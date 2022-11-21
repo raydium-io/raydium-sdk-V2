@@ -1,7 +1,7 @@
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction, SystemProgram, Connection, Keypair, Signer } from "@solana/web3.js";
 import BN from "bn.js";
-import { parseBigNumberish, RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "../../common";
+import { createLogger, parseBigNumberish, RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
 import { MintInfo, ReturnTypeMakeInstructions, AmmV3PoolInfo, AmmV3PoolPersonalPosition } from "./type";
 import { ObservationInfoLayout } from "./layout";
@@ -13,8 +13,12 @@ import {
   getPdaMetadataKey,
   getPdaProtocolPositionAddress,
   getPdaPersonalPositionAddress,
+  getPdaPoolRewardVaultId,
+  getPdaOperationAccount,
 } from "./utils/pda";
 import { TickUtils } from "./utils/tick";
+
+const logger = createLogger("Raydium_AmmV3");
 
 const anchorDataBuf = {
   createPool: [233, 146, 209, 142, 207, 104, 64, 188],
@@ -782,18 +786,18 @@ export class AmmV3Instrument {
     programId: PublicKey,
     payer: PublicKey,
     poolId: PublicKey,
+    operationId: PublicKey,
     ammConfigId: PublicKey,
 
     ownerTokenAccount: PublicKey,
     rewardMint: PublicKey,
     rewardVault: PublicKey,
 
-    rewardIndex: number,
     openTime: number,
     endTime: number,
     emissionsPerSecondX64: BN,
   ): TransactionInstruction {
-    const dataLayout = struct([u8("rewardIndex"), u64("openTime"), u64("endTime"), u128("emissionsPerSecondX64")]);
+    const dataLayout = struct([u64("openTime"), u64("endTime"), u128("emissionsPerSecondX64")]);
 
     const keys = [
       { pubkey: payer, isSigner: true, isWritable: true },
@@ -801,6 +805,7 @@ export class AmmV3Instrument {
       { pubkey: ammConfigId, isSigner: false, isWritable: false },
 
       { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: operationId, isSigner: false, isWritable: true },
       { pubkey: rewardMint, isSigner: false, isWritable: false },
       { pubkey: rewardVault, isSigner: false, isWritable: true },
 
@@ -812,7 +817,6 @@ export class AmmV3Instrument {
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(
       {
-        rewardIndex,
         openTime: parseBigNumberish(openTime),
         endTime: parseBigNumberish(endTime),
         emissionsPerSecondX64,
@@ -829,10 +833,54 @@ export class AmmV3Instrument {
     });
   }
 
+  static makeInitRewardInstructions({
+    poolInfo,
+    ownerInfo,
+    rewardInfo,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    ownerInfo: {
+      wallet: PublicKey;
+      tokenAccount: PublicKey;
+    };
+    rewardInfo: {
+      mint: PublicKey;
+      openTime: number;
+      endTime: number;
+      emissionsPerSecondX64: BN;
+    };
+  }): ReturnTypeMakeInstructions {
+    const poolRewardVault = getPdaPoolRewardVaultId(poolInfo.programId, poolInfo.id, rewardInfo.mint).publicKey;
+    const operationId = getPdaOperationAccount(poolInfo.programId).publicKey;
+    const ins = [
+      this.initRewardInstruction(
+        poolInfo.programId,
+        ownerInfo.wallet,
+        poolInfo.id,
+        operationId,
+        poolInfo.ammConfig.id,
+
+        ownerInfo.tokenAccount,
+        rewardInfo.mint,
+        poolRewardVault,
+
+        rewardInfo.openTime,
+        rewardInfo.endTime,
+        rewardInfo.emissionsPerSecondX64,
+      ),
+    ];
+    return {
+      signers: [],
+      instructions: ins,
+      address: {},
+    };
+  }
+
   static setRewardInstruction(
     programId: PublicKey,
     payer: PublicKey,
     poolId: PublicKey,
+    operationId: PublicKey,
     ammConfigId: PublicKey,
 
     ownerTokenAccount: PublicKey,
@@ -843,12 +891,13 @@ export class AmmV3Instrument {
     endTime: number,
     emissionsPerSecondX64: BN,
   ): TransactionInstruction {
-    const dataLayout = struct([u8("rewardIndex"), u64("openTime"), u64("endTime"), u128("emissionsPerSecondX64")]);
+    const dataLayout = struct([u8("rewardIndex"), u128("emissionsPerSecondX64"), u64("openTime"), u64("endTime")]);
 
     const keys = [
       { pubkey: payer, isSigner: true, isWritable: true },
       { pubkey: ammConfigId, isSigner: false, isWritable: false },
       { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: operationId, isSigner: false, isWritable: true },
 
       { pubkey: rewardVault, isSigner: false, isWritable: true },
       { pubkey: ownerTokenAccount, isSigner: false, isWritable: true },
@@ -874,6 +923,60 @@ export class AmmV3Instrument {
       programId,
       data: aData,
     });
+  }
+
+  static makeSetRewardInstructions({
+    poolInfo,
+    ownerInfo,
+    rewardInfo,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    ownerInfo: {
+      wallet: PublicKey;
+      tokenAccount: PublicKey;
+    };
+    rewardInfo: {
+      mint: PublicKey;
+      openTime: number;
+      endTime: number;
+      emissionsPerSecondX64: BN;
+    };
+  }): ReturnTypeMakeInstructions {
+    let rewardIndex;
+    let rewardVault;
+    for (let index = 0; index < poolInfo.rewardInfos.length; index++)
+      if (poolInfo.rewardInfos[index].tokenMint.equals(rewardInfo.mint)) {
+        rewardIndex = index;
+        rewardVault = poolInfo.rewardInfos[index].tokenVault;
+      }
+
+    if (rewardIndex === undefined || rewardVault === undefined)
+      logger.logWithError("reward mint check error", "no reward mint", poolInfo.rewardInfos);
+
+    const operationId = getPdaOperationAccount(poolInfo.programId).publicKey;
+
+    const ins = [
+      this.setRewardInstruction(
+        poolInfo.programId,
+        ownerInfo.wallet,
+        poolInfo.id,
+        operationId,
+        poolInfo.ammConfig.id,
+
+        ownerInfo.tokenAccount,
+        rewardVault,
+
+        rewardIndex,
+        rewardInfo.openTime,
+        rewardInfo.endTime,
+        rewardInfo.emissionsPerSecondX64,
+      ),
+    ];
+    return {
+      signers: [],
+      instructions: ins,
+      address: {},
+    };
   }
 
   static collectRewardInstruction(
@@ -911,6 +1014,48 @@ export class AmmV3Instrument {
       programId,
       data: aData,
     });
+  }
+
+  static makeCollectRewardInstructions({
+    poolInfo,
+    ownerInfo,
+    rewardMint,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    ownerInfo: {
+      wallet: PublicKey;
+      tokenAccount: PublicKey;
+    };
+    rewardMint: PublicKey;
+  }): ReturnTypeMakeInstructions {
+    let rewardIndex;
+    let rewardVault;
+    for (let index = 0; index < poolInfo.rewardInfos.length; index++)
+      if (poolInfo.rewardInfos[index].tokenMint.equals(rewardMint)) {
+        rewardIndex = index;
+        rewardVault = poolInfo.rewardInfos[index].tokenVault;
+      }
+
+    if (rewardIndex === undefined || rewardVault === undefined)
+      logger.logWithError("reward mint check error", "no reward mint", poolInfo.rewardInfos);
+
+    const ins = [
+      this.collectRewardInstruction(
+        poolInfo.programId,
+        ownerInfo.wallet,
+        poolInfo.id,
+
+        ownerInfo.tokenAccount,
+        rewardVault,
+
+        rewardIndex,
+      ),
+    ];
+    return {
+      signers: [],
+      instructions: ins,
+      address: {},
+    };
   }
 
   static addComputations(): TransactionInstruction {

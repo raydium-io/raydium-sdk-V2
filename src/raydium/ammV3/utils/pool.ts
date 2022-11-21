@@ -36,13 +36,13 @@ import { FETCH_TICKARRAY_COUNT } from "./tickQuery";
 import { PositionUtils } from "./position";
 
 export class PoolUtils {
-  static async getOutputAmountAndRemainAccounts(
+  static getOutputAmountAndRemainAccounts(
     poolInfo: AmmV3PoolInfo,
     tickArrayCache: { [key: string]: TickArray },
     inputTokenMint: PublicKey,
     inputAmount: BN,
     sqrtPriceLimitX64?: BN,
-  ): Promise<{ expectedAmountOut: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN }> {
+  ): { expectedAmountOut: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
     const zeroForOne = inputTokenMint.equals(poolInfo.mintA.mint);
 
     const allNeededAccounts: PublicKey[] = [];
@@ -50,10 +50,8 @@ export class PoolUtils {
       isExist,
       startIndex: firstTickArrayStartIndex,
       nextAccountMeta,
-    } = await this.getFirstInitializedTickArray(poolInfo, zeroForOne);
-    if (!isExist || !firstTickArrayStartIndex || !nextAccountMeta) {
-      throw new Error("Invalid tick array");
-    }
+    } = this.getFirstInitializedTickArray(poolInfo, zeroForOne);
+    if (!isExist || firstTickArrayStartIndex === undefined || !nextAccountMeta) throw new Error("Invalid tick array");
 
     allNeededAccounts.push(nextAccountMeta);
     const {
@@ -61,7 +59,7 @@ export class PoolUtils {
       accounts: reaminAccounts,
       sqrtPriceX64: executionPrice,
       feeAmount,
-    } = await SwapMath.swapCompute(
+    } = SwapMath.swapCompute(
       poolInfo.programId,
       poolInfo.id,
       tickArrayCache,
@@ -84,13 +82,12 @@ export class PoolUtils {
     };
   }
 
-  static async getFirstInitializedTickArray(
+  static getFirstInitializedTickArray(
     poolInfo: AmmV3PoolInfo,
     zeroForOne: boolean,
-  ): Promise<
+  ):
     | { isExist: true; startIndex: number; nextAccountMeta: PublicKey }
-    | { isExist: false; startIndex: undefined; nextAccountMeta: undefined }
-  > {
+    | { isExist: false; startIndex: undefined; nextAccountMeta: undefined } {
     const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap);
     const { isInitialized, startIndex } = TickUtils.checkTickArrayIsInitialized(
       tickArrayBitmap,
@@ -98,7 +95,7 @@ export class PoolUtils {
       poolInfo.tickSpacing,
     );
     if (isInitialized) {
-      const { publicKey: address } = await getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, startIndex);
+      const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, startIndex);
       return {
         isExist: true,
         startIndex,
@@ -107,7 +104,7 @@ export class PoolUtils {
     }
     const { isExist, nextStartIndex } = this.nextInitializedTickArrayStartIndex(poolInfo, zeroForOne);
     if (isExist) {
-      const { publicKey: address } = await getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, nextStartIndex);
+      const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, nextStartIndex);
       return {
         isExist: true,
         startIndex: nextStartIndex,
@@ -288,7 +285,7 @@ export class PoolUtils {
         Math.floor(FETCH_TICKARRAY_COUNT / 2),
       );
       for (const itemIndex of startIndexArray) {
-        const { publicKey: tickArrayAddress } = await getPdaTickArrayAddress(
+        const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(
           itemPoolInfo.programId,
           itemPoolInfo.id,
           itemIndex,
@@ -399,7 +396,7 @@ export class PoolUtils {
             tokenFeesOwedB: position.tokenFeesOwedB,
             rewardInfos: position.rewardInfos.map((i) => ({
               ...i,
-              peddingReward: new BN(0),
+              pendingReward: new BN(0),
             })),
 
             leverage,
@@ -459,7 +456,7 @@ export class PoolUtils {
           itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(BN_ZERO) ? tokenFeeAmountA : BN_ZERO;
           itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(BN_ZERO) ? tokenFeeAmountB : BN_ZERO;
           for (let i = 0; i < rewardInfos.length; i++) {
-            itemPA.rewardInfos[i].peddingReward = rewardInfos[i].gte(BN_ZERO) ? rewardInfos[i] : BN_ZERO;
+            itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(BN_ZERO) ? rewardInfos[i] : BN_ZERO;
           }
         }
       }

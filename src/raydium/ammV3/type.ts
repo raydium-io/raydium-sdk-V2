@@ -158,7 +158,7 @@ export interface AmmV3PoolPersonalPosition {
   rewardInfos: {
     growthInsideLastX64: BN;
     rewardAmountOwed: BN;
-    peddingReward: BN;
+    pendingReward: BN;
   }[];
 
   leverage: number;
@@ -368,4 +368,96 @@ export interface OpenPosition {
   liquidity: BN;
   slippage: number;
   associatedOnly?: boolean;
+}
+
+export interface InitRewardParams {
+  programId: PublicKey;
+  payer: PublicKey;
+  poolId: PublicKey;
+  operationId: PublicKey;
+  ammConfigId: PublicKey;
+
+  ownerTokenAccount: PublicKey;
+  rewardMint: PublicKey;
+  rewardVault: PublicKey;
+
+  rewardIndex: number;
+  openTime: number;
+  endTime: number;
+  emissionsPerSecondX64: BN;
+}
+
+export interface SwapInParams {
+  poolId: PublicKey;
+  ownerInfo: {
+    feePayer: PublicKey;
+    useSOLBalance?: boolean;
+  };
+  inputMint: PublicKey;
+  amountIn: BN;
+  amountOutMin: BN;
+  priceLimit?: Decimal;
+  remainingAccounts: PublicKey[];
+}
+
+export interface GetAmountParams {
+  poolId: string | PublicKey;
+  ownerPosition: AmmV3PoolPersonalPosition;
+  liquidity: BN;
+  slippage: number;
+  add: boolean;
+}
+
+export interface InitRewardParams {
+  poolId: PublicKey;
+  ownerInfo: {
+    feePayer: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  rewardInfo: {
+    mint: PublicKey;
+    openTime: number;
+    endTime: number;
+    perSecond: Decimal;
+  };
+  associatedOnly?: boolean;
+}
+
+export interface SetRewardParams {
+  poolId: PublicKey;
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+
+  rewardInfo: {
+    mint: PublicKey;
+    openTime: number; // If the reward is being distributed, please give 0
+    endTime: number; // If no modification is required, enter 0
+    perSecond: Decimal;
+  };
+  associatedOnly?: boolean;
+}
+
+export interface SetRewardsParams extends Omit<SetRewardParams, "rewardInfo"> {
+  rewardInfos: {
+    mint: PublicKey;
+    openTime: number; // If the reward is being distributed, please give 0
+    endTime: number; // If no modification is required, enter 0
+    perSecond: Decimal;
+  }[];
+}
+
+export interface CollectRewardParams {
+  poolId: PublicKey;
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  rewardMint: PublicKey;
+  associatedOnly?: boolean;
+}
+
+export interface CollectRewardsParams extends Omit<CollectRewardParams, "rewardMint"> {
+  rewardMints: PublicKey[];
 }

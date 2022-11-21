@@ -749,7 +749,7 @@ export class TradeV2 extends ModuleBase {
     }
   }
 
-  public async makeSwapTranscation({
+  public async makeSwapTransaction({
     swapInfo,
     ownerInfo,
     checkTransaction,

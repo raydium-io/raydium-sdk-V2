@@ -39,7 +39,7 @@ const Context: FC<{ children: ReactNode }> = ({ children }) => {
   const network = WalletAdapterNetwork.Mainnet
 
   // You can also provide a custom RPC endpoint.
-  const endpoint = 'https://solana-api.projectserum.com' // mainnet has rate limit so use Project Serum-hosted api node
+  const endpoint = 'https://rpc.asdf1234.win' // mainnet has rate limit so use Project Serum-hosted api node
 
   // You can also provide a custom RPC endpoint.
   //   const endpoint = useMemo(() => clusterApiUrl(network), [network])

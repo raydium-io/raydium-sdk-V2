@@ -39,7 +39,7 @@ export class TickQuery {
       Math.floor(FETCH_TICKARRAY_COUNT / 2),
     );
     for (let i = 0; i < startIndexArray.length; i++) {
-      const { publicKey: tickArrayAddress } = await getPdaTickArrayAddress(programId, poolId, startIndexArray[i]);
+      const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(programId, poolId, startIndexArray[i]);
       tickArraysToFetch.push(tickArrayAddress);
     }
 
@@ -60,19 +60,19 @@ export class TickQuery {
     return tickArrayCache;
   }
 
-  public static async nextInitializedTick(
+  public static nextInitializedTick(
     programId: PublicKey,
     poolId: PublicKey,
     tickArrayCache: { [key: string]: TickArray },
     tickIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
-  ): Promise<{ nextTick: Tick; tickArrayAddress?: PublicKey; tickArrayStartTickIndex: number }> {
+  ): { nextTick: Tick; tickArrayAddress?: PublicKey; tickArrayStartTickIndex: number } {
     let {
       initializedTick: nextTick,
       tickArrayAddress,
       tickArrayStartTickIndex,
-    } = await this.nextInitializedTickInOneArray(programId, poolId, tickArrayCache, tickIndex, tickSpacing, zeroForOne);
+    } = this.nextInitializedTickInOneArray(programId, poolId, tickArrayCache, tickIndex, tickSpacing, zeroForOne);
     while (nextTick == undefined || nextTick.liquidityGross.lten(0)) {
       tickArrayStartTickIndex = TickUtils.getNextTickArrayStartIndex(tickArrayStartTickIndex, tickSpacing, zeroForOne);
       if (
@@ -89,7 +89,7 @@ export class TickQuery {
         nextTick: _nextTick,
         tickArrayAddress: _tickArrayAddress,
         tickArrayStartTickIndex: _tickArrayStartTickIndex,
-      } = await this.firstInitializedTickInOneArray(programId, poolId, cachedTickArray, zeroForOne);
+      } = this.firstInitializedTickInOneArray(programId, poolId, cachedTickArray, zeroForOne);
       [nextTick, tickArrayAddress, tickArrayStartTickIndex] = [_nextTick, _tickArrayAddress, _tickArrayStartTickIndex];
     }
     if (nextTick == undefined) {
@@ -98,12 +98,12 @@ export class TickQuery {
     return { nextTick, tickArrayAddress, tickArrayStartTickIndex };
   }
 
-  public static async firstInitializedTickInOneArray(
+  public static firstInitializedTickInOneArray(
     programId: PublicKey,
     poolId: PublicKey,
     tickArray: TickArray,
     zeroForOne: boolean,
-  ): Promise<{ nextTick?: Tick; tickArrayAddress: PublicKey; tickArrayStartTickIndex: number }> {
+  ): { nextTick?: Tick; tickArrayAddress: PublicKey; tickArrayStartTickIndex: number } {
     let nextInitializedTick: Tick | undefined = undefined;
     if (zeroForOne) {
       let i = TICK_ARRAY_SIZE - 1;
@@ -126,22 +126,22 @@ export class TickQuery {
         i = i + 1;
       }
     }
-    const { publicKey: tickArrayAddress } = await getPdaTickArrayAddress(programId, poolId, tickArray.startTickIndex);
+    const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(programId, poolId, tickArray.startTickIndex);
     return { nextTick: nextInitializedTick, tickArrayAddress, tickArrayStartTickIndex: tickArray.startTickIndex };
   }
 
-  public static async nextInitializedTickInOneArray(
+  public static nextInitializedTickInOneArray(
     programId: PublicKey,
     poolId: PublicKey,
     tickArrayCache: { [key: string]: TickArray },
     tickIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
-  ): Promise<{
+  ): {
     initializedTick: Tick | undefined;
     tickArrayAddress: PublicKey | undefined;
     tickArrayStartTickIndex: number;
-  }> {
+  } {
     const startIndex = TickUtils.getTickArrayStartIndexByTick(tickIndex, tickSpacing);
     let tickPositionInArray = Math.floor((tickIndex - startIndex) / tickSpacing);
     const cachedTickArray = tickArrayCache[startIndex];
@@ -173,7 +173,7 @@ export class TickQuery {
         tickPositionInArray = tickPositionInArray + 1;
       }
     }
-    const { publicKey: tickArrayAddress } = await getPdaTickArrayAddress(programId, poolId, startIndex);
+    const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(programId, poolId, startIndex);
     return {
       initializedTick: nextInitializedTick,
       tickArrayAddress,

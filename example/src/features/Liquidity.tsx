@@ -44,41 +44,38 @@ export default function Liquidity() {
 
   const handleClickCreate = async (pool: LiquidityPoolJsonInfo) => {
     // change to your ids
-    const baseMint = '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'
-    const quoteMint = '4SZjjNABoqhbd4hnapbvoEPEqT8mnNkfbEoAwALf1V8t'
-    const marketId = 'pool fake id'
-
-    const associatedPoolKeys = await getAssociatedPoolKeys({
-      version: 4,
-      baseMint,
-      quoteMint,
-      marketId,
-    })
-    const { id: ammId, lpMint } = associatedPoolKeys
-    const lpMintInfoOnChain = (await connection.getAccountInfo(new PublicKey(lpMint)))?.data
-
-    const isAlreadyCreated = Boolean(
-      lpMintInfoOnChain?.length && Number(SPL_MINT_LAYOUT.decode(lpMintInfoOnChain).supply) === 0
-    )
-
-    if (!isAlreadyCreated) {
-      const { transaction, signers, execute } = await raydium!.liquidity.createPool({
-        version: 4,
-        baseMint,
-        quoteMint,
-        marketId,
-      })
-      const txId = execute()
-    }
-    const { transaction, signers, execute } = await raydium!.liquidity.initPool({
-      version: 4,
-      baseMint,
-      quoteMint,
-      marketId,
-      baseAmount: raydium!.mintToTokenAmount({ mint: baseMint, amount: 20 }),
-      quoteAmount: raydium!.mintToTokenAmount({ mint: quoteMint, amount: 20 }),
-    })
-    const txId = execute()
+    // const baseMint = new'4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'
+    // const quoteMint = '4SZjjNABoqhbd4hnapbvoEPEqT8mnNkfbEoAwALf1V8t'
+    // const marketId = 'pool fake id'
+    // const associatedPoolKeys = await getAssociatedPoolKeys({
+    //   version: 4,
+    //   baseMint,
+    //   quoteMint,
+    //   marketId,
+    // })
+    // const { id: ammId, lpMint } = associatedPoolKeys
+    // const lpMintInfoOnChain = (await connection.getAccountInfo(new PublicKey(lpMint)))?.data
+    // const isAlreadyCreated = Boolean(
+    //   lpMintInfoOnChain?.length && Number(SPL_MINT_LAYOUT.decode(lpMintInfoOnChain).supply) === 0
+    // )
+    // if (!isAlreadyCreated) {
+    //   const { transaction, signers, execute } = await raydium!.liquidity.createPool({
+    //     version: 4,
+    //     baseMint,
+    //     quoteMint,
+    //     marketId,
+    //   })
+    //   const txId = execute()
+    // }
+    // const { transaction, signers, execute } = await raydium!.liquidity.initPool({
+    //   version: 4,
+    //   baseMint,
+    //   quoteMint,
+    //   marketId,
+    //   baseAmount: raydium!.mintToTokenAmount({ mint: baseMint, amount: 20 }),
+    //   quoteAmount: raydium!.mintToTokenAmount({ mint: quoteMint, amount: 20 }),
+    // })
+    // const txId = execute()
   }
 
   useEffect(() => {
@@ -122,15 +119,16 @@ export default function Liquidity() {
 
   useEffect(() => {
     async function createPool() {
-      const poolBaseMint = '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'
-      const poolQuoteMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
-      const marketId = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
-      const { transaction } = await raydium!.liquidity.createPool({
-        version: 4,
-        baseMint: poolBaseMint,
-        quoteMint: poolQuoteMint,
-        marketId,
-      })
+      const poolBaseMint = new PublicKey('4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R')
+      const poolQuoteMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+      const marketId = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+      // const { transaction } = await raydium!.liquidity.createPool({
+      //   version: 4,
+      //   baseMint: poolBaseMint,
+      //   quoteMint: poolQuoteMint,
+      //   marketId,
+      //   marketVersion: 6,
+      // })
 
       // const { transaction, execute } = await raydium!.liquidity.initPool({
       //   version: 4,

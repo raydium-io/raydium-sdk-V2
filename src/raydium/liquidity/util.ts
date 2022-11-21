@@ -2,11 +2,12 @@ import { OpenOrders } from "@project-serum/serum";
 import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { LiquidityVersion } from "../../api/type";
 import { createLogger } from "../../common/logger";
-import { PublicKeyish, validateAndParsePublicKey } from "../../common/pubKey";
 import {
-  findProgramAddress, parseSimulateLogToJson, parseSimulateValue, simulateMultipleInstruction,
+  findProgramAddress,
+  parseSimulateLogToJson,
+  parseSimulateValue,
+  simulateMultipleInstruction,
 } from "../../common/txTool";
 import { Token, TokenAmount } from "../../module";
 
@@ -15,7 +16,11 @@ import { makeSimulatePoolInfoInstruction } from "./instruction";
 import { LIQUIDITY_VERSION_TO_STATE_LAYOUT, LiquidityStateLayout, liquidityStateV4Layout } from "./layout";
 import { getSerumAssociatedAuthority, getSerumProgramId, getSerumVersion } from "./serum";
 import {
-  AmountSide, LiquidityAssociatedPoolKeys, LiquidityFetchMultipleInfoParams, LiquidityPoolInfo, LiquidityPoolKeys,
+  AmountSide,
+  LiquidityAssociatedPoolKeys,
+  LiquidityFetchMultipleInfoParams,
+  LiquidityPoolInfo,
+  LiquidityPoolKeys,
 } from "./type";
 
 const logger = createLogger("Raydium_liquidity_util");
@@ -136,54 +141,54 @@ type AssociatedName =
   | "target_associated_seed"
   | "withdraw_associated_seed";
 
-export async function getLiquidityAssociatedId({ name, programId, marketId }: GetAssociatedParam): Promise<PublicKey> {
-  const { publicKey } = await findProgramAddress(
+export function getLiquidityAssociatedId({ name, programId, marketId }: GetAssociatedParam): PublicKey {
+  const { publicKey } = findProgramAddress(
     [programId.toBuffer(), marketId.toBuffer(), Buffer.from(name, "utf-8")],
     programId,
   );
   return publicKey;
 }
 
-export async function getLiquidityAssociatedAuthority({
-  programId,
-}: {
-  programId: PublicKey;
-}): Promise<{ publicKey: PublicKey; nonce: number }> {
+export function getLiquidityAssociatedAuthority({ programId }: { programId: PublicKey }): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
   return findProgramAddress([Buffer.from([97, 109, 109, 32, 97, 117, 116, 104, 111, 114, 105, 116, 121])], programId);
 }
 
 export async function getAssociatedPoolKeys({
   version,
-  marketId: _marketId,
-  baseMint: _baseMint,
-  quoteMint: _quoteMint,
+  marketVersion,
+  marketId,
+  baseMint,
+  quoteMint,
+  baseDecimals,
+  quoteDecimals,
+  programId,
+  marketProgramId,
 }: {
-  version: LiquidityVersion;
-  marketId: PublicKeyish;
-  baseMint: PublicKeyish;
-  quoteMint: PublicKeyish;
+  version: number;
+  marketVersion: number;
+  marketId: PublicKey;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+  baseDecimals: number;
+  quoteDecimals: number;
+  programId: PublicKey;
+  marketProgramId: PublicKey;
 }): Promise<LiquidityAssociatedPoolKeys> {
-  const programId = getLiquidityProgramId(version);
-  const [marketId, baseMint, quoteMint] = [
-    validateAndParsePublicKey({ publicKey: _marketId }),
-    validateAndParsePublicKey({ publicKey: _baseMint, transformSol: true }),
-    validateAndParsePublicKey({ publicKey: _quoteMint, transformSol: true }),
-  ];
+  const id = getLiquidityAssociatedId({ name: "amm_associated_seed", programId, marketId });
+  const lpMint = getLiquidityAssociatedId({ name: "lp_mint_associated_seed", programId, marketId });
+  const { publicKey: authority, nonce } = getLiquidityAssociatedAuthority({ programId });
+  const baseVault = getLiquidityAssociatedId({ name: "coin_vault_associated_seed", programId, marketId });
+  const quoteVault = getLiquidityAssociatedId({ name: "pc_vault_associated_seed", programId, marketId });
+  const lpVault = getLiquidityAssociatedId({ name: "temp_lp_token_associated_seed", programId, marketId });
+  const openOrders = getLiquidityAssociatedId({ name: "open_order_associated_seed", programId, marketId });
+  const targetOrders = getLiquidityAssociatedId({ name: "target_associated_seed", programId, marketId });
+  const withdrawQueue = getLiquidityAssociatedId({ name: "withdraw_associated_seed", programId, marketId });
 
-  const id = await getLiquidityAssociatedId({ name: "amm_associated_seed", programId, marketId });
-  const lpMint = await getLiquidityAssociatedId({ name: "lp_mint_associated_seed", programId, marketId });
-  const { publicKey: authority, nonce } = await getLiquidityAssociatedAuthority({ programId });
-  const baseVault = await getLiquidityAssociatedId({ name: "coin_vault_associated_seed", programId, marketId });
-  const quoteVault = await getLiquidityAssociatedId({ name: "pc_vault_associated_seed", programId, marketId });
-  const lpVault = await getLiquidityAssociatedId({ name: "temp_lp_token_associated_seed", programId, marketId });
-  const openOrders = await getLiquidityAssociatedId({ name: "open_order_associated_seed", programId, marketId });
-  const targetOrders = await getLiquidityAssociatedId({ name: "target_associated_seed", programId, marketId });
-  const withdrawQueue = await getLiquidityAssociatedId({ name: "withdraw_associated_seed", programId, marketId });
-
-  const serumVersion = getSerumVersion(version);
-  const serumProgramId = getSerumProgramId(serumVersion);
-  const { publicKey: marketAuthority } = await getSerumAssociatedAuthority({
-    programId: serumProgramId,
+  const { publicKey: marketAuthority } = getSerumAssociatedAuthority({
+    programId: marketProgramId,
     marketId,
   });
 
@@ -193,6 +198,9 @@ export async function getAssociatedPoolKeys({
     baseMint,
     quoteMint,
     lpMint,
+    baseDecimals,
+    quoteDecimals,
+    lpDecimals: baseDecimals,
     // version
     version,
     programId,
@@ -206,8 +214,8 @@ export async function getAssociatedPoolKeys({
     targetOrders,
     withdrawQueue,
     // market version
-    marketVersion: serumVersion,
-    marketProgramId: serumProgramId,
+    marketVersion,
+    marketProgramId,
     // market keys
     marketId,
     marketAuthority,

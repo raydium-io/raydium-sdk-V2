@@ -5,6 +5,7 @@ import {
   AccountLayout,
 } from "@solana/spl-token";
 import { Commitment, PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { getATAAddress } from "../ammV3/utils/pda";
 import { BigNumberish, WSOLMint } from "../../common";
 
 import { AddInstructionParam } from "../../common/txTool";
@@ -65,13 +66,9 @@ export default class Account extends ModuleBase {
     return this;
   }
 
-  public async getAssociatedTokenAccount(mint: PublicKey): Promise<PublicKey> {
+  public getAssociatedTokenAccount(mint: PublicKey): PublicKey {
     this.scope.checkOwner();
-    const cacheKey = `${this.scope.ownerPubKey.toBase58()}_${mint.toBase58()}`;
-    if (this._ataCache.has(cacheKey)) return this._ataCache.get(cacheKey) as PublicKey;
-    const ataPubKey = await getAssociatedTokenAddress(mint, this.scope.ownerPubKey, true);
-    this._ataCache.set(cacheKey, ataPubKey);
-    return ataPubKey;
+    return getATAAddress(this.scope.ownerPubKey, mint).publicKey;
   }
 
   public async fetchWalletTokenAccounts(config?: { forceUpdate?: boolean; commitment?: Commitment }): Promise<{
@@ -130,7 +127,7 @@ export default class Account extends ModuleBase {
       // sort by balance
       .sort((a, b) => (a.amount.lt(b.amount) ? 1 : -1));
 
-    const ata = await this.getAssociatedTokenAccount(mint);
+    const ata = this.getAssociatedTokenAccount(mint);
     for (const tokenAccount of tokenAccounts) {
       const { publicKey } = tokenAccount;
       if (publicKey) {
@@ -147,7 +144,7 @@ export default class Account extends ModuleBase {
   }> {
     await this.fetchWalletTokenAccounts();
     const { mint, createInfo, associatedOnly, owner, notUseTokenAccount = false, skipCloseAccount = false } = params;
-    const ata = await getAssociatedTokenAddress(mint, this.scope.ownerPubKey!, true);
+    const ata = this.getAssociatedTokenAccount(mint);
     const accounts = (notUseTokenAccount ? [] : this.tokenAccountRawInfos)
       .filter((i) => i.accountInfo.mint.equals(mint) && (!associatedOnly || i.pubkey.equals(ata)))
       .sort((a, b) => (a.accountInfo.amount.lt(b.accountInfo.amount) ? 1 : -1));
@@ -261,7 +258,7 @@ export default class Account extends ModuleBase {
     const newTxInstructions: AddInstructionParam = {};
 
     if (!tokenAccountAddress) {
-      const ataAddress = await this.getAssociatedTokenAccount(mint);
+      const ataAddress = this.getAssociatedTokenAccount(mint);
       const instruction = await createAssociatedTokenAccountInstruction(owner, ataAddress, owner, mint);
       newTxInstructions.instructions = [instruction];
       tokenAccountAddress = ataAddress;
@@ -293,7 +290,7 @@ export default class Account extends ModuleBase {
     } = params;
 
     const txBuilder = this.createTxBuilder();
-    const ata = await getAssociatedTokenAddress(mint, this.scope.ownerPubKey, true);
+    const ata = this.getAssociatedTokenAccount(mint);
 
     if (new PublicKey(WSOLMint).equals(mint)) {
       const txInstruction = await createWSolAccountInstructions({

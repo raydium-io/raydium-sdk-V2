@@ -10,79 +10,56 @@ export const POOL_VAULT_SEED = Buffer.from("pool_vault", "utf8");
 export const POOL_REWARD_VAULT_SEED = Buffer.from("pool_reward_vault", "utf8");
 export const POSITION_SEED = Buffer.from("position", "utf8");
 export const TICK_ARRAY_SEED = Buffer.from("tick_array", "utf8");
+export const OPERATION_SEED = Buffer.from("operation", "utf8");
 
-type ReturnType = Promise<{ publicKey: PublicKey; nonce: number }>;
+type ReturnType = { publicKey: PublicKey; nonce: number };
 
-export async function getPdaAmmConfigId(programId: PublicKey, index: number): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress([AMM_CONFIG_SEED, u16ToBytes(index)], programId);
-  return { publicKey, nonce };
+export function getPdaAmmConfigId(programId: PublicKey, index: number): ReturnType {
+  return findProgramAddress([AMM_CONFIG_SEED, u16ToBytes(index)], programId);
 }
 
-export async function getPdaPoolId(
+export function getPdaPoolId(
   programId: PublicKey,
   ammConfigId: PublicKey,
   mintA: PublicKey,
   mintB: PublicKey,
 ): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress(
-    [POOL_SEED, ammConfigId.toBuffer(), mintA.toBuffer(), mintB.toBuffer()],
-    programId,
-  );
-  return { publicKey, nonce };
+  return findProgramAddress([POOL_SEED, ammConfigId.toBuffer(), mintA.toBuffer(), mintB.toBuffer()], programId);
 }
 
-export async function getPdaPoolVaultId(programId: PublicKey, poolId: PublicKey, vaultMint: PublicKey): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress(
-    [POOL_VAULT_SEED, poolId.toBuffer(), vaultMint.toBuffer()],
-    programId,
-  );
-  return { publicKey, nonce };
+export function getPdaPoolVaultId(programId: PublicKey, poolId: PublicKey, vaultMint: PublicKey): ReturnType {
+  return findProgramAddress([POOL_VAULT_SEED, poolId.toBuffer(), vaultMint.toBuffer()], programId);
 }
 
-export async function getPdaPoolRewardVaulId(
-  programId: PublicKey,
-  poolId: PublicKey,
-  rewardMint: PublicKey,
-): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress(
-    [POOL_REWARD_VAULT_SEED, poolId.toBuffer(), rewardMint.toBuffer()],
-    programId,
-  );
-  return { publicKey, nonce };
+export function getPdaPoolRewardVaultId(programId: PublicKey, poolId: PublicKey, rewardMint: PublicKey): ReturnType {
+  return findProgramAddress([POOL_REWARD_VAULT_SEED, poolId.toBuffer(), rewardMint.toBuffer()], programId);
 }
 
-export async function getPdaTickArrayAddress(programId: PublicKey, poolId: PublicKey, startIndex: number): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress(
-    [TICK_ARRAY_SEED, poolId.toBuffer(), i32ToBytes(startIndex)],
-    programId,
-  );
-  return { publicKey, nonce };
+export function getPdaTickArrayAddress(programId: PublicKey, poolId: PublicKey, startIndex: number): ReturnType {
+  return findProgramAddress([TICK_ARRAY_SEED, poolId.toBuffer(), i32ToBytes(startIndex)], programId);
 }
 
-export async function getPdaProtocolPositionAddress(
+export function getPdaProtocolPositionAddress(
   programId: PublicKey,
   poolId: PublicKey,
   tickLower: number,
   tickUpper: number,
 ): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress(
+  return findProgramAddress(
     [POSITION_SEED, poolId.toBuffer(), i32ToBytes(tickLower), i32ToBytes(tickUpper)],
     programId,
   );
-  return { publicKey, nonce };
 }
 
-export async function getPdaPersonalPositionAddress(programId: PublicKey, nftMint: PublicKey): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress([POSITION_SEED, nftMint.toBuffer()], programId);
-  return { publicKey, nonce };
+export function getPdaPersonalPositionAddress(programId: PublicKey, nftMint: PublicKey): ReturnType {
+  return findProgramAddress([POSITION_SEED, nftMint.toBuffer()], programId);
 }
 
-export async function getATAAddress(owner: PublicKey, mint: PublicKey): ReturnType {
-  const { publicKey, nonce } = await findProgramAddress(
+export function getATAAddress(owner: PublicKey, mint: PublicKey): ReturnType {
+  return findProgramAddress(
     [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
     new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
   );
-  return { publicKey, nonce };
 }
 
 export function getPdaMetadataKey(mint: PublicKey): ReturnType {
@@ -90,4 +67,8 @@ export function getPdaMetadataKey(mint: PublicKey): ReturnType {
     [Buffer.from("metadata", "utf8"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
     METADATA_PROGRAM_ID,
   );
+}
+
+export function getPdaOperationAccount(programId: PublicKey): ReturnType {
+  return findProgramAddress([OPERATION_SEED], programId);
 }

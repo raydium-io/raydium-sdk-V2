@@ -39,13 +39,10 @@ export function getSerumProgramId(version: number): PublicKey {
   return programId;
 }
 
-export async function getSerumAssociatedAuthority({
-  programId,
-  marketId,
-}: {
-  programId: PublicKey;
-  marketId: PublicKey;
-}): Promise<{ publicKey: PublicKey; nonce: number }> {
+export function getSerumAssociatedAuthority({ programId, marketId }: { programId: PublicKey; marketId: PublicKey }): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
   const seeds = [marketId.toBuffer()];
 
   let nonce = 0;
@@ -54,7 +51,7 @@ export async function getSerumAssociatedAuthority({
   while (nonce < 100) {
     try {
       const seedsWithNonce = seeds.concat(Buffer.from([nonce]), Buffer.alloc(7));
-      publicKey = await PublicKey.createProgramAddress(seedsWithNonce, programId);
+      publicKey = PublicKey.createProgramAddressSync(seedsWithNonce, programId);
     } catch (err) {
       if (err instanceof TypeError) {
         throw err;

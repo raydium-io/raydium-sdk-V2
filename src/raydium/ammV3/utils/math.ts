@@ -20,6 +20,7 @@ import {
   Q64,
   U64Resolution,
   ZERO,
+  Q128,
 } from "./constants";
 import { TickArray } from "./tick";
 import { TickQuery } from "./tickQuery";
@@ -55,6 +56,10 @@ export class MathUtil {
 
   public static decimalToX64(num: Decimal): BN {
     return new BN(num.mul(Decimal.pow(2, 64)).floor().toFixed());
+  }
+
+  public static wrappingSubU128(n0: BN, n1: BN): BN {
+    return n0.add(Q128).sub(n1).mod(Q128);
   }
 }
 
@@ -444,7 +449,7 @@ export interface StepComputations {
 }
 
 export abstract class SwapMath {
-  public static async swapCompute(
+  public static swapCompute(
     programId: PublicKey,
     poolId: PublicKey,
     tickArrayCache: { [key: string]: TickArray },
@@ -457,14 +462,14 @@ export abstract class SwapMath {
     amountSpecified: BN,
     lastSavedTickArrayStartIndex: number,
     sqrtPriceLimitX64?: BN,
-  ): Promise<{
+  ): {
     amountCalculated: BN;
     sqrtPriceX64: BN;
     feeAmount: BN;
     liquidity: BN;
     tickCurrent: number;
     accounts: PublicKey[];
-  }> {
+  } {
     if (amountSpecified.eq(ZERO)) {
       throw new Error("amountSpecified must not be 0");
     }
@@ -514,7 +519,7 @@ export abstract class SwapMath {
         nextTick: nextInitTick,
         tickArrayAddress,
         tickArrayStartTickIndex: tickAarrayStartIndex,
-      } = await TickQuery.nextInitializedTick(programId, poolId, tickArrayCache, state.tick, tickSpacing, zeroForOne);
+      } = TickQuery.nextInitializedTick(programId, poolId, tickArrayCache, state.tick, tickSpacing, zeroForOne);
       step.tickNext = nextInitTick.tick;
       step.initialized = nextInitTick.liquidityGross.gtn(0);
       if (lastSavedTickArrayStartIndex !== tickAarrayStartIndex && tickArrayAddress) {

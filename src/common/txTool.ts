@@ -6,6 +6,7 @@ import {
   SimulatedTransactionResponse,
   Transaction,
   TransactionInstruction,
+  Keypair,
 } from "@solana/web3.js";
 
 import { SignAllTransactions } from "../raydium/type";
@@ -260,11 +261,14 @@ export interface ProgramAddress {
   publicKey: PublicKey;
   nonce: number;
 }
-export async function findProgramAddress(
+export function findProgramAddress(
   seeds: Array<Buffer | Uint8Array>,
   programId: PublicKey,
-): Promise<ProgramAddress> {
-  const [publicKey, nonce] = await PublicKey.findProgramAddress(seeds, programId);
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  const [publicKey, nonce] = PublicKey.findProgramAddressSync(seeds, programId);
   return { publicKey, nonce };
 }
 
@@ -330,4 +334,55 @@ export async function simulateTransaction(
   }
 
   return results;
+}
+
+export function splitTxAndSigners({
+  instructions,
+  signers,
+  payer,
+}: {
+  instructions: TransactionInstruction[];
+  signers: (Signer | Keypair)[];
+  payer: PublicKey;
+}): {
+  transaction: Transaction;
+  signer: (Keypair | Signer)[];
+}[] {
+  const signerKey: { [key: string]: Signer } = {};
+  for (const item of signers) signerKey[item.publicKey.toString()] = item;
+
+  const transactions: { transaction: Transaction; signer: (Keypair | Signer)[] }[] = [];
+
+  let itemIns: TransactionInstruction[] = [];
+
+  for (const item of instructions) {
+    const _itemIns = [...itemIns, item];
+    const _signerStrs = new Set<string>(
+      _itemIns.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+    );
+    const _signer = [..._signerStrs.values()].map((i) => new PublicKey(i));
+
+    if (forecastTransactionSize(_itemIns, [payer, ..._signer])) {
+      itemIns.push(item);
+    } else {
+      transactions.push({
+        transaction: new Transaction().add(...itemIns),
+        signer: [..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined),
+      });
+
+      itemIns = [item];
+    }
+  }
+
+  if (itemIns.length > 0) {
+    const _signerStrs = new Set<string>(
+      itemIns.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+    );
+    transactions.push({
+      transaction: new Transaction().add(...itemIns),
+      signer: [..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined),
+    });
+  }
+
+  return transactions;
 }

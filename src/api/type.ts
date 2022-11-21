@@ -34,7 +34,7 @@ export interface ApiLiquidityPoolInfo {
   quoteDecimals: number;
   lpDecimals: number;
   // version
-  version: LiquidityVersion;
+  version: number;
   programId: string;
   // keys
   authority: string;
@@ -45,7 +45,7 @@ export interface ApiLiquidityPoolInfo {
   withdrawQueue: string;
   lpVault: string;
   // market version
-  marketVersion: SerumVersion;
+  marketVersion: number;
   marketProgramId: string;
   // market keys
   marketId: string;

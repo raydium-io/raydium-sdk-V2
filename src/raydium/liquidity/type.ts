@@ -131,14 +131,7 @@ export interface LiquiditySwapFixedInInstructionParamsV4 {
 export interface LiquidityAssociatedPoolKeysV4
   extends Omit<
     LiquidityPoolKeysV4,
-    | "marketBaseVault"
-    | "marketQuoteVault"
-    | "marketBids"
-    | "marketAsks"
-    | "marketEventQueue"
-    | "baseDecimals"
-    | "quoteDecimals"
-    | "lpDecimals"
+    "marketBaseVault" | "marketQuoteVault" | "marketBids" | "marketAsks" | "marketEventQueue"
   > {
   nonce: number;
 }
@@ -151,10 +144,15 @@ export interface LiquidityAssociatedPoolKeysV4
 export type LiquidityAssociatedPoolKeys = LiquidityAssociatedPoolKeysV4;
 
 export interface CreatePoolParam {
-  version: LiquidityVersion;
-  baseMint: PublicKeyish;
-  quoteMint: PublicKeyish;
-  marketId: PublicKeyish;
+  version: number;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+  marketId: PublicKey;
+  marketVersion: number;
+  baseDecimals: number;
+  quoteDecimals: number;
+  programId: PublicKey;
+  marketProgramId: PublicKey;
 }
 
 export interface InitPoolParam extends CreatePoolParam {

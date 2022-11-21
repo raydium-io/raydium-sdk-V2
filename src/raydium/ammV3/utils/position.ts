@@ -33,17 +33,23 @@ export class PositionUtils {
       feeGrowthAboveX64B = poolState.feeGrowthGlobalX64B.sub(tickUpperState.feeGrowthOutsideX64B);
     }
 
-    const feeGrowthInsideX64A = poolState.feeGrowthGlobalX64A.sub(feeGrowthBelowX64A).sub(feeGrowthAboveX64A);
-    const feeGrowthInsideBX64 = poolState.feeGrowthGlobalX64B.sub(feeGrowthBelowX64B).sub(feeGrowthAboveX64B);
+    const feeGrowthInsideX64A = MathUtil.wrappingSubU128(
+      MathUtil.wrappingSubU128(poolState.feeGrowthGlobalX64A, feeGrowthBelowX64A),
+      feeGrowthAboveX64A,
+    );
+    const feeGrowthInsideBX64 = MathUtil.wrappingSubU128(
+      MathUtil.wrappingSubU128(poolState.feeGrowthGlobalX64B, feeGrowthBelowX64B),
+      feeGrowthAboveX64B,
+    );
     return { feeGrowthInsideX64A, feeGrowthInsideBX64 };
   }
 
-  static async GetPositionFees(
+  static GetPositionFees(
     ammPool: AmmV3PoolInfo,
     positionState: AmmV3PoolPersonalPosition,
     tickLowerState: Tick,
     tickUpperState: Tick,
-  ): Promise<{ tokenFeeAmountA: BN; tokenFeeAmountB: BN }> {
+  ): { tokenFeeAmountA: BN; tokenFeeAmountB: BN } {
     const { feeGrowthInsideX64A, feeGrowthInsideBX64 } = this.getfeeGrowthInside(
       ammPool,
       tickLowerState,
@@ -51,14 +57,14 @@ export class PositionUtils {
     );
 
     const feeGrowthdeltaA = MathUtil.mulDivFloor(
-      feeGrowthInsideX64A.sub(positionState.feeGrowthInsideLastX64A),
+      MathUtil.wrappingSubU128(feeGrowthInsideX64A, positionState.feeGrowthInsideLastX64A),
       positionState.liquidity,
       Q64,
     );
     const tokenFeeAmountA = positionState.tokenFeesOwedA.add(feeGrowthdeltaA);
 
     const feeGrowthdelta1 = MathUtil.mulDivFloor(
-      feeGrowthInsideBX64.sub(positionState.feeGrowthInsideLastX64B),
+      MathUtil.wrappingSubU128(feeGrowthInsideBX64, positionState.feeGrowthInsideLastX64B),
       positionState.liquidity,
       Q64,
     );
@@ -67,12 +73,12 @@ export class PositionUtils {
     return { tokenFeeAmountA, tokenFeeAmountB };
   }
 
-  static async GetPositionRewards(
+  static GetPositionRewards(
     ammPool: AmmV3PoolInfo,
     positionState: AmmV3PoolPersonalPosition,
     tickLowerState: Tick,
     tickUpperState: Tick,
-  ): Promise<BN[]> {
+  ): BN[] {
     const rewards: BN[] = [];
 
     const rewardGrowthsInside = this.getRewardGrowthInside(
@@ -85,7 +91,7 @@ export class PositionUtils {
       const rewardGrowthInside = rewardGrowthsInside[i];
       const currRewardInfo = positionState.rewardInfos[i];
 
-      const rewardGrowthDelta = rewardGrowthInside.sub(currRewardInfo.growthInsideLastX64);
+      const rewardGrowthDelta = MathUtil.wrappingSubU128(rewardGrowthInside, currRewardInfo.growthInsideLastX64);
       const amountOwedDelta = MathUtil.mulDivFloor(rewardGrowthDelta, positionState.liquidity, Q64);
       const rewardAmountOwed = currRewardInfo.rewardAmountOwed.add(amountOwedDelta);
       rewards.push(rewardAmountOwed);
@@ -119,7 +125,12 @@ export class PositionUtils {
         rewardGrowthsAbove = rewardInfos[i].rewardGrowthGlobalX64.add(tickUpperState.rewardGrowthsOutsideX64[i]);
       }
 
-      rewardGrowthsInside.push(rewardInfos[i].rewardGrowthGlobalX64.sub(rewardGrowthsBelow).sub(rewardGrowthsAbove));
+      rewardGrowthsInside.push(
+        MathUtil.wrappingSubU128(
+          MathUtil.wrappingSubU128(rewardInfos[i].rewardGrowthGlobalX64, rewardGrowthsBelow),
+          rewardGrowthsAbove,
+        ),
+      );
     }
 
     return rewardGrowthsInside;

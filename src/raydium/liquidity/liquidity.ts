@@ -271,10 +271,14 @@ export default class Liquidity extends ModuleBase {
       );
     }
 
-    const priceImpact = new Percent(
-      parseInt(String(Math.abs(parseFloat(executionPrice.toFixed()) - parseFloat(currentPrice.toFixed())) * 1e9)),
-      parseInt(String(parseFloat(currentPrice.toFixed()) * 1e9)),
-    );
+    const priceImpactDenominator = executionPrice.denominator.mul(currentPrice.numerator);
+    const priceImpactNumerator = executionPrice.numerator
+      .mul(currentPrice.denominator)
+      .sub(priceImpactDenominator)
+      .abs();
+    const priceImpact = new Percent(priceImpactNumerator, priceImpactDenominator);
+
+    logger.debug("priceImpact:", `${priceImpact.toSignificant()}%`);
     const fee = new TokenAmount(inputToken, feeRaw);
 
     return {

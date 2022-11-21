@@ -29,9 +29,17 @@ import {
   AmmV3PoolPersonalPosition,
   OpenPosition,
   ReturnTypeGetAmountsFromLiquidity,
+  SwapInParams,
+  GetAmountParams,
+  InitRewardParams,
+  SetRewardParams,
+  SetRewardsParams,
+  CollectRewardParams,
+  CollectRewardsParams,
 } from "./type";
 import { AmmV3Instrument } from "./instrument";
 import { LoadParams, MakeTransaction } from "../type";
+import { MathUtil } from "./utils/math";
 import BN from "bn.js";
 export class AmmV3 extends ModuleBase {
   private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
@@ -179,7 +187,7 @@ export class AmmV3 extends ModuleBase {
               .map((info, idx) => {
                 const token = this.scope.token.allTokenMap.get(poolRewardInfos[idx]?.tokenMint.toBase58());
                 const penddingReward = token
-                  ? this.scope.mintToTokenAmount({ mint: token.mint, amount: info.peddingReward })
+                  ? this.scope.mintToTokenAmount({ mint: token.mint, amount: info.pendingReward })
                   : undefined;
                 if (!penddingReward) return;
                 const apr24h =
@@ -251,6 +259,28 @@ export class AmmV3 extends ModuleBase {
     });
     this._hydratedAmmV3PoolsMap = new Map(this._hydratedAmmV3Pools.map((pool) => [pool.idString, pool]));
     return this._hydratedAmmV3Pools;
+  }
+
+  public getAmountsFromLiquidity({
+    poolId,
+    ownerPosition,
+    liquidity,
+    slippage,
+    add,
+  }: GetAmountParams): ReturnTypeGetAmountsFromLiquidity {
+    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
+    const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower);
+    const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickUpper);
+    return LiquidityMath.getAmountsFromLiquidityWithSlippage(
+      poolInfo!.sqrtPriceX64,
+      sqrtPriceX64A,
+      sqrtPriceX64B,
+      liquidity,
+      add,
+      add,
+      slippage,
+    );
   }
 
   public async fetchPoolAccountPosition(): Promise<HydratedConcentratedInfo[]> {
@@ -618,25 +648,12 @@ export class AmmV3 extends ModuleBase {
   public async swapBaseIn({
     poolId,
     ownerInfo,
-
     inputMint,
     amountIn,
     amountOutMin,
     priceLimit,
-
     remainingAccounts,
-  }: {
-    poolId: PublicKey;
-    ownerInfo: {
-      feePayer: PublicKey;
-      useSOLBalance?: boolean;
-    };
-    inputMint: PublicKey;
-    amountIn: BN;
-    amountOutMin: BN;
-    priceLimit?: Decimal;
-    remainingAccounts: PublicKey[];
-  }): Promise<MakeTransaction> {
+  }: SwapInParams): Promise<MakeTransaction> {
     this.scope.checkOwner();
     const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
@@ -702,31 +719,274 @@ export class AmmV3 extends ModuleBase {
     return txBuilder.build();
   }
 
-  public getAmountsFromLiquidity({
+  public async initReward({
     poolId,
-    ownerPosition,
-    liquidity,
-    slippage,
-    add,
-  }: {
-    poolId: string | PublicKey;
-    ownerPosition: AmmV3PoolPersonalPosition;
-    liquidity: BN;
-    slippage: number;
-    add: boolean;
-  }): ReturnTypeGetAmountsFromLiquidity {
+    ownerInfo,
+    rewardInfo,
+    associatedOnly = true,
+  }: InitRewardParams): Promise<MakeTransaction> {
     const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
-    const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower);
-    const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickUpper);
-    return LiquidityMath.getAmountsFromLiquidityWithSlippage(
-      poolInfo!.sqrtPriceX64,
-      sqrtPriceX64A,
-      sqrtPriceX64B,
-      liquidity,
-      add,
-      add,
-      slippage,
-    );
+
+    if (rewardInfo.endTime <= rewardInfo.openTime)
+      this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
+
+    const txBuilder = this.createTxBuilder();
+    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+
+    const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
+    const { account: ownerRewardAccount, instructionParams: ownerRewardAccountIns } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: rewardInfo.mint,
+        notUseTokenAccount: !!rewardMintUseSOLBalance,
+        skipCloseAccount: !rewardMintUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo: rewardMintUseSOLBalance
+          ? {
+              payer: ownerInfo.feePayer,
+              amount: new BN(
+                new Decimal(rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)).gte(
+                  rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime),
+                )
+                  ? rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)
+                  : rewardInfo.perSecond
+                      .sub(rewardInfo.endTime - rewardInfo.openTime)
+                      .add(1)
+                      .toFixed(0),
+              ),
+            }
+          : undefined,
+        associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+      });
+    ownerRewardAccountIns && txBuilder.addInstruction(ownerRewardAccountIns);
+
+    if (!ownerRewardAccount)
+      this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
+
+    const insInfo = AmmV3Instrument.makeInitRewardInstructions({
+      poolInfo: poolInfo!,
+      ownerInfo: {
+        wallet: this.scope.ownerPubKey,
+        tokenAccount: ownerRewardAccount!,
+      },
+      rewardInfo: {
+        mint: rewardInfo.mint,
+        openTime: rewardInfo.openTime,
+        endTime: rewardInfo.endTime,
+        emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
+      },
+    });
+    txBuilder.addInstruction({ instructions: insInfo.instructions });
+    return txBuilder.build();
+  }
+
+  public async setReward({
+    poolId,
+    ownerInfo,
+    rewardInfo,
+    associatedOnly = true,
+  }: SetRewardParams): Promise<MakeTransaction> {
+    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
+
+    if (rewardInfo.endTime <= rewardInfo.openTime)
+      this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
+
+    const txBuilder = this.createTxBuilder();
+    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
+    const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: rewardInfo.mint,
+        notUseTokenAccount: rewardMintUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo: rewardMintUseSOLBalance
+          ? {
+              payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+              amount: new BN(
+                new Decimal(rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)).gte(
+                  rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime),
+                )
+                  ? rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)
+                  : rewardInfo.perSecond
+                      .sub(rewardInfo.endTime - rewardInfo.openTime)
+                      .add(1)
+                      .toFixed(0),
+              ),
+            }
+          : undefined,
+
+        associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+      });
+    ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
+    if (!ownerRewardAccount)
+      this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
+
+    const insInfo = AmmV3Instrument.makeSetRewardInstructions({
+      poolInfo: poolInfo!,
+      ownerInfo: {
+        wallet: this.scope.ownerPubKey,
+        tokenAccount: ownerRewardAccount!,
+      },
+      rewardInfo: {
+        mint: rewardInfo.mint,
+        openTime: rewardInfo.openTime,
+        endTime: rewardInfo.endTime,
+        emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
+      },
+    });
+
+    txBuilder.addInstruction({ instructions: insInfo.instructions });
+
+    return txBuilder.build();
+  }
+
+  public async setRewards({
+    poolId,
+    ownerInfo,
+    rewardInfos,
+    associatedOnly = true,
+  }: SetRewardsParams): Promise<MakeTransaction> {
+    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
+
+    const txBuilder = this.createTxBuilder();
+    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+
+    for (const rewardInfo of rewardInfos) {
+      if (rewardInfo.endTime <= rewardInfo.openTime)
+        this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
+
+      const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
+      const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
+        await this.scope.account.getOrCreateTokenAccount({
+          mint: rewardInfo.mint,
+          notUseTokenAccount: rewardMintUseSOLBalance,
+          owner: this.scope.ownerPubKey,
+          createInfo: rewardMintUseSOLBalance
+            ? {
+                payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+                amount: new BN(
+                  new Decimal(rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)).gte(
+                    rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime),
+                  )
+                    ? rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)
+                    : rewardInfo.perSecond
+                        .sub(rewardInfo.endTime - rewardInfo.openTime)
+                        .add(1)
+                        .toFixed(0),
+                ),
+              }
+            : undefined,
+          associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+        });
+      ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
+      if (!ownerRewardAccount)
+        this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
+
+      const insInfo = AmmV3Instrument.makeSetRewardInstructions({
+        poolInfo: poolInfo!,
+        ownerInfo: {
+          wallet: this.scope.ownerPubKey,
+          tokenAccount: ownerRewardAccount!,
+        },
+        rewardInfo: {
+          mint: rewardInfo.mint,
+          openTime: rewardInfo.openTime,
+          endTime: rewardInfo.endTime,
+          emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
+        },
+      });
+      txBuilder.addInstruction({ instructions: insInfo.instructions });
+    }
+
+    return txBuilder.build();
+  }
+
+  public async collectReward({
+    poolId,
+    ownerInfo,
+    rewardMint,
+    associatedOnly = true,
+  }: CollectRewardParams): Promise<MakeTransaction> {
+    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
+
+    const txBuilder = this.createTxBuilder();
+    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardMint.equals(WSOLMint);
+    const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: rewardMint,
+        notUseTokenAccount: rewardMintUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !rewardMintUseSOLBalance,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount: 0,
+        },
+        associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+      });
+    ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
+
+    if (!ownerRewardAccount)
+      this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
+
+    const insInfo = AmmV3Instrument.makeCollectRewardInstructions({
+      poolInfo: poolInfo!,
+      ownerInfo: {
+        wallet: this.scope.ownerPubKey,
+        tokenAccount: ownerRewardAccount!,
+      },
+      rewardMint,
+    });
+    txBuilder.addInstruction({ instructions: insInfo.instructions });
+
+    return txBuilder.build();
+  }
+
+  public async collectRewards({
+    poolId,
+    ownerInfo,
+    rewardMints,
+    associatedOnly = true,
+  }: CollectRewardsParams): Promise<MakeTransaction> {
+    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
+
+    const txBuilder = this.createTxBuilder();
+    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+
+    for (const rewardMint of rewardMints) {
+      const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardMint.equals(WSOLMint);
+      const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
+        await this.scope.account.getOrCreateTokenAccount({
+          mint: rewardMint,
+          notUseTokenAccount: rewardMintUseSOLBalance,
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: !rewardMintUseSOLBalance,
+          createInfo: {
+            payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+            amount: 0,
+          },
+          associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+        });
+      if (!ownerRewardAccount)
+        this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
+      ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
+
+      const insInfo = AmmV3Instrument.makeCollectRewardInstructions({
+        poolInfo: poolInfo!,
+        ownerInfo: {
+          wallet: this.scope.ownerPubKey,
+          tokenAccount: ownerRewardAccount!,
+        },
+
+        rewardMint,
+      });
+      txBuilder.addInstruction({ instructions: insInfo.instructions });
+    }
+
+    return txBuilder.build();
   }
 }
