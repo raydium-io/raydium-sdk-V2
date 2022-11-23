@@ -571,7 +571,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static async makeDecreaseLiquidityInstructions({
+  static makeDecreaseLiquidityInstructions({
     poolInfo,
     ownerPosition,
     ownerInfo,
@@ -592,7 +592,7 @@ export class AmmV3Instrument {
     liquidity: BN;
     amountMinA: BN;
     amountMinB: BN;
-  }): Promise<ReturnTypeMakeInstructions> {
+  }): ReturnTypeMakeInstructions {
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
       poolInfo.ammConfig.tickSpacing,
@@ -602,23 +602,20 @@ export class AmmV3Instrument {
       poolInfo.ammConfig.tickSpacing,
     );
 
-    const { publicKey: tickArrayLower } = await getPdaTickArrayAddress(
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
       poolInfo.programId,
       poolInfo.id,
       tickArrayLowerStartIndex,
     );
-    const { publicKey: tickArrayUpper } = await getPdaTickArrayAddress(
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
       poolInfo.programId,
       poolInfo.id,
       tickArrayUpperStartIndex,
     );
-    const { publicKey: positionNftAccount } = await getATAAddress(ownerInfo.wallet, ownerPosition.nftMint);
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint);
 
-    const { publicKey: personalPosition } = await getPdaPersonalPositionAddress(
-      poolInfo.programId,
-      ownerPosition.nftMint,
-    );
-    const { publicKey: protocolPosition } = await getPdaProtocolPositionAddress(
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
       poolInfo.programId,
       poolInfo.id,
       ownerPosition.tickLower,

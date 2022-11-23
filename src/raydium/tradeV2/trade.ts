@@ -1,8 +1,7 @@
-import { Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils, AmmV3Instrument } from "../ammV3";
-import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE } from "../ammV3/utils/constants";
+import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
 import { TokenAccount } from "../account/types";
 import {
   forecastTransactionSize,
@@ -13,115 +12,23 @@ import {
   BN_ZERO,
 } from "../../common";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
-import {
-  StableLayout,
-  makeSimulatePoolInfoInstruction,
-  LiquidityPoolJsonInfo,
-  LiquidityPoolKeys,
-  LiquidityPoolsJsonFile,
-  makeAMMSwapInstruction,
-} from "../liquidity";
+import { StableLayout, makeSimulatePoolInfoInstruction, LiquidityPoolJsonInfo, LiquidityPoolKeys } from "../liquidity";
 import { getAssociatedMiddleStatusAccount } from "../route/util";
-import { route1Instruction, route2Instruction } from "./instrument";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
+import {
+  ComputeAmountOutLayout,
+  PoolType,
+  PoolAccountInfoV4,
+  ReturnTypeGetAddLiquidityDefaultPool,
+  ReturnTypeFetchMultipleInfo,
+  ReturnTypeGetAllRoute,
+  ReturnTypeMakeSwapTransaction,
+  RoutePathType,
+  ReturnTypeGetAllRouteComputeAmountOut,
+} from "./type";
+import { makeSwapInstruction } from "./instrument";
 
-export type PoolType = AmmV3PoolInfo | LiquidityPoolJsonInfo;
-type RoutePathType = {
-  [routeMint: string]: {
-    in: PoolType[];
-    out: PoolType[];
-    mDecimals: number;
-  };
-};
-
-interface poolAccountInfoV4 {
-  ammId: string;
-  status: BN;
-  baseDecimals: number;
-  quoteDecimals: number;
-  lpDecimals: number;
-  baseReserve: BN;
-  quoteReserve: BN;
-  lpSupply: BN;
-  startTime: BN;
-}
-
-export interface ComputeAmountOutAmmLayout {
-  amountIn: TokenAmount;
-  amountOut: TokenAmount;
-  minAmountOut: TokenAmount;
-  currentPrice: Price | undefined;
-  executionPrice: Price | null;
-  priceImpact: Percent;
-  fee: TokenAmount[];
-  routeType: "amm";
-  poolKey: PoolType[];
-  remainingAccounts: PublicKey[][];
-  middleMint: PublicKey | undefined;
-  poolReady: boolean;
-  poolType: string | undefined;
-}
-export interface ComputeAmountOutRouteLayout {
-  amountIn: TokenAmount;
-  amountOut: TokenAmount;
-  minAmountOut: TokenAmount;
-  currentPrice: Price | undefined;
-  executionPrice: Price | null;
-  priceImpact: Percent;
-  fee: TokenAmount[];
-  routeType: "route";
-  poolKey: PoolType[];
-  remainingAccounts: PublicKey[][];
-  middleMint: PublicKey | undefined;
-  poolReady: boolean;
-  poolType: (string | undefined)[];
-}
-type ComputeAmountOutLayout = ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;
-
-type makeSwapInstructionParam = {
-  ownerInfo: {
-    wallet: PublicKey;
-    // tokenAccountA: PublicKey
-    // tokenAccountB: PublicKey
-
-    sourceToken: PublicKey;
-    routeToken?: PublicKey;
-    destinationToken: PublicKey;
-    userPdaAccount?: PublicKey;
-  };
-
-  inputMint: PublicKey;
-  routeProgram: PublicKey;
-
-  swapInfo: ComputeAmountOutLayout;
-};
-
-export interface ReturnTypeGetAllRoute {
-  directPath: PoolType[];
-  addLiquidityPools: LiquidityPoolJsonInfo[];
-  routePathDict: RoutePathType;
-  needSimulate: LiquidityPoolJsonInfo[];
-  needTickArray: AmmV3PoolInfo[];
-}
-export interface ReturnTypeFetchMultipleInfo {
-  [ammId: string]: poolAccountInfoV4;
-}
-export type ReturnTypeGetAddLiquidityDefaultPool = LiquidityPoolJsonInfo | undefined;
-export type ReturnTypeGetAllRouteComputeAmountOut = ComputeAmountOutLayout[];
-export interface ReturnTypeMakeSwapInstruction {
-  signers: (Keypair | Signer)[];
-  instructions: TransactionInstruction[];
-  address: { [key: string]: PublicKey };
-}
-export interface ReturnTypeMakeSwapTranscation {
-  transactions: {
-    transaction: Transaction;
-    signer: (Keypair | Signer)[];
-  }[];
-  address: { [key: string]: PublicKey };
-}
-
-export class TradeV2 extends ModuleBase {
+export default class TradeV2 extends ModuleBase {
   private _stableLayout: StableLayout;
 
   constructor(params: ModuleBaseProps) {
@@ -129,17 +36,12 @@ export class TradeV2 extends ModuleBase {
     this._stableLayout = new StableLayout({ connection: this.scope.connection });
   }
 
-  static getAllRoute({
+  public getAllRoute({
     inputMint,
     outputMint,
-    apiPoolList,
-    ammV3List,
   }: {
     inputMint: PublicKey;
     outputMint: PublicKey;
-
-    apiPoolList?: LiquidityPoolsJsonFile;
-    ammV3List?: AmmV3PoolInfo[];
   }): ReturnTypeGetAllRoute {
     const needSimulate: { [poolKey: string]: LiquidityPoolJsonInfo } = {};
     const needTickArray: { [poolKey: string]: AmmV3PoolInfo } = {};
@@ -148,7 +50,8 @@ export class TradeV2 extends ModuleBase {
 
     const routePathDict: RoutePathType = {}; // {[route mint: string]: {in: [] , out: []}}
 
-    for (const itemAmmPool of ammV3List ?? []) {
+    for (const pool of this.scope.ammV3.pools.sdkParsedData) {
+      const itemAmmPool = pool.state;
       if (
         (itemAmmPool.mintA.mint.equals(inputMint) && itemAmmPool.mintB.mint.equals(outputMint)) ||
         (itemAmmPool.mintA.mint.equals(outputMint) && itemAmmPool.mintB.mint.equals(inputMint))
@@ -186,7 +89,7 @@ export class TradeV2 extends ModuleBase {
 
     const _inputMint = inputMint.toString();
     const _outputMint = outputMint.toString();
-    for (const itemAmmPool of (apiPoolList ?? {}).official ?? []) {
+    for (const itemAmmPool of (this.scope.apiData.liquidityPools?.data || {}).official || []) {
       if (
         (itemAmmPool.baseMint === _inputMint && itemAmmPool.quoteMint === _outputMint) ||
         (itemAmmPool.baseMint === _outputMint && itemAmmPool.quoteMint === _inputMint)
@@ -217,7 +120,7 @@ export class TradeV2 extends ModuleBase {
       }
     }
     const _insertAddLiquidityPool = addLiquidityPools.length === 0;
-    for (const itemAmmPool of (apiPoolList ?? {}).unOfficial ?? []) {
+    for (const itemAmmPool of (this.scope.apiData.liquidityPools?.data || {}).unOfficial || []) {
       if (
         (itemAmmPool.baseMint === _inputMint && itemAmmPool.quoteMint === _outputMint) ||
         (itemAmmPool.baseMint === _outputMint && itemAmmPool.quoteMint === _inputMint)
@@ -289,6 +192,32 @@ export class TradeV2 extends ModuleBase {
     };
   }
 
+  public async fetchPoolTickData({
+    inputMint,
+    outputMint,
+    batchRequest = true,
+  }: {
+    inputMint: PublicKey;
+    outputMint: PublicKey;
+    batchRequest?: boolean;
+  }): Promise<{
+    routes: ReturnTypeGetAllRoute;
+    ticks: ReturnTypeFetchMultiplePoolTickArrays;
+    poolsInfo: ReturnTypeFetchMultipleInfo;
+  }> {
+    const routes = this.getAllRoute({ inputMint, outputMint });
+    const ticks = await PoolUtils.fetchMultiplePoolTickArrays({
+      connection: this.scope.connection,
+      poolKeys: routes.needTickArray,
+      batchRequest,
+    });
+    const poolsInfo = await this.fetchMultipleInfo({
+      pools: routes.needSimulate,
+      batchRequest,
+    });
+    return { routes, ticks, poolsInfo };
+  }
+
   public async fetchMultipleInfo({
     pools,
     batchRequest = true,
@@ -343,7 +272,7 @@ export class TradeV2 extends ModuleBase {
     poolInfosCache,
   }: {
     addLiquidityPools: LiquidityPoolJsonInfo[];
-    poolInfosCache: { [ammId: string]: poolAccountInfoV4 };
+    poolInfosCache: { [ammId: string]: PoolAccountInfoV4 };
   }): ReturnTypeGetAddLiquidityDefaultPool {
     if (addLiquidityPools.length === 0) return undefined;
     if (addLiquidityPools.length === 1) return addLiquidityPools[0];
@@ -352,14 +281,14 @@ export class TradeV2 extends ModuleBase {
 
     const _addLiquidityPools = addLiquidityPools.filter((i) => i.version === addLiquidityPools[0].version);
 
-    _addLiquidityPools.sort((a, b) => this.ComparePoolSize(a, b, poolInfosCache));
+    _addLiquidityPools.sort((a, b) => this.comparePoolSize(a, b, poolInfosCache));
     return _addLiquidityPools[0];
   }
 
-  private static ComparePoolSize(
+  private static comparePoolSize(
     a: LiquidityPoolJsonInfo,
     b: LiquidityPoolJsonInfo,
-    ammIdToPoolInfo: { [ammId: string]: poolAccountInfoV4 },
+    ammIdToPoolInfo: { [ammId: string]: PoolAccountInfoV4 },
   ): number {
     const aInfo = ammIdToPoolInfo[a.id];
     const bInfo = ammIdToPoolInfo[b.id];
@@ -532,7 +461,6 @@ export class TradeV2 extends ModuleBase {
     amountIn: TokenAmount;
     currencyOut: Token;
     slippage: Percent;
-
     fromPool: PoolType;
     toPool: PoolType;
     simulateCache: ReturnTypeFetchMultipleInfo;
@@ -646,7 +574,6 @@ export class TradeV2 extends ModuleBase {
     }
 
     return {
-      // middleAmountOut,
       minMiddleAmountOut,
       amountOut,
       minAmountOut,
@@ -655,98 +582,6 @@ export class TradeV2 extends ModuleBase {
       fee: [firstFee, secondFee],
       remainingAccounts: [firstRemainingAccounts, secondRemainingAccounts],
     };
-  }
-
-  public async makeSwapInstruction({
-    routeProgram,
-    ownerInfo,
-    inputMint,
-    swapInfo,
-  }: makeSwapInstructionParam): Promise<ReturnTypeMakeSwapInstruction> {
-    if (swapInfo.routeType === "amm") {
-      if (swapInfo.poolKey[0].version === 6) {
-        const _poolKey = swapInfo.poolKey[0] as AmmV3PoolInfo;
-        const sqrtPriceLimitX64 = inputMint.equals(_poolKey.mintA.mint)
-          ? MIN_SQRT_PRICE_X64.add(ONE)
-          : MAX_SQRT_PRICE_X64.sub(ONE);
-
-        return await AmmV3Instrument.makeSwapBaseInInstructions({
-          poolInfo: _poolKey,
-          ownerInfo: {
-            wallet: ownerInfo.wallet,
-            tokenAccountA: _poolKey.mintA.mint.equals(inputMint) ? ownerInfo.sourceToken : ownerInfo.destinationToken,
-            tokenAccountB: _poolKey.mintA.mint.equals(inputMint) ? ownerInfo.destinationToken : ownerInfo.sourceToken,
-          },
-          inputMint,
-          amountIn: swapInfo.amountIn.raw,
-          amountOutMin: swapInfo.minAmountOut.raw,
-          sqrtPriceLimitX64,
-          remainingAccounts: swapInfo.remainingAccounts[0],
-        });
-      } else {
-        const _poolKey = swapInfo.poolKey[0] as LiquidityPoolJsonInfo;
-
-        return {
-          signers: [] as Keypair[],
-          instructions: [
-            makeAMMSwapInstruction({
-              poolKeys: jsonInfo2PoolKeys(_poolKey),
-              userKeys: {
-                tokenAccountIn: ownerInfo.sourceToken,
-                tokenAccountOut: ownerInfo.destinationToken,
-                owner: ownerInfo.wallet,
-              },
-              amountIn: swapInfo.amountIn.raw,
-              amountOut: swapInfo.minAmountOut.raw,
-              fixedSide: "in",
-            }),
-          ],
-          address: {} as { [key: string]: PublicKey },
-        };
-      }
-    } else if (swapInfo.routeType === "route") {
-      const poolKey1 = swapInfo.poolKey[0];
-      const poolKey2 = swapInfo.poolKey[1];
-
-      return {
-        signers: [] as Keypair[],
-        instructions: [
-          route1Instruction(
-            routeProgram,
-            poolKey1,
-            poolKey2,
-
-            ownerInfo.sourceToken,
-            ownerInfo.routeToken!,
-            ownerInfo.userPdaAccount!,
-            ownerInfo.wallet,
-
-            inputMint,
-
-            swapInfo.amountIn.raw,
-            swapInfo.minAmountOut.raw,
-            swapInfo.remainingAccounts[0],
-          ),
-          route2Instruction(
-            routeProgram,
-            poolKey1,
-            poolKey2,
-
-            ownerInfo.routeToken!,
-            ownerInfo.destinationToken,
-            ownerInfo.userPdaAccount!,
-            ownerInfo.wallet,
-
-            inputMint,
-
-            swapInfo.remainingAccounts[1],
-          ),
-        ],
-        address: {} as { [key: string]: PublicKey },
-      };
-    } else {
-      throw Error("route type error");
-    }
   }
 
   public async makeSwapTransaction({
@@ -761,7 +596,7 @@ export class TradeV2 extends ModuleBase {
       associatedOnly: boolean;
     };
     checkTransaction: boolean;
-  }): Promise<ReturnTypeMakeSwapTranscation> {
+  }): Promise<ReturnTypeMakeSwapTransaction> {
     const frontInstructions: TransactionInstruction[] = [];
     const endInstructions: TransactionInstruction[] = [];
 
@@ -786,16 +621,11 @@ export class TradeV2 extends ModuleBase {
           ? {
               payer: ownerInfo.wallet,
               amount: amountIn,
-
-              // frontInstructions,
-              // endInstructions,
-              // signers,
             }
           : undefined,
         owner: ownerInfo.wallet,
         associatedOnly: useSolBalance ? false : ownerInfo.associatedOnly,
       });
-
     sourceInstructionParams && txBuilder.addInstruction(sourceInstructionParams);
     if (sourceToken === undefined) throw Error("input account check error");
 
@@ -805,10 +635,6 @@ export class TradeV2 extends ModuleBase {
         createInfo: {
           payer: ownerInfo.wallet,
           amount: 0,
-
-          // frontInstructions,
-          // endInstructions: outSolBalance ? endInstructions : undefined,
-          // signers,
         },
         owner: ownerInfo.wallet,
         associatedOnly: ownerInfo.associatedOnly,
@@ -819,14 +645,9 @@ export class TradeV2 extends ModuleBase {
     if (swapInfo.routeType === "route") {
       const res = await this.scope.account.getOrCreateTokenAccount({
         mint: middleMint,
-        // tokenAccounts: ownerInfo.tokenAccounts,
         createInfo: {
           payer: ownerInfo.wallet,
           amount: 0,
-
-          // frontInstructions,
-          // endInstructions,
-          // signers,
         },
         owner: ownerInfo.wallet,
         associatedOnly: false,
@@ -835,7 +656,7 @@ export class TradeV2 extends ModuleBase {
       res.instructionParams && txBuilder.addInstruction(res.instructionParams);
     }
 
-    const ins = await this.makeSwapInstruction({
+    const ins = await makeSwapInstruction({
       routeProgram,
       inputMint,
       swapInfo,

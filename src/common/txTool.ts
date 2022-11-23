@@ -148,6 +148,74 @@ export class TxBuilder {
       extInfo: extInfo || {},
     };
   }
+
+  public sizeCheckBuild(extInfo?: Record<string, any>): MultiTxBuildData {
+    const signerKey: { [key: string]: Signer } = this.signers.reduce(
+      (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
+      {},
+    );
+
+    const allTransactions: Transaction[] = [];
+    const allSigners: Signer[][] = [];
+
+    let instructionQueue: TransactionInstruction[] = [];
+    this.allInstructions.forEach((item) => {
+      const _itemIns = [...instructionQueue, item];
+      const _signerStrs = new Set<string>(
+        _itemIns.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+      );
+      const _signer = [..._signerStrs.values()].map((i) => new PublicKey(i));
+      if (forecastTransactionSize(_itemIns, [this.feePayer, ..._signer])) {
+        instructionQueue.push(item);
+      } else {
+        allTransactions.push(new Transaction().add(...instructionQueue));
+        allSigners.push([..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined));
+        instructionQueue = [item];
+      }
+    });
+
+    if (instructionQueue.length > 0) {
+      const _signerStrs = new Set<string>(
+        instructionQueue.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+      );
+      allTransactions.push(new Transaction().add(...instructionQueue));
+      allSigners.push([..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined));
+    }
+    allTransactions.forEach((tx) => (tx.feePayer = this.feePayer));
+
+    return {
+      transactions: allTransactions,
+      signers: allSigners,
+      execute: async (): Promise<string[]> => {
+        const recentBlockHash = await getRecentBlockHash(this.connection);
+        if (this.owner?.isKeyPair) {
+          return await Promise.all(
+            allTransactions.map(async (tx, idx) => {
+              tx.recentBlockhash = recentBlockHash;
+              return await sendAndConfirmTransaction(this.connection, tx, allSigners[idx]);
+            }),
+          );
+        }
+        if (this.signAllTransactions) {
+          const partialSignedTxs = allTransactions.map((tx, idx) => {
+            tx.recentBlockhash = recentBlockHash;
+            if (allSigners[idx].length) tx.partialSign(...allSigners[idx]);
+            return tx;
+          });
+          const signedTxs = await this.signAllTransactions(partialSignedTxs);
+
+          const txIds: string[] = [];
+          for (let i = 0; i < signedTxs.length; i += 1) {
+            const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+            txIds.push(txId);
+          }
+          return txIds;
+        }
+        throw new Error("please connect wallet first");
+      },
+      extInfo: extInfo || {},
+    };
+  }
 }
 
 export async function getRecentBlockHash(connection: Connection): Promise<string> {

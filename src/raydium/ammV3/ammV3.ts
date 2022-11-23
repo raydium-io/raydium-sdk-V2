@@ -14,7 +14,7 @@ import { add, mul, div } from "../../common/fractionUtil";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { TokenAmount } from "../../module/amount";
 import { Percent } from "../../module/percent";
-import { mockCreatePoolInfo, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE } from "./utils/constants";
+import { mockCreatePoolInfo, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE, ZERO } from "./utils/constants";
 import { LiquidityMath, SqrtPriceMath } from "./utils/math";
 import { PoolUtils } from "./utils/pool";
 import { PositionUtils } from "./utils/position";
@@ -36,10 +36,12 @@ import {
   SetRewardsParams,
   CollectRewardParams,
   CollectRewardsParams,
+  HarvestAllRewardsParams,
 } from "./type";
 import { AmmV3Instrument } from "./instrument";
-import { LoadParams, MakeTransaction } from "../type";
+import { LoadParams, MakeTransaction, MakeMultiTransaction } from "../type";
 import { MathUtil } from "./utils/math";
+import { getATAAddress } from "./utils/pda";
 import BN from "bn.js";
 export class AmmV3 extends ModuleBase {
   private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
@@ -988,5 +990,119 @@ export class AmmV3 extends ModuleBase {
     }
 
     return txBuilder.build();
+  }
+
+  public async harvestAllRewards({
+    ownerInfo,
+    associatedOnly = false,
+  }: HarvestAllRewardsParams): Promise<MakeMultiTransaction> {
+    const ownerMintToAccount: { [mint: string]: PublicKey } = {};
+    for (const item of this.scope.account.tokenAccountRawInfos) {
+      if (associatedOnly) {
+        const ata = getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint).publicKey;
+        if (ata.equals(item.pubkey)) ownerMintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
+      } else {
+        ownerMintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
+      }
+    }
+    const txBuilder = this.createTxBuilder();
+
+    for (const itemInfo of this._hydratedAmmV3Pools) {
+      if (itemInfo.positionAccount === undefined) continue;
+      if (
+        !itemInfo.positionAccount.find(
+          (i) =>
+            !i.tokenFeeAmountA.isZero() ||
+            !i.tokenFeeAmountB.isZero() ||
+            i.rewardInfos.find((ii) => !ii.pendingReward.isZero()),
+        )
+      )
+        continue;
+
+      const poolInfo = itemInfo.state;
+      const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.mint.equals(WSOLMint);
+      const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.mint.equals(WSOLMint);
+
+      let ownerTokenAccountA = ownerMintToAccount[poolInfo.mintA.mint.toString()];
+      if (!ownerTokenAccountA) {
+        const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          mint: poolInfo.mintA.mint,
+          notUseTokenAccount: mintAUseSOLBalance,
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: true,
+          createInfo: {
+            payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+            amount: 0,
+          },
+          associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        });
+        ownerTokenAccountA = account!;
+        instructionParams && txBuilder.addInstruction(instructionParams);
+      }
+
+      let ownerTokenAccountB = ownerMintToAccount[poolInfo.mintB.mint.toString()];
+      if (!ownerTokenAccountB) {
+        const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          mint: poolInfo.mintB.mint,
+          notUseTokenAccount: mintBUseSOLBalance,
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: true,
+          createInfo: {
+            payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+            amount: 0,
+          },
+          associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        });
+        ownerTokenAccountB = account!;
+        instructionParams && txBuilder.addInstruction(instructionParams);
+      }
+
+      ownerMintToAccount[poolInfo.mintA.mint.toString()] = ownerTokenAccountA;
+      ownerMintToAccount[poolInfo.mintB.mint.toString()] = ownerTokenAccountB;
+
+      const rewardAccounts: PublicKey[] = [];
+      for (const itemReward of poolInfo.rewardInfos) {
+        const rewardUseSOLBalance = ownerInfo.useSOLBalance && itemReward.tokenMint.equals(WSOLMint);
+        let ownerRewardAccount = ownerMintToAccount[itemReward.tokenMint.toString()];
+        if (!ownerRewardAccount) {
+          const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+            mint: itemReward.tokenMint,
+            notUseTokenAccount: rewardUseSOLBalance,
+            owner: this.scope.ownerPubKey,
+            skipCloseAccount: !rewardUseSOLBalance,
+            createInfo: {
+              payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+              amount: 0,
+            },
+            associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+          });
+          ownerRewardAccount = account!;
+          instructionParams && txBuilder.addInstruction(instructionParams);
+        }
+
+        ownerMintToAccount[itemReward.tokenMint.toString()] = ownerRewardAccount;
+        rewardAccounts.push(ownerRewardAccount!);
+      }
+
+      for (const itemPosition of itemInfo.positionAccount) {
+        txBuilder.addInstruction({
+          instructions: AmmV3Instrument.makeDecreaseLiquidityInstructions({
+            poolInfo,
+            ownerPosition: itemPosition,
+            ownerInfo: {
+              wallet: this.scope.ownerPubKey,
+              tokenAccountA: ownerTokenAccountA,
+              tokenAccountB: ownerTokenAccountB,
+              rewardAccounts,
+            },
+            liquidity: ZERO,
+            amountMinA: ZERO,
+            amountMinB: ZERO,
+          }).instructions,
+        });
+      }
+    }
+
+    return txBuilder.sizeCheckBuild();
   }
 }

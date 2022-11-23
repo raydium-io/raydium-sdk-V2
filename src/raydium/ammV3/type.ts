@@ -461,3 +461,11 @@ export interface CollectRewardParams {
 export interface CollectRewardsParams extends Omit<CollectRewardParams, "rewardMint"> {
   rewardMints: PublicKey[];
 }
+
+export interface HarvestAllRewardsParams {
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+  associatedOnly?: boolean;
+}

@@ -1,13 +1,14 @@
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey, TransactionInstruction, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair, TransactionInstruction, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { AmmV3PoolInfo } from "../ammV3";
+import { AmmV3PoolInfo, AmmV3Instrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../ammV3";
 import { jsonInfo2PoolKeys } from "../../common";
 import { LiquidityPoolKeysV4 } from "../liquidity";
 import { struct, u64, u8 } from "../../marshmallow";
+import { LiquidityPoolJsonInfo, makeAMMSwapInstruction } from "../liquidity";
 
-import { PoolType } from "./trade";
+import { PoolType, ComputeAmountOutLayout, ReturnTypeMakeSwapInstruction } from "./type";
 
 export function route1Instruction(
   programId: PublicKey,
@@ -222,4 +223,114 @@ export function route2Instruction(
     programId,
     data,
   });
+}
+
+type MakeSwapInstructionParam = {
+  ownerInfo: {
+    wallet: PublicKey;
+    // tokenAccountA: PublicKey
+    // tokenAccountB: PublicKey
+
+    sourceToken: PublicKey;
+    routeToken?: PublicKey;
+    destinationToken: PublicKey;
+    userPdaAccount?: PublicKey;
+  };
+
+  inputMint: PublicKey;
+  routeProgram: PublicKey;
+
+  swapInfo: ComputeAmountOutLayout;
+};
+
+export async function makeSwapInstruction({
+  routeProgram,
+  ownerInfo,
+  inputMint,
+  swapInfo,
+}: MakeSwapInstructionParam): Promise<ReturnTypeMakeSwapInstruction> {
+  if (swapInfo.routeType === "amm") {
+    if (swapInfo.poolKey[0].version === 6) {
+      const _poolKey = swapInfo.poolKey[0] as AmmV3PoolInfo;
+      const sqrtPriceLimitX64 = inputMint.equals(_poolKey.mintA.mint)
+        ? MIN_SQRT_PRICE_X64.add(ONE)
+        : MAX_SQRT_PRICE_X64.sub(ONE);
+
+      return await AmmV3Instrument.makeSwapBaseInInstructions({
+        poolInfo: _poolKey,
+        ownerInfo: {
+          wallet: ownerInfo.wallet,
+          tokenAccountA: _poolKey.mintA.mint.equals(inputMint) ? ownerInfo.sourceToken : ownerInfo.destinationToken,
+          tokenAccountB: _poolKey.mintA.mint.equals(inputMint) ? ownerInfo.destinationToken : ownerInfo.sourceToken,
+        },
+        inputMint,
+        amountIn: swapInfo.amountIn.raw,
+        amountOutMin: swapInfo.minAmountOut.raw,
+        sqrtPriceLimitX64,
+        remainingAccounts: swapInfo.remainingAccounts[0],
+      });
+    } else {
+      const _poolKey = swapInfo.poolKey[0] as LiquidityPoolJsonInfo;
+
+      return {
+        signers: [] as Keypair[],
+        instructions: [
+          makeAMMSwapInstruction({
+            poolKeys: jsonInfo2PoolKeys(_poolKey),
+            userKeys: {
+              tokenAccountIn: ownerInfo.sourceToken,
+              tokenAccountOut: ownerInfo.destinationToken,
+              owner: ownerInfo.wallet,
+            },
+            amountIn: swapInfo.amountIn.raw,
+            amountOut: swapInfo.minAmountOut.raw,
+            fixedSide: "in",
+          }),
+        ],
+        address: {} as { [key: string]: PublicKey },
+      };
+    }
+  } else if (swapInfo.routeType === "route") {
+    const poolKey1 = swapInfo.poolKey[0];
+    const poolKey2 = swapInfo.poolKey[1];
+
+    return {
+      signers: [] as Keypair[],
+      instructions: [
+        route1Instruction(
+          routeProgram,
+          poolKey1,
+          poolKey2,
+
+          ownerInfo.sourceToken,
+          ownerInfo.routeToken!,
+          ownerInfo.userPdaAccount!,
+          ownerInfo.wallet,
+
+          inputMint,
+
+          swapInfo.amountIn.raw,
+          swapInfo.minAmountOut.raw,
+          swapInfo.remainingAccounts[0],
+        ),
+        route2Instruction(
+          routeProgram,
+          poolKey1,
+          poolKey2,
+
+          ownerInfo.routeToken!,
+          ownerInfo.destinationToken,
+          ownerInfo.userPdaAccount!,
+          ownerInfo.wallet,
+
+          inputMint,
+
+          swapInfo.remainingAccounts[1],
+        ),
+      ],
+      address: {} as { [key: string]: PublicKey },
+    };
+  } else {
+    throw Error("route type error");
+  }
 }

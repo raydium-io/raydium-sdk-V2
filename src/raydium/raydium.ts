@@ -18,6 +18,7 @@ import Route from "./route/route";
 import TokenModule, { MintToTokenAmount } from "./token/token";
 import { AmmV3 } from "./ammV3";
 import Trade from "./trade/trade";
+import TradeV2 from "./tradeV2/trade";
 import { SignAllTransactions } from "./type";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
@@ -66,6 +67,7 @@ export class Raydium {
   public ammV3: AmmV3;
   public token: TokenModule;
   public trade: Trade;
+  public tradeV2: TradeV2;
   public route: Route;
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
@@ -110,6 +112,7 @@ export class Raydium {
     this.liquidity = new Liquidity({ scope: this, moduleName: "Raydium_Liquidity" });
     this.token = new TokenModule({ scope: this, moduleName: "Raydium_token" });
     this.trade = new Trade({ scope: this, moduleName: "Raydium_trade" });
+    this.tradeV2 = new TradeV2({ scope: this, moduleName: "Raydium_tradeV2" });
     this.route = new Route({ scope: this, moduleName: "Raydium_route" });
     this.ammV3 = new AmmV3({ scope: this, moduleName: "Raydium_ammV3" });
 
