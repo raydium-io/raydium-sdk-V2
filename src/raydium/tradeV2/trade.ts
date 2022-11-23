@@ -1,4 +1,4 @@
-import { PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
 import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
@@ -9,6 +9,7 @@ import {
   parseSimulateLogToJson,
   parseSimulateValue,
   simulateMultipleInstruction,
+  TxBuilder,
   BN_ZERO,
 } from "../../common";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
@@ -22,11 +23,10 @@ import {
   ReturnTypeGetAddLiquidityDefaultPool,
   ReturnTypeFetchMultipleInfo,
   ReturnTypeGetAllRoute,
-  ReturnTypeMakeSwapTransaction,
   RoutePathType,
-  ReturnTypeGetAllRouteComputeAmountOut,
 } from "./type";
 import { makeSwapInstruction } from "./instrument";
+import { MakeMultiTransaction } from "../type";
 
 export default class TradeV2 extends ModuleBase {
   private _stableLayout: StableLayout;
@@ -192,7 +192,7 @@ export default class TradeV2 extends ModuleBase {
     };
   }
 
-  public async fetchPoolTickData({
+  public async fetchPoolAndTickData({
     inputMint,
     outputMint,
     batchRequest = true,
@@ -318,12 +318,14 @@ export default class TradeV2 extends ModuleBase {
     routePathDict: RoutePathType;
     simulateCache: ReturnTypeFetchMultipleInfo;
     tickCache: ReturnTypeFetchMultiplePoolTickArrays;
-
     inputTokenAmount: TokenAmount;
     outputToken: Token;
     slippage: Percent;
     chainTime: number;
-  }): Promise<ReturnTypeGetAllRouteComputeAmountOut> {
+  }): Promise<{
+    routes: ComputeAmountOutLayout[];
+    best?: ComputeAmountOutLayout;
+  }> {
     const amountIn = inputTokenAmount;
     const outRoute: ComputeAmountOutLayout[] = [];
 
@@ -440,10 +442,13 @@ export default class TradeV2 extends ModuleBase {
         }
       }
     }
-
     outRoute.sort((a, b) => (a.amountOut.raw.sub(b.amountOut.raw).gt(BN_ZERO) ? -1 : 1));
+    const isReadyRoutes = outRoute.filter((i) => i.poolReady);
 
-    return outRoute;
+    return {
+      routes: outRoute,
+      best: isReadyRoutes.length ? isReadyRoutes[0] : outRoute[0],
+    };
   }
 
   private async computeAmountOut({
@@ -584,7 +589,7 @@ export default class TradeV2 extends ModuleBase {
     };
   }
 
-  public async makeSwapTransaction({
+  public async swap({
     swapInfo,
     ownerInfo,
     checkTransaction,
@@ -596,12 +601,7 @@ export default class TradeV2 extends ModuleBase {
       associatedOnly: boolean;
     };
     checkTransaction: boolean;
-  }): Promise<ReturnTypeMakeSwapTransaction> {
-    const frontInstructions: TransactionInstruction[] = [];
-    const endInstructions: TransactionInstruction[] = [];
-
-    const signers: Signer[] = [];
-
+  }): Promise<MakeMultiTransaction> {
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
     const useSolBalance = !(amountIn instanceof TokenAmount);
@@ -609,9 +609,8 @@ export default class TradeV2 extends ModuleBase {
     const inputMint = amountIn instanceof TokenAmount ? amountIn.token.mint : Token.WSOL.mint;
     const middleMint = swapInfo.middleMint!;
     const outputMint = amountOut instanceof TokenAmount ? amountOut.token.mint : Token.WSOL.mint;
-    const txBuilder = this.createTxBuilder();
-
     const routeProgram = new PublicKey("routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS");
+    const txBuilder = this.createTxBuilder();
 
     const { account: sourceToken, instructionParams: sourceInstructionParams } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -632,6 +631,7 @@ export default class TradeV2 extends ModuleBase {
     const { account: destinationToken, instructionParams: destinationInstructionParams } =
       await this.scope.account.getOrCreateTokenAccount({
         mint: outputMint,
+        skipCloseAccount: !outSolBalance,
         createInfo: {
           payer: ownerInfo.wallet,
           amount: 0,
@@ -677,72 +677,84 @@ export default class TradeV2 extends ModuleBase {
       },
     });
 
-    const transactions: { transaction: Transaction; signer: Signer[] }[] = [];
-
-    const tempIns = [...frontInstructions, ...ins.instructions, ...endInstructions];
-    const tempSigner = [...signers, ...ins.signers];
+    const allTxBuilder: TxBuilder[] = [];
+    const tempIns = [...txBuilder.AllTxData.instructions, ...ins.instructions, ...txBuilder.AllTxData.endInstructions];
+    const tempSigner = [...txBuilder.AllTxData.signers, ...ins.signers];
     if (checkTransaction) {
       if (forecastTransactionSize(tempIns, [ownerInfo.wallet, ...tempSigner.map((i) => i.publicKey)])) {
-        transactions.push({
-          transaction: new Transaction().add(...tempIns),
-          signer: tempSigner,
-        });
+        allTxBuilder.push(
+          this.createTxBuilder().addInstruction({
+            instructions: tempIns,
+            signers: tempSigner,
+          }),
+        );
       } else {
-        if (frontInstructions.length > 0) {
-          transactions.push({
-            transaction: new Transaction().add(...frontInstructions),
-            signer: [...signers],
-          });
+        if (txBuilder.AllTxData.instructions.length > 0) {
+          allTxBuilder.push(
+            this.createTxBuilder().addInstruction({
+              instructions: txBuilder.AllTxData.instructions,
+              signers: txBuilder.AllTxData.signers,
+            }),
+          );
         }
         if (forecastTransactionSize(ins.instructions, [ownerInfo.wallet])) {
-          transactions.push({
-            transaction: new Transaction().add(...ins.instructions),
-            signer: [...ins.signers],
-          });
+          allTxBuilder.push(
+            this.createTxBuilder().addInstruction({
+              instructions: ins.instructions,
+              signers: ins.signers,
+            }),
+          );
         } else {
           for (const i of ins.instructions) {
-            transactions.push({
-              transaction: new Transaction().add(i),
-              signer: [...ins.signers],
-            });
+            allTxBuilder.push(
+              this.createTxBuilder().addInstruction({
+                instructions: [i],
+                signers: ins.signers,
+              }),
+            );
           }
         }
-        if (endInstructions.length > 0) {
-          transactions.push({
-            transaction: new Transaction().add(...endInstructions),
-            signer: [],
-          });
+        if (txBuilder.AllTxData.endInstructions.length > 0) {
+          allTxBuilder.push(
+            this.createTxBuilder().addInstruction({
+              instructions: txBuilder.AllTxData.endInstructions,
+            }),
+          );
         }
       }
     } else {
       if (swapInfo.routeType === "amm") {
-        transactions.push({
-          transaction: new Transaction().add(...tempIns),
-          signer: tempSigner,
-        });
+        allTxBuilder.push(
+          this.createTxBuilder().addInstruction({
+            instructions: tempIns,
+            signers: tempSigner,
+          }),
+        );
       } else {
-        if (frontInstructions.length > 0) {
-          transactions.push({
-            transaction: new Transaction().add(...frontInstructions),
-            signer: [...signers],
-          });
+        if (txBuilder.AllTxData.instructions.length > 0) {
+          allTxBuilder.push(
+            this.createTxBuilder().addInstruction({
+              instructions: txBuilder.AllTxData.instructions,
+              signers: txBuilder.AllTxData.signers,
+            }),
+          );
         }
-        transactions.push({
-          transaction: new Transaction().add(...ins.instructions),
-          signer: [...ins.signers],
-        });
-        if (endInstructions.length > 0) {
-          transactions.push({
-            transaction: new Transaction().add(...endInstructions),
-            signer: [],
-          });
+        allTxBuilder.push(
+          this.createTxBuilder().addInstruction({
+            instructions: ins.instructions,
+            signers: ins.signers,
+          }),
+        );
+        if (txBuilder.AllTxData.endInstructions.length > 0) {
+          allTxBuilder.push(
+            this.createTxBuilder().addInstruction({
+              instructions: txBuilder.AllTxData.endInstructions,
+            }),
+          );
         }
       }
     }
-
-    return {
-      transactions,
-      address: { ...ins.address },
-    };
+    const firstBuilder = allTxBuilder.shift()!;
+    return firstBuilder.buildMultiTx({ extraPreBuildData: allTxBuilder.map((builder) => builder.build()) });
   }
 }

@@ -73,7 +73,6 @@ export interface ReturnTypeFetchMultipleInfo {
   [ammId: string]: PoolAccountInfoV4;
 }
 export type ReturnTypeGetAddLiquidityDefaultPool = LiquidityPoolJsonInfo | undefined;
-export type ReturnTypeGetAllRouteComputeAmountOut = ComputeAmountOutLayout[];
 export interface ReturnTypeMakeSwapInstruction {
   signers: (Keypair | Signer)[];
   instructions: TransactionInstruction[];

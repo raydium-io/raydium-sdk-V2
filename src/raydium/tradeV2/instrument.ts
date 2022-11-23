@@ -273,7 +273,7 @@ export async function makeSwapInstruction({
       const _poolKey = swapInfo.poolKey[0] as LiquidityPoolJsonInfo;
 
       return {
-        signers: [] as Keypair[],
+        signers: [],
         instructions: [
           makeAMMSwapInstruction({
             poolKeys: jsonInfo2PoolKeys(_poolKey),
@@ -287,7 +287,7 @@ export async function makeSwapInstruction({
             fixedSide: "in",
           }),
         ],
-        address: {} as { [key: string]: PublicKey },
+        address: {},
       };
     }
   } else if (swapInfo.routeType === "route") {
@@ -295,7 +295,7 @@ export async function makeSwapInstruction({
     const poolKey2 = swapInfo.poolKey[1];
 
     return {
-      signers: [] as Keypair[],
+      signers: [],
       instructions: [
         route1Instruction(
           routeProgram,
@@ -328,7 +328,7 @@ export async function makeSwapInstruction({
           swapInfo.remainingAccounts[1],
         ),
       ],
-      address: {} as { [key: string]: PublicKey },
+      address: {},
     };
   } else {
     throw Error("route type error");
