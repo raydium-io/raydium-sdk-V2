@@ -157,7 +157,6 @@ export class Raydium {
 
     await raydium.token.load();
     await raydium.liquidity.load();
-    await raydium.chainTimeOffset();
 
     return raydium;
   }

@@ -4,7 +4,7 @@ import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
 import OutlinedInput from '@mui/material/OutlinedInput'
-import { Percent, RouteInfo, RouteType, TokenAmount } from '@raydium-io/raydium-sdk'
+import { Percent, RouteInfo, RouteType, TokenAmount, WSOLMint, USDCMint, USDTMint } from '@raydium-io/raydium-sdk'
 import debounce from 'lodash/debounce'
 import { useEffect, useState } from 'react'
 import { PublicKey } from '@solana/web3.js'
@@ -33,12 +33,30 @@ export default function Swap() {
 
   useEffect(() => {
     async function calculateAmount() {
-      console.log(1111, TokenAmount)
-      try {
-        await raydium?.ammV3.load()
-      } catch (e) {
-        console.log(4444, e)
-      }
+      if (!raydium) return
+      await raydium.ammV3.load()
+      const { routes, poolsInfo, ticks } = await raydium.tradeV2.fetchPoolAndTickData({
+        inputMint: WSOLMint,
+        outputMint: USDTMint,
+      })
+
+      const { routes: xxx, best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
+        directPath: routes.directPath,
+        routePathDict: routes.routePathDict,
+        simulateCache: poolsInfo,
+        tickCache: ticks,
+        inputTokenAmount: raydium.mintToTokenAmount({ mint: WSOLMint, amount: 0.1 }),
+        outputToken: raydium.mintToToken(USDTMint),
+        slippage: new Percent(1, 100),
+        chainTime: Date.now() / 1000,
+      })
+
+      const { execute, transactions } = await raydium.tradeV2.swap({
+        swapInfo: best!,
+        associatedOnly: true,
+        checkTransaction: true,
+      })
+
       if (!inAmount) {
         setOutAmount(undefined)
         setMinOutAmount(undefined)
@@ -50,7 +68,7 @@ export default function Swap() {
        *
        * return pool options: { availablePools, best, routedPools }, default will choose routedPools
        */
-      const { availablePools, best, routedPools } = await raydium!.trade.getAvailablePools({
+      const { routedPools } = await raydium!.trade.getAvailablePools({
         inputMint: inToken,
         outputMint: outToken,
       })!
@@ -60,24 +78,24 @@ export default function Swap() {
         return
       }
 
-      const {
-        amountOut: _amountOut,
-        minAmountOut,
-        routes,
-        routeType,
-      } = await raydium!.trade.getBestAmountOut({
-        pools: routedPools, // optional, pass only if called getAvailablePools
-        amountIn: raydium!.decimalAmount({ mint: inToken, amount: inAmount })!,
-        inputToken: raydium!.mintToToken(inToken),
-        outputToken: raydium!.mintToToken(outToken),
-        slippage: new Percent(1, 100),
-      })!
+      // const {
+      //   amountOut: _amountOut,
+      //   minAmountOut,
+      //   routes,
+      //   routeType,
+      // } = await raydium!.trade.getBestAmountOut({
+      //   pools: routedPools, // optional, pass only if called getAvailablePools
+      //   amountIn: raydium!.decimalAmount({ mint: inToken, amount: inAmount })!,
+      //   inputToken: raydium!.mintToToken(inToken),
+      //   outputToken: raydium!.mintToToken(outToken),
+      //   slippage: new Percent(1, 100),
+      // })!
 
-      setOutAmount(_amountOut)
-      setMinOutAmount(minAmountOut)
-      setRouteType(routeType)
-      setRoutes(routes)
-      setLoading(false)
+      // setOutAmount(_amountOut)
+      // setMinOutAmount(minAmountOut)
+      // setRouteType(routeType)
+      // setRoutes(routes)
+      // setLoading(false)
     }
 
     const debounceCalculate = debounce(() => {

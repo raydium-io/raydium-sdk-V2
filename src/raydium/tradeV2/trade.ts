@@ -2,15 +2,16 @@ import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
 import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
-import { TokenAccount } from "../account/types";
 import {
   forecastTransactionSize,
   jsonInfo2PoolKeys,
   parseSimulateLogToJson,
   parseSimulateValue,
   simulateMultipleInstruction,
+  solToWSol,
   TxBuilder,
   BN_ZERO,
+  SOLMint,
 } from "../../common";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { StableLayout, makeSimulatePoolInfoInstruction, LiquidityPoolJsonInfo, LiquidityPoolKeys } from "../liquidity";
@@ -43,6 +44,7 @@ export default class TradeV2 extends ModuleBase {
     inputMint: PublicKey;
     outputMint: PublicKey;
   }): ReturnTypeGetAllRoute {
+    const [input, output] = [solToWSol(inputMint), solToWSol(outputMint)];
     const needSimulate: { [poolKey: string]: LiquidityPoolJsonInfo } = {};
     const needTickArray: { [poolKey: string]: AmmV3PoolInfo } = {};
 
@@ -53,19 +55,19 @@ export default class TradeV2 extends ModuleBase {
     for (const pool of this.scope.ammV3.pools.sdkParsedData) {
       const itemAmmPool = pool.state;
       if (
-        (itemAmmPool.mintA.mint.equals(inputMint) && itemAmmPool.mintB.mint.equals(outputMint)) ||
-        (itemAmmPool.mintA.mint.equals(outputMint) && itemAmmPool.mintB.mint.equals(inputMint))
+        (itemAmmPool.mintA.mint.equals(input) && itemAmmPool.mintB.mint.equals(output)) ||
+        (itemAmmPool.mintA.mint.equals(output) && itemAmmPool.mintB.mint.equals(input))
       ) {
         directPath.push(itemAmmPool);
         needTickArray[itemAmmPool.id.toString()] = itemAmmPool;
       }
-      if (itemAmmPool.mintA.mint.equals(inputMint)) {
+      if (itemAmmPool.mintA.mint.equals(input)) {
         const t = itemAmmPool.mintB.mint.toString();
         if (routePathDict[t] === undefined)
           routePathDict[t] = { in: [], out: [], mDecimals: itemAmmPool.mintB.decimals };
         routePathDict[t].in.push(itemAmmPool);
       }
-      if (itemAmmPool.mintB.mint.equals(inputMint)) {
+      if (itemAmmPool.mintB.mint.equals(input)) {
         const t = itemAmmPool.mintA.mint.toString();
         if (routePathDict[t] === undefined)
           routePathDict[t] = { in: [], out: [], mDecimals: itemAmmPool.mintA.decimals };
@@ -87,8 +89,8 @@ export default class TradeV2 extends ModuleBase {
 
     const addLiquidityPools: LiquidityPoolJsonInfo[] = [];
 
-    const _inputMint = inputMint.toString();
-    const _outputMint = outputMint.toString();
+    const _inputMint = input.toString();
+    const _outputMint = output.toString();
     for (const itemAmmPool of (this.scope.apiData.liquidityPools?.data || {}).official || []) {
       if (
         (itemAmmPool.baseMint === _inputMint && itemAmmPool.quoteMint === _outputMint) ||
@@ -205,7 +207,8 @@ export default class TradeV2 extends ModuleBase {
     ticks: ReturnTypeFetchMultiplePoolTickArrays;
     poolsInfo: ReturnTypeFetchMultipleInfo;
   }> {
-    const routes = this.getAllRoute({ inputMint, outputMint });
+    const [input, output] = [solToWSol(inputMint), solToWSol(outputMint)];
+    const routes = this.getAllRoute({ inputMint: input, outputMint: output });
     const ticks = await PoolUtils.fetchMultiplePoolTickArrays({
       connection: this.scope.connection,
       poolKeys: routes.needTickArray,
@@ -591,24 +594,20 @@ export default class TradeV2 extends ModuleBase {
 
   public async swap({
     swapInfo,
-    ownerInfo,
+    associatedOnly,
     checkTransaction,
   }: {
     swapInfo: ComputeAmountOutLayout;
-    ownerInfo: {
-      wallet: PublicKey;
-      tokenAccounts: TokenAccount[];
-      associatedOnly: boolean;
-    };
+    associatedOnly: boolean;
     checkTransaction: boolean;
   }): Promise<MakeMultiTransaction> {
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
-    const useSolBalance = !(amountIn instanceof TokenAmount);
-    const outSolBalance = !(amountOut instanceof TokenAmount);
-    const inputMint = amountIn instanceof TokenAmount ? amountIn.token.mint : Token.WSOL.mint;
+    const useSolBalance = amountIn.token.mint.equals(Token.WSOL.mint) || amountIn.token.mint.equals(SOLMint);
+    const outSolBalance = amountOut.token.mint.equals(Token.WSOL.mint) || amountOut.token.mint.equals(SOLMint);
+    const inputMint = amountIn.token.mint;
     const middleMint = swapInfo.middleMint!;
-    const outputMint = amountOut instanceof TokenAmount ? amountOut.token.mint : Token.WSOL.mint;
+    const outputMint = amountOut.token.mint;
     const routeProgram = new PublicKey("routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS");
     const txBuilder = this.createTxBuilder();
 
@@ -618,12 +617,12 @@ export default class TradeV2 extends ModuleBase {
         notUseTokenAccount: useSolBalance,
         createInfo: useSolBalance
           ? {
-              payer: ownerInfo.wallet,
-              amount: amountIn,
+              payer: this.scope.ownerPubKey,
+              amount: amountIn.raw,
             }
           : undefined,
-        owner: ownerInfo.wallet,
-        associatedOnly: useSolBalance ? false : ownerInfo.associatedOnly,
+        owner: this.scope.ownerPubKey,
+        associatedOnly: useSolBalance ? false : associatedOnly,
       });
     sourceInstructionParams && txBuilder.addInstruction(sourceInstructionParams);
     if (sourceToken === undefined) throw Error("input account check error");
@@ -633,11 +632,11 @@ export default class TradeV2 extends ModuleBase {
         mint: outputMint,
         skipCloseAccount: !outSolBalance,
         createInfo: {
-          payer: ownerInfo.wallet,
+          payer: this.scope.ownerPubKey,
           amount: 0,
         },
-        owner: ownerInfo.wallet,
-        associatedOnly: ownerInfo.associatedOnly,
+        owner: this.scope.ownerPubKey,
+        associatedOnly,
       });
     destinationInstructionParams && txBuilder.addInstruction(destinationInstructionParams);
 
@@ -646,10 +645,10 @@ export default class TradeV2 extends ModuleBase {
       const res = await this.scope.account.getOrCreateTokenAccount({
         mint: middleMint,
         createInfo: {
-          payer: ownerInfo.wallet,
+          payer: this.scope.ownerPubKey,
           amount: 0,
         },
-        owner: ownerInfo.wallet,
+        owner: this.scope.ownerPubKey,
         associatedOnly: false,
       });
       routeToken = res.account;
@@ -661,7 +660,7 @@ export default class TradeV2 extends ModuleBase {
       inputMint,
       swapInfo,
       ownerInfo: {
-        wallet: ownerInfo.wallet,
+        wallet: this.scope.ownerPubKey,
         sourceToken,
         routeToken,
         destinationToken: destinationToken!,
@@ -670,7 +669,7 @@ export default class TradeV2 extends ModuleBase {
             ? await getAssociatedMiddleStatusAccount({
                 programId: routeProgram,
                 fromPoolId: new PublicKey(String(swapInfo.poolKey[0].id)),
-                owner: ownerInfo.wallet,
+                owner: this.scope.ownerPubKey,
                 middleMint: swapInfo.middleMint!,
               })
             : undefined,
@@ -681,7 +680,7 @@ export default class TradeV2 extends ModuleBase {
     const tempIns = [...txBuilder.AllTxData.instructions, ...ins.instructions, ...txBuilder.AllTxData.endInstructions];
     const tempSigner = [...txBuilder.AllTxData.signers, ...ins.signers];
     if (checkTransaction) {
-      if (forecastTransactionSize(tempIns, [ownerInfo.wallet, ...tempSigner.map((i) => i.publicKey)])) {
+      if (forecastTransactionSize(tempIns, [this.scope.ownerPubKey, ...tempSigner.map((i) => i.publicKey)])) {
         allTxBuilder.push(
           this.createTxBuilder().addInstruction({
             instructions: tempIns,
@@ -697,7 +696,7 @@ export default class TradeV2 extends ModuleBase {
             }),
           );
         }
-        if (forecastTransactionSize(ins.instructions, [ownerInfo.wallet])) {
+        if (forecastTransactionSize(ins.instructions, [this.scope.ownerPubKey])) {
           allTxBuilder.push(
             this.createTxBuilder().addInstruction({
               instructions: ins.instructions,

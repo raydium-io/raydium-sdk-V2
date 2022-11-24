@@ -177,7 +177,13 @@ export default class Liquidity extends ModuleBase {
     const tokenOut = outputToken;
 
     if (!includesToken(tokenIn, poolKeys) || !includesToken(tokenOut, poolKeys))
-      logger.logWithError("token not match with pool", "poolKeys", poolKeys);
+      logger.logWithError(
+        "token not match with pool",
+        "poolKeys",
+        poolKeys.id.toBase58(),
+        tokenIn.mint.toBase58(),
+        tokenOut.mint.toBase58(),
+      );
 
     const { baseReserve, quoteReserve } = poolInfo;
     this.logDebug("baseReserve:", baseReserve.toString(), "quoteReserve:", quoteReserve.toString());

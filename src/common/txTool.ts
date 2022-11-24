@@ -112,8 +112,8 @@ export class TxBuilder {
 
     const filterExtraBuildData = extraPreBuildData.filter((data) => data.transaction.instructions.length > 0);
 
-    const allTransactions: Transaction[] = [...filterExtraBuildData.map((data) => data.transaction), transaction];
-    const allSigners: Signer[][] = [...filterExtraBuildData.map((data) => data.signers), this.signers];
+    const allTransactions: Transaction[] = [transaction, ...filterExtraBuildData.map((data) => data.transaction)];
+    const allSigners: Signer[][] = [this.signers, ...filterExtraBuildData.map((data) => data.signers)];
 
     return {
       transactions: allTransactions,

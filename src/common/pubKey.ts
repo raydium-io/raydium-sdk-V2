@@ -74,3 +74,7 @@ export const ANAMint = new PublicKey("ANAxByE6G2WjFp7A4NqtWYXb3mgruyzZYg3spfxe6L
 export const ETHMint = new PublicKey("7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs");
 export const WSOLMint = new PublicKey("So11111111111111111111111111111111111111112");
 export const SOLMint = PublicKey.default;
+
+export function solToWSol(mint: PublicKeyish): PublicKey {
+  return validateAndParsePublicKey({ publicKey: mint, transformSol: true });
+}

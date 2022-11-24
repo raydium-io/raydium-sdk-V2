@@ -1,5 +1,5 @@
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey, Keypair, TransactionInstruction, SystemProgram } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
 
 import { AmmV3PoolInfo, AmmV3Instrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../ammV3";
@@ -97,8 +97,15 @@ export function route1Instruction(
         { pubkey: poolKey.marketBids, isSigner: false, isWritable: true },
         { pubkey: poolKey.marketAsks, isSigner: false, isWritable: true },
         { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
-        { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
-        { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+        ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
+          ? [
+              { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
+              { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+            ]
+          : [
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+            ]),
       ],
     );
   }
@@ -131,7 +138,7 @@ export function route2Instruction(
   userPdaAccount: PublicKey,
   ownerWallet: PublicKey,
 
-  inputMint: PublicKey,
+  routeMint: PublicKey,
 
   // tickArrayA?: PublicKey[],
   tickArrayB?: PublicKey[],
@@ -158,12 +165,12 @@ export function route2Instruction(
         { pubkey: poolKey.ammConfig.id, isSigner: false, isWritable: false },
         { pubkey: poolKey.id, isSigner: false, isWritable: true },
         {
-          pubkey: poolKey.mintA.mint.equals(inputMint) ? poolKey.mintA.vault : poolKey.mintB.vault,
+          pubkey: poolKey.mintA.mint.equals(routeMint) ? poolKey.mintA.vault : poolKey.mintB.vault,
           isSigner: false,
           isWritable: true,
         },
         {
-          pubkey: poolKey.mintA.mint.equals(inputMint) ? poolKey.mintB.vault : poolKey.mintA.vault,
+          pubkey: poolKey.mintA.mint.equals(routeMint) ? poolKey.mintB.vault : poolKey.mintA.vault,
           isSigner: false,
           isWritable: true,
         },
@@ -204,8 +211,15 @@ export function route2Instruction(
         { pubkey: poolKey.marketBids, isSigner: false, isWritable: true },
         { pubkey: poolKey.marketAsks, isSigner: false, isWritable: true },
         { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
-        { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
-        { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+        ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
+          ? [
+              { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
+              { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+            ]
+          : [
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+            ]),
       ],
     );
   }
@@ -323,7 +337,7 @@ export async function makeSwapInstruction({
           ownerInfo.userPdaAccount!,
           ownerInfo.wallet,
 
-          inputMint,
+          swapInfo.middleMint!,
 
           swapInfo.remainingAccounts[1],
         ),
