@@ -219,9 +219,9 @@ export default class Route extends ModuleBase {
         fixedSide,
       }),
     });
-    const preBuildData = preTxBuilder.build();
-    const buildData = txBuilder.buildMultiTx({
-      extraPreBuildData: [preBuildData],
+
+    const buildData = preTxBuilder.buildMultiTx({
+      extraPreBuildData: [txBuilder.build()],
       extInfo: { amountOut: amountOutRaw },
     }) as MakeMultiTransaction & SwapExtInfo;
     return buildData;
