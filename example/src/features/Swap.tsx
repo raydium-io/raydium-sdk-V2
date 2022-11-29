@@ -4,12 +4,22 @@ import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grid from '@mui/material/Grid'
 import OutlinedInput from '@mui/material/OutlinedInput'
-import { Percent, RouteInfo, RouteType, TokenAmount, WSOLMint, USDCMint, USDTMint } from '@raydium-io/raydium-sdk'
+import {
+  Percent,
+  RouteInfo,
+  RouteType,
+  TokenAmount,
+  WSOLMint,
+  USDCMint,
+  USDTMint,
+  TickUtils,
+} from '@raydium-io/raydium-sdk'
 import debounce from 'lodash/debounce'
 import { useEffect, useState } from 'react'
 import { PublicKey } from '@solana/web3.js'
 
 import { useAppStore } from '../store/appStore'
+import Decimal from 'decimal.js'
 
 export default function Swap() {
   const raydium = useAppStore((state) => state.raydium)
@@ -35,27 +45,38 @@ export default function Swap() {
     async function calculateAmount() {
       if (!raydium) return
       await raydium.ammV3.load()
-      const { routes, poolsInfo, ticks } = await raydium.tradeV2.fetchPoolAndTickData({
-        inputMint: WSOLMint,
-        outputMint: USDTMint,
-      })
+      //3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X
+      const poolInfo = raydium.ammV3.pools.hydratedDataData.get('3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X')!.state
+      console.log(
+        99999,
+        TickUtils.getPriceAndTick({
+          poolInfo,
+          price: new Decimal(12.7855),
+          baseIn: true,
+        })
+      )
 
-      const { routes: xxx, best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
-        directPath: routes.directPath,
-        routePathDict: routes.routePathDict,
-        simulateCache: poolsInfo,
-        tickCache: ticks,
-        inputTokenAmount: raydium.mintToTokenAmount({ mint: WSOLMint, amount: 0.1 }),
-        outputToken: raydium.mintToToken(USDTMint),
-        slippage: new Percent(1, 100),
-        chainTime: Date.now() / 1000,
-      })
+      // const { routes, poolsInfo, ticks } = await raydium.tradeV2.fetchPoolAndTickData({
+      //   inputMint: WSOLMint,
+      //   outputMint: USDTMint,
+      // })
 
-      const { execute, transactions } = await raydium.tradeV2.swap({
-        swapInfo: best!,
-        associatedOnly: true,
-        checkTransaction: true,
-      })
+      // const { routes: xxx, best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
+      //   directPath: routes.directPath,
+      //   routePathDict: routes.routePathDict,
+      //   simulateCache: poolsInfo,
+      //   tickCache: ticks,
+      //   inputTokenAmount: raydium.mintToTokenAmount({ mint: WSOLMint, amount: 0.1 }),
+      //   outputToken: raydium.mintToToken(USDTMint),
+      //   slippage: new Percent(1, 100),
+      //   chainTime: Date.now() / 1000,
+      // })
+
+      // const { execute, transactions } = await raydium.tradeV2.swap({
+      //   swapInfo: best!,
+      //   associatedOnly: true,
+      //   checkTransaction: true,
+      // })
 
       if (!inAmount) {
         setOutAmount(undefined)

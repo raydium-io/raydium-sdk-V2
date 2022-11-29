@@ -3,7 +3,7 @@ import BN from "bn.js";
 import Decimal from "decimal.js";
 
 import { getPdaTickArrayAddress } from "./pda";
-import { SqrtPriceMath } from "./math";
+import { TickMath, SqrtPriceMath } from "./math";
 import { AmmV3PoolInfo } from "../type";
 
 export const TICK_ARRAY_SIZE = 60;
@@ -13,6 +13,11 @@ export interface ReturnTypeGetTickPrice {
   tick: number;
   price: Decimal;
   tickSqrtPriceX64: BN;
+}
+
+export interface ReturnTypeGetPriceAndTick {
+  tick: number;
+  price: Decimal;
 }
 
 export type Tick = {
@@ -264,5 +269,31 @@ export class TickUtils {
     return baseIn
       ? { tick, price: tickPrice, tickSqrtPriceX64 }
       : { tick, price: new Decimal(1).div(tickPrice), tickSqrtPriceX64 };
+  }
+  static getPriceAndTick({
+    poolInfo,
+    price,
+    baseIn,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    price: Decimal;
+    baseIn: boolean;
+  }): ReturnTypeGetPriceAndTick {
+    const _price = baseIn ? price : new Decimal(1).div(price);
+
+    const tick = TickMath.getTickWithPriceAndTickspacing(
+      _price,
+      poolInfo.ammConfig.tickSpacing,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+    const tickSqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
+    const tickPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
+      tickSqrtPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+
+    return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
   }
 }

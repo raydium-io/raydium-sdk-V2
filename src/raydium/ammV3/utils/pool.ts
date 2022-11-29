@@ -13,6 +13,7 @@ import {
   ReturnTypeComputeAmountOut,
   ReturnTypeComputeAmountOutFormat,
   ReturnTypeFetchMultiplePoolTickArrays,
+  ReturnTypeGetLiquidityAmountOutFromAmountIn,
 } from "../type";
 import { Percent } from "../../../module/percent";
 import { Price } from "../../../module/price";
@@ -748,5 +749,64 @@ export class PoolUtils {
       rewardsApr,
       apr: feeApr + rewardsApr.reduce((a, b) => a + b, 0),
     };
+  }
+
+  static getLiquidityAmountOutFromAmountIn({
+    poolInfo,
+    inputA,
+    tickLower,
+    tickUpper,
+    amount,
+    slippage,
+    add,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    inputA: boolean;
+    tickLower: number;
+    tickUpper: number;
+    amount: BN;
+    slippage: number;
+    add: boolean;
+  }): ReturnTypeGetLiquidityAmountOutFromAmountIn {
+    const sqrtPriceX64 = poolInfo.sqrtPriceX64;
+    const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
+    const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
+
+    const coefficient = add ? 1 - slippage : 1 + slippage;
+    const _amount = amount.mul(new BN(Math.floor(coefficient * 1000000))).div(new BN(1000000));
+
+    let liquidity: BN;
+    if (sqrtPriceX64.lte(sqrtPriceX64A)) {
+      liquidity = inputA
+        ? LiquidityMath.getLiquidityFromTokenAmountA(sqrtPriceX64A, sqrtPriceX64B, _amount, !add)
+        : new BN(0);
+    } else if (sqrtPriceX64.lte(sqrtPriceX64B)) {
+      const liquidity0 = LiquidityMath.getLiquidityFromTokenAmountA(sqrtPriceX64, sqrtPriceX64B, _amount, !add);
+      const liquidity1 = LiquidityMath.getLiquidityFromTokenAmountB(sqrtPriceX64A, sqrtPriceX64, _amount);
+      liquidity = inputA ? liquidity0 : liquidity1;
+    } else {
+      liquidity = inputA
+        ? new BN(0)
+        : LiquidityMath.getLiquidityFromTokenAmountB(sqrtPriceX64A, sqrtPriceX64B, _amount);
+    }
+
+    const amountsSlippage = LiquidityMath.getAmountsFromLiquidityWithSlippage(
+      poolInfo.sqrtPriceX64,
+      sqrtPriceX64A,
+      sqrtPriceX64B,
+      liquidity,
+      add,
+      !add,
+      slippage,
+    );
+    const amounts = LiquidityMath.getAmountsFromLiquidity(
+      poolInfo.sqrtPriceX64,
+      sqrtPriceX64A,
+      sqrtPriceX64B,
+      liquidity,
+      !add,
+    );
+
+    return { liquidity, ...amountsSlippage, ...amounts };
   }
 }
