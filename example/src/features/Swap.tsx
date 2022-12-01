@@ -20,6 +20,7 @@ import { PublicKey } from '@solana/web3.js'
 
 import { useAppStore } from '../store/appStore'
 import Decimal from 'decimal.js'
+import BN from 'bn.js'
 
 export default function Swap() {
   const raydium = useAppStore((state) => state.raydium)
@@ -45,16 +46,21 @@ export default function Swap() {
     async function calculateAmount() {
       if (!raydium) return
       await raydium.ammV3.load()
+      await raydium.ammV3.fetchPoolAccountPosition()
       //3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X
-      const poolInfo = raydium.ammV3.pools.hydratedDataData.get('3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X')!.state
-      console.log(
-        99999,
-        TickUtils.getPriceAndTick({
-          poolInfo,
-          price: new Decimal(12.7855),
-          baseIn: true,
-        })
-      )
+
+      // const { execute } = await raydium.ammV3.openPosition({
+      //   poolId: new PublicKey('HZf7wppva3wk4dCnrUe2GE1c8aUEXsUNk5asMFQ5sYch'),
+      //   tickLower: -760,
+      //   tickUpper: -740,
+      //   liquidity: new BN('18223242651'),
+      //   ownerInfo: {
+      //     useSOLBalance: true,
+      //   },
+      //   slippage: 0.001,
+      // })
+
+      // execute()
 
       // const { routes, poolsInfo, ticks } = await raydium.tradeV2.fetchPoolAndTickData({
       //   inputMint: WSOLMint,

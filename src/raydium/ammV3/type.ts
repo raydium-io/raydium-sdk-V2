@@ -180,6 +180,7 @@ export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
   userPositionAccount?: UserPositionAccount[];
   name: string;
   idString: string;
+  decimals: number;
 
   ammConfig: AmmV3PoolInfo["ammConfig"];
   currentPrice: Fraction;
@@ -300,7 +301,7 @@ export interface UserPositionAccount {
   /** transform to SDK function, should not used directlly in UI */
   sdkParsed: AmmV3PoolPersonalPosition;
   rewardInfos: {
-    penddingReward: TokenAmount | undefined;
+    pendingReward: TokenAmount | undefined;
     apr24h: Percent;
     apr7d: Percent;
     apr30d: Percent;
@@ -308,8 +309,8 @@ export interface UserPositionAccount {
   inRange: boolean;
   poolId: PublicKey;
   nftMint: PublicKey;
-  priceLower: Numberish;
-  priceUpper: Numberish;
+  priceLower: Fraction;
+  priceUpper: Fraction;
   amountA?: TokenAmount;
   amountB?: TokenAmount;
   tokenA?: SplToken;

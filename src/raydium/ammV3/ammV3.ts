@@ -131,6 +131,7 @@ export class AmmV3 extends ModuleBase {
         creator: pool.state.creator,
         ammConfig: pool.state.ammConfig,
         currentPrice,
+        decimals: Math.max(base?.decimals || 0, quote?.decimals || 0, 6),
 
         idString: pool.state.id.toBase58(),
         tvl: toUsdCurrency(pool.state.tvl),
@@ -164,7 +165,7 @@ export class AmmV3 extends ModuleBase {
           const amountA = toMintATokenAmount(a.amountA, false);
           const amountB = toMintATokenAmount(a.amountB, false);
           const tokenFeeAmountA = toMintATokenAmount(a.tokenFeeAmountA, false);
-          const tokenFeeAmountB = toMintATokenAmount(a.tokenFeeAmountB, false);
+          const tokenFeeAmountB = toMintBTokenAmount(a.tokenFeeAmountB, false);
           const innerVolumeA = mul(currentPrice, amountA) || 0;
           const innerVolumeB = mul(currentPrice, amountB) || 0;
           const positionPercentA = toPercent(div(innerVolumeA, add(innerVolumeA, innerVolumeB))!);
@@ -188,10 +189,10 @@ export class AmmV3 extends ModuleBase {
             rewardInfos: a.rewardInfos
               .map((info, idx) => {
                 const token = this.scope.token.allTokenMap.get(poolRewardInfos[idx]?.tokenMint.toBase58());
-                const penddingReward = token
+                const pendingReward = token
                   ? this.scope.mintToTokenAmount({ mint: token.mint, amount: info.pendingReward })
                   : undefined;
-                if (!penddingReward) return;
+                if (!pendingReward) return;
                 const apr24h =
                   idx === 0
                     ? toPercent(pool.state.day.rewardApr.A, { alreadyDecimaled: true })
@@ -210,9 +211,9 @@ export class AmmV3 extends ModuleBase {
                     : idx === 1
                     ? toPercent(pool.state.month.rewardApr.B, { alreadyDecimaled: true })
                     : toPercent(pool.state.month.rewardApr.C, { alreadyDecimaled: true });
-                return { penddingReward, apr24h, apr7d, apr30d };
+                return { pendingReward, apr24h, apr7d, apr30d };
               })
-              .filter((info) => Boolean(info?.penddingReward)) as UserPositionAccount["rewardInfos"],
+              .filter((info) => Boolean(info?.pendingReward)) as UserPositionAccount["rewardInfos"],
             getLiquidityVolume: (): any => {
               const aPrice = this.scope.token.tokenPrices.get(pool.state.mintA.mint.toBase58());
               const bPrice = this.scope.token.tokenPrices.get(pool.state.mintB.mint.toBase58());
