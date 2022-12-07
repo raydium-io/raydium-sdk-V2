@@ -287,12 +287,12 @@ export class AmmV3 extends ModuleBase {
   }
 
   public async fetchPoolAccountPosition(): Promise<HydratedConcentratedInfo[]> {
+    this._ammV3SdkParsedPools = this._ammV3SdkParsedPools.map((pool) => {
+      delete pool.positionAccount;
+      this._ammV3SdkParsedPoolMap.set(pool.state.id.toBase58(), pool);
+      return pool;
+    });
     if (!this.scope.owner) {
-      this._ammV3SdkParsedPools = this._ammV3SdkParsedPools.map((pool) => {
-        delete pool.positionAccount;
-        this._ammV3SdkParsedPoolMap.set(pool.state.id.toBase58(), pool);
-        return pool;
-      });
       this.hydratePoolsInfo();
       return this._hydratedAmmV3Pools;
     }

@@ -1,6 +1,7 @@
 import { OpenOrders } from "@project-serum/serum";
 import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
+import { SOLMint } from "../../common";
 
 import { createLogger } from "../../common/logger";
 import {
@@ -31,7 +32,7 @@ const logger = createLogger("Raydium_liquidity_util");
  * @returns token amount side is `base` or `quote`
  */
 export function getAmountSide(amount: TokenAmount, poolKeys: LiquidityPoolKeys): AmountSide {
-  const token = amount instanceof TokenAmount ? amount.token : Token.WSOL;
+  const token = amount.token.mint.equals(SOLMint) ? Token.WSOL : amount.token;
   const { baseMint, quoteMint } = poolKeys;
 
   if (token.mint.equals(baseMint)) return "base";

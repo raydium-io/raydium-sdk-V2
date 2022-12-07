@@ -125,11 +125,12 @@ export default class TokenModule extends ModuleBase {
   }
 
   public mintToToken(mint: PublicKeyish): Token {
-    const _mint = validateAndParsePublicKey({ publicKey: mint, transformSol: true });
+    const _mint = validateAndParsePublicKey({ publicKey: mint });
     const tokenInfo = this.allTokenMap.get(_mint.toBase58());
     if (!tokenInfo) this.logAndCreateError("token not found, mint:", _mint.toBase58());
     const { decimals, name, symbol } = tokenInfo!;
-    return new Token({ mint, decimals, name, symbol });
+    const isSol = _mint.equals(SOLMint);
+    return new Token({ decimals, name, symbol, skipMint: isSol, mint: isSol ? "" : mint });
   }
 
   public mintToTokenAmount({ mint, amount, decimalDone }: MintToTokenAmount): TokenAmount {
