@@ -10,7 +10,7 @@ export default function Farm() {
   useEffect(() => {
     async function addFarm() {
       if (!raydium) return
-      await raydium.farm.load()
+      await raydium.farm.loadHydratedFarmInfo()
 
       // USDT - USDC farm
       const farmId = '5oCZkR2k955Mvmgq3A4sFd76D5k4qZn45VpaCkp8H3uS'

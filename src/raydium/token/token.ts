@@ -83,6 +83,52 @@ export default class TokenModule extends ModuleBase {
     return this._tokenPrice;
   }
 
+  public parseV2PoolTokens(): void {
+    this.scope.liquidity.allPools.forEach((pool) => {
+      const toToken = (mint: string, decimals: number): TokenJson => ({
+        symbol: mint.substring(0, 6),
+        name: mint.substring(0, 6),
+        mint,
+        decimals,
+        extensions: {},
+        icon: "",
+      });
+      if (!this._tokenMap.has(pool.baseMint)) {
+        const token = toToken(pool.baseMint, pool.baseDecimals);
+        this._tokens.push(token);
+        this._tokenMap.set(token.mint, { ...token, id: token.mint });
+      }
+      if (!this._tokenMap.has(pool.quoteMint)) {
+        const token = toToken(pool.quoteMint, pool.quoteDecimals);
+        this._tokens.push(token);
+        this._tokenMap.set(token.mint, { ...token, id: token.mint });
+      }
+    });
+  }
+
+  public parseV3PoolTokens(): void {
+    this.scope.ammV3.pools.data.forEach((pool) => {
+      const toToken = (mint: string, decimals: number): TokenJson => ({
+        symbol: mint.substring(0, 6),
+        name: mint.substring(0, 6),
+        mint,
+        decimals,
+        extensions: {},
+        icon: "",
+      });
+      if (!this._tokenMap.has(pool.mintA)) {
+        const token = toToken(pool.mintA, pool.mintDecimalsA);
+        this._tokens.push(token);
+        this._tokenMap.set(token.mint, { ...token, id: token.mint });
+      }
+      if (!this._tokenMap.has(pool.mintB)) {
+        const token = toToken(pool.mintB, pool.mintDecimalsB);
+        this._tokens.push(token);
+        this._tokenMap.set(token.mint, { ...token, id: token.mint });
+      }
+    });
+  }
+
   public async fetchTokenPrices(preloadRaydiumPrice?: Record<string, number>): Promise<Map<string, Price>> {
     const coingeckoTokens = this.allTokens.filter(
       (token) => !!token.extensions?.coingeckoId && token.mint !== PublicKey.default.toBase58(),

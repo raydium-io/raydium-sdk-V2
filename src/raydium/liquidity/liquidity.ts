@@ -4,7 +4,7 @@ import { ApiJsonPairInfo } from "../../api";
 
 import { BN_ONE, BN_ZERO, divCeil, Numberish, parseNumberInfo, toBN, toTokenPrice } from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
-import { PublicKeyish, SOLMint, validateAndParsePublicKey, WSOLMint } from "../../common/pubKey";
+import { PublicKeyish, SOLMint, validateAndParsePublicKey, WSOLMint, solToWSol } from "../../common/pubKey";
 import { jsonInfo2PoolKeys } from "../../common/utility";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { makeTransferInstruction } from "../account/instruction";
@@ -95,6 +95,7 @@ export default class Liquidity extends ModuleBase {
         return info.id;
       }),
     );
+    this.scope.token.parseV2PoolTokens();
   }
 
   public async loadPairs(params?: LoadParams): Promise<ApiJsonPairInfo[]> {
@@ -327,39 +328,44 @@ export default class Liquidity extends ModuleBase {
     const parsedInfo = (await this.sdkParseJsonLiquidityInfo([poolInfo!]))[0];
     if (!parsedInfo) this.logAndCreateError("pool parseInfo not found", poolIdPubKey.toBase58());
 
+    const _amount = amount.token.mint.equals(SOLMint)
+      ? this.scope.mintToTokenAmount({ mint: WSOLMint, amount: amount.toExact() })
+      : amount;
+    const _anotherToken = anotherToken.mint.equals(SOLMint) ? this.scope.mintToToken(WSOLMint) : anotherToken;
+
     const { baseReserve, quoteReserve } = parsedInfo;
     this.logDebug("baseReserve:", baseReserve.toString(), "quoteReserve:", quoteReserve.toString());
 
-    const tokenIn = amount.token;
+    const tokenIn = _amount.token;
     this.logDebug(
       "tokenIn:",
       tokenIn,
       "amount:",
-      amount.toFixed(),
+      _amount.toFixed(),
       "anotherToken:",
-      anotherToken,
+      _anotherToken,
       "slippage:",
       `${slippage.toSignificant()}%`,
     );
 
     // input is fixed
-    const input = getAmountSide(amount, jsonInfo2PoolKeys(poolInfo!));
+    const input = getAmountSide(_amount, jsonInfo2PoolKeys(poolInfo!));
     this.logDebug("input side:", input);
 
     // round up
     let amountRaw = BN_ZERO;
-    if (!amount.isZero()) {
+    if (!_amount.isZero()) {
       amountRaw =
         input === "base"
-          ? divCeil(amount.raw.mul(quoteReserve), baseReserve)
-          : divCeil(amount.raw.mul(baseReserve), quoteReserve);
+          ? divCeil(_amount.raw.mul(quoteReserve), baseReserve)
+          : divCeil(_amount.raw.mul(baseReserve), quoteReserve);
     }
 
     const _slippage = new Percent(BN_ONE).add(slippage);
     const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
 
-    const _anotherAmount = new TokenAmount(anotherToken, amountRaw);
-    const _maxAnotherAmount = new TokenAmount(anotherToken, slippageAdjustedAmount);
+    const _anotherAmount = new TokenAmount(_anotherToken, amountRaw);
+    const _maxAnotherAmount = new TokenAmount(_anotherToken, slippageAdjustedAmount);
     this.logDebug("anotherAmount:", _anotherAmount.toFixed(), "maxAnotherAmount:", _maxAnotherAmount.toFixed());
 
     return {
@@ -520,11 +526,19 @@ export default class Liquidity extends ModuleBase {
   }
 
   public async addLiquidity(params: LiquidityAddTransactionParams): Promise<MakeTransaction> {
-    const { poolId, amountInA, amountInB, fixedSide, config } = params;
+    const { poolId, amountInA: _amountInA, amountInB: _amountInB, fixedSide, config } = params;
     const _poolId = validateAndParsePublicKey({ publicKey: poolId });
     const poolInfo = this.allPools.find((pool) => pool.id === _poolId.toBase58());
 
     if (!poolInfo) this.logAndCreateError("pool not found", poolId);
+    const amountInA = this.scope.mintToTokenAmount({
+      mint: solToWSol(_amountInA.token.mint),
+      amount: _amountInA.toExact(),
+    });
+    const amountInB = this.scope.mintToTokenAmount({
+      mint: solToWSol(_amountInB.token.mint),
+      amount: _amountInB.toExact(),
+    });
     const poolKeysList = await this.sdkParseJsonLiquidityInfo([poolInfo!]);
     const poolKeys = poolKeysList[0];
     if (!poolKeys) this.logAndCreateError("pool parse error", poolKeys);

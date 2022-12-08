@@ -207,7 +207,6 @@ export default class Farm extends ModuleBase {
     const isNewPool = farmInfo.version !== 6 && farmInfo.upcoming && !isClosedPool; // NOTE: Rudy says!!!
     const isStablePool =
       this.scope.liquidity.allPools.find((i) => i.lpMint === farmInfo.lpMint.toBase58())?.version === 5;
-
     const lpToken = isStakePool ? this.scope.mintToToken(farmInfo.lpMint) : this.getLpTokenInfo(farmInfo.lpMint);
     const baseToken = this.scope.mintToToken(isStakePool ? farmInfo.lpMint : farmInfo.baseMint);
     const quoteToken = this.scope.mintToToken(isStakePool ? farmInfo.lpMint : farmInfo.quoteMint);
