@@ -12,6 +12,7 @@ import {
   TxBuilder,
   BN_ZERO,
   SOLMint,
+  WSOLMint,
 } from "../../common";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { StableLayout, makeSimulatePoolInfoInstruction, LiquidityPoolJsonInfo, LiquidityPoolKeys } from "../liquidity";
@@ -329,7 +330,9 @@ export default class TradeV2 extends ModuleBase {
     routes: ComputeAmountOutLayout[];
     best?: ComputeAmountOutLayout;
   }> {
-    const amountIn = inputTokenAmount;
+    const amountIn = inputTokenAmount.token.mint.equals(SOLMint)
+      ? this.scope.solToWsolTokenAmount(inputTokenAmount)
+      : inputTokenAmount;
     const outRoute: ComputeAmountOutLayout[] = [];
 
     for (const itemPool of directPath) {
@@ -593,7 +596,7 @@ export default class TradeV2 extends ModuleBase {
   }
 
   public async swap({
-    swapInfo,
+    swapInfo: orgSwapInfo,
     associatedOnly,
     checkTransaction,
   }: {
@@ -601,6 +604,13 @@ export default class TradeV2 extends ModuleBase {
     associatedOnly: boolean;
     checkTransaction: boolean;
   }): Promise<MakeMultiTransaction> {
+    const swapInfo = {
+      ...orgSwapInfo,
+      amountIn: this.scope.solToWsolTokenAmount(orgSwapInfo.amountIn),
+      amountOut: this.scope.solToWsolTokenAmount(orgSwapInfo.amountOut),
+      minAmounOut: this.scope.solToWsolTokenAmount(orgSwapInfo.minAmountOut),
+      middleMint: orgSwapInfo.middleMint ? solToWSol(orgSwapInfo.middleMint) : undefined,
+    };
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
     const useSolBalance = amountIn.token.mint.equals(Token.WSOL.mint) || amountIn.token.mint.equals(SOLMint);

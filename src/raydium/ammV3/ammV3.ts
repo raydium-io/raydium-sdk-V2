@@ -309,8 +309,15 @@ export class AmmV3 extends ModuleBase {
 
   public async createPool(
     props: CreateConcentratedPool,
-  ): Promise<Omit<MakeTransaction, "extInfo"> & { extInfo: AmmV3PoolInfo }> {
-    const { programId, owner = this.scope.ownerPubKey, mint1, mint2, ammConfig, initialPrice } = props;
+  ): Promise<Omit<MakeTransaction, "extInfo"> & { extInfo: { mockPoolInfo: AmmV3PoolInfo } }> {
+    const {
+      programId,
+      owner = this.scope.owner?.publicKey || PublicKey.default,
+      mint1,
+      mint2,
+      ammConfig,
+      initialPrice,
+    } = props;
     const txBuilder = this.createTxBuilder();
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
@@ -356,7 +363,7 @@ export class AmmV3 extends ModuleBase {
         currentPrice: initPrice,
         ...mockCreatePoolInfo,
       },
-    }) as Omit<MakeTransaction, "extInfo"> & { extInfo: AmmV3PoolInfo };
+    }) as Omit<MakeTransaction, "extInfo"> & { extInfo: { mockPoolInfo: AmmV3PoolInfo } };
   }
 
   public async openPosition({

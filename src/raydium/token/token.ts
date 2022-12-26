@@ -68,6 +68,8 @@ export default class TokenModule extends ModuleBase {
     });
     this._tokenMap.set(TOKEN_WSOL.mint, { ...TOKEN_WSOL, icon: quantumSOLHydratedTokenJsonInfo.icon, id: "wsol" });
     this._tokenMap.set(SOLMint.toBase58(), { ...quantumSOLHydratedTokenJsonInfo, mint: SOLMint.toBase58() });
+    this.parseV2PoolTokens();
+    this.parseV3PoolTokens();
   }
 
   get allTokens(): TokenJson[] {

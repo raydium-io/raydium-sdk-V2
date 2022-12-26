@@ -38,6 +38,7 @@ export function validateAndParsePublicKey({
   if (transformSol && publicKey === SOLMint.toBase58()) return WSOLMint;
 
   if (typeof publicKey === "string") {
+    if (publicKey === PublicKey.default.toBase58()) return PublicKey.default;
     try {
       const key = new PublicKey(publicKey);
       return key;
