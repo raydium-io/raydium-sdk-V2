@@ -14,5 +14,6 @@ module.exports = {
     "object-shorthand": ["error", "always"],
     "@typescript-eslint/explicit-function-return-type": ["warn"],
     "@typescript-eslint/no-non-null-assertion": "off",
+    "no-inner-declarations": ["warn"],
   },
 };

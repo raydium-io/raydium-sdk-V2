@@ -6,7 +6,7 @@ import { Api, UrlConfigs, ApiFarmPools, ApiJsonPairInfo, ApiLiquidityPools, ApiT
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
 import { Owner } from "../common/owner";
-import { PublicKeyish, WSOLMint } from "../common/pubKey";
+import { PublicKeyish, WSOLMint, SOLMint } from "../common/pubKey";
 import { TokenAmount } from "../module/amount";
 import { Token } from "../module/token";
 import { Cluster } from "../solana";
@@ -284,6 +284,7 @@ export class Raydium {
     return this.token.mintToTokenAmount(params);
   }
   public solToWsolTokenAmount(tokenAmount: TokenAmount): TokenAmount {
+    if (!tokenAmount.token.mint.equals(SOLMint)) return tokenAmount;
     return this.token.mintToTokenAmount({
       mint: WSOLMint,
       amount: tokenAmount.toExact(),
