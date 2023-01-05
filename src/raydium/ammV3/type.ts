@@ -412,7 +412,7 @@ export interface GetAmountParams {
 export interface InitRewardParams {
   poolId: PublicKey;
   ownerInfo: {
-    feePayer: PublicKey;
+    feePayer?: PublicKey;
     useSOLBalance?: boolean; // if has WSOL mint
   };
   rewardInfo: {
@@ -421,6 +421,21 @@ export interface InitRewardParams {
     endTime: number;
     perSecond: Decimal;
   };
+  associatedOnly?: boolean;
+}
+
+export interface InitRewardsParams {
+  poolId: PublicKey;
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  rewardInfos: {
+    mint: PublicKey;
+    openTime: number;
+    endTime: number;
+    perSecond: Decimal;
+  }[];
   associatedOnly?: boolean;
 }
 

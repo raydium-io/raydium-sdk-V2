@@ -32,6 +32,7 @@ import {
   SwapInParams,
   GetAmountParams,
   InitRewardParams,
+  InitRewardsParams,
   SetRewardParams,
   SetRewardsParams,
   CollectRewardParams,
@@ -41,7 +42,8 @@ import {
 import { AmmV3Instrument } from "./instrument";
 import { LoadParams, MakeTransaction, MakeMultiTransaction } from "../type";
 import { MathUtil } from "./utils/math";
-import { getATAAddress } from "./utils/pda";
+import { getATAAddress, getPdaOperationAccount } from "./utils/pda";
+import { OperationLayout } from "./layout";
 import BN from "bn.js";
 export class AmmV3 extends ModuleBase {
   private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
@@ -753,7 +755,7 @@ export class AmmV3 extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: rewardMintUseSOLBalance
           ? {
-              payer: ownerInfo.feePayer,
+              payer: ownerInfo.feePayer || this.scope.ownerPubKey,
               amount: new BN(
                 new Decimal(rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)).gte(
                   rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime),
@@ -787,6 +789,72 @@ export class AmmV3 extends ModuleBase {
       },
     });
     txBuilder.addInstruction({ instructions: insInfo.instructions });
+    return txBuilder.build();
+  }
+
+  public async initRewards({
+    poolId,
+    ownerInfo,
+    rewardInfos,
+    associatedOnly = true,
+  }: InitRewardsParams): Promise<MakeTransaction> {
+    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
+
+    for (const rewardInfo of rewardInfos) {
+      if (rewardInfo.endTime <= rewardInfo.openTime)
+        this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
+    }
+
+    const txBuilder = this.createTxBuilder();
+    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+
+    for (const rewardInfo of rewardInfos) {
+      const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
+      const { account: ownerRewardAccount, instructionParams: ownerRewardAccountIns } =
+        await this.scope.account.getOrCreateTokenAccount({
+          mint: rewardInfo.mint,
+          notUseTokenAccount: !!rewardMintUseSOLBalance,
+          skipCloseAccount: !rewardMintUseSOLBalance,
+          owner: this.scope.ownerPubKey,
+          createInfo: rewardMintUseSOLBalance
+            ? {
+                payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+                amount: new BN(
+                  new Decimal(rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)).gte(
+                    rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime),
+                  )
+                    ? rewardInfo.perSecond.sub(rewardInfo.endTime - rewardInfo.openTime).toFixed(0)
+                    : rewardInfo.perSecond
+                        .sub(rewardInfo.endTime - rewardInfo.openTime)
+                        .add(1)
+                        .toFixed(0),
+                ),
+              }
+            : undefined,
+          associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+        });
+      ownerRewardAccountIns && txBuilder.addInstruction(ownerRewardAccountIns);
+
+      if (!ownerRewardAccount)
+        this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
+
+      const insInfo = AmmV3Instrument.makeInitRewardInstructions({
+        poolInfo: poolInfo!,
+        ownerInfo: {
+          wallet: this.scope.ownerPubKey,
+          tokenAccount: ownerRewardAccount!,
+        },
+        rewardInfo: {
+          mint: rewardInfo.mint,
+          openTime: rewardInfo.openTime,
+          endTime: rewardInfo.endTime,
+          emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
+        },
+      });
+      txBuilder.addInstruction({ instructions: insInfo.instructions });
+    }
+
     return txBuilder.build();
   }
 
@@ -1112,5 +1180,12 @@ export class AmmV3 extends ModuleBase {
     }
 
     return txBuilder.sizeCheckBuild();
+  }
+
+  public async getWhiteListMint({ programId }: { programId: PublicKey }): Promise<PublicKey[]> {
+    const accountInfo = await this.scope.connection.getAccountInfo(getPdaOperationAccount(programId).publicKey);
+    if (!accountInfo) return [];
+    const whitelistMintsInfo = OperationLayout.decode(accountInfo.data);
+    return whitelistMintsInfo.whitelistMints.filter((i) => !i.equals(PublicKey.default));
   }
 }
