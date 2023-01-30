@@ -41,6 +41,7 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
 
 export interface RaydiumApiBatchRequestParams {
   api: Api;
+  defaultChainTimeOffset?: number;
   defaultApiTokens?: ApiTokens;
   defaultApiLiquidityPools?: ApiLiquidityPools;
   defaultApiFarmPools?: ApiFarmPools;
@@ -91,6 +92,7 @@ export class Raydium {
       defaultApiFarmPools,
       defaultApiPairsInfo,
       defaultApiAmmV3PoolsInfo,
+      defaultChainTimeOffset,
       apiCacheTime,
     } = config;
 
@@ -126,6 +128,7 @@ export class Raydium {
         defaultApiPairsInfo ? { fetched: now, data: defaultApiPairsInfo } : apiCacheData.liquidityPairsInfo,
         defaultApiAmmV3PoolsInfo ? { fetched: now, data: defaultApiAmmV3PoolsInfo } : apiCacheData.ammV3Pools,
       ];
+    if (defaultChainTimeOffset) this._chainTime = { fetched: now, value: defaultChainTimeOffset };
 
     this.apiData = {
       ...(apiTokensCache ? { tokens: apiTokensCache } : {}),
@@ -270,10 +273,9 @@ export class Raydium {
 
   public async chainTimeOffset(): Promise<number> {
     if (this._chainTime && Date.now() - this._chainTime.fetched <= 1000 * 60 * 5) return this._chainTime.value;
-    const chainTime = await this.connection.getBlockTime(await this.connection.getSlot());
-    if (!chainTime) return 0;
-    const offset = Number((chainTime * 1000 - Date.now()).toFixed(0));
-    this._chainTime = { fetched: Date.now(), value: offset };
+    const offset = await (await this.api.getChainTimeOffset()).offset;
+    if (!offset) return 0;
+    this._chainTime = { fetched: Date.now(), value: offset * 1000 };
     return offset;
   }
 

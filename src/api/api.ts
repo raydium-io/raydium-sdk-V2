@@ -30,6 +30,7 @@ export interface UrlConfigs {
   farms?: string;
   ammV3Pools?: string;
   price?: string;
+  chainTime?: string;
 }
 
 export interface ApiProps {
@@ -136,5 +137,9 @@ export class Api {
     });
     const slotList = res.result.map((data) => data.numSlots);
     return slotList.reduce((a, b) => a + b, 0) / slotList.length / 60;
+  }
+
+  async getChainTimeOffset(): Promise<{ chainTime: number; offset: number }> {
+    return this.api.get(this.urlConfigs.chainTime || "/main/chain/time");
   }
 }
