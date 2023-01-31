@@ -110,6 +110,9 @@ export default class Liquidity extends ModuleBase {
         return [pair.ammId, pair];
       }),
     );
+    this.scope.farm.farmAPRs = Object.fromEntries(
+      this._pairsInfo.map((i) => [i.ammId, { apr30d: i.apr30d, apr7d: i.apr7d, apr24h: i.apr24h }]),
+    );
     return this._pairsInfo;
   }
 

@@ -42,6 +42,7 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
 export interface RaydiumApiBatchRequestParams {
   api: Api;
   defaultChainTimeOffset?: number;
+  defaultChainTime?: number;
   defaultApiTokens?: ApiTokens;
   defaultApiLiquidityPools?: ApiLiquidityPools;
   defaultApiFarmPools?: ApiFarmPools;
@@ -79,7 +80,13 @@ export class Raydium {
   private _apiCacheTime: number;
   private _signAllTransactions?: SignAllTransactions;
   private logger: Logger;
-  private _chainTime?: { fetched: number; value: number };
+  private _chainTime?: {
+    fetched: number;
+    value: {
+      chainTime: number;
+      offset: number;
+    };
+  };
 
   constructor(config: RaydiumConstructorParams) {
     const {
@@ -92,6 +99,7 @@ export class Raydium {
       defaultApiFarmPools,
       defaultApiPairsInfo,
       defaultApiAmmV3PoolsInfo,
+      defaultChainTime,
       defaultChainTimeOffset,
       apiCacheTime,
     } = config;
@@ -128,7 +136,14 @@ export class Raydium {
         defaultApiPairsInfo ? { fetched: now, data: defaultApiPairsInfo } : apiCacheData.liquidityPairsInfo,
         defaultApiAmmV3PoolsInfo ? { fetched: now, data: defaultApiAmmV3PoolsInfo } : apiCacheData.ammV3Pools,
       ];
-    if (defaultChainTimeOffset) this._chainTime = { fetched: now, value: defaultChainTimeOffset };
+    if (defaultChainTimeOffset)
+      this._chainTime = {
+        fetched: now,
+        value: {
+          chainTime: defaultChainTime || Date.now() + defaultChainTimeOffset,
+          offset: defaultChainTimeOffset,
+        },
+      };
 
     this.apiData = {
       ...(apiTokensCache ? { tokens: apiTokensCache } : {}),
@@ -271,12 +286,36 @@ export class Raydium {
     return dataObject.data;
   }
 
+  public async fetchChainTime(): Promise<void> {
+    try {
+      const data = await this.api.getChainTimeOffset();
+      this._chainTime = {
+        fetched: Date.now(),
+        value: {
+          chainTime: data.chainTime * 1000,
+          offset: data.offset * 1000,
+        },
+      };
+    } catch {
+      this._chainTime = undefined;
+    }
+  }
+
+  get chainTimeData(): { offset: number; chainTime: number } | undefined {
+    return this._chainTime?.value;
+  }
+
   public async chainTimeOffset(): Promise<number> {
-    if (this._chainTime && Date.now() - this._chainTime.fetched <= 1000 * 60 * 5) return this._chainTime.value;
-    const offset = await (await this.api.getChainTimeOffset()).offset;
-    if (!offset) return 0;
-    this._chainTime = { fetched: Date.now(), value: offset * 1000 };
-    return offset;
+    if (this._chainTime && Date.now() - this._chainTime.fetched <= 1000 * 60 * 5) return this._chainTime.value.offset;
+    await this.fetchChainTime();
+    return this._chainTime?.value.offset || 0;
+  }
+
+  public async currentBlockChainTime(): Promise<number> {
+    if (this._chainTime && Date.now() - this._chainTime.fetched <= 1000 * 60 * 5)
+      return this._chainTime.value.chainTime;
+    await this.fetchChainTime();
+    return this._chainTime?.value.chainTime || Date.now();
   }
 
   public mintToToken(mint: PublicKeyish): Token {

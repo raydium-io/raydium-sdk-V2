@@ -9,7 +9,7 @@ import { LoadParams } from "../type";
 
 import { quantumSOLHydratedTokenJsonInfo, TOKEN_WSOL } from "./constant";
 import { SplToken, TokenJson } from "./type";
-import { sortTokens } from "./util";
+// import { sortTokens } from "./util";
 
 export interface MintToTokenAmount {
   mint: PublicKeyish;
@@ -55,7 +55,7 @@ export default class TokenModule extends ModuleBase {
       });
     });
     this._mintList["official"].push(quantumSOLHydratedTokenJsonInfo.mint.toBase58());
-    this._tokens = sortTokens(this._tokens, this._mintList);
+    // this._tokens = sortTokens(this._tokens, this._mintList);
     this._tokens.push({
       ...quantumSOLHydratedTokenJsonInfo,
       mint: SOLMint.toBase58(),

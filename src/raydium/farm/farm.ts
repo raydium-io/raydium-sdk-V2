@@ -76,9 +76,18 @@ export default class Farm extends ModuleBase {
   private _hydratedFarmMap: Map<string, HydratedFarmInfo> = new Map();
   private _sdkParsedFarmPools: SdkParsedFarmInfo[] = [];
   private _lpTokenInfoMap: Map<string, RToken> = new Map();
+  public farmAPRs: Record<
+    string,
+    {
+      apr30d: number;
+      apr7d: number;
+      apr24h: number;
+    }
+  > = {};
 
   public async load(params?: LoadParams): Promise<void> {
     await this.scope.liquidity.load(params);
+    await this.scope.liquidity.loadPairs(params);
     await this.scope.fetchFarms(params?.forceUpdate);
 
     const data = this.scope.apiData.farmPools?.data || {};
@@ -122,26 +131,16 @@ export default class Farm extends ModuleBase {
     const { forceUpdate, skipPrice } = params || {};
     if (this._hydratedFarmPools.length && !forceUpdate) return this._hydratedFarmPools;
     await this.scope.farm.load();
-    try {
-      await this.scope.account.fetchWalletTokenAccounts();
-    } catch {
-      //
-    }
     !skipPrice && (await this.scope.token.fetchTokenPrices());
-    await this.scope.liquidity.loadPairs();
-    const chainTimeOffset = await this.scope.chainTimeOffset();
-    const currentBlockChainDate = offsetDateTime(Date.now() + chainTimeOffset, { minutes: 0 /* force */ });
-    const blockSlotCountForSecond = await this.scope.api.getBlockSlotCountForSecond(this.scope.connection.rpcEndpoint);
 
-    const farmAprs = Object.fromEntries(
-      this.scope.liquidity.allPairs.map((i) => [i.ammId, { apr30d: i.apr30d, apr7d: i.apr7d, apr24h: i.apr24h }]),
-    );
+    const chainTimeOffset = await this.scope.chainTimeOffset();
+    const currentBlockChainDate = new Date(await this.scope.currentBlockChainTime());
+    const blockSlotCountForSecond = await this.scope.api.getBlockSlotCountForSecond(this.scope.connection.rpcEndpoint);
 
     this._hydratedFarmPools = this._sdkParsedFarmPools.map((farmInfo) => {
       const info = this.hydrateFarmInfo({
         farmInfo,
         blockSlotCountForSecond,
-        farmAprs,
         currentBlockChainDate, // same as chainTimeOffset
         chainTimeOffset, // same as currentBlockChainDate
       });
@@ -193,11 +192,10 @@ export default class Farm extends ModuleBase {
   public hydrateFarmInfo(params: {
     farmInfo: SdkParsedFarmInfo;
     blockSlotCountForSecond: number;
-    farmAprs: Record<string, { apr30d: number; apr7d: number; apr24h: number }>; // from api:pairs
     currentBlockChainDate: Date;
     chainTimeOffset: number;
   }): HydratedFarmInfo {
-    const { farmInfo, blockSlotCountForSecond, farmAprs, currentBlockChainDate, chainTimeOffset = 0 } = params;
+    const { farmInfo, blockSlotCountForSecond, currentBlockChainDate, chainTimeOffset = 0 } = params;
     const farmPoolType = judgeFarmType(farmInfo, currentBlockChainDate);
     const isStakePool = whetherIsStakeFarmPool(farmInfo);
     const isDualFusionPool = farmPoolType === "dual fusion pool";
@@ -211,9 +209,6 @@ export default class Farm extends ModuleBase {
     const baseToken = this.scope.mintToToken(isStakePool ? farmInfo.lpMint : farmInfo.baseMint);
     const quoteToken = this.scope.mintToToken(isStakePool ? farmInfo.lpMint : farmInfo.quoteMint);
 
-    if (!baseToken?.symbol) {
-      // console.log('farmInfo: ', farmInfo.jsonInfo)
-    }
     const name = isStakePool
       ? `${baseToken?.symbol ?? "unknown"}`
       : `${baseToken?.symbol ?? "unknown"}-${quoteToken?.symbol ?? "unknown"}`;
@@ -241,9 +236,9 @@ export default class Farm extends ModuleBase {
     });
 
     const ammId = this.scope.liquidity.allPools.find((pool) => pool.lpMint === farmInfo.lpMint.toBase58())?.id;
-    const raydiumFeeApr7d = ammId ? toPercent(farmAprs[ammId]?.apr7d, { alreadyDecimaled: true }) : undefined;
-    const raydiumFeeApr30d = ammId ? toPercent(farmAprs[ammId]?.apr30d, { alreadyDecimaled: true }) : undefined;
-    const raydiumFeeApr24h = ammId ? toPercent(farmAprs[ammId]?.apr24h, { alreadyDecimaled: true }) : undefined;
+    const raydiumFeeApr7d = ammId ? toPercent(this.farmAPRs[ammId]?.apr7d, { alreadyDecimaled: true }) : undefined;
+    const raydiumFeeApr30d = ammId ? toPercent(this.farmAPRs[ammId]?.apr30d, { alreadyDecimaled: true }) : undefined;
+    const raydiumFeeApr24h = ammId ? toPercent(this.farmAPRs[ammId]?.apr24h, { alreadyDecimaled: true }) : undefined;
     const totalApr7d = aprs.reduce((acc, cur) => (acc ? (cur ? acc.add(cur) : acc) : cur), raydiumFeeApr7d);
     const totalApr30d = aprs.reduce((acc, cur) => (acc ? (cur ? acc.add(cur) : acc) : cur), raydiumFeeApr30d);
     const totalApr24h = aprs.reduce((acc, cur) => (acc ? (cur ? acc.add(cur) : acc) : cur), raydiumFeeApr24h);
