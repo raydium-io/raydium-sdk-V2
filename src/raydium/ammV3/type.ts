@@ -485,3 +485,19 @@ export interface HarvestAllRewardsParams {
   };
   associatedOnly?: boolean;
 }
+
+export interface ReturnTypeComputeAmountOutBaseOut {
+  amountIn: BN;
+  maxAmountIn: BN;
+  currentPrice: Decimal;
+  executionPrice: Decimal;
+  priceImpact: Percent;
+  fee: BN;
+  remainingAccounts: PublicKey[];
+}
+
+export interface ReturnTypeMakeTransaction {
+  signers: (Signer | Keypair)[];
+  transaction: Transaction;
+  address: { [name: string]: PublicKey };
+}

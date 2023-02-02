@@ -1,5 +1,13 @@
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey, TransactionInstruction, SystemProgram, Connection, Keypair, Signer } from "@solana/web3.js";
+import {
+  PublicKey,
+  TransactionInstruction,
+  ComputeBudgetProgram,
+  SystemProgram,
+  Connection,
+  Keypair,
+  Signer,
+} from "@solana/web3.js";
 import BN from "bn.js";
 import { createLogger, parseBigNumberish, RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
@@ -1055,11 +1063,69 @@ export class AmmV3Instrument {
     };
   }
 
-  static addComputations(): TransactionInstruction {
-    return new TransactionInstruction({
-      programId: new PublicKey("ComputeBudget111111111111111111111111111111"),
-      data: Buffer.from([0, 128, 26, 6, 0, 0, 0, 0, 0]),
-      keys: [],
-    });
+  static addComputations(): TransactionInstruction[] {
+    return [
+      ComputeBudgetProgram.setComputeUnitLimit({
+        units: 1000000,
+      }),
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: 1,
+      }),
+    ];
+  }
+
+  static makeSwapBaseOutInstructions({
+    poolInfo,
+    ownerInfo,
+    outputMint,
+    amountOut,
+    amountInMax,
+    sqrtPriceLimitX64,
+    remainingAccounts,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+
+    ownerInfo: {
+      wallet: PublicKey;
+      tokenAccountA: PublicKey;
+      tokenAccountB: PublicKey;
+    };
+
+    outputMint: PublicKey;
+
+    amountOut: BN;
+    amountInMax: BN;
+    sqrtPriceLimitX64: BN;
+
+    remainingAccounts: PublicKey[];
+  }): ReturnTypeMakeInstructions {
+    const isInputMintA = poolInfo.mintA.mint.equals(outputMint);
+    const ins = [
+      this.swapInstruction(
+        poolInfo.programId,
+        ownerInfo.wallet,
+
+        poolInfo.id,
+        poolInfo.ammConfig.id,
+
+        isInputMintA ? ownerInfo.tokenAccountB : ownerInfo.tokenAccountA,
+        isInputMintA ? ownerInfo.tokenAccountA : ownerInfo.tokenAccountB,
+
+        isInputMintA ? poolInfo.mintB.vault : poolInfo.mintA.vault,
+        isInputMintA ? poolInfo.mintA.vault : poolInfo.mintB.vault,
+
+        remainingAccounts,
+        poolInfo.observationId,
+        amountOut,
+        amountInMax,
+        sqrtPriceLimitX64,
+        false,
+      ),
+    ];
+    return {
+      signers: [],
+      instructions: ins,
+      address: {},
+    };
   }
 }

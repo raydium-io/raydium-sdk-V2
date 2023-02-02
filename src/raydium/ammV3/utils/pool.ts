@@ -809,4 +809,45 @@ export class PoolUtils {
 
     return { liquidity, ...amountsSlippage, ...amounts };
   }
+
+  static getInputAmountAndRemainAccounts(
+    poolInfo: AmmV3PoolInfo,
+    tickArrayCache: { [key: string]: TickArray },
+    outputTokenMint: PublicKey,
+    outputAmount: BN,
+    sqrtPriceLimitX64?: BN,
+  ): { expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
+    const zeroForOne = outputTokenMint.equals(poolInfo.mintB.mint);
+
+    const allNeededAccounts: PublicKey[] = [];
+    const {
+      isExist,
+      startIndex: firstTickArrayStartIndex,
+      nextAccountMeta,
+    } = this.getFirstInitializedTickArray(poolInfo, zeroForOne);
+    if (!isExist || firstTickArrayStartIndex === undefined || !nextAccountMeta) throw new Error("Invalid tick array");
+
+    allNeededAccounts.push(nextAccountMeta);
+    const {
+      amountCalculated: inputAmount,
+      accounts: reaminAccounts,
+      sqrtPriceX64: executionPrice,
+      feeAmount,
+    } = SwapMath.swapCompute(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayCache,
+      zeroForOne,
+      poolInfo.ammConfig.tradeFeeRate,
+      poolInfo.liquidity,
+      poolInfo.tickCurrent,
+      poolInfo.tickSpacing,
+      poolInfo.sqrtPriceX64,
+      outputAmount.mul(NEGATIVE_ONE),
+      firstTickArrayStartIndex,
+      sqrtPriceLimitX64,
+    );
+    allNeededAccounts.push(...reaminAccounts);
+    return { expectedAmountIn: inputAmount, remainingAccounts: allNeededAccounts, executionPrice, feeAmount };
+  }
 }

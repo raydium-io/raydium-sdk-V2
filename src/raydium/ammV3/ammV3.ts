@@ -38,13 +38,17 @@ import {
   CollectRewardParams,
   CollectRewardsParams,
   HarvestAllRewardsParams,
+  ReturnTypeComputeAmountOutBaseOut,
+  ReturnTypeMakeTransaction,
 } from "./type";
 import { AmmV3Instrument } from "./instrument";
 import { LoadParams, MakeTransaction, MakeMultiTransaction } from "../type";
 import { MathUtil } from "./utils/math";
+import { TickArray } from "./utils/tick";
 import { getATAAddress, getPdaOperationAccount } from "./utils/pda";
 import { OperationLayout } from "./layout";
 import BN from "bn.js";
+import { TOKEN_WSOL } from "../token";
 export class AmmV3 extends ModuleBase {
   private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
   private _ammV3PoolMap: Map<string, ApiAmmV3PoolInfo> = new Map();
@@ -341,7 +345,7 @@ export class AmmV3 extends ModuleBase {
 
     txBuilder.addInstruction({
       signers: insInfo.signers,
-      instructions: [AmmV3Instrument.addComputations(), ...insInfo.instructions],
+      instructions: [...AmmV3Instrument.addComputations(), ...insInfo.instructions],
     });
 
     return txBuilder.build({
@@ -391,7 +395,7 @@ export class AmmV3 extends ModuleBase {
       slippage,
     );
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     let ownerTokenAccountA: PublicKey | null = null;
     let ownerTokenAccountB: PublicKey | null = null;
@@ -462,7 +466,7 @@ export class AmmV3 extends ModuleBase {
 
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const { amountSlippageA, amountSlippageB } = LiquidityMath.getAmountsFromLiquidityWithSlippage(
       poolInfo.sqrtPriceX64,
       SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower),
@@ -526,7 +530,7 @@ export class AmmV3 extends ModuleBase {
     const poolInfo = pool!.state;
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     let _amountMinA: BN;
     let _amountMinB: BN;
@@ -685,7 +689,7 @@ export class AmmV3 extends ModuleBase {
     }
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const isInputMintA = poolInfo.mintA.mint.equals(inputMint);
 
     let ownerTokenAccountA: PublicKey | undefined = undefined;
@@ -744,7 +748,7 @@ export class AmmV3 extends ModuleBase {
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardAccountIns } =
@@ -807,7 +811,7 @@ export class AmmV3 extends ModuleBase {
     }
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     for (const rewardInfo of rewardInfos) {
       const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
@@ -871,7 +875,7 @@ export class AmmV3 extends ModuleBase {
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -929,7 +933,7 @@ export class AmmV3 extends ModuleBase {
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     for (const rewardInfo of rewardInfos) {
       if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -991,7 +995,7 @@ export class AmmV3 extends ModuleBase {
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardMint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -1033,7 +1037,7 @@ export class AmmV3 extends ModuleBase {
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: [AmmV3Instrument.addComputations()] });
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     for (const rewardMint of rewardMints) {
       const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardMint.equals(WSOLMint);
@@ -1187,5 +1191,200 @@ export class AmmV3 extends ModuleBase {
     if (!accountInfo) return [];
     const whitelistMintsInfo = OperationLayout.decode(accountInfo.data);
     return whitelistMintsInfo.whitelistMints.filter((i) => !i.equals(PublicKey.default));
+  }
+
+  public computeAmountIn({
+    // poolInfo,
+    poolId,
+    tickArrayCache,
+    baseMint,
+    amountOut,
+    slippage,
+    priceLimit = new Decimal(0),
+  }: {
+    // poolInfo: AmmV3PoolInfo;
+    poolId: string;
+    tickArrayCache: { [key: string]: TickArray };
+    baseMint: PublicKey;
+
+    amountOut: BN;
+    slippage: number;
+    priceLimit?: Decimal;
+  }): ReturnTypeComputeAmountOutBaseOut {
+    const poolInfo = this._hydratedAmmV3PoolsMap.get(poolId)?.state;
+    if (!poolInfo) throw new Error(`pool not found ${poolId}`);
+
+    let sqrtPriceLimitX64: BN;
+    if (priceLimit.equals(new Decimal(0))) {
+      sqrtPriceLimitX64 = baseMint.equals(poolInfo.mintB.mint)
+        ? MIN_SQRT_PRICE_X64.add(ONE)
+        : MAX_SQRT_PRICE_X64.sub(ONE);
+    } else {
+      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+        priceLimit,
+        poolInfo.mintA.decimals,
+        poolInfo.mintB.decimals,
+      );
+    }
+
+    const {
+      expectedAmountIn,
+      remainingAccounts,
+      executionPrice: _executionPriceX64,
+      feeAmount,
+    } = PoolUtils.getInputAmountAndRemainAccounts(poolInfo, tickArrayCache, baseMint, amountOut, sqrtPriceLimitX64);
+
+    const _executionPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
+      _executionPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+    const executionPrice = baseMint.equals(poolInfo.mintA.mint) ? _executionPrice : new Decimal(1).div(_executionPrice);
+
+    const maxAmountIn = expectedAmountIn.mul(new BN(Math.floor((1 + slippage) * 10000000000))).div(new BN(10000000000));
+
+    const poolPrice = poolInfo.mintA.mint.equals(baseMint)
+      ? poolInfo.currentPrice
+      : new Decimal(1).div(poolInfo.currentPrice);
+
+    const _numerator = new Decimal(executionPrice).sub(poolPrice).abs();
+    const _denominator = poolPrice;
+    const priceImpact = new Percent(
+      new Decimal(_numerator).mul(10 ** 15).toFixed(0),
+      new Decimal(_denominator).mul(10 ** 15).toFixed(0),
+    );
+
+    return {
+      amountIn: expectedAmountIn,
+      maxAmountIn,
+      currentPrice: poolInfo.currentPrice,
+      executionPrice,
+      priceImpact,
+      fee: feeAmount,
+
+      remainingAccounts,
+    };
+  }
+
+  public async makeSwapBaseOutTransaction({
+    poolId,
+    ownerInfo,
+
+    outputMint,
+    amountOut,
+    amountInMax,
+    priceLimit,
+
+    remainingAccounts,
+  }: {
+    poolId: string;
+    ownerInfo: {
+      feePayer?: PublicKey;
+      wallet?: PublicKey;
+      // tokenAccounts: TokenAccount[],
+      useSOLBalance?: boolean; // if has WSOL mint
+    };
+
+    outputMint: PublicKey;
+    amountOut: BN;
+    amountInMax: BN;
+    priceLimit?: Decimal;
+
+    remainingAccounts: PublicKey[];
+  }): Promise<ReturnTypeMakeTransaction> {
+    const poolInfo = this._ammV3SdkParsedPoolMap.get(poolId)?.state;
+    if (!poolInfo) throw new Error(`pool not found ${poolId}`);
+
+    const wallet = ownerInfo.wallet || this.scope.ownerPubKey;
+    const payer = ownerInfo.feePayer || this.scope.ownerPubKey;
+    const txBuilder = this.createTxBuilder();
+    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
+
+    let sqrtPriceLimitX64: BN;
+    if (!priceLimit || priceLimit.equals(new Decimal(0))) {
+      sqrtPriceLimitX64 = outputMint.equals(poolInfo.mintB.mint)
+        ? MIN_SQRT_PRICE_X64.add(ONE)
+        : MAX_SQRT_PRICE_X64.sub(ONE);
+    } else {
+      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+        priceLimit,
+        poolInfo.mintA.decimals,
+        poolInfo.mintB.decimals,
+      );
+    }
+
+    const isInputMintA = poolInfo.mintA.mint.equals(outputMint);
+
+    let ownerTokenAccountA: PublicKey | null;
+    let ownerTokenAccountB: PublicKey | null;
+    if (poolInfo.mintA.mint.equals(new PublicKey(TOKEN_WSOL.mint)) && ownerInfo.useSOLBalance) {
+      // mintA
+      const { tokenAccount, ...minAInstructions } = await this.scope.account.handleTokenAccount({
+        side: "in",
+        amount: isInputMintA ? amountInMax : 0,
+        mint: poolInfo.mintA.mint,
+        bypassAssociatedCheck: true,
+      });
+      ownerTokenAccountA = tokenAccount!;
+      txBuilder.addInstruction(minAInstructions);
+    } else {
+      ownerTokenAccountA = (await this.scope.account.getCreatedTokenAccount({
+        mint: poolInfo.mintA.mint,
+        associatedOnly: false,
+      }))!;
+    }
+
+    if (poolInfo.mintB.mint.equals(new PublicKey(TOKEN_WSOL.mint)) && ownerInfo.useSOLBalance) {
+      // mintB
+      const { tokenAccount, ...minBInstructions } = await this.scope.account.handleTokenAccount({
+        side: "in",
+        amount: !isInputMintA ? amountInMax : 0,
+        mint: poolInfo.mintB.mint,
+        payer,
+        bypassAssociatedCheck: true,
+      });
+      ownerTokenAccountB = tokenAccount!;
+      txBuilder.addInstruction(minBInstructions);
+    } else {
+      ownerTokenAccountB = (await this.scope.account.getCreatedTokenAccount({
+        mint: poolInfo.mintB.mint,
+        associatedOnly: false,
+      }))!;
+    }
+
+    if (!ownerTokenAccountA && !ownerTokenAccountB) {
+      this.logAndCreateError(
+        "cannot found target token accounts",
+        "tokenAccounts",
+        this.scope.account.tokenAccountRawInfos,
+      );
+    }
+
+    const insInfo = AmmV3Instrument.makeSwapBaseOutInstructions({
+      poolInfo,
+      ownerInfo: {
+        wallet,
+        tokenAccountA: ownerTokenAccountA!,
+        tokenAccountB: ownerTokenAccountB!,
+      },
+
+      outputMint,
+
+      amountOut,
+      amountInMax,
+      sqrtPriceLimitX64,
+
+      remainingAccounts,
+    });
+
+    txBuilder.addInstruction({ instructions: insInfo.instructions });
+
+    const { signers, transaction } = txBuilder.build();
+
+    return {
+      signers: [...signers, ...insInfo.signers],
+      transaction,
+      address: { ...insInfo.address },
+    };
   }
 }
