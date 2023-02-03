@@ -1266,7 +1266,7 @@ export class AmmV3 extends ModuleBase {
     };
   }
 
-  public async makeSwapBaseOutTransaction({
+  public async swapBaseOut({
     poolId,
     ownerInfo,
 
@@ -1291,7 +1291,7 @@ export class AmmV3 extends ModuleBase {
     priceLimit?: Decimal;
 
     remainingAccounts: PublicKey[];
-  }): Promise<ReturnTypeMakeTransaction> {
+  }): Promise<MakeTransaction> {
     const poolInfo = this._ammV3SdkParsedPoolMap.get(poolId)?.state;
     if (!poolInfo) throw new Error(`pool not found ${poolId}`);
 
@@ -1379,12 +1379,6 @@ export class AmmV3 extends ModuleBase {
 
     txBuilder.addInstruction({ instructions: insInfo.instructions });
 
-    const { signers, transaction } = txBuilder.build();
-
-    return {
-      signers: [...signers, ...insInfo.signers],
-      transaction,
-      address: { ...insInfo.address },
-    };
+    return txBuilder.build();
   }
 }
