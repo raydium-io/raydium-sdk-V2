@@ -20,6 +20,7 @@ import { AmmV3 } from "./ammV3";
 import Trade from "./trade/trade";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
+import MarketV2 from "./marketV2";
 import { SignAllTransactions } from "./type";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
@@ -72,6 +73,7 @@ export class Raydium {
   public trade: Trade;
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
+  public marketV2: MarketV2;
   public route: Route;
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
@@ -128,6 +130,7 @@ export class Raydium {
     this.route = new Route({ scope: this, moduleName: "Raydium_route" });
     this.ammV3 = new AmmV3({ scope: this, moduleName: "Raydium_ammV3" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
+    this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
 
     const now = new Date().getTime();
 
