@@ -63,7 +63,6 @@ import {
   getAssociatedAuthority,
   getAssociatedLedgerAccount,
   getAssociatedLedgerPoolAccount,
-  getFarmProgramId,
   mergeSdkFarmInfo,
   judgeFarmType,
   whetherIsStakeFarmPool,
@@ -390,7 +389,7 @@ export default class Farm extends ModuleBase {
       lockInfo: { lockMint: FARM_LOCK_MINT, lockVault: FARM_LOCK_VAULT },
       version: 6,
       rewardInfos,
-      programId: getFarmProgramId(6)!,
+      programId: new PublicKey(poolJsonInfo!.programId),
     };
 
     const txBuilder = this.createTxBuilder();
@@ -412,7 +411,7 @@ export default class Farm extends ModuleBase {
     });
 
     const { publicKey: authority, nonce } = await getAssociatedAuthority({
-      programId: poolInfo.programId,
+      programId: new PublicKey(poolInfo.programId),
       poolId: farmKeyPair.publicKey,
     });
 
@@ -634,6 +633,7 @@ export default class Farm extends ModuleBase {
       programId: new PublicKey(farmInfo.programId),
       poolId: new PublicKey(farmInfo.id),
       owner: this.scope.ownerPubKey,
+      version: farmInfo.version,
     });
 
     if (!farmInfo.ledger && farmInfo.version < 6 /* start from v6, no need init ledger any more */) {

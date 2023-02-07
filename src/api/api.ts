@@ -4,6 +4,7 @@ import { createLogger, sleep } from "../common";
 import { Cluster } from "../solana";
 
 import { ApiFarmPools, ApiJsonPairInfo, ApiLiquidityPools, ApiTokens, ApiAmmV3PoolInfo } from "./type";
+import { API_URLS } from "./url";
 
 const logger = createLogger("Raydium_Api");
 
@@ -50,7 +51,7 @@ export class Api {
     this.cluster = cluster;
     this.urlConfigs = urlConfigs || {};
 
-    this.api = axios.create({ baseURL: "https://api.raydium.io/v2", timeout });
+    this.api = axios.create({ baseURL: API_URLS.TOKEN, timeout });
 
     this.api.interceptors.request.use(
       (config) => {
@@ -93,34 +94,32 @@ export class Api {
   }
 
   async getTokens(): Promise<ApiTokens> {
-    return this.api.get(this.urlConfigs.tokens || "/sdk/token/raydium.mainnet.json");
+    return this.api.get(this.urlConfigs.tokens || API_URLS.TOKEN);
   }
 
   async getLiquidityPools(): Promise<ApiLiquidityPools> {
-    return this.api.get(this.urlConfigs.liquidityPools || `/sdk/liquidity/${this.cluster}.json`);
+    return this.api.get(this.urlConfigs.liquidityPools || API_URLS.LIQUIDITY);
   }
 
   async getPairsInfo(): Promise<ApiJsonPairInfo[]> {
-    return this.api.get(this.urlConfigs.pairs || "/main/pairs");
+    return this.api.get(this.urlConfigs.pairs || API_URLS.PAIRS);
   }
 
   async getFarmPools(): Promise<ApiFarmPools> {
-    return this.api.get(this.urlConfigs.farms || `/sdk/farm-v2/${this.cluster}.json`);
+    return this.api.get(this.urlConfigs.farms || API_URLS.FARMS);
   }
 
   async getConcentratedPools(): Promise<ApiAmmV3PoolInfo[]> {
-    const res = await this.api.get(this.urlConfigs.ammV3Pools || "/ammV3/ammPools");
+    const res = await this.api.get(this.urlConfigs.ammV3Pools || API_URLS.AMM_V3);
     return res.data;
   }
 
   async getCoingeckoPrice(coingeckoIds: string[]): Promise<Record<string, { usd?: number }>> {
-    return this.api.get(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds.join(",")}&vs_currencies=usd`,
-    );
+    return this.api.get(`${API_URLS.COINGECKO}?ids=${coingeckoIds.join(",")}&vs_currencies=usd`);
   }
 
   async getRaydiumTokenPrice(): Promise<Record<string, number>> {
-    return this.api.get(this.urlConfigs.price || "/main/price");
+    return this.api.get(this.urlConfigs.price || API_URLS.PRICE);
   }
 
   async getBlockSlotCountForSecond(endpointUrl?: string): Promise<number> {
@@ -140,6 +139,6 @@ export class Api {
   }
 
   async getChainTimeOffset(): Promise<{ chainTime: number; offset: number }> {
-    return this.api.get(this.urlConfigs.chainTime || "/main/chain/time");
+    return this.api.get(this.urlConfigs.chainTime || API_URLS.CHAIN_TIME);
   }
 }

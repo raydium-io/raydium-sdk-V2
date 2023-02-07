@@ -8,3 +8,5 @@ export * from "./lodash";
 export * from "./accountInfo";
 export * from "./fractionUtil";
 export * from "./date";
+export * from "./programId";
+export * from "./txType";

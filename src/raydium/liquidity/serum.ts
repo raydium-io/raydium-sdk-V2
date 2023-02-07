@@ -7,36 +7,11 @@ import { LIQUIDITY_VERSION_TO_SERUM_VERSION } from "./constant";
 
 const logger = createLogger("Raydium_liquidity_serum");
 
-/* ================= program public keys ================= */
-export const _SERUM_PROGRAM_ID_V3 = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
-export const SERUM_PROGRAM_ID_V3 = new PublicKey(_SERUM_PROGRAM_ID_V3);
-
-// serum program id string => serum version
-export const SERUM_PROGRAMID_TO_VERSION: {
-  [key: string]: SerumVersion;
-} = {
-  [_SERUM_PROGRAM_ID_V3]: 3,
-};
-
-// serum version => serum program id
-export const SERUM_VERSION_TO_PROGRAM_ID: { [key in SerumVersion]?: PublicKey } & {
-  [K: number]: PublicKey;
-} = {
-  3: SERUM_PROGRAM_ID_V3,
-};
-
 export function getSerumVersion(version: number): SerumVersion {
   const serumVersion = LIQUIDITY_VERSION_TO_SERUM_VERSION[version];
   if (!serumVersion) logger.logWithError("invalid version", "version", version);
 
   return serumVersion;
-}
-
-export function getSerumProgramId(version: number): PublicKey {
-  const programId = SERUM_VERSION_TO_PROGRAM_ID[version];
-  if (!programId) logger.logWithError("invalid version", "version", version);
-
-  return programId;
 }
 
 export function getSerumAssociatedAuthority({ programId, marketId }: { programId: PublicKey; marketId: PublicKey }): {

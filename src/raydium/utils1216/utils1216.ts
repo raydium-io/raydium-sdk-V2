@@ -285,11 +285,6 @@ export default class Utils1216 extends ModuleBase {
       signer: Signer[];
     }[]
   > {
-    // const frontInstructions: TransactionInstruction[] = [];
-    // const endInstructions: TransactionInstruction[] = [];
-    // const instructions: TransactionInstruction[] = [];
-
-    // const signers: Signer[] = [];
     const txBuilder = this.createTxBuilder();
     const wallet = ownerInfo.wallet || this.scope.ownerPubKey;
 

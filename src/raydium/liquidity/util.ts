@@ -12,10 +12,10 @@ import {
 } from "../../common/txTool";
 import { Token, TokenAmount } from "../../module";
 
-import { LIQUIDITY_VERSION_TO_PROGRAM_ID, LiquidityPoolStatus } from "./constant";
+import { LiquidityPoolStatus } from "./constant";
 import { makeSimulatePoolInfoInstruction } from "./instruction";
 import { LIQUIDITY_VERSION_TO_STATE_LAYOUT, LiquidityStateLayout, liquidityStateV4Layout } from "./layout";
-import { getSerumAssociatedAuthority, getSerumProgramId, getSerumVersion } from "./serum";
+import { getSerumAssociatedAuthority } from "./serum";
 import {
   AmountSide,
   LiquidityAssociatedPoolKeys,
@@ -116,13 +116,6 @@ export function getLiquidityStateLayout(version: number): LiquidityStateLayout {
   if (!STATE_LAYOUT) logger.logWithError("invalid version", "version", version);
 
   return STATE_LAYOUT;
-}
-
-export function getLiquidityProgramId(version: number): PublicKey {
-  const programId = LIQUIDITY_VERSION_TO_PROGRAM_ID[version];
-  if (!programId) logger.logWithError("invalid version", "version", version);
-
-  return programId;
 }
 
 interface GetAssociatedParam {

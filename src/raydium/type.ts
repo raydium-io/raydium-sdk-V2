@@ -1,6 +1,7 @@
 import { PublicKey, Signer, Transaction } from "@solana/web3.js";
 
 import { ApiTokenCategory, ApiTokenInfo } from "../api";
+import { InstructionType } from "../common";
 import { ExecuteParam } from "../common/txTool";
 
 export interface RaydiumTokenInfo extends ApiTokenInfo {
@@ -12,6 +13,7 @@ export type SignAllTransactions = ((transaction: Transaction[]) => Promise<Trans
 export interface MakeTransaction {
   signers: Signer[];
   transaction: Transaction;
+  instructionTypes: number[];
   execute: () => Promise<string>;
   extInfo: Record<string, any>;
 }
@@ -19,6 +21,7 @@ export interface MakeTransaction {
 export interface MakeMultiTransaction {
   signers: Signer[][];
   transactions: Transaction[];
+  instructionTypes: number[];
   execute: (params?: ExecuteParam) => Promise<string[]>;
   extInfo: Record<string, any>;
 }

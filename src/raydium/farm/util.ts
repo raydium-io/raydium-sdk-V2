@@ -4,20 +4,14 @@ import BN from "bn.js";
 import { GetMultipleAccountsInfoConfig, getMultipleAccountsInfoWithCustomFlags } from "../../common/accountInfo";
 import { parseBigNumberish, BN_ONE, BN_TEN, toTotalPrice, toFraction } from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
-import { PublicKeyish, validateAndParsePublicKey, RAYMint } from "../../common/pubKey";
+import { RAYMint } from "../../common/pubKey";
 import { findProgramAddress, ProgramAddress } from "../../common/txTool";
 import { DateParam, isDateAfter, isDateBefore } from "../../common/date";
 import { splAccountLayout } from "../account/layout";
 import { SplAccount } from "../account/types";
 
-import {
-  FARM_PROGRAMID_TO_VERSION,
-  FARM_VERSION_TO_LEDGER_LAYOUT,
-  FARM_VERSION_TO_PROGRAMID,
-  FARM_VERSION_TO_STATE_LAYOUT,
-  FarmVersion,
-} from "./config";
-import { TokenAmount, CurrencyAmount, Fraction, Price, Token } from "../../module";
+import { FARM_VERSION_TO_LEDGER_LAYOUT, FARM_VERSION_TO_STATE_LAYOUT } from "./config";
+import { CurrencyAmount, Fraction, Price, Token } from "../../module";
 import { FarmLedger, FarmLedgerLayout, FarmState, FarmStateLayout } from "./layout";
 import { FarmPoolJsonInfo, FarmRewardInfo, FarmRewardInfoConfig, SdkParsedFarmInfo } from "./type";
 import { jsonInfo2PoolKeys } from "../../common";
@@ -50,32 +44,22 @@ export async function getAssociatedLedgerPoolAccount({
   return publicKey;
 }
 
-export function getFarmVersion(programId: PublicKeyish): FarmVersion {
-  const programIdPubKey = validateAndParsePublicKey({ publicKey: programId });
-  const programIdString = programIdPubKey.toBase58();
-
-  const version = FARM_PROGRAMID_TO_VERSION[programIdString];
-
-  return version;
-}
-
 export async function getAssociatedLedgerAccount({
   programId,
   poolId,
   owner,
+  version,
 }: {
   programId: PublicKey;
   poolId: PublicKey;
   owner: PublicKey;
+  version: number;
 }): Promise<PublicKey> {
   const { publicKey } = await findProgramAddress(
     [
       poolId.toBuffer(),
       owner.toBuffer(),
-      Buffer.from(
-        getFarmVersion(programId) === 6 ? "farmer_info_associated_seed" : "staker_info_v2_associated_seed",
-        "utf-8",
-      ),
+      Buffer.from(version === 6 ? "farmer_info_associated_seed" : "staker_info_v2_associated_seed", "utf-8"),
     ],
     programId,
   );
@@ -89,12 +73,6 @@ export const getAssociatedAuthority = async ({
   programId: PublicKey;
   poolId: PublicKey;
 }): Promise<ProgramAddress> => await findProgramAddress([poolId.toBuffer()], programId);
-
-export function getFarmProgramId(version: number): PublicKey | undefined {
-  const programId = FARM_VERSION_TO_PROGRAMID[version];
-
-  return programId;
-}
 
 export function farmRewardInfoToConfig(data: FarmRewardInfo): FarmRewardInfoConfig {
   return {
@@ -226,7 +204,12 @@ export async function fetchMultipleFarmInfoAndUpdate({
 
     if (owner) {
       publicKeys.push({
-        pubkey: await getAssociatedLedgerAccount({ programId: pool.programId, poolId: pool.id, owner }),
+        pubkey: await getAssociatedLedgerAccount({
+          programId: pool.programId,
+          poolId: pool.id,
+          owner,
+          version: poolInfo.version,
+        }),
         version: pool.version,
         key: "ledger",
         poolId: pool.id,

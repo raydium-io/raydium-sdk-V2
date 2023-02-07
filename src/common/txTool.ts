@@ -26,10 +26,12 @@ export interface AddInstructionParam {
   instructions?: TransactionInstruction[];
   endInstructions?: TransactionInstruction[];
   signers?: Signer[];
+  instructionTypes?: number[];
 }
 
 export interface TxBuildData {
   transaction: Transaction;
+  instructionTypes: number[];
   signers: Signer[];
   execute: () => Promise<string>;
   extInfo: Record<string, any>;
@@ -41,6 +43,7 @@ export interface ExecuteParam {
 }
 export interface MultiTxBuildData {
   transactions: Transaction[];
+  instructionTypes: number[];
   signers: Signer[][];
   execute: (executeParams?: ExecuteParam) => Promise<string[]>;
   extInfo: Record<string, any>;
@@ -52,6 +55,7 @@ export class TxBuilder {
   private instructions: TransactionInstruction[] = [];
   private endInstructions: TransactionInstruction[] = [];
   private signers: Signer[] = [];
+  private instructionTypes: number[] = [];
   private feePayer: PublicKey;
   private signAllTransactions?: SignAllTransactions;
 
@@ -66,11 +70,13 @@ export class TxBuilder {
     instructions: TransactionInstruction[];
     endInstructions: TransactionInstruction[];
     signers: Signer[];
+    instructionTypes: number[];
   } {
     return {
       instructions: this.instructions,
       endInstructions: this.endInstructions,
       signers: this.signers,
+      instructionTypes: this.instructionTypes,
     };
   }
 
@@ -78,10 +84,16 @@ export class TxBuilder {
     return [...this.instructions, ...this.endInstructions];
   }
 
-  public addInstruction({ instructions = [], endInstructions = [], signers = [] }: AddInstructionParam): TxBuilder {
+  public addInstruction({
+    instructions = [],
+    endInstructions = [],
+    signers = [],
+    instructionTypes = [],
+  }: AddInstructionParam): TxBuilder {
     this.instructions.push(...instructions);
     this.endInstructions.push(...endInstructions);
     this.signers.push(...signers);
+    this.instructionTypes.push(...instructionTypes);
     return this;
   }
 
@@ -93,6 +105,7 @@ export class TxBuilder {
     return {
       transaction,
       signers: this.signers,
+      instructionTypes: this.instructionTypes,
       execute: async (): Promise<string> => {
         const recentBlockHash = await getRecentBlockHash(this.connection);
         transaction.recentBlockhash = recentBlockHash;
@@ -118,10 +131,15 @@ export class TxBuilder {
 
     const allTransactions: Transaction[] = [transaction, ...filterExtraBuildData.map((data) => data.transaction)];
     const allSigners: Signer[][] = [this.signers, ...filterExtraBuildData.map((data) => data.signers)];
+    const allInstructionTypes: number[] = [
+      ...this.instructionTypes,
+      ...filterExtraBuildData.map((data) => data.instructionTypes).flat(),
+    ];
 
     return {
       transactions: allTransactions,
       signers: allSigners,
+      instructionTypes: allInstructionTypes,
       execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
         const { sequentially, onTxUpdate } = executeParams || {};
         const recentBlockHash = await getRecentBlockHash(this.connection);
@@ -217,6 +235,7 @@ export class TxBuilder {
     return {
       transactions: allTransactions,
       signers: allSigners,
+      instructionTypes: this.instructionTypes,
       execute: async (): Promise<string[]> => {
         const recentBlockHash = await getRecentBlockHash(this.connection);
         if (this.owner?.isKeyPair) {
