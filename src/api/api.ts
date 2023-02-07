@@ -51,7 +51,7 @@ export class Api {
     this.cluster = cluster;
     this.urlConfigs = urlConfigs || {};
 
-    this.api = axios.create({ baseURL: API_URLS.TOKEN, timeout });
+    this.api = axios.create({ baseURL: API_URLS.BASE, timeout });
 
     this.api.interceptors.request.use(
       (config) => {
