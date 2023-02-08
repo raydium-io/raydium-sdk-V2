@@ -1,6 +1,6 @@
 {
   "name": "test-raydium-sdk-v2",
-  "version": "0.0.65-alpha",
+  "version": "0.0.66-alpha",
   "description": "An SDK for building applications on top of Raydium.",
   "license": "GPL-3.0",
   "main": "./lib/index.js",

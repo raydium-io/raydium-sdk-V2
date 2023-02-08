@@ -4,62 +4,62 @@ export enum TxVersion {
 }
 
 export enum InstructionType {
-  "createAccount",
-  "initAccount",
-  "createATA",
-  "closeAccount",
-  "transferAmount",
-  "initMint",
-  "mintTo",
+  "CreateAccount",
+  "InitAccount",
+  "CreateATA",
+  "CloseAccount",
+  "TransferAmount",
+  "InitMint",
+  "MintTo",
 
-  "initMarket", // create market main ins
-  "util1216OwnerClaim", // owner claim token ins
+  "InitMarket", // create market main ins
+  "Itil1216OwnerClaim", // owner claim token ins
 
-  "setComputeUnitPrice", // addComputeBudget
-  "setComputeUnitLimit", // addComputeBudget
+  "SetComputeUnitPrice", // addComputeBudget
+  "SetComputeUnitLimit", // addComputeBudget
 
   // CLMM
-  "clmmCreatePool",
-  "clmmOpenPosition",
-  "clmmIncreasePosition",
-  "clmmDecreasePosition",
-  "clmmClosePosition",
-  "clmmSwapBaseIn",
-  "clmmSwapBaseOut",
-  "clmmInitReward",
-  "clmmSetReward",
-  "clmmCollectReward",
+  "ClmmCreatePool",
+  "ClmmOpenPosition",
+  "ClmmIncreasePosition",
+  "ClmmDecreasePosition",
+  "ClmmClosePosition",
+  "ClmmSwapBaseIn",
+  "ClmmSwapBaseOut",
+  "ClmmInitReward",
+  "ClmmSetReward",
+  "ClmmCollectReward",
 
-  "ammV4Swap",
-  "ammV4AddLiquidity",
-  "ammV4RemoveLiquidity",
-  "ammV4SimulatePoolInfo",
-  "ammV4SwapBaseIn",
-  "ammV4SwapBaseOut",
-  "ammV4CreatePool",
-  "ammV4InitPool",
+  "AmmV4Swap",
+  "AmmV4AddLiquidity",
+  "AmmV4RemoveLiquidity",
+  "AmmV4SimulatePoolInfo",
+  "AmmV4SwapBaseIn",
+  "AmmV4SwapBaseOut",
+  "AmmV4CreatePool",
+  "AmmV4InitPool",
 
-  "ammV5AddLiquidity",
-  "ammV5RemoveLiquidity",
-  "ammV5SimulatePoolInfo",
-  "ammV5SwapBaseIn",
-  "ammV5SwapBaseOut",
+  "AmmV5AddLiquidity",
+  "AmmV5RemoveLiquidity",
+  "AmmV5SimulatePoolInfo",
+  "AmmV5SwapBaseIn",
+  "AmmV5SwapBaseOut",
 
-  "routeSwap1",
-  "routeSwap2",
+  "RouteSwap1",
+  "RouteSwap2",
 
-  "farmV3Deposit",
-  "farmV3Withdraw",
-  "farmV3CreateLedger",
+  "FarmV3Deposit",
+  "FarmV3Withdraw",
+  "FarmV3CreateLedger",
 
-  "farmV5Deposit",
-  "farmV5Withdraw",
-  "farmV5CreateLedger",
+  "FarmV5Deposit",
+  "FarmV5Withdraw",
+  "FarmV5CreateLedger",
 
-  "farmV6Deposit",
-  "farmV6Withdraw",
-  "farmV6Create",
-  "farmV6Restart",
-  "farmV6CreatorAddReward",
-  "farmV6CreatorWithdraw",
+  "FarmV6Deposit",
+  "FarmV6Withdraw",
+  "FarmV6Create",
+  "FarmV6Restart",
+  "FarmV6CreatorAddReward",
+  "FarmV6CreatorWithdraw",
 }
