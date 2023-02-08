@@ -3,8 +3,15 @@ import axios, { AxiosInstance } from "axios";
 import { createLogger, sleep } from "../common";
 import { Cluster } from "../solana";
 
-import { ApiFarmPools, ApiJsonPairInfo, ApiLiquidityPools, ApiTokens, ApiAmmV3PoolInfo } from "./type";
-import { API_URLS } from "./url";
+import {
+  ApiFarmPools,
+  ApiJsonPairInfo,
+  ApiLiquidityPools,
+  ApiTokens,
+  ApiAmmV3PoolInfo,
+  ApiAmmV3ConfigInfo,
+} from "./type";
+import { API_URLS, API_URL_CONFIG } from "./url";
 
 const logger = createLogger("Raydium_Api");
 
@@ -24,20 +31,10 @@ export async function endlessRetry<T>(name: string, call: () => Promise<T>, inte
   return result;
 }
 
-export interface UrlConfigs {
-  tokens?: string;
-  liquidityPools?: string;
-  pairs?: string;
-  farms?: string;
-  ammV3Pools?: string;
-  price?: string;
-  chainTime?: string;
-}
-
 export interface ApiProps {
   cluster: Cluster;
   timeout: number;
-  urlConfigs?: UrlConfigs;
+  urlConfigs?: API_URL_CONFIG;
 }
 
 export class Api {
@@ -45,13 +42,13 @@ export class Api {
 
   public api: AxiosInstance;
 
-  public urlConfigs: UrlConfigs;
+  public urlConfigs: API_URL_CONFIG;
 
   constructor({ cluster, timeout, urlConfigs }: ApiProps) {
     this.cluster = cluster;
     this.urlConfigs = urlConfigs || {};
 
-    this.api = axios.create({ baseURL: API_URLS.BASE, timeout });
+    this.api = axios.create({ baseURL: this.urlConfigs.BASE_HOST || API_URLS.BASE_HOST, timeout });
 
     this.api.interceptors.request.use(
       (config) => {
@@ -94,23 +91,33 @@ export class Api {
   }
 
   async getTokens(): Promise<ApiTokens> {
-    return this.api.get(this.urlConfigs.tokens || API_URLS.TOKEN);
+    return this.api.get(this.urlConfigs.TOKEN || API_URLS.TOKEN);
   }
 
   async getLiquidityPools(): Promise<ApiLiquidityPools> {
-    return this.api.get(this.urlConfigs.liquidityPools || API_URLS.LIQUIDITY);
+    return this.api.get(this.urlConfigs.LIQUIDITY || API_URLS.LIQUIDITY);
   }
 
   async getPairsInfo(): Promise<ApiJsonPairInfo[]> {
-    return this.api.get(this.urlConfigs.pairs || API_URLS.PAIRS);
+    return this.api.get(this.urlConfigs.PAIRS || API_URLS.PAIRS);
   }
 
   async getFarmPools(): Promise<ApiFarmPools> {
-    return this.api.get(this.urlConfigs.farms || API_URLS.FARMS);
+    return this.api.get(this.urlConfigs.FARMS || API_URLS.FARMS);
   }
 
   async getConcentratedPools(): Promise<ApiAmmV3PoolInfo[]> {
-    const res = await this.api.get(this.urlConfigs.ammV3Pools || API_URLS.AMM_V3);
+    const res = await this.api.get(this.urlConfigs.AMM_V3 || API_URLS.AMM_V3);
+    return res.data;
+  }
+
+  async getAmmV3Configs(): Promise<Record<string, ApiAmmV3ConfigInfo>> {
+    const res = await this.api.get(this.urlConfigs.AMM_V3_CONFIG || API_URLS.AMM_V3_CONFIG);
+    return res.data;
+  }
+
+  async getAmmV3PoolLines(poolId: string): Promise<{ price: string; liquidity: string }[]> {
+    const res = await this.api.get(`${this.urlConfigs.AMM_V3_LINES || API_URLS.AMM_V3_LINES}?pool_id=${poolId}`);
     return res.data;
   }
 
@@ -119,7 +126,7 @@ export class Api {
   }
 
   async getRaydiumTokenPrice(): Promise<Record<string, number>> {
-    return this.api.get(this.urlConfigs.price || API_URLS.PRICE);
+    return this.api.get(this.urlConfigs.PRICE || API_URLS.PRICE);
   }
 
   async getBlockSlotCountForSecond(endpointUrl?: string): Promise<number> {
@@ -139,6 +146,6 @@ export class Api {
   }
 
   async getChainTimeOffset(): Promise<{ chainTime: number; offset: number }> {
-    return this.api.get(this.urlConfigs.chainTime || API_URLS.CHAIN_TIME);
+    return this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME);
   }
 }
