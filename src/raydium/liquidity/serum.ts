@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
-import { SerumVersion } from "../../api";
+import { SerumVersion } from "../serum";
 import { createLogger } from "../../common/logger";
 
 import { LIQUIDITY_VERSION_TO_SERUM_VERSION } from "./constant";

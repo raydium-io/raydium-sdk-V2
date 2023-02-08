@@ -22,8 +22,6 @@ export type ApiTokens = {
 /* ================= liquidity ================= */
 export type LiquidityVersion = 4 | 5;
 
-export type SerumVersion = 1 | 2 | 3;
-
 export interface ApiLiquidityPoolInfo {
   // base
   id: string;

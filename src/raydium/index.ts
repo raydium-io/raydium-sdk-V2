@@ -7,6 +7,7 @@ export * from "./token";
 export * from "./trade";
 export * from "./tradeV2";
 export * from "./ammV3";
+export * from "./serum";
 export * from "./utils1216";
 export * from "./marketV2";
 export * from "./type";

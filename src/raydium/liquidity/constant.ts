@@ -1,5 +1,6 @@
 import BN from "bn.js";
-import { LiquidityVersion, SerumVersion } from "../../api/type";
+import { LiquidityVersion } from "../../api/type";
+import { SerumVersion } from "../serum";
 
 export enum LiquidityPoolStatus {
   Uninitialized,
