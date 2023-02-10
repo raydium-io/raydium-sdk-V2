@@ -155,6 +155,50 @@ export interface CreatePoolParam {
   marketProgramId: PublicKey;
 }
 
+export interface CreatePoolV4Param {
+  programId: PublicKey;
+  marketInfo: {
+    marketId: PublicKey;
+    programId: PublicKey;
+  };
+  baseMintInfo: {
+    mint: PublicKey;
+    decimals: number;
+  };
+  quoteMintInfo: {
+    mint: PublicKey;
+    decimals: number;
+  };
+
+  baseAmount: BN;
+  quoteAmount: BN;
+  startTime: BN;
+
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  associatedOnly: boolean;
+  computeBudgetConfig?: any;
+}
+
+export interface CreatePoolV4Address {
+  programId: PublicKey;
+  ammId: PublicKey;
+  ammAuthority: PublicKey;
+  ammOpenOrders: PublicKey;
+  lpMint: PublicKey;
+  coinMint: PublicKey;
+  pcMint: PublicKey;
+  coinVault: PublicKey;
+  pcVault: PublicKey;
+  withdrawQueue: PublicKey;
+  ammTargetOrders: PublicKey;
+  poolTempLp: PublicKey;
+  marketProgramId: PublicKey;
+  marketId: PublicKey;
+}
+
 export interface InitPoolParam extends CreatePoolParam {
   baseAmount: TokenAmount;
   quoteAmount: TokenAmount;

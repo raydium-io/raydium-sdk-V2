@@ -1,10 +1,10 @@
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 
 import { parseBigNumberish } from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
-import { accountMeta, commonSystemAccountMeta } from "../../common/pubKey";
-import { struct, u8 } from "../../marshmallow";
+import { accountMeta, commonSystemAccountMeta, RENT_PROGRAM_ID } from "../../common/pubKey";
+import { struct, u8, u64 } from "../../marshmallow";
 
 import {
   addLiquidityLayout,
@@ -25,6 +25,7 @@ import {
   LiquiditySwapFixedOutInstructionParamsV4,
   LiquiditySwapInstructionParams,
 } from "./type";
+import BN from "bn.js";
 
 const logger = createLogger("Raydium_liquidity_instruction");
 
@@ -218,6 +219,90 @@ export function makeCreatePoolInstruction(
   return new TransactionInstruction({
     programId: poolKeys.programId,
     keys,
+    data,
+  });
+}
+
+export function makeCreatePoolV4InstructionV2({
+  programId,
+  ammId,
+  ammAuthority,
+  ammOpenOrders,
+  lpMint,
+  coinMint,
+  pcMint,
+  coinVault,
+  pcVault,
+  withdrawQueue,
+  ammTargetOrders,
+  poolTempLp,
+  marketProgramId,
+  marketId,
+  userWallet,
+  userCoinVault,
+  userPcVault,
+  userLpVault,
+  nonce,
+  openTime,
+  coinAmount,
+  pcAmount,
+}: {
+  programId: PublicKey;
+  ammId: PublicKey;
+  ammAuthority: PublicKey;
+  ammOpenOrders: PublicKey;
+  lpMint: PublicKey;
+  coinMint: PublicKey;
+  pcMint: PublicKey;
+  coinVault: PublicKey;
+  pcVault: PublicKey;
+  withdrawQueue: PublicKey;
+  ammTargetOrders: PublicKey;
+  poolTempLp: PublicKey;
+  marketProgramId: PublicKey;
+  marketId: PublicKey;
+  userWallet: PublicKey;
+  userCoinVault: PublicKey;
+  userPcVault: PublicKey;
+  userLpVault: PublicKey;
+
+  nonce: number;
+  openTime: BN;
+  coinAmount: BN;
+  pcAmount: BN;
+}): TransactionInstruction {
+  const dataLayout = struct([u8("instruction"), u8("nonce"), u64("openTime"), u64("pcAmount"), u64("coinAmount")]);
+
+  const keys = [
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: ammId, isSigner: false, isWritable: true },
+    { pubkey: ammAuthority, isSigner: false, isWritable: false },
+    { pubkey: ammOpenOrders, isSigner: false, isWritable: true },
+    { pubkey: lpMint, isSigner: false, isWritable: true },
+    { pubkey: coinMint, isSigner: false, isWritable: false },
+    { pubkey: pcMint, isSigner: false, isWritable: false },
+    { pubkey: coinVault, isSigner: false, isWritable: true },
+    { pubkey: pcVault, isSigner: false, isWritable: true },
+    { pubkey: withdrawQueue, isSigner: false, isWritable: true },
+    { pubkey: ammTargetOrders, isSigner: false, isWritable: true },
+    { pubkey: poolTempLp, isSigner: false, isWritable: true },
+    { pubkey: marketProgramId, isSigner: false, isWritable: false },
+    { pubkey: marketId, isSigner: false, isWritable: false },
+    { pubkey: userWallet, isSigner: true, isWritable: true },
+    { pubkey: userCoinVault, isSigner: false, isWritable: true },
+    { pubkey: userPcVault, isSigner: false, isWritable: true },
+    { pubkey: userLpVault, isSigner: false, isWritable: true },
+  ];
+
+  const data = Buffer.alloc(dataLayout.span);
+  dataLayout.encode({ instruction: 1, nonce, openTime, coinAmount, pcAmount }, data);
+
+  return new TransactionInstruction({
+    keys,
+    programId,
     data,
   });
 }

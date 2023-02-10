@@ -8,6 +8,7 @@ import { PublicKeyish, SOLMint, validateAndParsePublicKey, WSOLMint, solToWSol }
 import { jsonInfo2PoolKeys } from "../../common/utility";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { makeTransferInstruction } from "../account/instruction";
+import { getATAAddress } from "../ammV3/utils/pda";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { SwapExtInfo } from "../trade/type";
 import { LoadParams, MakeMultiTransaction, MakeTransaction } from "../type";
@@ -19,11 +20,14 @@ import {
   makeCreatePoolInstruction,
   makeInitPoolInstruction,
   makeRemoveLiquidityInstruction,
+  makeCreatePoolV4InstructionV2,
 } from "./instruction";
 import { getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice, StableLayout } from "./stable";
 import {
   AmountSide,
   CreatePoolParam,
+  CreatePoolV4Param,
+  CreatePoolV4Address,
   InitPoolParam,
   LiquidityAddTransactionParams,
   LiquidityComputeAmountOutParams,
@@ -435,6 +439,110 @@ export default class Liquidity extends ModuleBase {
       ],
     });
     return txBuilder.buildMultiTx({ extInfo: { amountOut } }) as MakeMultiTransaction & SwapExtInfo;
+  }
+
+  public async createPoolV4({
+    programId,
+    marketInfo,
+    baseMintInfo,
+    quoteMintInfo,
+    baseAmount,
+    quoteAmount,
+    startTime,
+    ownerInfo,
+    associatedOnly = false,
+    computeBudgetConfig,
+  }: CreatePoolV4Param): Promise<MakeTransaction & { extInfo: { address: CreatePoolV4Address } }> {
+    const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(Token.WSOL.mint);
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && quoteMintInfo.mint.equals(Token.WSOL.mint);
+
+    const txBuilder = this.createTxBuilder();
+
+    const { account: ownerTokenAccountBase, instructionParams: ownerTokenAccountBaseInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: baseMintInfo.mint,
+        owner: this.scope.ownerPubKey,
+        createInfo: mintAUseSOLBalance
+          ? {
+              payer: payer!,
+              amount: baseAmount,
+            }
+          : undefined,
+
+        notUseTokenAccount: mintAUseSOLBalance,
+        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+      });
+    txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
+
+    const { account: ownerTokenAccountQuote, instructionParams: ownerTokenAccountQuoteInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: quoteMintInfo.mint,
+        owner: this.scope.ownerPubKey,
+        createInfo: mintBUseSOLBalance
+          ? {
+              payer: payer!,
+              amount: quoteAmount,
+            }
+          : undefined,
+
+        notUseTokenAccount: mintBUseSOLBalance,
+        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+      });
+    txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
+
+    if (ownerTokenAccountBase === undefined || ownerTokenAccountQuote === undefined)
+      throw Error("you don't has some token account");
+
+    const poolInfo = getAssociatedPoolKeys({
+      version: 4,
+      marketVersion: 3,
+      marketId: marketInfo.marketId,
+      baseMint: baseMintInfo.mint,
+      quoteMint: quoteMintInfo.mint,
+      baseDecimals: baseMintInfo.decimals,
+      quoteDecimals: quoteMintInfo.decimals,
+      programId,
+      marketProgramId: marketInfo.programId,
+    });
+
+    const createPoolKeys = {
+      programId,
+      ammId: poolInfo.id,
+      ammAuthority: poolInfo.authority,
+      ammOpenOrders: poolInfo.openOrders,
+      lpMint: poolInfo.lpMint,
+      coinMint: poolInfo.baseMint,
+      pcMint: poolInfo.quoteMint,
+      coinVault: poolInfo.baseVault,
+      pcVault: poolInfo.quoteVault,
+      withdrawQueue: poolInfo.withdrawQueue,
+      ammTargetOrders: poolInfo.targetOrders,
+      poolTempLp: poolInfo.lpVault,
+      marketProgramId: poolInfo.marketProgramId,
+      marketId: poolInfo.marketId,
+    };
+
+    const ins = makeCreatePoolV4InstructionV2({
+      ...createPoolKeys,
+      userWallet: this.scope.ownerPubKey,
+      userCoinVault: ownerTokenAccountBase,
+      userPcVault: ownerTokenAccountQuote,
+      userLpVault: getATAAddress(this.scope.ownerPubKey, poolInfo.lpMint).publicKey,
+
+      nonce: poolInfo.nonce,
+      openTime: startTime,
+      coinAmount: baseAmount,
+      pcAmount: quoteAmount,
+    });
+
+    txBuilder.addInstruction({
+      instructions: [ins],
+    });
+
+    return txBuilder.build<{ address: CreatePoolV4Address }>({
+      address: createPoolKeys,
+    });
   }
 
   public async createPool(params: CreatePoolParam): Promise<MakeTransaction> {

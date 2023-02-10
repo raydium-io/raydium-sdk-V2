@@ -150,7 +150,7 @@ export function getLiquidityAssociatedAuthority({ programId }: { programId: Publ
   return findProgramAddress([Buffer.from([97, 109, 109, 32, 97, 117, 116, 104, 111, 114, 105, 116, 121])], programId);
 }
 
-export async function getAssociatedPoolKeys({
+export function getAssociatedPoolKeys({
   version,
   marketVersion,
   marketId,
@@ -170,7 +170,7 @@ export async function getAssociatedPoolKeys({
   quoteDecimals: number;
   programId: PublicKey;
   marketProgramId: PublicKey;
-}): Promise<LiquidityAssociatedPoolKeys> {
+}): LiquidityAssociatedPoolKeys {
   const id = getLiquidityAssociatedId({ name: "amm_associated_seed", programId, marketId });
   const lpMint = getLiquidityAssociatedId({ name: "lp_mint_associated_seed", programId, marketId });
   const { publicKey: authority, nonce } = getLiquidityAssociatedAuthority({ programId });

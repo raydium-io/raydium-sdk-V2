@@ -313,9 +313,7 @@ export class AmmV3 extends ModuleBase {
     return this._hydratedAmmV3Pools;
   }
 
-  public async createPool(
-    props: CreateConcentratedPool,
-  ): Promise<Omit<MakeTransaction, "extInfo"> & { extInfo: { mockPoolInfo: AmmV3PoolInfo } }> {
+  public async createPool(props: CreateConcentratedPool): Promise<MakeTransaction<{ mockPoolInfo: AmmV3PoolInfo }>> {
     const {
       programId,
       owner = this.scope.owner?.publicKey || PublicKey.default,
@@ -348,8 +346,9 @@ export class AmmV3 extends ModuleBase {
       instructions: [...AmmV3Instrument.addComputations(), ...insInfo.instructions],
     });
 
-    return txBuilder.build({
+    return txBuilder.build<{ mockPoolInfo: AmmV3PoolInfo }>({
       mockPoolInfo: {
+        creator: this.scope.ownerPubKey,
         id: insInfo.address.poolId,
         mintA: {
           mint: mintA.mint,
@@ -368,8 +367,9 @@ export class AmmV3 extends ModuleBase {
         sqrtPriceX64: initialPriceX64,
         currentPrice: initPrice,
         ...mockCreatePoolInfo,
+        version: 6,
       },
-    }) as Omit<MakeTransaction, "extInfo"> & { extInfo: { mockPoolInfo: AmmV3PoolInfo } };
+    });
   }
 
   public async openPosition({

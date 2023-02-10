@@ -15,16 +15,6 @@ An SDK for building applications on top of Raydium.
 $ yarn add @raydium-io/raydium-sdk
 ```
 
-### Load the Raydium instance
-
-```javascript
-import { Raydium } from "@raydium-io/raydium-sdk";
-
-const raydium = await Raydium.load({
-  connection,
-});
-```
-
 ### Enable special logger
 
 ```javascript
@@ -34,13 +24,6 @@ setLoggerLevel("Common.Api", "debug");
 ```
 
 ## Features
-
-### Marshmallow
-
-**_Full layout type inference_**
-
-![](snapshots/marshmallow/1.png)
-![](snapshots/marshmallow/2.png)
 
 ### Initialization
 
@@ -78,14 +61,31 @@ const { tokenAccounts, tokenAccountRawInfos } = parseTokenAccountResp({
 # token
 raydium.token.allTokens
 raydium.token.allTokenMap
+raydium.token.tokenMints
+raydium.token.tokenPrices
 
 # liquidity pool
 raydium.liquidity.allPools
 raydium.liquidity.allPoolIdSet
+raydium.liquidity.allPoolMap
+raydium.liquidity.allPairs
+raydium.liquidity.allPairsMap
+raydium.liquidity.lpTokenMap
+raydium.liquidity.lpPriceMap
+
+# clmm pool
+raydium.ammv3.pools.data
+raydium.ammv3.pools.dataMap
+raydium.ammv3.pools.sdkParsedData
+raydium.ammv3.pools.sdkParsedDataMap
+raydium.ammv3.pools.hydratedData
+raydium.ammv3.pools.hydratedDataData
 
 # farm pool
 raydium.farm.allFarms
 raydium.farm.allParsedFarms
+raydium.farm.allHydratedFarms
+raydium.farm.allHydratedFarmMap
 
 # token account
 raydium.account.tokenAccounts
@@ -103,6 +103,10 @@ const raydium = await Raydium.load({
   owner // please provide key pair, if want to handle tx by yourself, just provide publicKey
   signAllTransactions // optional - provide sign functions provided by @solana/wallet-adapter-react
 })
+
+// Raydium.load call raydium.liquidity.load() automatically, also can call raydium.liquidity.load() manually
+
+// if need trading pair info, call await raydium.liquidity.loadPairs()
 
 const { transaction, signers, execute } = raydium.liquidity.createPool({
   version: 4,
@@ -135,6 +139,22 @@ const { transaction, signers, execute } = raydium.liquidity.removeLiquidity({
 const txId = execute()
 ```
 
+### Liquidity
+
+```
+import { Raydium, Token, Percent, TokenAmount } from '@raydium-io/raydium-sdk'
+import BN from 'bn.js'
+
+const raydium = await Raydium.load({
+  connection,
+  owner // please provide key pair, if want to handle tx by yourself, just provide publicKey
+  signAllTransactions // optional - provide sign functions provided by @solana/wallet-adapter-react
+})
+
+await raydium.ammV3.load() // load all clmm pool data
+
+```
+
 ### Farm
 
 ```
@@ -146,6 +166,10 @@ const raydium = await Raydium.load({
   owner // please provide key pair, if want to handle tx by yourself, just provide publicKey
   signAllTransactions // optional - provide sign functions provided by @solana/wallet-adapter-react
 })
+
+await raydium.farm.load() // default load farms data
+await raydium.farm.loadHydratedFarmInfo // load farms data width apr and detail info
+
 ```
 
 #### Farm methods

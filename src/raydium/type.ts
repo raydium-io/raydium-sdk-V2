@@ -10,12 +10,12 @@ export interface RaydiumTokenInfo extends ApiTokenInfo {
 
 export type SignAllTransactions = ((transaction: Transaction[]) => Promise<Transaction[]>) | undefined;
 
-export interface MakeTransaction {
+export interface MakeTransaction<T = Record<string, any>> {
   signers: Signer[];
   transaction: Transaction;
   instructionTypes: InstructionType[];
   execute: () => Promise<string>;
-  extInfo: Record<string, any>;
+  extInfo: T;
 }
 
 export interface MakeMultiTransaction {

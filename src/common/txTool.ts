@@ -29,12 +29,12 @@ export interface AddInstructionParam {
   instructionTypes?: number[];
 }
 
-export interface TxBuildData {
+export interface TxBuildData<T = Record<string, any>> {
   transaction: Transaction;
   instructionTypes: number[];
   signers: Signer[];
   execute: () => Promise<string>;
-  extInfo: Record<string, any>;
+  extInfo: T;
 }
 
 export interface ExecuteParam {
@@ -97,7 +97,7 @@ export class TxBuilder {
     return this;
   }
 
-  public build(extInfo?: Record<string, any>): TxBuildData {
+  public build<T = Record<string, any>>(extInfo?: T): TxBuildData<T> {
     const transaction = new Transaction();
     if (this.allInstructions.length) transaction.add(...this.allInstructions);
     transaction.feePayer = this.feePayer;
@@ -119,11 +119,14 @@ export class TxBuilder {
         }
         throw new Error("please connect wallet first");
       },
-      extInfo: extInfo || {},
+      extInfo: extInfo || ({} as T),
     };
   }
 
-  public buildMultiTx(params: { extraPreBuildData?: TxBuildData[]; extInfo?: Record<string, any> }): MultiTxBuildData {
+  public buildMultiTx<T = Record<string, any>>(params: {
+    extraPreBuildData?: TxBuildData[];
+    extInfo?: T;
+  }): MultiTxBuildData {
     const { extraPreBuildData = [], extInfo } = params;
     const { transaction } = this.build(extInfo);
 
