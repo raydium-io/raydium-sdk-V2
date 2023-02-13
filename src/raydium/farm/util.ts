@@ -24,13 +24,13 @@ interface AssociatedLedgerPoolAccount {
   type: "lpVault" | "rewardVault";
 }
 
-export async function getAssociatedLedgerPoolAccount({
+export function getAssociatedLedgerPoolAccount({
   programId,
   poolId,
   mint,
   type,
-}: AssociatedLedgerPoolAccount): Promise<PublicKey> {
-  const { publicKey } = await findProgramAddress(
+}: AssociatedLedgerPoolAccount): PublicKey {
+  const { publicKey } = findProgramAddress(
     [
       poolId.toBuffer(),
       mint.toBuffer(),

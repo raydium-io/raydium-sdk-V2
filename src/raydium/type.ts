@@ -30,6 +30,11 @@ export interface InstructionReturn {
   instructionType: string;
 }
 
+export interface ComputeBudgetConfig {
+  units?: number;
+  microLamports?: number;
+}
+
 export interface LoadParams {
   forceUpdate?: boolean;
 }

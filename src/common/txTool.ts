@@ -1,5 +1,6 @@
 import {
   Connection,
+  ComputeBudgetProgram,
   PublicKey,
   sendAndConfirmTransaction,
   Signer,
@@ -8,13 +9,32 @@ import {
   TransactionInstruction,
   Keypair,
 } from "@solana/web3.js";
+import axios from "axios";
 
-import { SignAllTransactions } from "../raydium/type";
+import { InstructionType } from "./txType";
+import { SignAllTransactions, ComputeBudgetConfig } from "../raydium/type";
 
 import { createLogger } from "./logger";
 import { Owner } from "./owner";
 
 const logger = createLogger("Raydium_txTool");
+
+interface SolanaFeeInfo {
+  min: number;
+  max: number;
+  avg: number;
+  priorityTx: number;
+  nonVotes: number;
+  priorityRatio: number;
+  avgCuPerBlock: number;
+  blockspaceUsageRatio: number;
+}
+type SolanaFeeInfoJson = {
+  "1": SolanaFeeInfo;
+  "5": SolanaFeeInfo;
+  "15": SolanaFeeInfo;
+};
+
 interface TxBuilderInit {
   connection: Connection;
   feePayer: PublicKey;
@@ -86,6 +106,27 @@ export class TxBuilder {
 
   get allInstructions(): TransactionInstruction[] {
     return [...this.instructions, ...this.endInstructions];
+  }
+
+  public async getComputeBudgetConfig(): Promise<ComputeBudgetConfig | undefined> {
+    const json = await axios.get<SolanaFeeInfoJson>(
+      `https://solanacompass.com/api/fees?cacheFreshTime=${5 * 60 * 1000}`,
+    );
+    const { avg } = json?.[15] ?? {};
+    if (!avg) return undefined;
+    return {
+      units: 400000,
+      microLamports: Math.min(Math.ceil((avg * 1000000) / 400000), 25000),
+    };
+  }
+
+  public async calComputeBudget(): Promise<void> {
+    const config = await this.getComputeBudgetConfig();
+    if (config) {
+      const { instructions, instructionTypes } = addComputeBudget(config);
+      this.instructions.unshift(...instructions);
+      this.instructionTypes.unshift(...instructionTypes);
+    }
   }
 
   public addInstruction({
@@ -275,6 +316,27 @@ export class TxBuilder {
       extInfo: extInfo || {},
     };
   }
+}
+
+export function addComputeBudget(config: ComputeBudgetConfig): {
+  instructions: TransactionInstruction[];
+  instructionTypes: string[];
+} {
+  const ins: TransactionInstruction[] = [];
+  const insTypes: string[] = [];
+  if (config.microLamports) {
+    ins.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.microLamports }));
+    insTypes.push(InstructionType.SetComputeUnitPrice);
+  }
+  if (config.units) {
+    ins.push(ComputeBudgetProgram.setComputeUnitLimit({ units: config.units }));
+    insTypes.push(InstructionType.SetComputeUnitPrice);
+  }
+
+  return {
+    instructions: ins,
+    instructionTypes: insTypes,
+  };
 }
 
 export async function getRecentBlockHash(connection: Connection): Promise<string> {

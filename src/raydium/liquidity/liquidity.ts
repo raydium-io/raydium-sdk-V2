@@ -6,6 +6,7 @@ import { BN_ONE, BN_ZERO, divCeil, Numberish, parseNumberInfo, toBN, toTokenPric
 import { createLogger } from "../../common/logger";
 import { PublicKeyish, SOLMint, validateAndParsePublicKey, WSOLMint, solToWSol } from "../../common/pubKey";
 import { jsonInfo2PoolKeys } from "../../common/utility";
+import { InstructionType } from "../../common/txType";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { makeTransferInstruction } from "../account/instruction";
 import { getATAAddress } from "../ammV3/utils/pda";
@@ -423,6 +424,10 @@ export default class Liquidity extends ModuleBase {
       bypassAssociatedCheck,
     });
     txBuilder.addInstruction(outTxInstructions);
+    const instructionTypes =
+      fixedSide === "in"
+        ? [poolKeys.version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV5SwapBaseIn]
+        : [poolKeys.version === 4 ? InstructionType.AmmV4SwapBaseOut : InstructionType.AmmV5SwapBaseOut];
     txBuilder.addInstruction({
       instructions: [
         makeAMMSwapInstruction({
@@ -437,6 +442,7 @@ export default class Liquidity extends ModuleBase {
           fixedSide,
         }),
       ],
+      instructionTypes,
     });
     return txBuilder.buildMultiTx({ extInfo: { amountOut } }) as MakeMultiTransaction & SwapExtInfo;
   }
@@ -451,7 +457,6 @@ export default class Liquidity extends ModuleBase {
     startTime,
     ownerInfo,
     associatedOnly = false,
-    computeBudgetConfig,
   }: CreatePoolV4Param): Promise<MakeTransaction & { extInfo: { address: CreatePoolV4Address } }> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(Token.WSOL.mint);
@@ -523,7 +528,7 @@ export default class Liquidity extends ModuleBase {
       marketId: poolInfo.marketId,
     };
 
-    const ins = makeCreatePoolV4InstructionV2({
+    const { instruction, instructionType } = makeCreatePoolV4InstructionV2({
       ...createPoolKeys,
       userWallet: this.scope.ownerPubKey,
       userCoinVault: ownerTokenAccountBase,
@@ -537,8 +542,11 @@ export default class Liquidity extends ModuleBase {
     });
 
     txBuilder.addInstruction({
-      instructions: [ins],
+      instructions: [instruction],
+      instructionTypes: [instructionType],
     });
+
+    await txBuilder.calComputeBudget();
 
     return txBuilder.build<{ address: CreatePoolV4Address }>({
       address: createPoolKeys,
@@ -631,6 +639,7 @@ export default class Liquidity extends ModuleBase {
           startTime,
         }),
       ],
+      instructionTypes: [InstructionType.TransferAmount, InstructionType.AmmV4InitPool],
     });
 
     return txBuilder.build();
@@ -741,6 +750,9 @@ export default class Liquidity extends ModuleBase {
           fixedSide: _fixedSide,
         }),
       ],
+      instructionTypes: [
+        poolInfo!.version === 4 ? InstructionType.AmmV4AddLiquidity : InstructionType.AmmV5AddLiquidity,
+      ],
     });
     return txBuilder.build();
   }
@@ -809,6 +821,9 @@ export default class Liquidity extends ModuleBase {
           },
           amountIn: amountIn.raw,
         }),
+      ],
+      instructionTypes: [
+        poolKeys!.version === 4 ? InstructionType.AmmV4RemoveLiquidity : InstructionType.AmmV5RemoveLiquidity,
       ],
     });
     return txBuilder.build();

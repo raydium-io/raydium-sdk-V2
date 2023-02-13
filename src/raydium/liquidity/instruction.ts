@@ -4,6 +4,8 @@ import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.j
 import { parseBigNumberish } from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
 import { accountMeta, commonSystemAccountMeta, RENT_PROGRAM_ID } from "../../common/pubKey";
+import { InstructionType } from "../../common/txType";
+import { InstructionReturn } from "../type";
 import { struct, u8, u64 } from "../../marshmallow";
 
 import {
@@ -270,7 +272,7 @@ export function makeCreatePoolV4InstructionV2({
   openTime: BN;
   coinAmount: BN;
   pcAmount: BN;
-}): TransactionInstruction {
+}): InstructionReturn {
   const dataLayout = struct([u8("instruction"), u8("nonce"), u64("openTime"), u64("pcAmount"), u64("coinAmount")]);
 
   const keys = [
@@ -300,11 +302,14 @@ export function makeCreatePoolV4InstructionV2({
   const data = Buffer.alloc(dataLayout.span);
   dataLayout.encode({ instruction: 1, nonce, openTime, coinAmount, pcAmount }, data);
 
-  return new TransactionInstruction({
-    keys,
-    programId,
-    data,
-  });
+  return {
+    instruction: new TransactionInstruction({
+      keys,
+      programId,
+      data,
+    }),
+    instructionType: InstructionType.AmmV4CreatePool,
+  };
 }
 
 export function makeInitPoolInstruction(params: LiquidityInitPoolInstructionParams): TransactionInstruction {

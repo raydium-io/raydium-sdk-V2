@@ -179,7 +179,6 @@ export interface CreatePoolV4Param {
     useSOLBalance?: boolean; // if has WSOL mint
   };
   associatedOnly: boolean;
-  computeBudgetConfig?: any;
 }
 
 export interface CreatePoolV4Address {

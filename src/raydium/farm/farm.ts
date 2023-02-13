@@ -544,6 +544,7 @@ export default class Farm extends ModuleBase {
     return await txBuilder
       .addInstruction({
         instructions: [new TransactionInstruction({ programId: poolKeys.programId, keys, data })],
+        instructionTypes: [InstructionType.FarmV6Restart],
       })
       .build();
   }
@@ -556,7 +557,7 @@ export default class Farm extends ModuleBase {
     const payerPubKey = payer ?? this.scope.ownerPubKey;
     const txBuilder = this.createTxBuilder();
 
-    const rewardVault = await getAssociatedLedgerPoolAccount({
+    const rewardVault = getAssociatedLedgerPoolAccount({
       programId: new PublicKey(farmInfo.programId),
       poolId: new PublicKey(farmInfo.id),
       mint: newRewardInfo.rewardMint,
@@ -600,6 +601,7 @@ export default class Farm extends ModuleBase {
     return await txBuilder
       .addInstruction({
         instructions: [new TransactionInstruction({ programId: new PublicKey(farmInfo.programId), keys, data })],
+        instructionTypes: [InstructionType.FarmV6CreatorAddReward],
       })
       .build();
   }
@@ -766,9 +768,17 @@ export default class Farm extends ModuleBase {
       }
     }
     const newInstruction = new TransactionInstruction({ programId: farmInfo.programId, keys, data });
-    return await txBuilder
+
+    const insType = {
+      3: InstructionType.FarmV3Withdraw,
+      5: InstructionType.FarmV5Withdraw,
+      6: InstructionType.FarmV6Withdraw,
+    };
+
+    return txBuilder
       .addInstruction({
         instructions: [newInstruction],
+        instructionTypes: [insType[version]],
       })
       .build();
   }

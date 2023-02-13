@@ -152,10 +152,13 @@ export default class Account extends ModuleBase {
       instructions: [],
       endInstructions: [],
       signers: [],
+      instructionTypes: [],
+      endInstructionTypes: [],
     };
 
     if (associatedOnly) {
       newTxInstructions.instructions!.push(createAssociatedTokenAccountInstruction(owner, ata, owner, mint));
+      newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
 
       if (mint.equals(WSOLMint)) {
         const txInstruction = await createWSolAccountInstructions({
@@ -167,7 +170,8 @@ export default class Account extends ModuleBase {
         });
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
         newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
-        newTxInstructions.signers!.push(...(txInstruction.signers || []));
+        newTxInstructions.instructionTypes!.push(...(txInstruction.instructionTypes || []));
+        newTxInstructions.endInstructionTypes!.push(...(txInstruction.endInstructionTypes || []));
 
         if (createInfo.amount) {
           newTxInstructions.instructions!.push(
@@ -178,6 +182,7 @@ export default class Account extends ModuleBase {
               amount: createInfo.amount,
             }),
           );
+          newTxInstructions.instructionTypes!.push(InstructionType.TransferAmount);
         }
       }
 
@@ -185,6 +190,7 @@ export default class Account extends ModuleBase {
         newTxInstructions.endInstructions!.push(
           closeAccountInstruction({ owner, payer: createInfo.payer || owner, tokenAccount: ata }),
         );
+        newTxInstructions.endInstructionTypes!.push(InstructionType.CloseAccount);
       }
 
       return { account: ata, instructionParams: newTxInstructions };
@@ -200,6 +206,8 @@ export default class Account extends ModuleBase {
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
         newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
         newTxInstructions.signers!.push(...(txInstruction.signers || []));
+        newTxInstructions.instructionTypes!.push(...(txInstruction.instructionTypes || []));
+        newTxInstructions.endInstructionTypes!.push(...(txInstruction.endInstructionTypes || []));
 
         return { account: txInstruction.signers![0].publicKey, instructionParams: newTxInstructions };
       } else {
@@ -223,6 +231,8 @@ export default class Account extends ModuleBase {
           }),
         );
         newTxInstructions.signers!.push(newTokenAccount);
+        newTxInstructions.instructionTypes!.push(InstructionType.CreateAccount);
+        newTxInstructions.instructionTypes!.push(InstructionType.InitAccount);
         if (!skipCloseAccount) {
           newTxInstructions.endInstructions!.push(
             closeAccountInstruction({
@@ -231,6 +241,7 @@ export default class Account extends ModuleBase {
               tokenAccount: newTokenAccount.publicKey,
             }),
           );
+          newTxInstructions.endInstructionTypes!.push(InstructionType.CloseAccount);
         }
         return { account: newTokenAccount.publicKey, instructionParams: newTxInstructions };
       }
@@ -286,7 +297,6 @@ export default class Account extends ModuleBase {
       skipCloseAccount,
     } = params;
 
-    const txBuilder = this.createTxBuilder();
     const ata = this.getAssociatedTokenAccount(mint);
 
     if (new PublicKey(WSOLMint).equals(mint)) {
@@ -297,7 +307,6 @@ export default class Account extends ModuleBase {
         amount,
         skipCloseAccount,
       });
-      txBuilder.addInstruction(txInstruction);
       return { tokenAccount: txInstruction.signers![0].publicKey, ...txInstruction };
     } else if (!tokenAccount || (side === "out" && !ata.equals(tokenAccount) && !bypassAssociatedCheck)) {
       return {
@@ -305,6 +314,7 @@ export default class Account extends ModuleBase {
         instructions: [
           createAssociatedTokenAccountInstruction(this.scope.ownerPubKey, ata, this.scope.ownerPubKey, mint),
         ],
+        instructionTypes: [InstructionType.CreateATA],
       };
     }
 
