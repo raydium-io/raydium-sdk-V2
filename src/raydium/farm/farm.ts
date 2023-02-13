@@ -21,6 +21,8 @@ import {
   parseBigNumberish,
 } from "../../common/bignumber";
 import { PublicKeyish, SOLMint, validateAndParsePublicKey } from "../../common/pubKey";
+import { InstructionType } from "../../common/txType";
+
 import { Fraction } from "../../module/fraction";
 import { Token as RToken } from "../../module/token";
 import { TokenAmount } from "../../module/amount";
@@ -38,14 +40,12 @@ import {
   poolTypeV6,
   validateFarmRewards,
 } from "./config";
-import { createAssociatedLedgerAccountInstruction, makeCreateFarmInstruction } from "./instruction";
 import {
-  dwLayout,
-  farmAddRewardLayout,
-  farmRewardRestartLayout,
-  farmStateV6Layout,
-  withdrawRewardLayout,
-} from "./layout";
+  createAssociatedLedgerAccountInstruction,
+  makeCreateFarmInstruction,
+  makeCreatorWithdrawFarmRewardInstruction,
+} from "./instruction";
+import { dwLayout, farmAddRewardLayout, farmRewardRestartLayout, farmStateV6Layout } from "./layout";
 import {
   CreateFarm,
   FarmDWParam,
@@ -462,7 +462,7 @@ export default class Farm extends ModuleBase {
     if (!lockUserAccount)
       this.logAndCreateError("cannot found lock vault", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const createInstruction = makeCreateFarmInstruction({
+    const { instruction, instructionType } = makeCreateFarmInstruction({
       farmKeyPair,
       owner: this.scope.ownerPubKey,
       farmAuthority: authority,
@@ -479,7 +479,8 @@ export default class Farm extends ModuleBase {
 
     return await txBuilder
       .addInstruction({
-        instructions: [createInstruction],
+        instructions: [instruction],
+        instructionTypes: [instructionType],
       })
       .build();
   }
@@ -637,14 +638,14 @@ export default class Farm extends ModuleBase {
     });
 
     if (!farmInfo.ledger && farmInfo.version < 6 /* start from v6, no need init ledger any more */) {
-      const instruction = await createAssociatedLedgerAccountInstruction({
+      const { instruction, instructionType } = await createAssociatedLedgerAccountInstruction({
         id: farmInfo.id,
         programId: farmInfo.programId,
         version: farmInfo.version,
         ledger: ledgerAddress,
         owner: this.scope.ownerPubKey,
       });
-      txBuilder.addInstruction({ instructions: [instruction] });
+      txBuilder.addInstruction({ instructions: [instruction], instructionTypes: [instructionType] });
     }
 
     const lowVersionKeys = [
@@ -710,12 +711,18 @@ export default class Farm extends ModuleBase {
         keys.push(accountMeta({ pubkey: rewardInfos[index].rewardVault }));
       }
     }
+    const insType = {
+      3: InstructionType.FarmV3Deposit,
+      5: InstructionType.FarmV5Deposit,
+      6: InstructionType.FarmV6Deposit,
+    };
 
     const newInstruction = new TransactionInstruction({ programId: farmInfo.programId, keys, data });
 
-    return await txBuilder
+    return txBuilder
       .addInstruction({
         instructions: [newInstruction],
+        instructionTypes: [insType[version]],
       })
       .build();
   }
@@ -789,10 +796,6 @@ export default class Farm extends ModuleBase {
     const txBuilder = this.createTxBuilder();
 
     let userRewardToken: PublicKey;
-    this._getUserRewardInfo({
-      payer: this.scope.ownerPubKey,
-      rewardInfo: rewardInfo!,
-    });
 
     if (withdrawMint.equals(SOLMint)) {
       const txInstruction = await createWSolAccountInstructions({
@@ -819,28 +822,27 @@ export default class Farm extends ModuleBase {
               withdrawMint,
             ),
           ],
+          instructionTypes: [InstructionType.CreateATA],
         });
       } else {
         userRewardToken = selectUserRewardToken!;
       }
     }
 
-    const data = Buffer.alloc(withdrawRewardLayout.span);
-    withdrawRewardLayout.encode({ instruction: 5 }, data);
-
-    const keys = [
-      accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-      accountMeta({ pubkey: farmInfo.id }),
-      accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
-      accountMeta({ pubkey: farmInfo.lpVault.mint, isWritable: false }),
-      accountMeta({ pubkey: rewardVault }),
-      accountMeta({ pubkey: userRewardToken }),
-      accountMeta({ pubkey: this.scope.ownerPubKey, isWritable: false, isSigner: true }),
-    ];
+    const { instruction, instructionType } = makeCreatorWithdrawFarmRewardInstruction({
+      programId: farmInfo.programId,
+      id: farmInfo.id,
+      authority: farmInfo.authority,
+      lpVault: farmInfo.lpVault.mint,
+      rewardVault,
+      userRewardToken,
+      owner: this.scope.ownerPubKey,
+    });
 
     return await txBuilder
       .addInstruction({
-        instructions: [new TransactionInstruction({ programId: farmInfo.programId, keys, data })],
+        instructions: [instruction],
+        instructionTypes: [instructionType],
       })
       .build();
   }

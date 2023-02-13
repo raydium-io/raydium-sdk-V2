@@ -1,7 +1,7 @@
 import { createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, AccountLayout } from "@solana/spl-token";
 import { Commitment, PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { getATAAddress } from "../ammV3/utils/pda";
-import { BigNumberish, WSOLMint } from "../../common";
+import { BigNumberish, InstructionType, WSOLMint } from "../../common";
 
 import { AddInstructionParam } from "../../common/txTool";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
@@ -256,12 +256,14 @@ export default class Account extends ModuleBase {
       const ataAddress = this.getAssociatedTokenAccount(mint);
       const instruction = await createAssociatedTokenAccountInstruction(owner, ataAddress, owner, mint);
       newTxInstructions.instructions = [instruction];
+      newTxInstructions.instructionTypes = [InstructionType.CreateATA];
       tokenAccountAddress = ataAddress;
     }
     if (autoUnwrapWSOLToSOL && WSOLMint.toBase58() === mint.toBase58()) {
       newTxInstructions.endInstructions = [
         closeAccountInstruction({ owner, payer: owner, tokenAccount: tokenAccountAddress }),
       ];
+      newTxInstructions.endInstructionTypes = [InstructionType.CloseAccount];
     }
 
     return {
