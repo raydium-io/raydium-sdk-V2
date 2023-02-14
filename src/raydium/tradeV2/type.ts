@@ -76,6 +76,7 @@ export type ReturnTypeGetAddLiquidityDefaultPool = LiquidityPoolJsonInfo | undef
 export interface ReturnTypeMakeSwapInstruction {
   signers: (Keypair | Signer)[];
   instructions: TransactionInstruction[];
+  instructionTypes: string[];
   address: { [key: string]: PublicKey };
 }
 export interface ReturnTypeMakeSwapTransaction {

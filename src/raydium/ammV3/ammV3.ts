@@ -340,12 +340,7 @@ export class AmmV3 extends ModuleBase {
       initialPriceX64,
     });
 
-    txBuilder.addInstruction({
-      signers: insInfo.signers,
-      instructions: insInfo.instructions,
-      instructionTypes: [InstructionType.ClmmCreatePool],
-    });
-
+    txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
 
     return txBuilder.build<{ mockPoolInfo: AmmV3PoolInfo }>({
@@ -440,7 +435,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const insInfo = await AmmV3Instrument.openPositionInstructions({
+    const insInfo = AmmV3Instrument.openPositionInstructions({
       poolInfo,
       ownerInfo: {
         ...ownerInfo,
@@ -455,11 +450,7 @@ export class AmmV3 extends ModuleBase {
       amountSlippageA,
       amountSlippageB,
     });
-    txBuilder.addInstruction({
-      instructions: insInfo.instructions,
-      signers: insInfo.signers,
-      instructionTypes: [InstructionType.ClmmOpenPosition],
-    });
+    txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
@@ -498,23 +489,20 @@ export class AmmV3 extends ModuleBase {
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    txBuilder.addInstruction({
-      instructions: (
-        await AmmV3Instrument.makeIncreaseLiquidityInstructions({
-          poolInfo,
-          ownerPosition,
-          ownerInfo: {
-            wallet: this.scope.ownerPubKey,
-            tokenAccountA: ownerTokenAccountA!,
-            tokenAccountB: ownerTokenAccountB!,
-          },
-          liquidity,
-          amountSlippageA,
-          amountSlippageB,
-        })
-      ).instructions,
-      instructionTypes: [InstructionType.ClmmIncreasePosition],
-    });
+    txBuilder.addInstruction(
+      AmmV3Instrument.makeIncreaseLiquidityInstructions({
+        poolInfo,
+        ownerPosition,
+        ownerInfo: {
+          wallet: this.scope.ownerPubKey,
+          tokenAccountA: ownerTokenAccountA!,
+          tokenAccountB: ownerTokenAccountB!,
+        },
+        liquidity,
+        amountSlippageA,
+        amountSlippageB,
+      }),
+    );
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
@@ -642,7 +630,7 @@ export class AmmV3 extends ModuleBase {
         ownerInfo: { wallet: this.scope.ownerPubKey },
         ownerPosition,
       });
-      txBuilder.addInstruction({ instructions: closeInsInfo.instructions });
+      txBuilder.addInstruction(closeInsInfo);
     }
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
@@ -665,9 +653,7 @@ export class AmmV3 extends ModuleBase {
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
     const ins = await AmmV3Instrument.makeClosePositionInstructions({ poolInfo, ownerInfo, ownerPosition });
-    return txBuilder
-      .addInstruction({ instructions: ins.instructions, instructionTypes: [InstructionType.ClmmClosePosition] })
-      .build();
+    return txBuilder.addInstruction(ins).build();
   }
 
   public async swapBaseIn({
@@ -738,10 +724,7 @@ export class AmmV3 extends ModuleBase {
 
       remainingAccounts,
     });
-    txBuilder.addInstruction({
-      instructions: insInfo.instructions,
-      instructionTypes: [InstructionType.ClmmSwapBaseIn],
-    });
+    txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
@@ -802,10 +785,7 @@ export class AmmV3 extends ModuleBase {
         emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
       },
     });
-    txBuilder.addInstruction({
-      instructions: insInfo.instructions,
-      instructionTypes: [InstructionType.ClmmInitReward],
-    });
+    txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
@@ -869,10 +849,7 @@ export class AmmV3 extends ModuleBase {
           emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
         },
       });
-      txBuilder.addInstruction({
-        instructions: insInfo.instructions,
-        instructionTypes: [InstructionType.ClmmInitReward],
-      });
+      txBuilder.addInstruction(insInfo);
     }
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
@@ -933,7 +910,7 @@ export class AmmV3 extends ModuleBase {
       },
     });
 
-    txBuilder.addInstruction({ instructions: insInfo.instructions, instructionTypes: [InstructionType.ClmmSetReward] });
+    txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
@@ -994,10 +971,7 @@ export class AmmV3 extends ModuleBase {
           emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
         },
       });
-      txBuilder.addInstruction({
-        instructions: insInfo.instructions,
-        instructionTypes: [InstructionType.ClmmSetReward],
-      });
+      txBuilder.addInstruction(insInfo);
     }
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
@@ -1039,10 +1013,7 @@ export class AmmV3 extends ModuleBase {
       },
       rewardMint,
     });
-    txBuilder.addInstruction({
-      instructions: insInfo.instructions,
-      instructionTypes: [InstructionType.ClmmCollectReward],
-    });
+    txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
@@ -1085,10 +1056,7 @@ export class AmmV3 extends ModuleBase {
 
         rewardMint,
       });
-      txBuilder.addInstruction({
-        instructions: insInfo.instructions,
-        instructionTypes: [InstructionType.ClmmCollectReward],
-      });
+      txBuilder.addInstruction(insInfo);
     }
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
@@ -1398,10 +1366,7 @@ export class AmmV3 extends ModuleBase {
       remainingAccounts,
     });
 
-    txBuilder.addInstruction({
-      instructions: insInfo.instructions,
-      instructionTypes: [InstructionType.ClmmSwapBaseOut],
-    });
+    txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }

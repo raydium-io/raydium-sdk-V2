@@ -9,7 +9,7 @@ import {
   Signer,
 } from "@solana/web3.js";
 import BN from "bn.js";
-import { createLogger, parseBigNumberish, RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "../../common";
+import { createLogger, parseBigNumberish, RENT_PROGRAM_ID, METADATA_PROGRAM_ID, InstructionType } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
 import { MintInfo, ReturnTypeMakeInstructions, AmmV3PoolInfo, AmmV3PoolPersonalPosition } from "./type";
 import { ObservationInfoLayout } from "./layout";
@@ -109,9 +109,9 @@ export class AmmV3Instrument {
       }),
     ];
 
-    const { publicKey: poolId } = await getPdaPoolId(programId, ammConfigId, mintA.mint, mintB.mint);
-    const { publicKey: mintAVault } = await getPdaPoolVaultId(programId, poolId, mintA.mint);
-    const { publicKey: mintBVault } = await getPdaPoolVaultId(programId, poolId, mintB.mint);
+    const { publicKey: poolId } = getPdaPoolId(programId, ammConfigId, mintA.mint, mintB.mint);
+    const { publicKey: mintAVault } = getPdaPoolVaultId(programId, poolId, mintA.mint);
+    const { publicKey: mintBVault } = getPdaPoolVaultId(programId, poolId, mintB.mint);
 
     ins.push(
       this.createPoolInstruction(
@@ -131,6 +131,7 @@ export class AmmV3Instrument {
     return {
       signers: [observationId],
       instructions: ins,
+      instructionTypes: [InstructionType.CreateAccount, InstructionType.ClmmCreatePool],
       address: { poolId, observationId: observationId.publicKey, mintAVault, mintBVault },
     };
   }
@@ -216,7 +217,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static async openPositionInstructions({
+  static openPositionInstructions({
     poolInfo,
     ownerInfo,
     tickLower,
@@ -239,7 +240,7 @@ export class AmmV3Instrument {
     liquidity: BN;
     amountSlippageA: BN;
     amountSlippageB: BN;
-  }): Promise<ReturnTypeMakeInstructions> {
+  }): ReturnTypeMakeInstructions {
     const signers: Signer[] = [];
 
     const nftMintAKeypair = new Keypair();
@@ -248,24 +249,24 @@ export class AmmV3Instrument {
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
     const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
 
-    const { publicKey: tickArrayLower } = await getPdaTickArrayAddress(
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
       poolInfo.programId,
       poolInfo.id,
       tickArrayLowerStartIndex,
     );
-    const { publicKey: tickArrayUpper } = await getPdaTickArrayAddress(
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
       poolInfo.programId,
       poolInfo.id,
       tickArrayUpperStartIndex,
     );
 
-    const { publicKey: positionNftAccount } = await getATAAddress(ownerInfo.wallet, nftMintAKeypair.publicKey);
-    const { publicKey: metadataAccount } = await getPdaMetadataKey(nftMintAKeypair.publicKey);
-    const { publicKey: personalPosition } = await getPdaPersonalPositionAddress(
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, nftMintAKeypair.publicKey);
+    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAKeypair.publicKey);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(
       poolInfo.programId,
       nftMintAKeypair.publicKey,
     );
-    const { publicKey: protocolPosition } = await getPdaProtocolPositionAddress(
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
       poolInfo.programId,
       poolInfo.id,
       tickLower,
@@ -301,6 +302,7 @@ export class AmmV3Instrument {
     return {
       signers: [nftMintAKeypair],
       instructions: [ins],
+      instructionTypes: [InstructionType.ClmmOpenPosition],
       address: {},
     };
   }
@@ -368,6 +370,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmClosePosition],
       address: {},
     };
   }
@@ -428,7 +431,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static async makeIncreaseLiquidityInstructions({
+  static makeIncreaseLiquidityInstructions({
     poolInfo,
     ownerPosition,
     ownerInfo,
@@ -448,7 +451,7 @@ export class AmmV3Instrument {
     liquidity: BN;
     amountSlippageA: BN;
     amountSlippageB: BN;
-  }): Promise<ReturnTypeMakeInstructions> {
+  }): ReturnTypeMakeInstructions {
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
       poolInfo.ammConfig.tickSpacing,
@@ -458,24 +461,21 @@ export class AmmV3Instrument {
       poolInfo.ammConfig.tickSpacing,
     );
 
-    const { publicKey: tickArrayLower } = await getPdaTickArrayAddress(
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
       poolInfo.programId,
       poolInfo.id,
       tickArrayLowerStartIndex,
     );
-    const { publicKey: tickArrayUpper } = await getPdaTickArrayAddress(
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
       poolInfo.programId,
       poolInfo.id,
       tickArrayUpperStartIndex,
     );
 
-    const { publicKey: positionNftAccount } = await getATAAddress(ownerInfo.wallet, ownerPosition.nftMint);
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint);
 
-    const { publicKey: personalPosition } = await getPdaPersonalPositionAddress(
-      poolInfo.programId,
-      ownerPosition.nftMint,
-    );
-    const { publicKey: protocolPosition } = await getPdaProtocolPositionAddress(
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
       poolInfo.programId,
       poolInfo.id,
       ownerPosition.tickLower,
@@ -507,6 +507,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmIncreasePosition],
       address: {},
     };
   }
@@ -667,6 +668,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmDecreasePosition],
       address: {},
     };
   }
@@ -783,6 +785,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmSwapBaseIn],
       address: {},
     };
   }
@@ -877,6 +880,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmInitReward],
       address: {},
     };
   }
@@ -980,6 +984,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmSetReward],
       address: {},
     };
   }
@@ -1059,6 +1064,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmCollectReward],
       address: {},
     };
   }
@@ -1125,6 +1131,7 @@ export class AmmV3Instrument {
     return {
       signers: [],
       instructions: ins,
+      instructionTypes: [InstructionType.ClmmSwapBaseOut],
       address: {},
     };
   }

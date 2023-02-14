@@ -688,12 +688,18 @@ export default class TradeV2 extends ModuleBase {
     const allTxBuilder: TxBuilder[] = [];
     const tempIns = [...txBuilder.AllTxData.instructions, ...ins.instructions, ...txBuilder.AllTxData.endInstructions];
     const tempSigner = [...txBuilder.AllTxData.signers, ...ins.signers];
+    const tempInsType = [
+      ...txBuilder.AllTxData.instructionTypes,
+      ...ins.instructionTypes,
+      ...txBuilder.AllTxData.endInstructionTypes,
+    ];
     if (checkTransaction) {
       if (forecastTransactionSize(tempIns, [this.scope.ownerPubKey, ...tempSigner.map((i) => i.publicKey)])) {
         allTxBuilder.push(
           this.createTxBuilder().addInstruction({
             instructions: tempIns,
             signers: tempSigner,
+            instructionTypes: tempInsType,
           }),
         );
       } else {
@@ -702,6 +708,7 @@ export default class TradeV2 extends ModuleBase {
             this.createTxBuilder().addInstruction({
               instructions: txBuilder.AllTxData.instructions,
               signers: txBuilder.AllTxData.signers,
+              instructionTypes: txBuilder.AllTxData.instructionTypes,
             }),
           );
         }
@@ -710,6 +717,7 @@ export default class TradeV2 extends ModuleBase {
             this.createTxBuilder().addInstruction({
               instructions: ins.instructions,
               signers: ins.signers,
+              instructionTypes: ins.instructionTypes,
             }),
           );
         } else {
@@ -718,6 +726,7 @@ export default class TradeV2 extends ModuleBase {
               this.createTxBuilder().addInstruction({
                 instructions: [i],
                 signers: ins.signers,
+                instructionTypes: ins.instructionTypes,
               }),
             );
           }
@@ -726,6 +735,7 @@ export default class TradeV2 extends ModuleBase {
           allTxBuilder.push(
             this.createTxBuilder().addInstruction({
               instructions: txBuilder.AllTxData.endInstructions,
+              instructionTypes: txBuilder.AllTxData.endInstructionTypes,
             }),
           );
         }
@@ -736,6 +746,7 @@ export default class TradeV2 extends ModuleBase {
           this.createTxBuilder().addInstruction({
             instructions: tempIns,
             signers: tempSigner,
+            instructionTypes: tempInsType,
           }),
         );
       } else {
@@ -744,6 +755,7 @@ export default class TradeV2 extends ModuleBase {
             this.createTxBuilder().addInstruction({
               instructions: txBuilder.AllTxData.instructions,
               signers: txBuilder.AllTxData.signers,
+              instructionTypes: txBuilder.AllTxData.instructionTypes,
             }),
           );
         }
@@ -751,12 +763,14 @@ export default class TradeV2 extends ModuleBase {
           this.createTxBuilder().addInstruction({
             instructions: ins.instructions,
             signers: ins.signers,
+            instructionTypes: ins.instructionTypes,
           }),
         );
         if (txBuilder.AllTxData.endInstructions.length > 0) {
           allTxBuilder.push(
             this.createTxBuilder().addInstruction({
               instructions: txBuilder.AllTxData.endInstructions,
+              instructionTypes: txBuilder.AllTxData.endInstructionTypes,
             }),
           );
         }

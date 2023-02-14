@@ -247,6 +247,7 @@ export interface ReturnTypeMakeCreatePoolTransaction {
 export interface ReturnTypeMakeInstructions {
   signers: (Signer | Keypair)[];
   instructions: TransactionInstruction[];
+  instructionTypes: string[];
   address: { [name: string]: PublicKey };
 }
 export interface ReturnTypeGetLiquidityAmountOutFromAmountIn {

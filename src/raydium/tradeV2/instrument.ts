@@ -3,7 +3,7 @@ import { PublicKey, TransactionInstruction, SystemProgram } from "@solana/web3.j
 import BN from "bn.js";
 
 import { AmmV3PoolInfo, AmmV3Instrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../ammV3";
-import { jsonInfo2PoolKeys } from "../../common";
+import { InstructionType, jsonInfo2PoolKeys } from "../../common";
 import { LiquidityPoolKeysV4 } from "../liquidity";
 import { struct, u64, u8 } from "../../marshmallow";
 import { LiquidityPoolJsonInfo, makeAMMSwapInstruction } from "../liquidity";
@@ -301,6 +301,7 @@ export async function makeSwapInstruction({
             fixedSide: "in",
           }),
         ],
+        instructionTypes: [_poolKey.version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV5SwapBaseIn],
         address: {},
       };
     }
@@ -342,6 +343,7 @@ export async function makeSwapInstruction({
           swapInfo.remainingAccounts[1],
         ),
       ],
+      instructionTypes: [InstructionType.RouteSwap1, InstructionType.RouteSwap2],
       address: {},
     };
   } else {
