@@ -9,7 +9,7 @@ import {
   BigNumberish,
   recursivelyDecimalToFraction,
 } from "../../common/bignumber";
-import { WSOLMint } from "../../common";
+import { InstructionType, WSOLMint } from "../../common";
 import { add, mul, div } from "../../common/fractionUtil";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { TokenAmount } from "../../module/amount";
@@ -39,7 +39,6 @@ import {
   CollectRewardsParams,
   HarvestAllRewardsParams,
   ReturnTypeComputeAmountOutBaseOut,
-  ReturnTypeMakeTransaction,
 } from "./type";
 import { AmmV3Instrument } from "./instrument";
 import { LoadParams, MakeTransaction, MakeMultiTransaction } from "../type";
@@ -343,8 +342,11 @@ export class AmmV3 extends ModuleBase {
 
     txBuilder.addInstruction({
       signers: insInfo.signers,
-      instructions: [...AmmV3Instrument.addComputations(), ...insInfo.instructions],
+      instructions: insInfo.instructions,
+      instructionTypes: [InstructionType.ClmmCreatePool],
     });
+
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
 
     return txBuilder.build<{ mockPoolInfo: AmmV3PoolInfo }>({
       mockPoolInfo: {
@@ -395,7 +397,6 @@ export class AmmV3 extends ModuleBase {
       slippage,
     );
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     let ownerTokenAccountA: PublicKey | null = null;
     let ownerTokenAccountB: PublicKey | null = null;
@@ -454,8 +455,12 @@ export class AmmV3 extends ModuleBase {
       amountSlippageA,
       amountSlippageB,
     });
-    txBuilder.addInstruction({ instructions: insInfo.instructions, signers: insInfo.signers });
-
+    txBuilder.addInstruction({
+      instructions: insInfo.instructions,
+      signers: insInfo.signers,
+      instructionTypes: [InstructionType.ClmmOpenPosition],
+    });
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -466,7 +471,6 @@ export class AmmV3 extends ModuleBase {
 
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const { amountSlippageA, amountSlippageB } = LiquidityMath.getAmountsFromLiquidityWithSlippage(
       poolInfo.sqrtPriceX64,
       SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower),
@@ -509,8 +513,9 @@ export class AmmV3 extends ModuleBase {
           amountSlippageB,
         })
       ).instructions,
+      instructionTypes: [InstructionType.ClmmIncreasePosition],
     });
-
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -530,7 +535,6 @@ export class AmmV3 extends ModuleBase {
     const poolInfo = pool!.state;
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     let _amountMinA: BN;
     let _amountMinB: BN;
@@ -627,7 +631,10 @@ export class AmmV3 extends ModuleBase {
       amountMinB: _amountMinB,
     });
 
-    txBuilder.addInstruction({ instructions: decreaseInsInfo.instructions });
+    txBuilder.addInstruction({
+      instructions: decreaseInsInfo.instructions,
+      instructionTypes: [InstructionType.ClmmDecreasePosition],
+    });
 
     if (ownerInfo.closePosition) {
       const closeInsInfo = await AmmV3Instrument.makeClosePositionInstructions({
@@ -637,7 +644,7 @@ export class AmmV3 extends ModuleBase {
       });
       txBuilder.addInstruction({ instructions: closeInsInfo.instructions });
     }
-
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -658,7 +665,9 @@ export class AmmV3 extends ModuleBase {
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
     const ins = await AmmV3Instrument.makeClosePositionInstructions({ poolInfo, ownerInfo, ownerPosition });
-    return txBuilder.addInstruction({ instructions: ins.instructions }).build();
+    return txBuilder
+      .addInstruction({ instructions: ins.instructions, instructionTypes: [InstructionType.ClmmClosePosition] })
+      .build();
   }
 
   public async swapBaseIn({
@@ -689,7 +698,6 @@ export class AmmV3 extends ModuleBase {
     }
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const isInputMintA = poolInfo.mintA.mint.equals(inputMint);
 
     let ownerTokenAccountA: PublicKey | undefined = undefined;
@@ -730,8 +738,11 @@ export class AmmV3 extends ModuleBase {
 
       remainingAccounts,
     });
-    txBuilder.addInstruction({ instructions: insInfo.instructions });
-
+    txBuilder.addInstruction({
+      instructions: insInfo.instructions,
+      instructionTypes: [InstructionType.ClmmSwapBaseIn],
+    });
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -748,7 +759,6 @@ export class AmmV3 extends ModuleBase {
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardAccountIns } =
@@ -792,7 +802,11 @@ export class AmmV3 extends ModuleBase {
         emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
       },
     });
-    txBuilder.addInstruction({ instructions: insInfo.instructions });
+    txBuilder.addInstruction({
+      instructions: insInfo.instructions,
+      instructionTypes: [InstructionType.ClmmInitReward],
+    });
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -811,7 +825,6 @@ export class AmmV3 extends ModuleBase {
     }
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     for (const rewardInfo of rewardInfos) {
       const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
@@ -856,9 +869,12 @@ export class AmmV3 extends ModuleBase {
           emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
         },
       });
-      txBuilder.addInstruction({ instructions: insInfo.instructions });
+      txBuilder.addInstruction({
+        instructions: insInfo.instructions,
+        instructionTypes: [InstructionType.ClmmInitReward],
+      });
     }
-
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -875,7 +891,6 @@ export class AmmV3 extends ModuleBase {
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -918,8 +933,8 @@ export class AmmV3 extends ModuleBase {
       },
     });
 
-    txBuilder.addInstruction({ instructions: insInfo.instructions });
-
+    txBuilder.addInstruction({ instructions: insInfo.instructions, instructionTypes: [InstructionType.ClmmSetReward] });
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -979,9 +994,12 @@ export class AmmV3 extends ModuleBase {
           emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
         },
       });
-      txBuilder.addInstruction({ instructions: insInfo.instructions });
+      txBuilder.addInstruction({
+        instructions: insInfo.instructions,
+        instructionTypes: [InstructionType.ClmmSetReward],
+      });
     }
-
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -995,7 +1013,6 @@ export class AmmV3 extends ModuleBase {
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardMint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -1022,8 +1039,11 @@ export class AmmV3 extends ModuleBase {
       },
       rewardMint,
     });
-    txBuilder.addInstruction({ instructions: insInfo.instructions });
-
+    txBuilder.addInstruction({
+      instructions: insInfo.instructions,
+      instructionTypes: [InstructionType.ClmmCollectReward],
+    });
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -1037,7 +1057,6 @@ export class AmmV3 extends ModuleBase {
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     for (const rewardMint of rewardMints) {
       const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardMint.equals(WSOLMint);
@@ -1066,9 +1085,12 @@ export class AmmV3 extends ModuleBase {
 
         rewardMint,
       });
-      txBuilder.addInstruction({ instructions: insInfo.instructions });
+      txBuilder.addInstruction({
+        instructions: insInfo.instructions,
+        instructionTypes: [InstructionType.ClmmCollectReward],
+      });
     }
-
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 
@@ -1298,7 +1320,6 @@ export class AmmV3 extends ModuleBase {
     const wallet = ownerInfo.wallet || this.scope.ownerPubKey;
     const payer = ownerInfo.feePayer || this.scope.ownerPubKey;
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
 
     let sqrtPriceLimitX64: BN;
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
@@ -1377,8 +1398,11 @@ export class AmmV3 extends ModuleBase {
       remainingAccounts,
     });
 
-    txBuilder.addInstruction({ instructions: insInfo.instructions });
-
+    txBuilder.addInstruction({
+      instructions: insInfo.instructions,
+      instructionTypes: [InstructionType.ClmmSwapBaseOut],
+    });
+    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
     return txBuilder.build();
   }
 }

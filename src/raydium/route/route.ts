@@ -1,6 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { intersection, xor } from "lodash";
 
+import { InstructionType } from "../../common/txType";
 import { Price } from "../../module/price";
 import { Token } from "../../module/token";
 import { getPoolEnabledFeatures, includesToken } from "../liquidity/util";
@@ -218,6 +219,10 @@ export default class Route extends ModuleBase {
         amountOut: amountOutRaw,
         fixedSide,
       }),
+      instructionTypes:
+        fixedSide === "in"
+          ? [fromPoolKeys.version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV4SwapBaseIn]
+          : [fromPoolKeys.version === 4 ? InstructionType.AmmV5SwapBaseOut : InstructionType.AmmV5SwapBaseOut],
     });
 
     const buildData = preTxBuilder.buildMultiTx({

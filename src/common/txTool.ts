@@ -120,12 +120,18 @@ export class TxBuilder {
     };
   }
 
-  public async calComputeBudget(): Promise<void> {
-    const config = await this.getComputeBudgetConfig();
-    if (config) {
-      const { instructions, instructionTypes } = addComputeBudget(config);
-      this.instructions.unshift(...instructions);
-      this.instructionTypes.unshift(...instructionTypes);
+  public async calComputeBudget(defaultIns?: TransactionInstruction[]): Promise<void> {
+    try {
+      const config = await this.getComputeBudgetConfig();
+      if (config) {
+        const { instructions, instructionTypes } = addComputeBudget(config);
+        this.instructions.unshift(...instructions);
+        this.instructionTypes.unshift(...instructionTypes);
+        return;
+      }
+      defaultIns && this.instructions.unshift(...defaultIns);
+    } catch {
+      defaultIns && this.instructions.unshift(...defaultIns);
     }
   }
 
