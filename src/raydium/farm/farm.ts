@@ -428,7 +428,7 @@ export default class Farm extends ModuleBase {
     for (const rewardInfo of poolInfo.rewardInfos) {
       if (rewardInfo.rewardOpenTime >= rewardInfo.rewardEndTime)
         this.logAndCreateError("start time error", "rewardInfo.rewardOpenTime", rewardInfo.rewardOpenTime.toString());
-      if (!poolTypeV6[rewardInfo.rewardType]) this.logAndCreateError("rewardType error", rewardInfo.rewardType);
+      if (isNaN(poolTypeV6[rewardInfo.rewardType])) this.logAndCreateError("rewardType error", rewardInfo.rewardType);
       if (rewardInfo.rewardPerSecond <= 0)
         this.logAndCreateError("rewardPerSecond error", rewardInfo.rewardPerSecond.toString());
 

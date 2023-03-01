@@ -10,7 +10,7 @@ import { DateParam, isDateAfter, isDateBefore } from "../../common/date";
 import { splAccountLayout } from "../account/layout";
 import { SplAccount } from "../account/types";
 
-import { FARM_VERSION_TO_LEDGER_LAYOUT, FARM_VERSION_TO_STATE_LAYOUT } from "./config";
+import { FARM_VERSION_TO_LEDGER_LAYOUT, FARM_VERSION_TO_STATE_LAYOUT, poolTypeV6 } from "./config";
 import { CurrencyAmount, Fraction, Price, Token } from "../../module";
 import { FarmLedger, FarmLedgerLayout, FarmState, FarmStateLayout } from "./layout";
 import { FarmPoolJsonInfo, FarmRewardInfo, FarmRewardInfoConfig, SdkParsedFarmInfo } from "./type";
@@ -80,7 +80,7 @@ export function farmRewardInfoToConfig(data: FarmRewardInfo): FarmRewardInfoConf
     rewardPerSecond: parseBigNumberish(data.rewardPerSecond),
     rewardOpenTime: parseBigNumberish(data.rewardOpenTime),
     rewardEndTime: parseBigNumberish(data.rewardEndTime),
-    rewardType: parseBigNumberish(data.rewardType),
+    rewardType: parseBigNumberish(poolTypeV6[data.rewardType]),
   };
 }
 
