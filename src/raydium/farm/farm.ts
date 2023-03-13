@@ -541,7 +541,7 @@ export default class Farm extends ModuleBase {
       accountMeta({ pubkey: this.scope.ownerPubKey, isWritable: false, isSigner: true }),
     ];
 
-    return await txBuilder
+    return txBuilder
       .addInstruction({
         instructions: [new TransactionInstruction({ programId: poolKeys.programId, keys, data })],
         instructionTypes: [InstructionType.FarmV6Restart],

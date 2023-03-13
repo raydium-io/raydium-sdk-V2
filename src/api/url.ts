@@ -10,6 +10,8 @@ export const API_URLS = {
   AMM_V3_LINES: "/ammV3/positionLine",
   PRICE: "/main/price",
   CHAIN_TIME: "/main/chain/time",
+  IDO_INFO: "/main/ido/pools",
+  IDO_PROJECT_INFO: "/main/ido/project/",
 };
 
 export type API_URL_CONFIG = Partial<typeof API_URLS>;

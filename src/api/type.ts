@@ -188,3 +188,52 @@ export interface ApiAmmV3PoolInfo {
   };
   tvl: number;
 }
+
+export type ApiIdoItem = {
+  id: string;
+  projectName: string;
+  projectPosters: string;
+  projectDetailLink: string;
+  baseMint: string;
+  baseVault: string;
+  baseSymbol: string;
+  baseDecimals: number;
+  baseIcon: string;
+  quoteMint: string;
+  quoteVault: string;
+  quoteSymbol: string;
+  quoteDecimals: number;
+  quoteIcon: string;
+  startTime: number; // timestamp (milliseconds)
+  endTime: number; // timestamp (milliseconds)
+  startWithdrawTime: number; // timestamp (milliseconds)
+  stakeTimeEnd: number; // timestamp (milliseconds)
+  price: number; // real price
+  raise: number; // raise token amount
+  maxWinLotteries: number;
+  raisedLotteries: number;
+  isWinning: number;
+  version: 3; // currently only 3, V2 do not support old ido
+  snapshotVersion: 1; // currently only 1
+  programId: string;
+  authority: string;
+  snapshotProgramId: string;
+  seedId: string;
+};
+
+export type ApiIdoInfo = {
+  info: ApiIdoItem;
+  projectInfo: {
+    projectDetails: string;
+    projectDocs: {
+      tokenomics: string;
+      website: string;
+    };
+    projectSocials: {
+      Discord: string;
+      Medium: string;
+      Telegram: string;
+      Twitter: string;
+    };
+  };
+};

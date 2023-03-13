@@ -10,6 +10,7 @@ import {
   ApiLiquidityPools,
   ApiTokens,
   ApiAmmV3PoolInfo,
+  ApiIdoItem,
 } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
@@ -29,6 +30,7 @@ import Trade from "./trade/trade";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
+import Ido from "./ido/ido";
 import { SignAllTransactions } from "./type";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
@@ -58,6 +60,7 @@ export interface RaydiumApiBatchRequestParams {
   defaultApiFarmPools?: ApiFarmPools;
   defaultApiPairsInfo?: ApiJsonPairInfo[];
   defaultApiAmmV3PoolsInfo?: ApiAmmV3PoolInfo[];
+  defaultApiIdoList?: ApiIdoItem[];
 }
 
 export type RaydiumConstructorParams = Required<RaydiumLoadParams> & RaydiumApiBatchRequestParams;
@@ -68,6 +71,7 @@ interface ApiData {
   liquidityPairsInfo?: { fetched: number; data: ApiJsonPairInfo[] };
   farmPools?: { fetched: number; data: ApiFarmPools };
   ammV3Pools?: { fetched: number; data: ApiAmmV3PoolInfo[] };
+  idoList?: { fetched: number; data: ApiIdoItem[] };
 }
 
 const apiCacheData: ApiData = {};
@@ -83,6 +87,7 @@ export class Raydium {
   public utils1216: Utils1216;
   public marketV2: MarketV2;
   public route: Route;
+  public ido: Ido;
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
 
@@ -111,6 +116,7 @@ export class Raydium {
       defaultApiFarmPools,
       defaultApiPairsInfo,
       defaultApiAmmV3PoolsInfo,
+      defaultApiIdoList,
       defaultChainTime,
       defaultChainTimeOffset,
       apiCacheTime,
@@ -139,17 +145,25 @@ export class Raydium {
     this.ammV3 = new AmmV3({ scope: this, moduleName: "Raydium_ammV3" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
+    this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
 
     const now = new Date().getTime();
 
-    const [apiTokensCache, apiLiquidityPoolsCache, apiFarmPoolsCache, apiLiquidityPairsInfoCache, apiAmmV3PoolsCache] =
-      [
-        defaultApiTokens ? { fetched: now, data: defaultApiTokens } : apiCacheData.tokens,
-        defaultApiLiquidityPools ? { fetched: now, data: defaultApiLiquidityPools } : apiCacheData.liquidityPools,
-        defaultApiFarmPools ? { fetched: now, data: defaultApiFarmPools } : apiCacheData.farmPools,
-        defaultApiPairsInfo ? { fetched: now, data: defaultApiPairsInfo } : apiCacheData.liquidityPairsInfo,
-        defaultApiAmmV3PoolsInfo ? { fetched: now, data: defaultApiAmmV3PoolsInfo } : apiCacheData.ammV3Pools,
-      ];
+    const [
+      apiTokensCache,
+      apiLiquidityPoolsCache,
+      apiFarmPoolsCache,
+      apiLiquidityPairsInfoCache,
+      apiAmmV3PoolsCache,
+      apiIdoListCache,
+    ] = [
+      defaultApiTokens ? { fetched: now, data: defaultApiTokens } : apiCacheData.tokens,
+      defaultApiLiquidityPools ? { fetched: now, data: defaultApiLiquidityPools } : apiCacheData.liquidityPools,
+      defaultApiFarmPools ? { fetched: now, data: defaultApiFarmPools } : apiCacheData.farmPools,
+      defaultApiPairsInfo ? { fetched: now, data: defaultApiPairsInfo } : apiCacheData.liquidityPairsInfo,
+      defaultApiAmmV3PoolsInfo ? { fetched: now, data: defaultApiAmmV3PoolsInfo } : apiCacheData.ammV3Pools,
+      defaultApiIdoList ? { fetched: now, data: defaultApiIdoList } : apiCacheData.idoList,
+    ];
     if (defaultChainTimeOffset)
       this._chainTime = {
         fetched: now,
@@ -165,6 +179,7 @@ export class Raydium {
       ...(apiFarmPoolsCache ? { farmPools: apiFarmPoolsCache } : {}),
       ...(apiLiquidityPairsInfoCache ? { liquidityPairsInfo: apiLiquidityPairsInfoCache } : {}),
       ...(apiAmmV3PoolsCache ? { ammV3Pools: apiAmmV3PoolsCache } : {}),
+      ...(apiIdoListCache ? { idoList: apiIdoListCache } : {}),
     };
   }
 
@@ -313,6 +328,19 @@ export class Raydium {
     } catch {
       this._chainTime = undefined;
     }
+  }
+
+  public async fetchIdoList(forceUpdate?: boolean): Promise<ApiIdoItem[]> {
+    if (this.apiData.idoList && !this.isCacheInvalidate(this.apiData.idoList.fetched) && !forceUpdate)
+      return this.apiData.idoList.data;
+
+    const dataObject = {
+      fetched: Date.now(),
+      data: (await this.api.getIdoList()).data,
+    };
+    this.apiData.idoList = dataObject;
+    apiCacheData.idoList = dataObject;
+    return dataObject.data;
   }
 
   get chainTimeData(): { offset: number; chainTime: number } | undefined {

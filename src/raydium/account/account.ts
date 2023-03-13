@@ -22,7 +22,6 @@ export interface TokenAccountDataProp {
 export default class Account extends ModuleBase {
   private _tokenAccounts: TokenAccount[] = [];
   private _tokenAccountRawInfos: TokenAccountRaw[] = [];
-  private _ataCache: Map<string, PublicKey> = new Map();
   private _accountChangeListenerId?: number;
   private _accountListener: ((data: TokenAccountDataProp) => void)[] = [];
   private _clientOwnedToken = false;

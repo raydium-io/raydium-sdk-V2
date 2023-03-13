@@ -14,10 +14,12 @@ export function getTimestamp(): number {
   return new Date().getTime();
 }
 
-const baseInnerObjects = [Token, TokenAmount, PublicKey, Fraction, BN, Price, Percent];
-
-function notInnerObject(v: unknown): v is Record<string, any> {
-  return typeof v === "object" && v !== null && !baseInnerObjects.some((o) => typeof o === "object" && v instanceof o);
+export function notInnerObject(v: unknown): v is Record<string, any> {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    ![Token, TokenAmount, PublicKey, Fraction, BN, Price, Percent].some((o) => typeof o === "object" && v instanceof o)
+  );
 }
 
 export function jsonInfo2PoolKeys<T>(jsonInfo: T): ReplaceType<T, string, PublicKey> {

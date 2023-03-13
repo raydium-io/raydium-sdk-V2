@@ -1,6 +1,5 @@
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { PublicKey } from "@solana/web3.js";
 import { Token } from "../module/token";
 import { Price } from "../module/price";
 import { Currency } from "../module/currency";
@@ -11,6 +10,7 @@ import { SplToken, TokenJson } from "../raydium/token/type";
 import { ReplaceType } from "../raydium/type";
 import { createLogger } from "./logger";
 import { mul } from "./fractionUtil";
+import { notInnerObject } from "./utility";
 
 export enum Rounding {
   ROUND_DOWN,
@@ -191,11 +191,6 @@ export function decimalToFraction(n: Decimal | undefined): Fraction | undefined 
   if (n == null) return undefined;
   const { numerator, denominator } = parseNumberInfo(n.toString());
   return new Fraction(numerator, denominator);
-}
-
-function notInnerObject(v: unknown): boolean {
-  const baseInnerObjects = [Token, TokenAmount, PublicKey, Fraction, BN, Currency, CurrencyAmount, Price, Percent];
-  return typeof v === "object" && v !== null && !baseInnerObjects.some((o) => !!o && v instanceof o);
 }
 
 export function isDecimal(val: unknown): boolean {
