@@ -1,18 +1,13 @@
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { ApiIdoItem } from "../../api/type";
 import { getAssociatedLedgerAccountAddress, getAssociatedSnapshotAddress } from "./pda";
-import {
-  getMultipleAccountsInfoWithCustomFlags,
-  getDepositedTickets,
-  isTicketWin,
-  getWinningTickets,
-  getWinningTicketsTailNumbers,
-} from "./utils";
+import { getDepositedTickets, isTicketWin, getWinningTickets, getWinningTicketsTailNumbers } from "./utils";
 import { getIdoStateLayout, getIdoLedgerLayout, getSnapshotStateLayout } from "./layout";
 import { GetIdoMultipleInfoParams, IdoInfo, IdoPoolConfig, SdkIdoInfo, HydratedIdoInfo } from "./type";
 import { tryParsePublicKey } from "../../common/pubKey";
 import { isMeaningfulNumber } from "../../common/fractionUtil";
 import { toTokenPrice } from "../../common/bignumber";
+import { getMultipleAccountsInfoWithCustomFlags } from "../../common/accountInfo";
 import { Percent } from "../../module/percent";
 
 import { PublicKey } from "@solana/web3.js";

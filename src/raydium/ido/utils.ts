@@ -1,25 +1,4 @@
-import { PublicKey, Connection, Commitment, AccountInfo } from "@solana/web3.js";
-import { getMultipleAccountsInfo } from "../../common";
 import { SdkIdoInfo, TicketInfo, HydratedIdoInfo, TicketTailNumberInfo } from "./type";
-
-export interface GetMultipleAccountsInfoConfig {
-  batchRequest?: boolean;
-  commitment?: Commitment;
-}
-
-export async function getMultipleAccountsInfoWithCustomFlags<T extends { pubkey: PublicKey }>(
-  connection: Connection,
-  publicKeysWithCustomFlag: T[],
-  config?: GetMultipleAccountsInfoConfig,
-): Promise<({ accountInfo: AccountInfo<Buffer> | null } & T)[]> {
-  const multipleAccountsInfo = await getMultipleAccountsInfo(
-    connection,
-    publicKeysWithCustomFlag.map((o) => o.pubkey),
-    config,
-  );
-
-  return publicKeysWithCustomFlag.map((o, idx) => ({ ...o, accountInfo: multipleAccountsInfo[idx] }));
-}
 
 export function getDepositedTickets(idoInfo: SdkIdoInfo): TicketInfo[] {
   if (!idoInfo.ledger) return [];
