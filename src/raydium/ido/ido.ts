@@ -42,8 +42,8 @@ export default class Ido extends ModuleBase {
     };
   }
 
-  public async load(): Promise<void> {
-    await this.scope.fetchIdoList();
+  public async load(forceUpdate?: boolean): Promise<void> {
+    await this.scope.fetchIdoList(forceUpdate);
     this._idoList = this.scope.apiData.idoList?.data || [];
     this._idoMap = new Map(this._idoList.map((ido) => [ido.id, ido]));
     await this.loadIdoSdkInfo();
@@ -137,6 +137,7 @@ export default class Ido extends ModuleBase {
       this.scope.mintToTokenAmount({
         mint: updatedIdoInfo.quoteMint,
         amount: updatedIdoInfo.state.perLotteryQuoteAmount,
+        decimalDone: true,
       });
     const depositedTicketCount = updatedIdoInfo.state && updatedIdoInfo.state.raisedLotteries.toNumber();
 

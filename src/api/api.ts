@@ -136,7 +136,7 @@ export class Api {
   }
 
   async getIdoInfo(id: string): Promise<ApiIdoInfo> {
-    return this.api.get(this.urlConfigs.IDO_PROJECT_INFO || API_URLS.IDO_PROJECT_INFO + id);
+    return this.api.get((this.urlConfigs.IDO_PROJECT_INFO || API_URLS.IDO_PROJECT_INFO) + id);
   }
 
   async getBlockSlotCountForSecond(endpointUrl?: string): Promise<number> {

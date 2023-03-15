@@ -186,9 +186,7 @@ export default class TokenModule extends ModuleBase {
 
     if (decimalDone) {
       const numberDetails = parseNumberInfo(amount);
-      const amountBigNumber = toBN(
-        new Fraction(numberDetails.numerator, numberDetails.denominator).mul(new BN(10).pow(new BN(token.decimals))),
-      );
+      const amountBigNumber = toBN(new Fraction(numberDetails.numerator, numberDetails.denominator));
       return new TokenAmount(token, amountBigNumber);
     }
     return new TokenAmount(token, this.decimalAmount({ mint, amount, decimalDone }));
