@@ -1,6 +1,6 @@
 {
   "name": "test-raydium-sdk-v2",
-  "version": "0.0.79-alpha",
+  "version": "0.0.85-alpha",
   "description": "An SDK for building applications on top of Raydium.",
   "license": "GPL-3.0",
   "main": "./lib/index.js",
@@ -10,7 +10,11 @@
     "./lib",
     "./src"
   ],
-  "repository": "https://github.com/raydium-io/raydium-sdk",
+  "repository": "https://github.com/raydium-io/raydium-sdk-V2",
+  "publicConfig": {
+    "registry": "https://registry.yarnpkg.com",
+    "access": "public"
+  },
   "keywords": [
     "raydium",
     "solana"
@@ -34,9 +38,9 @@
   },
   "dependencies": {
     "@project-serum/serum": "^0.13.65",
-    "@solana/buffer-layout": "^4.0.0",
-    "@solana/spl-token": "^0.3.4",
-    "@solana/web3.js": "^1.66.2",
+    "@solana/buffer-layout": "4.0.0",
+    "@solana/spl-token": "^0.3.7",
+    "@solana/web3.js": "^1.73.3",
     "axios": "^1.1.3",
     "big.js": "^6.2.1",
     "bn.js": "^5.2.0",

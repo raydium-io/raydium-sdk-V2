@@ -28,6 +28,7 @@ export interface TokenJson {
     coingeckoId?: string;
   };
   icon: string;
+  hasFreeze?: boolean;
 }
 
 export type SplToken = TokenProps & {

@@ -1,5 +1,5 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-
+import { MintLayout, RawMint } from "@solana/spl-token";
 import { ApiTokenInfo } from "../../api/type";
 import { PublicKeyish, validateAndParsePublicKey } from "../../common/pubKey";
 import { GetStructureSchema } from "../../marshmallow";
@@ -54,4 +54,17 @@ export const toSplToken = ({ mint, decimals }: { mint: PublicKey; decimals: numb
     icon: "",
     extensions: {},
   };
+};
+
+export const getTokenInfo = async ({
+  connection,
+  mint,
+}: {
+  connection: Connection;
+  mint: PublicKeyish;
+}): Promise<RawMint | undefined> => {
+  const accountData = await connection.getAccountInfo(new PublicKey(mint));
+  if (!accountData || accountData.data.length !== MintLayout.span) return;
+  const tokenInfo = MintLayout.decode(accountData.data);
+  return tokenInfo;
 };

@@ -100,7 +100,7 @@ export default class Liquidity extends ModuleBase {
         return info.id;
       }),
     );
-    this.scope.token.parseV2PoolTokens();
+    await this.scope.token.parseAllPoolTokens();
   }
 
   public async loadPairs(params?: LoadParams): Promise<ApiJsonPairInfo[]> {

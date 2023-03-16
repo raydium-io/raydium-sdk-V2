@@ -79,7 +79,7 @@ export class AmmV3 extends ModuleBase {
     });
     this._ammV3SdkParsedPools = Object.values(sdkParsed);
     this._ammV3SdkParsedPoolMap = new Map(Object.entries(sdkParsed));
-    this.scope.token.parseV3PoolTokens();
+    await this.scope.token.parseAllPoolTokens();
     this.hydratePoolsInfo();
   }
 

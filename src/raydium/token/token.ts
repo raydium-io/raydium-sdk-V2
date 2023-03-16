@@ -1,3 +1,4 @@
+import { RawMint } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
@@ -9,7 +10,7 @@ import { LoadParams } from "../type";
 
 import { quantumSOLHydratedTokenJsonInfo, TOKEN_WSOL } from "./constant";
 import { SplToken, TokenJson } from "./type";
-// import { sortTokens } from "./util";
+import { getTokenInfo } from "./util";
 
 export interface MintToTokenAmount {
   mint: PublicKeyish;
@@ -21,11 +22,28 @@ export default class TokenModule extends ModuleBase {
   private _tokens: TokenJson[] = [];
   private _tokenMap: Map<string, SplToken> = new Map();
   private _tokenPrice: Map<string, Price> = new Map();
-  private _mintList: { official: string[]; unOfficial: string[]; unNamed: string[] };
+  private _mintList: {
+    official: string[];
+    unOfficial: string[];
+    unNamed: string[];
+    otherLiquiditySupportedMints: string[];
+  };
+  private _mintSets: {
+    official: Set<string>;
+    unOfficial: Set<string>;
+    unNamed: Set<string>;
+    otherLiquiditySupportedMints: Set<string>;
+  };
 
   constructor(params: ModuleBaseProps) {
     super(params);
-    this._mintList = { official: [], unOfficial: [], unNamed: [] };
+    this._mintList = { official: [], unOfficial: [], unNamed: [], otherLiquiditySupportedMints: [] };
+    this._mintSets = {
+      official: new Set(),
+      unOfficial: new Set(),
+      unNamed: new Set(),
+      otherLiquiditySupportedMints: new Set(),
+    };
   }
 
   public async load(params?: LoadParams): Promise<void> {
@@ -33,7 +51,7 @@ export default class TokenModule extends ModuleBase {
     await this.scope.fetchTokens(params?.forceUpdate);
     // unofficial: solana token list
     // official: raydium token list
-    this._mintList = { official: [], unOfficial: [], unNamed: [] };
+    this._mintList = { official: [], unOfficial: [], unNamed: [], otherLiquiditySupportedMints: [] };
     this._tokens = [];
     this._tokenMap = new Map();
     const { data } = this.scope.apiData.tokens || {
@@ -85,8 +103,27 @@ export default class TokenModule extends ModuleBase {
     return this._tokenPrice;
   }
 
-  public parseV2PoolTokens(): void {
-    this.scope.liquidity.allPools.forEach((pool) => {
+  public async isVerifiedToken(mint: PublicKeyish, tokenInfo?: RawMint): Promise<boolean> {
+    const mintStr = mint.toString();
+    const tokenData = tokenInfo || (await getTokenInfo({ connection: this.scope.connection, mint }));
+    if (!tokenData) return false;
+
+    const isAPIToken = this._mintSets.official.has(mintStr) || this._mintSets.unOfficial.has(mintStr);
+    if (tokenData.decimals !== null && !isAPIToken && tokenData.freezeAuthorityOption === 1) return false;
+
+    return true;
+  }
+
+  public async parseAllPoolTokens(): Promise<void> {
+    this._mintList.otherLiquiditySupportedMints = [];
+    await this.parseV2PoolTokens();
+    await this.parseV3PoolTokens();
+    this._mintSets.otherLiquiditySupportedMints = new Set(this._mintList.otherLiquiditySupportedMints);
+  }
+
+  public async parseV2PoolTokens(): Promise<void> {
+    for (let i = 0; i < this.scope.liquidity.allPools.length; i++) {
+      const pool = this.scope.liquidity.allPools[i];
       const toToken = (mint: string, decimals: number): TokenJson => ({
         symbol: mint.substring(0, 6),
         name: mint.substring(0, 6),
@@ -96,20 +133,25 @@ export default class TokenModule extends ModuleBase {
         icon: "",
       });
       if (!this._tokenMap.has(pool.baseMint)) {
-        const token = toToken(pool.baseMint, pool.baseDecimals);
+        const hasFreeze = !(await this.isVerifiedToken(pool.baseMint));
+        const token = { ...toToken(pool.baseMint, pool.baseDecimals), hasFreeze };
         this._tokens.push(token);
         this._tokenMap.set(token.mint, { ...token, id: token.mint });
+        this._mintList.otherLiquiditySupportedMints.push(pool.baseMint);
       }
       if (!this._tokenMap.has(pool.quoteMint)) {
-        const token = toToken(pool.quoteMint, pool.quoteDecimals);
+        const hasFreeze = !(await this.isVerifiedToken(pool.quoteMint));
+        const token = { ...toToken(pool.quoteMint, pool.quoteDecimals), hasFreeze };
         this._tokens.push(token);
         this._tokenMap.set(token.mint, { ...token, id: token.mint });
+        this._mintList.otherLiquiditySupportedMints.push(pool.baseMint);
       }
-    });
+    }
   }
 
-  public parseV3PoolTokens(): void {
-    this.scope.ammV3.pools.data.forEach((pool) => {
+  public async parseV3PoolTokens(): Promise<void> {
+    for (let i = 0; i < this.scope.ammV3.pools.data.length; i++) {
+      const pool = this.scope.ammV3.pools.data[i];
       const toToken = (mint: string, decimals: number): TokenJson => ({
         symbol: mint.substring(0, 6),
         name: mint.substring(0, 6),
@@ -119,16 +161,18 @@ export default class TokenModule extends ModuleBase {
         icon: "",
       });
       if (!this._tokenMap.has(pool.mintA)) {
-        const token = toToken(pool.mintA, pool.mintDecimalsA);
+        const hasFreeze = !(await this.isVerifiedToken(pool.mintA));
+        const token = { ...toToken(pool.mintA, pool.mintDecimalsA), hasFreeze };
         this._tokens.push(token);
         this._tokenMap.set(token.mint, { ...token, id: token.mint });
       }
       if (!this._tokenMap.has(pool.mintB)) {
-        const token = toToken(pool.mintB, pool.mintDecimalsB);
+        const hasFreeze = !(await this.isVerifiedToken(pool.mintB));
+        const token = { ...toToken(pool.mintB, pool.mintDecimalsB), hasFreeze };
         this._tokens.push(token);
         this._tokenMap.set(token.mint, { ...token, id: token.mint });
       }
-    });
+    }
   }
 
   public async fetchTokenPrices(preloadRaydiumPrice?: Record<string, number>): Promise<Map<string, Price>> {
