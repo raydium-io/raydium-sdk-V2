@@ -49,6 +49,7 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   apiCacheTime?: number;
   signAllTransactions?: SignAllTransactions;
   urlConfigs?: API_URL_CONFIG;
+  prefetchLiquidity?: boolean;
 }
 
 export interface RaydiumApiBatchRequestParams {
@@ -194,7 +195,7 @@ export class Raydium {
       },
       config,
     );
-    const { cluster, apiRequestTimeout, urlConfigs } = custom;
+    const { cluster, apiRequestTimeout, urlConfigs, prefetchLiquidity = true } = custom;
 
     const api = new Api({ cluster, timeout: apiRequestTimeout, urlConfigs });
     const raydium = new Raydium({
@@ -203,7 +204,7 @@ export class Raydium {
     });
 
     await raydium.token.load();
-    await raydium.liquidity.load();
+    if (prefetchLiquidity) await raydium.liquidity.load();
 
     return raydium;
   }
