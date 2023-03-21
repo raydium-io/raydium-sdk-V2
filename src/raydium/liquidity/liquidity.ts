@@ -2,7 +2,16 @@ import { ComputeBudgetProgram } from "@solana/web3.js";
 import BN from "bn.js";
 import { ApiJsonPairInfo } from "../../api";
 
-import { BN_ONE, BN_ZERO, divCeil, Numberish, parseNumberInfo, toBN, toTokenPrice } from "../../common/bignumber";
+import {
+  BN_ONE,
+  BN_ZERO,
+  divCeil,
+  Numberish,
+  parseNumberInfo,
+  toBN,
+  toTokenPrice,
+  toUsdCurrency,
+} from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
 import { PublicKeyish, SOLMint, validateAndParsePublicKey, WSOLMint, solToWSol } from "../../common/pubKey";
 import { jsonInfo2PoolKeys } from "../../common/utility";
@@ -24,6 +33,7 @@ import {
   makeCreatePoolV4InstructionV2,
 } from "./instruction";
 import { getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice, StableLayout } from "./stable";
+import { LpToken, SplToken } from "../token/type";
 import {
   AmountSide,
   CreatePoolParam,
@@ -42,6 +52,7 @@ import {
   LiquiditySwapTransactionParams,
   PairJsonInfo,
   SDKParsedLiquidityInfo,
+  HydratedPairItemInfo,
 } from "./type";
 import {
   getAmountSide,
@@ -51,7 +62,7 @@ import {
   isValidFixedSide,
   makeSimulationPoolInfo,
 } from "./util";
-
+import Decimal from "decimal.js-light";
 export default class Liquidity extends ModuleBase {
   private _poolInfos: LiquidityPoolJsonInfo[] = [];
   private _poolInfoMap: Map<string, LiquidityPoolJsonInfo> = new Map();
@@ -118,7 +129,139 @@ export default class Liquidity extends ModuleBase {
     this.scope.farm.farmAPRs = Object.fromEntries(
       this._pairsInfo.map((i) => [i.ammId, { apr30d: i.apr30d, apr7d: i.apr7d, apr24h: i.apr24h }]),
     );
+
     return this._pairsInfo;
+  }
+
+  public hydratedPairInfo(
+    pair: ApiJsonPairInfo,
+    payload: {
+      lpToken?: LpToken;
+      lpBalance?: TokenAmount;
+      isStable?: boolean;
+      isOpenBook?: boolean;
+      userCustomTokenSymbol: { [x: string]: { symbol: string; name: string } };
+    },
+  ): HydratedPairItemInfo {
+    const lp = payload.lpToken;
+    const base = lp?.base;
+    const quote = lp?.quote;
+    let newPairName = "";
+
+    const tokenAmountBase = base
+      ? this.scope.mintToTokenAmount({ mint: base.mint, amount: pair.tokenAmountCoin }) ?? null
+      : null;
+    const tokenAmountQuote = quote
+      ? this.scope.mintToTokenAmount({ mint: quote.mint, amount: pair.tokenAmountPc }) ?? null
+      : null;
+
+    const tokenAmountLp = lp ? new TokenAmount(lp!, pair.tokenAmountLp.toFixed(lp.decimals), false) ?? null : null;
+
+    const lpBalance = payload.lpBalance;
+    const calcLpUserLedgerInfoResult = this.computeUserLedgerInfo(
+      { tokenAmountBase, tokenAmountQuote, tokenAmountLp },
+      { lpToken: lp, baseToken: base, quoteToken: quote, lpBalance },
+    );
+
+    const nameParts = pair.name.split("-");
+    const basePubString = base?.mint?.toString() || "";
+    const quotePubString = quote?.mint?.toString() || "";
+
+    if (base && payload.userCustomTokenSymbol[basePubString]) {
+      base.symbol = payload.userCustomTokenSymbol[basePubString].symbol;
+      base.name = payload.userCustomTokenSymbol[basePubString].name
+        ? payload.userCustomTokenSymbol[basePubString].name
+        : base.symbol;
+      nameParts[0] = base.symbol;
+    } else if (nameParts[0] === "unknown") {
+      nameParts[0] = base?.symbol?.substring(0, 6) ?? nameParts[0];
+    }
+
+    if (quote && payload.userCustomTokenSymbol[quotePubString]) {
+      quote.symbol = payload.userCustomTokenSymbol[quotePubString].symbol;
+      quote.name = payload.userCustomTokenSymbol[quotePubString].name
+        ? payload.userCustomTokenSymbol[quotePubString].name
+        : quote.symbol;
+      nameParts[1] = quote.symbol;
+    } else if (nameParts[1] === "unknown") {
+      nameParts[1] = quote?.symbol?.substring(0, 6) ?? nameParts[0];
+    }
+
+    newPairName = nameParts.join("-");
+
+    return {
+      ...pair,
+      ...{
+        fee7d: toUsdCurrency(pair.fee7d),
+        fee7dQuote: toUsdCurrency(pair.fee7dQuote),
+        fee24h: toUsdCurrency(pair.fee24h),
+        fee24hQuote: toUsdCurrency(pair.fee24hQuote),
+        fee30d: toUsdCurrency(pair.fee30d),
+        fee30dQuote: toUsdCurrency(pair.fee30dQuote),
+        volume24h: toUsdCurrency(pair.volume24h),
+        volume24hQuote: toUsdCurrency(pair.volume24hQuote),
+        volume7d: toUsdCurrency(pair.volume7d),
+        volume7dQuote: toUsdCurrency(pair.volume7dQuote),
+        volume30d: toUsdCurrency(pair.volume30d),
+        volume30dQuote: toUsdCurrency(pair.volume30dQuote),
+        tokenAmountBase,
+        tokenAmountQuote,
+        tokenAmountLp,
+        liquidity: toUsdCurrency(Math.round(pair.liquidity)),
+        lpPrice: lp && pair.lpPrice ? toTokenPrice({ token: lp, numberPrice: pair.lpPrice }) : null,
+        // customized
+        lp,
+        base,
+        quote,
+        basePooled: calcLpUserLedgerInfoResult?.basePooled,
+        quotePooled: calcLpUserLedgerInfoResult?.quotePooled,
+        sharePercent: calcLpUserLedgerInfoResult?.sharePercent,
+        price: base ? toTokenPrice({ token: base, numberPrice: pair.price }) : null,
+        isStablePool: Boolean(payload.isStable),
+        isOpenBook: Boolean(payload.isOpenBook),
+        name: newPairName ? newPairName : pair.name,
+      },
+    };
+  }
+
+  public computeUserLedgerInfo(
+    pairInfo: {
+      tokenAmountBase: TokenAmount | null; // may have decimal
+      tokenAmountQuote: TokenAmount | null; // may have decimal
+      tokenAmountLp: TokenAmount | null; // may have decimal
+    },
+    additionalTools: {
+      lpToken: SplToken | undefined;
+      quoteToken: SplToken | undefined;
+      baseToken: SplToken | undefined;
+      lpBalance: TokenAmount | undefined;
+    },
+  ): { basePooled?: TokenAmount; quotePooled?: TokenAmount; sharePercent?: Decimal } {
+    if (!pairInfo.tokenAmountBase || !pairInfo.tokenAmountQuote || !pairInfo.tokenAmountLp)
+      return { basePooled: undefined, quotePooled: undefined, sharePercent: undefined };
+    Decimal.set({ precision: 40 });
+    const sharePercent = new Decimal(additionalTools.lpBalance?.toExact() || 0).div(pairInfo.tokenAmountLp.toExact());
+
+    const basePooled =
+      additionalTools.baseToken && sharePercent
+        ? this.scope.mintToTokenAmount({
+            mint: additionalTools.baseToken.mint,
+            amount: sharePercent.mul(pairInfo.tokenAmountBase.toExact()).toString(),
+          })
+        : undefined;
+    const quotePooled =
+      additionalTools.quoteToken && sharePercent
+        ? this.scope.mintToTokenAmount({
+            mint: additionalTools.quoteToken.mint,
+            amount: sharePercent.mul(pairInfo.tokenAmountQuote.toExact()).toString(),
+          })
+        : undefined;
+
+    return {
+      basePooled,
+      quotePooled,
+      sharePercent,
+    };
   }
 
   get allPools(): LiquidityPoolJsonInfo[] {

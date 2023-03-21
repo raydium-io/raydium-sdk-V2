@@ -1,13 +1,15 @@
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { ApiJsonPairInfo, ApiLiquidityPoolInfo, LiquidityVersion } from "../../api/type";
+import { ApiJsonPairInfo, ApiLiquidityPoolInfo } from "../../api/type";
 import { GetMultipleAccountsInfoConfig } from "../../common/accountInfo";
 import { BigNumberish } from "../../common/bignumber";
 import { PublicKeyish } from "../../common/pubKey";
 import { JsonFileMetaData } from "../../common/json-file";
-import { Percent, Price, Token, TokenAmount } from "../../module";
+import { SplToken } from "../token";
+import { Percent, Price, Token, TokenAmount, CurrencyAmount } from "../../module";
 import { ReplaceType } from "../type";
+import Decimal from "decimal.js-light";
 
 export type LiquidityPoolJsonInfo = ApiLiquidityPoolInfo;
 export type PairJsonInfo = ApiJsonPairInfo;
@@ -282,4 +284,49 @@ export interface LiquidityComputeAnotherAmountParams {
 export interface LiquidityPoolsJsonFile extends JsonFileMetaData {
   readonly official: LiquidityPoolJsonInfo[];
   readonly unOfficial: LiquidityPoolJsonInfo[];
+}
+
+export interface HydratedPairItemInfo {
+  ammId: string;
+  apr24h: number;
+  apr7d: number;
+  apr30d: number;
+  fee7d: CurrencyAmount; // usd
+  fee7dQuote: CurrencyAmount; // usd
+  fee24h: CurrencyAmount; // usd
+  fee24hQuote: CurrencyAmount; // usd
+  fee30d: CurrencyAmount; // usd
+  fee30dQuote: CurrencyAmount; // usd
+  liquidity: CurrencyAmount; // usd
+  lpMint: string;
+  market: string;
+  name: string;
+  official: boolean;
+
+  tokenAmountBase: TokenAmount | null; // renameFrom: tokenAmountCoin. if unknown token, return null
+  tokenAmountLp: TokenAmount | null; // renameFrom: tokenAmountLp. if unknown token, return null
+  tokenAmountQuote: TokenAmount | null; // renameFrom: tokenAmountPc. if unknown token, return null
+
+  volume7d: CurrencyAmount; // usd
+  volume7dQuote: CurrencyAmount; // usd
+  volume24h: CurrencyAmount; // usd
+  volume24hQuote: CurrencyAmount; // usd
+  volume30d: CurrencyAmount; // usd
+  volume30dQuote: CurrencyAmount; // usd
+
+  lpPrice: Price | null;
+  price: Price | null;
+
+  // customized
+
+  lp?: SplToken;
+  base?: SplToken;
+  quote?: SplToken;
+
+  basePooled: TokenAmount | undefined; // user's wallet must has pool's lp
+  quotePooled: TokenAmount | undefined; // user's wallet must has pool's lp
+  sharePercent: Decimal | undefined; // user's wallet must has pool's lp
+
+  isStablePool: boolean;
+  isOpenBook: boolean;
 }

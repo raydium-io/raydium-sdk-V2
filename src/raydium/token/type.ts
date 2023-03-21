@@ -1,4 +1,4 @@
-import { TokenProps } from "../../module/token";
+import { TokenProps, Token } from "../../module/token";
 
 export type ExtensionKey = "coingeckoId" | "website" | "whitepaper";
 export type Extensions = { [key in ExtensionKey]?: string };
@@ -38,4 +38,16 @@ export type SplToken = TokenProps & {
     [key in "coingeckoId" | "website" | "whitepaper"]?: string;
   };
   userAdded?: boolean; // only if token is added by user
+};
+
+export type LpToken = Token & {
+  isLp: true;
+  base: SplToken;
+  quote: SplToken;
+  icon: string;
+  /** mint. for `<TokenSelector>`*/
+  id: string;
+  extensions: {
+    [key in "coingeckoId" | "website" | "whitepaper"]?: string;
+  };
 };
