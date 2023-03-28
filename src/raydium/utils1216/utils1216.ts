@@ -93,7 +93,7 @@ export default class Utils1216 extends ModuleBase {
     },
   };
 
-  static VERSION_PROJECT = [undefined, "Francium", "Tulip"] as const;
+  static VERSION_PROJECT = [undefined, "Francium", "Tulip", "Larix"] as const;
 
   // pda
   static getPdaPoolId(

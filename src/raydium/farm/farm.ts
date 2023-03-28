@@ -118,11 +118,13 @@ export default class Farm extends ModuleBase {
   }
 
   public async fetchSdkFarmInfo(): Promise<void> {
+    const chainTime = await this.scope.chainTimeOffset();
     this._sdkParsedFarmPools = await mergeSdkFarmInfo({
       connection: this.scope.connection,
       farmPools: this._farmPools,
       owner: this.scope.owner?.publicKey,
       config: { commitment: "confirmed" },
+      chainTime,
     });
   }
 

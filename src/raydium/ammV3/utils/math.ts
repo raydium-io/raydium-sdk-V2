@@ -506,7 +506,7 @@ export abstract class SwapMath {
     let loopCount = 0;
     while (
       !state.amountSpecifiedRemaining.eq(ZERO) &&
-      state.sqrtPriceX64 != sqrtPriceLimitX64 &&
+      !state.sqrtPriceX64.eq(sqrtPriceLimitX64) &&
       state.tick < MAX_TICK &&
       state.tick > MIN_TICK
     ) {

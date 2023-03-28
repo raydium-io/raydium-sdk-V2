@@ -12,6 +12,7 @@ export const API_URLS = {
   CHAIN_TIME: "/main/chain/time",
   IDO_INFO: "/main/ido/pools",
   IDO_PROJECT_INFO: "/main/ido/project/",
+  RPCS: "/main/rpcs",
 };
 
 export type API_URL_CONFIG = Partial<typeof API_URLS>;

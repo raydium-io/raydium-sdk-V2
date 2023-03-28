@@ -53,7 +53,7 @@ export async function getAssociatedLedgerAccount({
   programId: PublicKey;
   poolId: PublicKey;
   owner: PublicKey;
-  version: number;
+  version: 6 | 5 | 3;
 }): Promise<PublicKey> {
   const { publicKey } = await findProgramAddress(
     [
@@ -163,6 +163,7 @@ export interface FarmFetchMultipleInfoParams {
   farmPools: FarmPoolJsonInfo[];
   owner?: PublicKey;
   config?: GetMultipleAccountsInfoConfig;
+  chainTime: number;
 }
 
 export async function fetchMultipleFarmInfoAndUpdate({
@@ -170,6 +171,7 @@ export async function fetchMultipleFarmInfoAndUpdate({
   farmPools,
   owner,
   config,
+  chainTime,
 }: FarmFetchMultipleInfoParams): Promise<FarmPoolsInfo> {
   let hasNotV6Pool = false;
   let hasV6Pool = false;
@@ -208,7 +210,7 @@ export async function fetchMultipleFarmInfoAndUpdate({
           programId: pool.programId,
           poolId: pool.id,
           owner,
-          version: poolInfo.version,
+          version: poolInfo.version as 6 | 5 | 3,
         }),
         version: pool.version,
         key: "ledger",
@@ -242,7 +244,6 @@ export async function fetchMultipleFarmInfoAndUpdate({
   }
 
   const slot = hasV6Pool || hasNotV6Pool ? await connection.getSlot() : 0;
-  const chainTime = hasV6Pool ? (await connection.getBlockTime(slot)) ?? 0 : 0;
 
   for (const poolId of Object.keys(poolsInfo)) {
     poolsInfo[poolId].state = updateFarmPoolInfo(poolsInfo[poolId].state, poolsInfo[poolId].lpVault, slot, chainTime);
