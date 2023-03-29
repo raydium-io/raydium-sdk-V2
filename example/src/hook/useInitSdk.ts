@@ -12,7 +12,7 @@ export default function useInitSdk() {
   useEffect(() => {
     // raydium sdk initialization can be done with connection only
     if (connection) {
-      initRaydium({ owner: publicKey || undefined, connection, signAllTransactions })
+      initRaydium({ owner: publicKey || undefined, connection, signAllTransactions, logRequests: true })
     }
   }, [initRaydium, connection])
 

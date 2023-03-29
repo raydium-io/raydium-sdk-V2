@@ -49,6 +49,8 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   apiCacheTime?: number;
   signAllTransactions?: SignAllTransactions;
   urlConfigs?: API_URL_CONFIG;
+  logRequests?: boolean;
+  logCount?: number;
   prefetchLiquidity?: boolean;
 }
 
@@ -195,9 +197,9 @@ export class Raydium {
       },
       config,
     );
-    const { cluster, apiRequestTimeout, urlConfigs, prefetchLiquidity = true } = custom;
+    const { cluster, apiRequestTimeout, logCount, logRequests, urlConfigs, prefetchLiquidity = true } = custom;
 
-    const api = new Api({ cluster, timeout: apiRequestTimeout, urlConfigs });
+    const api = new Api({ cluster, timeout: apiRequestTimeout, urlConfigs, logCount, logRequests });
     const raydium = new Raydium({
       ...custom,
       api,

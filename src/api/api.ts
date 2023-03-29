@@ -14,6 +14,7 @@ import {
   ApiIdoInfo,
 } from "./type";
 import { API_URLS, API_URL_CONFIG } from "./url";
+import { updateReqHistory } from "./utils";
 
 const logger = createLogger("Raydium_Api");
 
@@ -36,6 +37,8 @@ export async function endlessRetry<T>(name: string, call: () => Promise<T>, inte
 export interface ApiProps {
   cluster: Cluster;
   timeout: number;
+  logRequests?: boolean;
+  logCount?: number;
   urlConfigs?: API_URL_CONFIG;
 }
 
@@ -43,12 +46,14 @@ export class Api {
   public cluster: Cluster;
 
   public api: AxiosInstance;
+  public logCount: number;
 
   public urlConfigs: API_URL_CONFIG;
 
-  constructor({ cluster, timeout, urlConfigs }: ApiProps) {
+  constructor({ cluster, timeout, logRequests, logCount, urlConfigs }: ApiProps) {
     this.cluster = cluster;
     this.urlConfigs = urlConfigs || {};
+    this.logCount = logCount || 1000;
 
     this.api = axios.create({ baseURL: this.urlConfigs.BASE_HOST || API_URLS.BASE_HOST, timeout });
 
@@ -74,6 +79,16 @@ export class Api {
         const { config, data, status } = response;
         const { method, baseURL, url } = config;
 
+        if (logRequests) {
+          updateReqHistory({
+            status,
+            url: `${baseURL}${url}`,
+            params: config.params,
+            data,
+            logCount: this.logCount,
+          });
+        }
+
         logger.debug(`${method?.toUpperCase()} ${baseURL}${url}  ${status}`);
 
         return data;
@@ -84,6 +99,16 @@ export class Api {
         const { config, response = {} } = error;
         const { status } = response;
         const { method, baseURL, url } = config;
+
+        if (logRequests) {
+          updateReqHistory({
+            status,
+            url: `${baseURL}${url}`,
+            params: config.params,
+            data: error.message,
+            logCount: this.logCount,
+          });
+        }
 
         logger.error(`${method.toUpperCase()} ${baseURL}${url} ${status || error.message}`);
 
