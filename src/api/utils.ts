@@ -21,16 +21,43 @@ export interface ResHistory {
   logCount?: number;
   time: number;
   session: string;
+  removeLastLog?: boolean;
 }
 
-export const updateReqHistory = ({ logCount = 1000, ...resData }: Omit<ResHistory, "time" | "session">): void => {
+export const updateReqHistory = ({
+  logCount = 1000,
+  removeLastLog,
+  ...resData
+}: Omit<ResHistory, "time" | "session">): void => {
   if (typeof window === undefined) return;
   const data: ResHistory[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").slice(0, logCount - 1);
+
+  // means retry last save error
+  if (removeLastLog) data.pop();
+
+  // if data > 1kb
+  if (new Blob([JSON.stringify(resData.data)]).size > 1024)
+    resData.data = JSON.stringify(resData.data).substring(0, 200) + "...";
   data.unshift({ ...resData, time: Date.now(), session: getSessionKey() });
+
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
-    data[0].data = JSON.stringify(data[0].data).substring(0, 100) + "...";
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    // if retry failed, empty request data
+    if (removeLastLog) {
+      try {
+        data[0].data = JSON.stringify(resData.data).substring(0, 100) + "...";
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch {
+        data[0].data = "";
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      }
+      return;
+    }
+    updateReqHistory({
+      ...resData,
+      logCount,
+      removeLastLog,
+    });
   }
 };
