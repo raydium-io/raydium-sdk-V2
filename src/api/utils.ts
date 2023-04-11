@@ -24,12 +24,12 @@ export interface ResHistory {
   removeLastLog?: boolean;
 }
 
-export const updateReqHistory = ({
+export const updateReqHistory = async ({
   logCount = 1000,
   removeLastLog,
   ...resData
-}: Omit<ResHistory, "time" | "session">): void => {
-  if (typeof window === undefined) return;
+}: Omit<ResHistory, "time" | "session">): Promise<void> => {
+  if (typeof window === undefined) return new Promise((resolve) => resolve());
   const data: ResHistory[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").slice(0, logCount - 1);
 
   // means retry last save error
@@ -45,19 +45,26 @@ export const updateReqHistory = ({
   } catch {
     // if retry failed, empty request data
     if (removeLastLog) {
-      try {
-        data[0].data = JSON.stringify(resData.data).substring(0, 100) + "...";
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      } catch {
-        data[0].data = "";
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      let success = false;
+      const resStr = JSON.stringify(resData.data).substring(0, 100);
+      data[0].data = resStr + (resStr.length > 100 ? "..." : "");
+      while (!success) {
+        data.pop();
+        const resStr = JSON.stringify(resData.data).substring(0, 100);
+        data[0].data = resStr + (resStr.length > 100 ? "..." : "");
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          success = true;
+        } catch {
+          success = false;
+        }
       }
-      return;
+      return new Promise((resolve) => resolve());
     }
-    updateReqHistory({
+    return updateReqHistory({
       ...resData,
       logCount,
-      removeLastLog,
+      removeLastLog: true,
     });
   }
 };
