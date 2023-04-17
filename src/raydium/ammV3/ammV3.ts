@@ -9,7 +9,7 @@ import {
   BigNumberish,
   recursivelyDecimalToFraction,
 } from "../../common/bignumber";
-import { InstructionType, WSOLMint } from "../../common";
+import { InstructionType, WSOLMint, getATAAddress } from "../../common";
 import { add, mul, div } from "../../common/fractionUtil";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { TokenAmount } from "../../module/amount";
@@ -44,7 +44,7 @@ import { AmmV3Instrument } from "./instrument";
 import { LoadParams, MakeTransaction, MakeMultiTransaction } from "../type";
 import { MathUtil } from "./utils/math";
 import { TickArray } from "./utils/tick";
-import { getATAAddress, getPdaOperationAccount } from "./utils/pda";
+import { getPdaOperationAccount } from "./utils/pda";
 import { OperationLayout } from "./layout";
 import BN from "bn.js";
 import { TOKEN_WSOL } from "../token";
@@ -320,6 +320,7 @@ export class AmmV3 extends ModuleBase {
       mint2,
       ammConfig,
       initialPrice,
+      startTime,
     } = props;
     const txBuilder = this.createTxBuilder();
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -338,6 +339,7 @@ export class AmmV3 extends ModuleBase {
       mintB,
       ammConfigId: ammConfig.id,
       initialPriceX64,
+      startTime,
     });
 
     txBuilder.addInstruction(insInfo);
@@ -365,6 +367,8 @@ export class AmmV3 extends ModuleBase {
         currentPrice: initPrice,
         ...mockCreatePoolInfo,
         version: 6,
+        lookupTableAccount: PublicKey.default,
+        startTime: startTime.toNumber(),
       },
     });
   }

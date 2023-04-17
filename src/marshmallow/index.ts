@@ -2,8 +2,18 @@ import { PublicKey } from "@solana/web3.js";
 import BN, { isBN } from "bn.js";
 
 import {
-  bits, blob, Blob, Layout, offset as _offset, seq as _seq, Structure as _Structure, u32 as _u32, u8 as _u8, UInt,
-  union as _union, Union as _Union,
+  bits,
+  blob,
+  Blob,
+  Layout,
+  offset as _offset,
+  seq as _seq,
+  Structure as _Structure,
+  u32 as _u32,
+  u8 as _u8,
+  UInt,
+  union as _union,
+  Union as _Union,
 } from "./buffer-layout";
 
 export * from "./buffer-layout";
@@ -64,7 +74,7 @@ export class WideBits<P extends string = ""> extends Layout<Record<string, boole
     return { ...lowerDecoded, ...upperDecoded };
   }
 
-  encode(src: any /* TEMP */, b: Buffer, offset = 0):any {
+  encode(src: any /* TEMP */, b: Buffer, offset = 0): any {
     return this._lower.encode(src, b, offset) + this._upper.encode(src, b, offset + this._lower.span);
   }
 }
@@ -83,6 +93,10 @@ export function u64<P extends string = "">(property?: P): BNLayout<P> {
 
 export function u128<P extends string = "">(property?: P): BNLayout<P> {
   return new BNLayout(16, false, property);
+}
+
+export function i8<P extends string = "">(property?: P): BNLayout<P> {
+  return new BNLayout(1, true, property);
 }
 
 export function i64<P extends string = "">(property?: P): BNLayout<P> {
@@ -298,7 +312,7 @@ export class Union<Schema> extends _Union<Schema> {
     return b.slice(0, this.encode(instruction, b));
   }
 
-  decodeInstruction(instruction: any):Partial<Schema> {
+  decodeInstruction(instruction: any): Partial<Schema> {
     return this.decode(instruction);
   }
 }
@@ -311,7 +325,7 @@ export function union<UnionSchema extends { [key: string]: any } = any>(
 }
 
 class Zeros extends Blob {
-  decode(b: Buffer, offset: number):Buffer {
+  decode(b: Buffer, offset: number): Buffer {
     const slice = super.decode(b, offset);
     if (!slice.every((v) => v === 0)) {
       throw new Error("nonzero padding bytes");
@@ -320,7 +334,7 @@ class Zeros extends Blob {
   }
 }
 
-export function zeros(length: number):Zeros {
+export function zeros(length: number): Zeros {
   return new Zeros(length);
 }
 
@@ -336,7 +350,7 @@ export function seq<T, P extends string = "", AnotherP extends string = "">(
       : isBN(count)
       ? count.toNumber()
       : new Proxy(count as unknown as Layout<number> /* pretend to be Layout<number> */, {
-          get(target, property):any {
+          get(target, property): any {
             if (!parsedCount) {
               // get count in targetLayout. note that count may be BN
               const countProperty = Reflect.get(target, "count");
@@ -349,7 +363,7 @@ export function seq<T, P extends string = "", AnotherP extends string = "">(
             }
             return Reflect.get(target, property);
           },
-          set(target, property, value):any {
+          set(target, property, value): any {
             if (property === "count") {
               parsedCount = value;
             }

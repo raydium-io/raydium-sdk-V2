@@ -254,6 +254,8 @@ export class PoolUtils {
           week: apiPoolInfo.week,
           month: apiPoolInfo.month,
           tvl: apiPoolInfo.tvl,
+          lookupTableAccount: new PublicKey(apiPoolInfo.lookupTableAccount),
+          startTime: layoutAccountInfo.startTime.toNumber(),
         },
       };
     }

@@ -9,7 +9,14 @@ import {
   Signer,
 } from "@solana/web3.js";
 import BN from "bn.js";
-import { createLogger, parseBigNumberish, RENT_PROGRAM_ID, METADATA_PROGRAM_ID, InstructionType } from "../../common";
+import {
+  createLogger,
+  parseBigNumberish,
+  RENT_PROGRAM_ID,
+  METADATA_PROGRAM_ID,
+  InstructionType,
+  getATAAddress,
+} from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
 import { MintInfo, ReturnTypeMakeInstructions, AmmV3PoolInfo, AmmV3PoolPersonalPosition } from "./type";
 import { ObservationInfoLayout } from "./layout";
@@ -17,7 +24,6 @@ import {
   getPdaPoolId,
   getPdaPoolVaultId,
   getPdaTickArrayAddress,
-  getATAAddress,
   getPdaMetadataKey,
   getPdaProtocolPositionAddress,
   getPdaPersonalPositionAddress,
@@ -49,6 +55,7 @@ interface CreatePoolInstruction {
   mintB: MintInfo;
   ammConfigId: PublicKey;
   initialPriceX64: BN;
+  startTime: BN;
 }
 
 export class AmmV3Instrument {
@@ -63,8 +70,9 @@ export class AmmV3Instrument {
     mintB: PublicKey,
     mintVaultB: PublicKey,
     sqrtPriceX64: BN,
+    startTime: BN,
   ): TransactionInstruction {
-    const dataLayout = struct([u128("sqrtPriceX64")]);
+    const dataLayout = struct([u128("sqrtPriceX64"), u64("startTime")]);
 
     const keys = [
       { pubkey: poolCreator, isSigner: true, isWritable: true },
@@ -84,6 +92,7 @@ export class AmmV3Instrument {
     dataLayout.encode(
       {
         sqrtPriceX64,
+        startTime,
       },
       data,
     );
@@ -97,7 +106,7 @@ export class AmmV3Instrument {
   }
 
   static async createPoolInstructions(props: CreatePoolInstruction): Promise<ReturnTypeMakeInstructions> {
-    const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64 } = props;
+    const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } = props;
     const observationId = new Keypair();
     const ins = [
       SystemProgram.createAccount({
@@ -125,6 +134,7 @@ export class AmmV3Instrument {
         mintB.mint,
         mintBVault,
         initialPriceX64,
+        startTime,
       ),
     );
 

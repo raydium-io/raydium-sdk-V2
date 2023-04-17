@@ -18,7 +18,7 @@ import { jsonInfo2PoolKeys } from "../../common/utility";
 import { InstructionType } from "../../common/txType";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { makeTransferInstruction } from "../account/instruction";
-import { getATAAddress } from "../ammV3/utils/pda";
+import { getATAAddress } from "../../common/pda";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { SwapExtInfo } from "../trade/type";
 import { LoadParams, MakeMultiTransaction, MakeTransaction } from "../type";

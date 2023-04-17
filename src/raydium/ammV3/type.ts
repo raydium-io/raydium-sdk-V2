@@ -130,6 +130,9 @@ export interface AmmV3PoolInfo {
     priceMax: number;
   };
   tvl: number;
+  lookupTableAccount: PublicKey;
+
+  startTime: number;
 }
 
 export interface ReturnTypeMakeHarvestTransaction {
@@ -296,6 +299,7 @@ export interface CreateConcentratedPool {
   mint2: MintInfo;
   ammConfig: AmmV3ConfigInfo;
   initialPrice: Decimal;
+  startTime: BN;
 }
 
 export interface UserPositionAccount {

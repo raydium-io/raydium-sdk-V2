@@ -1,6 +1,6 @@
 import { createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, AccountLayout } from "@solana/spl-token";
 import { Commitment, PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
-import { getATAAddress } from "../ammV3/utils/pda";
+import { getATAAddress } from "../../common/pda";
 import { BigNumberish, InstructionType, WSOLMint } from "../../common";
 
 import { AddInstructionParam } from "../../common/txTool";

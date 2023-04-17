@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
+import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils, ApiAmmV3ConfigInfo } from "../ammV3";
 import {
   forecastTransactionSize,
   jsonInfo2PoolKeys,
@@ -357,7 +357,7 @@ export default class TradeV2 extends ModuleBase {
             routeType: "amm",
             poolKey: [itemPool],
             middleMint: undefined,
-            poolReady: true,
+            poolReady: (itemPool as AmmV3PoolInfo).startTime < chainTime,
             poolType: "CLMM",
           });
         } catch (e) {
@@ -419,10 +419,15 @@ export default class TradeV2 extends ModuleBase {
                 simulateCache,
                 tickCache,
               });
+
             const infoAPoolOpen =
-              iFromPool.version === 6 ? true : simulateCache[iFromPool.id as string].startTime.toNumber() < chainTime;
+              iFromPool.version === 6
+                ? (iFromPool as AmmV3PoolInfo).startTime < chainTime
+                : simulateCache[iFromPool.id as string].startTime.toNumber() < chainTime;
             const infoBPoolOpen =
-              iOutPool.version === 6 ? true : simulateCache[iOutPool.id as string].startTime.toNumber() < chainTime;
+              iOutPool.version === 6
+                ? (iOutPool as AmmV3PoolInfo).startTime < chainTime
+                : simulateCache[iOutPool.id as string].startTime.toNumber() < chainTime;
 
             const poolTypeA = iFromPool.version === 6 ? "CLMM" : iFromPool.version === 5 ? "STABLE" : undefined;
             const poolTypeB = iOutPool.version === 6 ? "CLMM" : iOutPool.version === 5 ? "STABLE" : undefined;

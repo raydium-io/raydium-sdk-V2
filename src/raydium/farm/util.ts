@@ -15,6 +15,7 @@ import { CurrencyAmount, Fraction, Price, Token } from "../../module";
 import { FarmLedger, FarmLedgerLayout, FarmState, FarmStateLayout } from "./layout";
 import { FarmPoolJsonInfo, FarmRewardInfo, FarmRewardInfoConfig, SdkParsedFarmInfo } from "./type";
 import { jsonInfo2PoolKeys } from "../../common";
+import { VoterRegistrar, Voter } from "./layout";
 
 const logger = createLogger("Raydium.farm.util");
 interface AssociatedLedgerPoolAccount {
@@ -44,7 +45,7 @@ export function getAssociatedLedgerPoolAccount({
   return publicKey;
 }
 
-export async function getAssociatedLedgerAccount({
+export function getAssociatedLedgerAccount({
   programId,
   poolId,
   owner,
@@ -54,8 +55,8 @@ export async function getAssociatedLedgerAccount({
   poolId: PublicKey;
   owner: PublicKey;
   version: 6 | 5 | 3;
-}): Promise<PublicKey> {
-  const { publicKey } = await findProgramAddress(
+}): PublicKey {
+  const { publicKey } = findProgramAddress(
     [
       poolId.toBuffer(),
       owner.toBuffer(),
@@ -246,6 +247,7 @@ export async function fetchMultipleFarmInfoAndUpdate({
   const slot = hasV6Pool || hasNotV6Pool ? await connection.getSlot() : 0;
 
   for (const poolId of Object.keys(poolsInfo)) {
+    if (poolsInfo[poolId] === undefined) continue;
     poolsInfo[poolId].state = updateFarmPoolInfo(poolsInfo[poolId].state, poolsInfo[poolId].lpVault, slot, chainTime);
   }
 
@@ -380,4 +382,30 @@ export function calculateFarmPoolAprList(
     });
     return calcAprList;
   }
+}
+
+export async function getDepositEntryIndex(
+  connection: Connection,
+  registrar: PublicKey,
+  voter: PublicKey,
+  voterMint: PublicKey,
+): Promise<{ index: number; isInit: boolean }> {
+  const registrarAccountData = await connection.getAccountInfo(registrar);
+  if (registrarAccountData === null) throw Error("registrar info check error");
+  const registrarData = VoterRegistrar.decode(registrarAccountData.data);
+
+  const votingMintConfigIndex = registrarData.votingMints.findIndex((i) => i.mint.equals(voterMint));
+
+  if (votingMintConfigIndex === -1) throw Error("find voter mint error");
+
+  const voterAccountData = await connection.getAccountInfo(voter);
+  if (voterAccountData === null) return { index: votingMintConfigIndex, isInit: false }; // throw Error('voter info check error')
+
+  const voterData = Voter.decode(voterAccountData.data);
+
+  const depositEntryIndex = voterData.deposits.findIndex(
+    (i) => i.isUsed && i.votingMintConfigIdx === votingMintConfigIndex,
+  );
+  if (depositEntryIndex === -1) return { index: votingMintConfigIndex, isInit: false };
+  else return { index: depositEntryIndex, isInit: true };
 }

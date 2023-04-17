@@ -80,7 +80,12 @@ export const PoolInfoLayout = struct([
   u64("totalFeesTokenB"),
   u64("totalFeesClaimedTokenB"),
 
-  seq(u64(), 15 * 4, ""),
+  u64("fundFeesTokenA"),
+  u64("fundFeesTokenB"),
+
+  u64("startTime"),
+
+  seq(u64(), 15 * 4 - 3, "padding"),
 ]);
 
 export const PositionRewardInfoLayout = struct([u128("growthInsideLastX64"), u64("rewardAmountOwed")]);

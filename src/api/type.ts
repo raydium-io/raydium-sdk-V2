@@ -187,6 +187,7 @@ export interface ApiAmmV3PoolInfo {
     priceMax: number;
   };
   tvl: number;
+  lookupTableAccount: string;
 }
 
 export type ApiIdoItem = {
