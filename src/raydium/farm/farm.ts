@@ -74,6 +74,7 @@ export default class Farm extends ModuleBase {
   private _hydratedFarmPools: HydratedFarmInfo[] = [];
   private _hydratedFarmMap: Map<string, HydratedFarmInfo> = new Map();
   private _sdkParsedFarmPools: SdkParsedFarmInfo[] = [];
+  private _sdkParsedFarmMap: Map<string, SdkParsedFarmInfo> = new Map();
   private _lpTokenInfoMap: Map<string, RToken> = new Map();
   public farmAPRs: Record<
     string,
@@ -126,6 +127,7 @@ export default class Farm extends ModuleBase {
       config: { commitment: "confirmed" },
       chainTime,
     });
+    this._sdkParsedFarmMap = new Map(this._sdkParsedFarmPools.map((f) => [f.id.toString(), f]));
   }
 
   public async loadHydratedFarmInfo(params?: LoadParams & { skipPrice?: boolean }): Promise<HydratedFarmInfo[]> {
@@ -156,6 +158,9 @@ export default class Farm extends ModuleBase {
   }
   get allParsedFarms(): SdkParsedFarmInfo[] {
     return this._sdkParsedFarmPools;
+  }
+  get allParsedFarmMap(): Map<string, SdkParsedFarmInfo> {
+    return this._sdkParsedFarmMap;
   }
   get allHydratedFarms(): HydratedFarmInfo[] {
     return this._hydratedFarmPools;

@@ -194,7 +194,7 @@ export default class Account extends ModuleBase {
 
       return { account: ata, instructionParams: newTxInstructions };
     } else {
-      if (mint.equals(WSOLMint)) {
+      if (mint.equals(WSOLMint) && createInfo.amount) {
         const txInstruction = await createWSolAccountInstructions({
           connection: this.scope.connection,
           owner: this.scope.ownerPubKey,

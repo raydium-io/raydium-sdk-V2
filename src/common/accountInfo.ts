@@ -44,9 +44,12 @@ export async function getMultipleAccountsInfo(
         args,
       };
     });
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    const unsafeResponse: MultipleAccountsJsonRpcResponse[] = await connection._rpcBatchRequest(batch);
+
+    const _batch = chunkArray(batch, 10);
+
+    const unsafeResponse: MultipleAccountsJsonRpcResponse[] = await (
+      await Promise.all(_batch.map(async (i) => await (connection as any)._rpcBatchRequest(i)))
+    ).flat();
     results = unsafeResponse.map((unsafeRes: MultipleAccountsJsonRpcResponse) => {
       if (unsafeRes.error)
         logger.logWithError(`failed to get info for multiple accounts, RPC_ERROR, ${unsafeRes.error.message}`);

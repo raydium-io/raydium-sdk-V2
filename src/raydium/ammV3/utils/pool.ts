@@ -853,3 +853,47 @@ export class PoolUtils {
     return { expectedAmountIn: inputAmount, remainingAccounts: allNeededAccounts, executionPrice, feeAmount };
   }
 }
+
+export function getLiquidityFromAmounts({
+  poolInfo,
+  tickLower,
+  tickUpper,
+  amountA,
+  amountB,
+  slippage,
+  add,
+}: {
+  poolInfo: AmmV3PoolInfo;
+  tickLower: number;
+  tickUpper: number;
+  amountA: BN;
+  amountB: BN;
+  slippage: number;
+  add: boolean;
+}): ReturnTypeGetLiquidityAmountOutFromAmountIn {
+  const [_tickLower, _tickUpper, _amountA, _amountB] =
+    tickLower < tickUpper ? [tickLower, tickUpper, amountA, amountB] : [tickUpper, tickLower, amountB, amountA];
+  const sqrtPriceX64 = poolInfo.sqrtPriceX64;
+  const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(_tickLower);
+  const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(_tickUpper);
+
+  const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
+    sqrtPriceX64,
+    sqrtPriceX64A,
+    sqrtPriceX64B,
+    _amountA,
+    _amountB,
+  );
+  const amountsSlippage = LiquidityMath.getAmountsFromLiquidityWithSlippage(
+    sqrtPriceX64,
+    sqrtPriceX64A,
+    sqrtPriceX64B,
+    liquidity,
+    add,
+    !add,
+    slippage,
+  );
+  const amounts = LiquidityMath.getAmountsFromLiquidity(sqrtPriceX64, sqrtPriceX64A, sqrtPriceX64B, liquidity, !add);
+
+  return { liquidity, ...amountsSlippage, ...amounts };
+}
