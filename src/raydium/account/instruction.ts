@@ -26,9 +26,10 @@ export function initTokenAccountInstruction(params: {
   mint: PublicKey;
   tokenAccount: PublicKey;
   owner: PublicKey;
+  programId?: PublicKey;
 }): TransactionInstruction {
-  const { mint, tokenAccount, owner } = params;
-  return createInitializeAccountInstruction(tokenAccount, mint, owner);
+  const { mint, tokenAccount, owner, programId = TOKEN_PROGRAM_ID } = params;
+  return createInitializeAccountInstruction(tokenAccount, mint, owner, programId);
 }
 
 export function closeAccountInstruction(params: {
@@ -36,9 +37,10 @@ export function closeAccountInstruction(params: {
   payer: PublicKey;
   multiSigners?: Signer[];
   owner: PublicKey;
+  programId?: PublicKey;
 }): TransactionInstruction {
-  const { tokenAccount, payer, multiSigners = [], owner } = params;
-  return createCloseAccountInstruction(tokenAccount, payer, owner, multiSigners);
+  const { tokenAccount, payer, multiSigners = [], owner, programId = TOKEN_PROGRAM_ID } = params;
+  return createCloseAccountInstruction(tokenAccount, payer, owner, multiSigners, programId);
 }
 
 interface CreateWSolTokenAccount {
@@ -47,13 +49,14 @@ interface CreateWSolTokenAccount {
   owner: PublicKey;
   amount: BigNumberish;
   commitment?: Commitment;
+  programId?: PublicKey;
   skipCloseAccount?: boolean;
 }
 /**
  * WrappedNative account = wsol account
  */
 export async function createWSolAccountInstructions(params: CreateWSolTokenAccount): Promise<AddInstructionParam> {
-  const { connection, amount, commitment, payer, owner, skipCloseAccount } = params;
+  const { connection, amount, commitment, payer, owner, programId = TOKEN_PROGRAM_ID, skipCloseAccount } = params;
 
   const balanceNeeded = await connection.getMinimumBalanceForRentExemption(splAccountLayout.span, commitment);
   const lamports = parseBigNumberish(amount).add(new BN(balanceNeeded));
@@ -67,12 +70,13 @@ export async function createWSolAccountInstructions(params: CreateWSolTokenAccou
         newAccountPubkey: newAccount.publicKey,
         lamports: lamports.toNumber(),
         space: splAccountLayout.span,
-        programId: TOKEN_PROGRAM_ID,
+        programId,
       }),
       initTokenAccountInstruction({
         mint: new PublicKey(TOKEN_WSOL.mint),
         tokenAccount: newAccount.publicKey,
         owner,
+        programId,
       }),
     ],
     instructionTypes: [InstructionType.CreateAccount, InstructionType.InitAccount],
@@ -95,12 +99,21 @@ export function makeTransferInstruction({
   owner,
   amount,
   multiSigners = [],
+  tokenProgram = TOKEN_PROGRAM_ID,
 }: {
   source: PublicKey;
   destination: PublicKey;
   owner: PublicKey;
   amount: BigNumberish;
   multiSigners?: Signer[];
+  tokenProgram?: PublicKey;
 }): TransactionInstruction {
-  return createTransferInstruction(source, destination, owner, parseBigNumberish(amount).toNumber(), multiSigners);
+  return createTransferInstruction(
+    source,
+    destination,
+    owner,
+    parseBigNumberish(amount).toNumber(),
+    multiSigners,
+    tokenProgram,
+  );
 }

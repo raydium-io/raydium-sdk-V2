@@ -1069,11 +1069,12 @@ export class AmmV3 extends ModuleBase {
   public async harvestAllRewards({
     ownerInfo,
     associatedOnly = false,
+    programId,
   }: HarvestAllRewardsParams): Promise<MakeMultiTransaction> {
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
       if (associatedOnly) {
-        const ata = getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint).publicKey;
+        const ata = getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint, programId).publicKey;
         if (ata.equals(item.pubkey)) ownerMintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
       } else {
         ownerMintToAccount[item.accountInfo.mint.toString()] = item.pubkey;

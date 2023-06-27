@@ -1,3 +1,4 @@
+import { PublicKey } from "@solana/web3.js";
 import { BN_ZERO, BigNumberish, parseBigNumberish } from "../../common/bignumber";
 import { div, gte } from "../../common/fractionUtil";
 import { PublicKeyish, validateAndParsePublicKey, WSOLMint } from "../../common/pubKey";
@@ -287,7 +288,7 @@ export default class Trade extends ModuleBase {
     return tokenAccounts;
   }
 
-  public async unWrapWSol(amount: BigNumberish): Promise<MakeTransaction> {
+  public async unWrapWSol(amount: BigNumberish, tokenProgram?: PublicKey): Promise<MakeTransaction> {
     const tokenAccounts = await this.getWSolAccounts();
     const txBuilder = this.createTxBuilder();
     const ins = await createWSolAccountInstructions({
@@ -326,6 +327,7 @@ export default class Trade extends ModuleBase {
           source: tokenAccounts[i].publicKey!,
           amount: amountBN,
           owner: this.scope.ownerPubKey,
+          tokenProgram,
         });
       }
     }
@@ -333,7 +335,7 @@ export default class Trade extends ModuleBase {
     return txBuilder.build();
   }
 
-  public async wrapWSol(amount: BigNumberish): Promise<MakeTransaction> {
+  public async wrapWSol(amount: BigNumberish, tokenProgram?: PublicKey): Promise<MakeTransaction> {
     const tokenAccounts = await this.getWSolAccounts();
 
     const txBuilder = this.createTxBuilder();
@@ -356,6 +358,7 @@ export default class Trade extends ModuleBase {
             source: ins.signers![0].publicKey,
             amount,
             owner: this.scope.ownerPubKey,
+            tokenProgram,
           }),
         ],
         endInstructions: [

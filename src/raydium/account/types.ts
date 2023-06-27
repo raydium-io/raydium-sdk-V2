@@ -47,4 +47,5 @@ export interface GetOrCreateTokenAccountParams {
   associatedOnly: boolean;
   notUseTokenAccount?: boolean;
   skipCloseAccount?: boolean;
+  tokenProgram?: PublicKey;
 }

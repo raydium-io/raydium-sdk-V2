@@ -442,6 +442,7 @@ export async function makeDepositTokenInstruction({
   communityTokenMint,
   owner,
   poolId,
+  tokenProgram,
 }: {
   connection: Connection;
   programId: PublicKey;
@@ -451,6 +452,7 @@ export async function makeDepositTokenInstruction({
   communityTokenMint: PublicKey;
   owner: PublicKey;
   poolId: PublicKey;
+  tokenProgram?: PublicKey;
 }): Promise<TransactionInstruction[]> {
   const registrar = getRegistrarAddress(voteWeightAddinProgramId, realm, communityTokenMint).publicKey;
   const ownerPda = getAssociatedLedgerAccount({ programId, poolId, owner, version: 3 });
@@ -468,7 +470,7 @@ export async function makeDepositTokenInstruction({
   const votingMint = getVotingTokenMint(programId, poolId).publicKey;
   const votingMintAuthority = getVotingMintAuthority(programId, poolId).publicKey;
   const { publicKey: voter, nonce: voterBump } = getVoterAddress(voteWeightAddinProgramId, registrar, owner);
-  const voterVault = getATAAddress(voter, votingMint).publicKey;
+  const voterVault = getATAAddress(voter, votingMint, tokenProgram).publicKey;
 
   const { publicKey: voterWeightRecord, nonce: voterWeightRecordBump } = getVoterWeightRecordAddress(
     voteWeightAddinProgramId,
@@ -485,7 +487,7 @@ export async function makeDepositTokenInstruction({
 
   const instructions: TransactionInstruction[] = [];
 
-  const depositToken = getATAAddress(owner, votingMint).publicKey;
+  const depositToken = getATAAddress(owner, votingMint, tokenProgram).publicKey;
   const depositTokenAccountInfo = await connection.getAccountInfo(depositToken);
   if (depositTokenAccountInfo === null) {
     instructions.push(createAssociatedTokenAccountInstruction(owner, depositToken, owner, votingMint));
@@ -575,6 +577,7 @@ export async function makeWithdrawTokenInstruction({
   communityTokenMint,
   owner,
   poolId,
+  tokenProgram,
 }: {
   connection: Connection;
   programId: PublicKey;
@@ -585,6 +588,7 @@ export async function makeWithdrawTokenInstruction({
   communityTokenMint: PublicKey;
   owner: PublicKey;
   poolId: PublicKey;
+  tokenProgram?: PublicKey;
 }): Promise<TransactionInstruction[]> {
   const registrar = getRegistrarAddress(voteWeightAddinProgramId, realm, communityTokenMint).publicKey;
   const ownerPda = getAssociatedLedgerAccount({ programId, poolId, owner, version: 3 });
@@ -600,7 +604,7 @@ export async function makeWithdrawTokenInstruction({
   const votingMint = getVotingTokenMint(programId, poolId).publicKey;
   const votingMintAuthority = getVotingMintAuthority(programId, poolId).publicKey;
   const { publicKey: voter } = getVoterAddress(voteWeightAddinProgramId, registrar, owner);
-  const voterVault = getATAAddress(voter, votingMint).publicKey;
+  const voterVault = getATAAddress(voter, votingMint, tokenProgram).publicKey;
   const { publicKey: voterWeightRecord } = getVoterWeightRecordAddress(voteWeightAddinProgramId, registrar, owner);
 
   const tokenOwnerRecordAddress = getTokenOwnerRecordAddress(
@@ -629,7 +633,7 @@ export async function makeWithdrawTokenInstruction({
       tokenOwnerRecordAddress,
       voterWeightRecord,
       voterVault,
-      getATAAddress(owner, votingMint).publicKey,
+      getATAAddress(owner, votingMint, tokenProgram).publicKey,
       ownerPda,
       poolId,
       votingMint,

@@ -489,6 +489,7 @@ export interface HarvestAllRewardsParams {
     useSOLBalance?: boolean;
   };
   associatedOnly?: boolean;
+  programId?: PublicKey;
 }
 
 export interface ReturnTypeComputeAmountOutBaseOut {

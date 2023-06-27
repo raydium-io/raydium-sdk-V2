@@ -181,6 +181,7 @@ export interface CreatePoolV4Param {
     useSOLBalance?: boolean; // if has WSOL mint
   };
   associatedOnly: boolean;
+  tokenProgram?: PublicKey;
 }
 
 export interface CreatePoolV4Address {
@@ -207,6 +208,7 @@ export interface InitPoolParam extends CreatePoolParam {
   config?: {
     bypassAssociatedCheck?: boolean;
   };
+  tokenProgram?: PublicKey;
 }
 
 export type LiquidityInitPoolInstructionParams = {

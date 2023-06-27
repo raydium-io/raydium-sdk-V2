@@ -602,6 +602,7 @@ export default class Liquidity extends ModuleBase {
     startTime,
     ownerInfo,
     associatedOnly = false,
+    tokenProgram,
   }: CreatePoolV4Param): Promise<MakeTransaction & { extInfo: { address: CreatePoolV4Address } }> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(Token.WSOL.mint);
@@ -678,7 +679,7 @@ export default class Liquidity extends ModuleBase {
       userWallet: this.scope.ownerPubKey,
       userCoinVault: ownerTokenAccountBase,
       userPcVault: ownerTokenAccountQuote,
-      userLpVault: getATAAddress(this.scope.ownerPubKey, poolInfo.lpMint).publicKey,
+      userLpVault: getATAAddress(this.scope.ownerPubKey, poolInfo.lpMint, tokenProgram).publicKey,
 
       nonce: poolInfo.nonce,
       openTime: startTime,
@@ -714,7 +715,7 @@ export default class Liquidity extends ModuleBase {
 
   public async initPool(params: InitPoolParam): Promise<MakeTransaction> {
     if (params.version !== 4) this.logAndCreateError("invalid version", "poolKeys.version", params.version);
-    const { baseAmount, quoteAmount, startTime = 0, config } = params;
+    const { baseAmount, quoteAmount, startTime = 0, config, tokenProgram } = params;
     const poolKeys = await getAssociatedPoolKeys(params);
     const { baseMint, quoteMint, lpMint, baseVault, quoteVault } = poolKeys;
     const txBuilder = this.createTxBuilder();
@@ -771,12 +772,14 @@ export default class Liquidity extends ModuleBase {
           destination: baseVault,
           owner: this.scope.ownerPubKey,
           amount: baseAmount.raw,
+          tokenProgram,
         }),
         makeTransferInstruction({
           source: _quoteTokenAccount!,
           destination: quoteVault,
           owner: this.scope.ownerPubKey,
           amount: quoteAmount.raw,
+          tokenProgram,
         }),
         makeInitPoolInstruction({
           poolKeys,
@@ -1015,6 +1018,7 @@ export default class Liquidity extends ModuleBase {
     farmInfo,
     computeBudgetConfig,
     payer,
+    tokenProgram,
   }: {
     poolId: PublicKeyish;
     removeLpAmount: BN;
@@ -1032,6 +1036,7 @@ export default class Liquidity extends ModuleBase {
     };
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
+    tokenProgram?: PublicKey;
   }): Promise<MakeTransaction> {
     const poolInfo = this._poolInfoMap.get(poolId.toString());
     if (!poolInfo) throw new Error("pool not found");
@@ -1054,7 +1059,7 @@ export default class Liquidity extends ModuleBase {
     for (const item of this.scope.account.tokenAccountRawInfos) {
       if (
         mintToAccount[item.accountInfo.mint.toString()] === undefined ||
-        getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint).publicKey.equals(item.pubkey)
+        getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint, tokenProgram).publicKey.equals(item.pubkey)
       ) {
         mintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
       }

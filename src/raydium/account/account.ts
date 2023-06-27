@@ -60,9 +60,8 @@ export default class Account extends ModuleBase {
     return this;
   }
 
-  public getAssociatedTokenAccount(mint: PublicKey): PublicKey {
-    this.scope.checkOwner();
-    return getATAAddress(this.scope.ownerPubKey, mint).publicKey;
+  public getAssociatedTokenAccount(mint: PublicKey, programId?: PublicKey): PublicKey {
+    return getATAAddress(this.scope.ownerPubKey, mint, programId).publicKey;
   }
 
   public async fetchWalletTokenAccounts(config?: { forceUpdate?: boolean; commitment?: Commitment }): Promise<{
@@ -137,7 +136,15 @@ export default class Account extends ModuleBase {
     instructionParams?: AddInstructionParam;
   }> {
     await this.fetchWalletTokenAccounts();
-    const { mint, createInfo, associatedOnly, owner, notUseTokenAccount = false, skipCloseAccount = false } = params;
+    const {
+      mint,
+      createInfo,
+      associatedOnly,
+      owner,
+      notUseTokenAccount = false,
+      skipCloseAccount = false,
+      tokenProgram,
+    } = params;
     const ata = this.getAssociatedTokenAccount(mint);
     const accounts = (notUseTokenAccount ? [] : this.tokenAccountRawInfos)
       .filter((i) => i.accountInfo.mint.equals(mint) && (!associatedOnly || i.pubkey.equals(ata)))
@@ -179,6 +186,7 @@ export default class Account extends ModuleBase {
               destination: ata,
               owner: this.scope.ownerPubKey,
               amount: createInfo.amount,
+              tokenProgram,
             }),
           );
           newTxInstructions.instructionTypes!.push(InstructionType.TransferAmount);
