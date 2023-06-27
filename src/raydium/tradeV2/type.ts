@@ -20,6 +20,11 @@ export interface ComputeAmountOutAmmLayout {
   middleMint: PublicKey | undefined;
   poolReady: boolean;
   poolType: string | undefined;
+
+  feeConfig?: {
+    feeAmount: BN;
+    feeAccount: PublicKey;
+  };
 }
 export interface ComputeAmountOutRouteLayout {
   amountIn: TokenAmount;
@@ -35,6 +40,11 @@ export interface ComputeAmountOutRouteLayout {
   middleMint: PublicKey | undefined;
   poolReady: boolean;
   poolType: (string | undefined)[];
+
+  feeConfig?: {
+    feeAmount: BN;
+    feeAccount: PublicKey;
+  };
 }
 
 export type ComputeAmountOutLayout = ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;

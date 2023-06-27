@@ -291,7 +291,7 @@ export class AmmV3 extends ModuleBase {
     );
   }
 
-  public async fetchPoolAccountPosition(): Promise<HydratedConcentratedInfo[]> {
+  public async fetchPoolAccountPosition(updateOwnerRewardAndFee?: boolean): Promise<HydratedConcentratedInfo[]> {
     this._ammV3SdkParsedPools = this._ammV3SdkParsedPools.map((pool) => {
       delete pool.positionAccount;
       this._ammV3SdkParsedPoolMap.set(pool.state.id.toBase58(), pool);
@@ -306,6 +306,7 @@ export class AmmV3 extends ModuleBase {
       pools: this._ammV3SdkParsedPools,
       connection: this.scope.connection,
       ownerInfo: { tokenAccounts: this.scope.account.tokenAccountRawInfos, wallet: this.scope.ownerPubKey },
+      updateOwnerRewardAndFee,
     });
     this._ammV3SdkParsedPoolMap = new Map(this._ammV3SdkParsedPools.map((pool) => [pool.state.id.toBase58(), pool]));
     this.hydratePoolsInfo();
@@ -381,6 +382,7 @@ export class AmmV3 extends ModuleBase {
     liquidity,
     slippage,
     associatedOnly = true,
+    checkCreateATAOwner = false,
   }: OpenPosition): Promise<MakeTransaction> {
     this.scope.checkOwner();
     const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
@@ -415,6 +417,7 @@ export class AmmV3 extends ModuleBase {
 
         notUseTokenAccount: mintAUseSOLBalance,
         associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     if (_ownerTokenAccountA) ownerTokenAccountA = _ownerTokenAccountA;
     txBuilder.addInstruction(_tokenAccountAInstruction || {});
@@ -427,11 +430,12 @@ export class AmmV3 extends ModuleBase {
         createInfo: mintBUseSOLBalance
           ? {
               payer: this.scope.ownerPubKey!,
-              amount: amountSlippageA,
+              amount: amountSlippageB,
             }
           : undefined,
         notUseTokenAccount: mintBUseSOLBalance,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     if (_ownerTokenAccountB) ownerTokenAccountB = _ownerTokenAccountB;
     txBuilder.addInstruction(_tokenAccountBInstruction || {});
@@ -460,7 +464,15 @@ export class AmmV3 extends ModuleBase {
   }
 
   public async increaseLiquidity(props: IncreaseLiquidity): Promise<MakeTransaction> {
-    const { poolId, ownerPosition, liquidity, slippage, ownerInfo } = props;
+    const {
+      poolId,
+      ownerPosition,
+      liquidity,
+      slippage,
+      ownerInfo,
+      associatedOnly = true,
+      checkCreateATAOwner = false,
+    } = props;
     const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
 
@@ -478,17 +490,45 @@ export class AmmV3 extends ModuleBase {
     let ownerTokenAccountA: PublicKey | undefined = undefined;
     let ownerTokenAccountB: PublicKey | undefined = undefined;
 
-    const { tokenAccount: _ownerTokenAccountA, ...accountAInstructions } = await this.scope.account.processTokenAccount(
-      { mint: poolInfo.mintA.mint, amount: amountSlippageA, useSOLBalance: ownerInfo.useSOLBalance },
-    );
-    ownerTokenAccountA = _ownerTokenAccountA;
-    txBuilder.addInstruction(accountAInstructions);
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.mint.equals(WSOLMint);
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.mint.equals(WSOLMint);
 
-    const { tokenAccount: _ownerTokenAccountB, ...accountBInstructions } = await this.scope.account.processTokenAccount(
-      { mint: poolInfo.mintB.mint, amount: amountSlippageB, useSOLBalance: ownerInfo.useSOLBalance },
-    );
-    ownerTokenAccountB = _ownerTokenAccountB;
-    txBuilder.addInstruction(accountBInstructions);
+    const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: poolInfo.mintA.mint,
+        owner: this.scope.ownerPubKey,
+
+        createInfo: mintAUseSOLBalance
+          ? {
+              payer: this.scope.ownerPubKey,
+              amount: amountSlippageA,
+            }
+          : undefined,
+
+        notUseTokenAccount: mintAUseSOLBalance,
+        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    if (_ownerTokenAccountA) ownerTokenAccountA = _ownerTokenAccountA;
+    txBuilder.addInstruction(_tokenAccountAInstruction || {});
+
+    const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: poolInfo.mintB.mint,
+        owner: this.scope.ownerPubKey,
+
+        createInfo: mintBUseSOLBalance
+          ? {
+              payer: this.scope.ownerPubKey!,
+              amount: amountSlippageB,
+            }
+          : undefined,
+        notUseTokenAccount: mintBUseSOLBalance,
+        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    if (_ownerTokenAccountB) ownerTokenAccountB = _ownerTokenAccountB;
+    txBuilder.addInstruction(_tokenAccountBInstruction || {});
 
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
@@ -521,6 +561,7 @@ export class AmmV3 extends ModuleBase {
       liquidity,
       slippage,
       associatedOnly = true,
+      checkCreateATAOwner = false,
     } = props;
     const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
@@ -564,6 +605,7 @@ export class AmmV3 extends ModuleBase {
         },
         skipCloseAccount: true,
         associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     ownerTokenAccountA = _ownerTokenAccountA;
     accountAInstructions && txBuilder.addInstruction(accountAInstructions);
@@ -579,6 +621,7 @@ export class AmmV3 extends ModuleBase {
         },
         skipCloseAccount: true,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     ownerTokenAccountB = _ownerTokenAccountB;
     accountBInstructions && txBuilder.addInstruction(accountBInstructions);
@@ -597,6 +640,7 @@ export class AmmV3 extends ModuleBase {
           },
           skipCloseAccount: !rewardUseSOLBalance,
           associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
         });
       ownerRewardAccountInstructions && txBuilder.addInstruction(ownerRewardAccountInstructions);
       _ownerRewardAccount && rewardAccounts.push(_ownerRewardAccount);
@@ -668,6 +712,8 @@ export class AmmV3 extends ModuleBase {
     amountOutMin,
     priceLimit,
     remainingAccounts,
+    associatedOnly = true,
+    checkCreateATAOwner = false,
   }: SwapInParams): Promise<MakeTransaction> {
     this.scope.checkOwner();
     const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
@@ -690,20 +736,49 @@ export class AmmV3 extends ModuleBase {
     const txBuilder = this.createTxBuilder();
     const isInputMintA = poolInfo.mintA.mint.equals(inputMint);
 
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.mint.equals(WSOLMint);
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.mint.equals(WSOLMint);
+
     let ownerTokenAccountA: PublicKey | undefined = undefined;
     let ownerTokenAccountB: PublicKey | undefined = undefined;
 
-    const { tokenAccount: _ownerTokenAccountA, ...accountAInstructions } = await this.scope.account.processTokenAccount(
-      { mint: poolInfo.mintA.mint, amount: isInputMintA ? amountIn : 0, useSOLBalance: ownerInfo.useSOLBalance },
-    );
+    const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: poolInfo.mintA.mint,
+        notUseTokenAccount: mintAUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo:
+          mintAUseSOLBalance || !isInputMintA
+            ? {
+                payer: this.scope.ownerPubKey,
+                amount: isInputMintA ? amountIn : 0,
+              }
+            : undefined,
+        skipCloseAccount: !(mintAUseSOLBalance || !isInputMintA),
+        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
     ownerTokenAccountA = _ownerTokenAccountA;
-    txBuilder.addInstruction(accountAInstructions);
+    accountAInstructions && txBuilder.addInstruction(accountAInstructions);
 
-    const { tokenAccount: _ownerTokenAccountB, ...accountBInstructions } = await this.scope.account.processTokenAccount(
-      { mint: poolInfo.mintB.mint, amount: !isInputMintA ? amountIn : 0, useSOLBalance: ownerInfo.useSOLBalance },
-    );
+    const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: poolInfo.mintB.mint,
+        notUseTokenAccount: mintBUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo:
+          mintBUseSOLBalance || isInputMintA
+            ? {
+                payer: this.scope.ownerPubKey,
+                amount: isInputMintA ? 0 : amountIn,
+              }
+            : undefined,
+        skipCloseAccount: !(mintBUseSOLBalance || isInputMintA),
+        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
     ownerTokenAccountB = _ownerTokenAccountB;
-    txBuilder.addInstruction(accountBInstructions);
+    accountBInstructions && txBuilder.addInstruction(accountBInstructions);
 
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError(
@@ -738,6 +813,7 @@ export class AmmV3 extends ModuleBase {
     ownerInfo,
     rewardInfo,
     associatedOnly = true,
+    checkCreateATAOwner = false,
   }: InitRewardParams): Promise<MakeTransaction> {
     const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
@@ -770,6 +846,7 @@ export class AmmV3 extends ModuleBase {
             }
           : undefined,
         associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     ownerRewardAccountIns && txBuilder.addInstruction(ownerRewardAccountIns);
 
@@ -799,6 +876,7 @@ export class AmmV3 extends ModuleBase {
     ownerInfo,
     rewardInfos,
     associatedOnly = true,
+    checkCreateATAOwner = false,
   }: InitRewardsParams): Promise<MakeTransaction> {
     const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
@@ -834,6 +912,7 @@ export class AmmV3 extends ModuleBase {
               }
             : undefined,
           associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
         });
       ownerRewardAccountIns && txBuilder.addInstruction(ownerRewardAccountIns);
 
@@ -864,6 +943,7 @@ export class AmmV3 extends ModuleBase {
     ownerInfo,
     rewardInfo,
     associatedOnly = true,
+    checkCreateATAOwner = false,
   }: SetRewardParams): Promise<MakeTransaction> {
     const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
@@ -895,6 +975,7 @@ export class AmmV3 extends ModuleBase {
           : undefined,
 
         associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
     if (!ownerRewardAccount)
@@ -924,6 +1005,7 @@ export class AmmV3 extends ModuleBase {
     ownerInfo,
     rewardInfos,
     associatedOnly = true,
+    checkCreateATAOwner = false,
   }: SetRewardsParams): Promise<MakeTransaction> {
     const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
@@ -957,6 +1039,7 @@ export class AmmV3 extends ModuleBase {
               }
             : undefined,
           associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
         });
       ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
       if (!ownerRewardAccount)
@@ -986,6 +1069,7 @@ export class AmmV3 extends ModuleBase {
     ownerInfo,
     rewardMint,
     associatedOnly = true,
+    checkCreateATAOwner = false,
   }: CollectRewardParams): Promise<MakeTransaction> {
     const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
@@ -1003,6 +1087,7 @@ export class AmmV3 extends ModuleBase {
           amount: 0,
         },
         associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
 
@@ -1027,6 +1112,7 @@ export class AmmV3 extends ModuleBase {
     ownerInfo,
     rewardMints,
     associatedOnly = true,
+    checkCreateATAOwner = false,
   }: CollectRewardsParams): Promise<MakeTransaction> {
     const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
@@ -1046,6 +1132,7 @@ export class AmmV3 extends ModuleBase {
             amount: 0,
           },
           associatedOnly: rewardMintUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
         });
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
@@ -1068,7 +1155,8 @@ export class AmmV3 extends ModuleBase {
 
   public async harvestAllRewards({
     ownerInfo,
-    associatedOnly = false,
+    associatedOnly = true,
+    checkCreateATAOwner = false,
     programId,
   }: HarvestAllRewardsParams): Promise<MakeMultiTransaction> {
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
@@ -1110,6 +1198,7 @@ export class AmmV3 extends ModuleBase {
             amount: 0,
           },
           associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
         });
         ownerTokenAccountA = account!;
         instructionParams && txBuilder.addInstruction(instructionParams);
@@ -1127,6 +1216,7 @@ export class AmmV3 extends ModuleBase {
             amount: 0,
           },
           associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
         });
         ownerTokenAccountB = account!;
         instructionParams && txBuilder.addInstruction(instructionParams);
@@ -1271,6 +1361,8 @@ export class AmmV3 extends ModuleBase {
     priceLimit,
 
     remainingAccounts,
+    associatedOnly = true,
+    checkCreateATAOwner = false,
   }: {
     poolId: string;
     ownerInfo: {
@@ -1284,7 +1376,8 @@ export class AmmV3 extends ModuleBase {
     amountOut: BN;
     amountInMax: BN;
     priceLimit?: Decimal;
-
+    associatedOnly?: boolean;
+    checkCreateATAOwner?: boolean;
     remainingAccounts: PublicKey[];
   }): Promise<MakeTransaction> {
     const poolInfo = this._ammV3SdkParsedPoolMap.get(poolId)?.state;
@@ -1308,43 +1401,49 @@ export class AmmV3 extends ModuleBase {
     }
 
     const isInputMintA = poolInfo.mintA.mint.equals(outputMint);
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.mint.equals(WSOLMint);
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.mint.equals(WSOLMint);
 
-    let ownerTokenAccountA: PublicKey | null;
-    let ownerTokenAccountB: PublicKey | null;
-    if (poolInfo.mintA.mint.equals(new PublicKey(TOKEN_WSOL.mint)) && ownerInfo.useSOLBalance) {
-      // mintA
-      const { tokenAccount, ...minAInstructions } = await this.scope.account.handleTokenAccount({
-        side: "in",
-        amount: isInputMintA ? amountInMax : 0,
-        mint: poolInfo.mintA.mint,
-        bypassAssociatedCheck: true,
-      });
-      ownerTokenAccountA = tokenAccount!;
-      txBuilder.addInstruction(minAInstructions);
-    } else {
-      ownerTokenAccountA = (await this.scope.account.getCreatedTokenAccount({
-        mint: poolInfo.mintA.mint,
-        associatedOnly: false,
-      }))!;
-    }
+    let ownerTokenAccountA: PublicKey | undefined = undefined;
+    let ownerTokenAccountB: PublicKey | undefined = undefined;
 
-    if (poolInfo.mintB.mint.equals(new PublicKey(TOKEN_WSOL.mint)) && ownerInfo.useSOLBalance) {
-      // mintB
-      const { tokenAccount, ...minBInstructions } = await this.scope.account.handleTokenAccount({
-        side: "in",
-        amount: !isInputMintA ? amountInMax : 0,
-        mint: poolInfo.mintB.mint,
-        payer,
-        bypassAssociatedCheck: true,
+    const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: poolInfo.mintA.mint,
+        notUseTokenAccount: mintAUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo:
+          mintAUseSOLBalance || !isInputMintA
+            ? {
+                payer,
+                amount: isInputMintA ? amountInMax : 0,
+              }
+            : undefined,
+        skipCloseAccount: !(mintAUseSOLBalance || !isInputMintA),
+        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
-      ownerTokenAccountB = tokenAccount!;
-      txBuilder.addInstruction(minBInstructions);
-    } else {
-      ownerTokenAccountB = (await this.scope.account.getCreatedTokenAccount({
+    ownerTokenAccountA = _ownerTokenAccountA;
+    accountAInstructions && txBuilder.addInstruction(accountAInstructions);
+
+    const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
+      await this.scope.account.getOrCreateTokenAccount({
         mint: poolInfo.mintB.mint,
-        associatedOnly: false,
-      }))!;
-    }
+        notUseTokenAccount: mintBUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo:
+          mintBUseSOLBalance || isInputMintA
+            ? {
+                payer,
+                amount: isInputMintA ? 0 : amountInMax,
+              }
+            : undefined,
+        skipCloseAccount: !(mintBUseSOLBalance || isInputMintA),
+        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    ownerTokenAccountB = _ownerTokenAccountB;
+    accountBInstructions && txBuilder.addInstruction(accountBInstructions);
 
     if (!ownerTokenAccountA && !ownerTokenAccountB) {
       this.logAndCreateError(

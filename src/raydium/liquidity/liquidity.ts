@@ -21,13 +21,11 @@ import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { makeTransferInstruction } from "../account/instruction";
 import { getATAAddress } from "../../common/pda";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { SwapExtInfo } from "../trade/type";
-import { LoadParams, MakeMultiTransaction, MakeTransaction, ComputeBudgetConfig } from "../type";
+import { LoadParams, MakeTransaction, ComputeBudgetConfig } from "../type";
 
 import { LIQUIDITY_FEES_DENOMINATOR, LIQUIDITY_FEES_NUMERATOR } from "./constant";
 import {
   makeAddLiquidityInstruction,
-  makeAMMSwapInstruction,
   makeCreatePoolInstruction,
   makeInitPoolInstruction,
   makeRemoveLiquidityInstruction,
@@ -527,71 +525,6 @@ export default class Liquidity extends ModuleBase {
     };
   }
 
-  public async swapWithAMM(params: LiquiditySwapTransactionParams): Promise<MakeMultiTransaction & SwapExtInfo> {
-    const { poolKeys, payer, amountIn, amountOut, fixedSide, config } = params;
-    this.logDebug("amountIn:", amountIn);
-    this.logDebug("amountOut:", amountOut);
-    if (amountIn.isZero() || amountOut.isZero())
-      this.logAndCreateError("amounts must greater than zero", "amounts", {
-        amountIn: amountIn.toFixed(),
-        amountOut: amountOut.toFixed(),
-      });
-    const { account } = this.scope;
-    const txBuilder = this.createTxBuilder();
-    const { bypassAssociatedCheck = false } = config || {};
-
-    const [tokenIn, tokenOut] = [amountIn.token, amountOut.token];
-    const tokenAccountIn = await account.getCreatedTokenAccount({
-      mint: tokenIn.mint,
-      associatedOnly: false,
-    });
-    const tokenAccountOut = await account.getCreatedTokenAccount({
-      mint: tokenOut.mint,
-    });
-
-    const [amountInRaw, amountOutRaw] = [amountIn.raw, amountOut.raw];
-
-    const { tokenAccount: _tokenAccountIn, ...inTxInstructions } = await account.handleTokenAccount({
-      side: "in",
-      amount: amountInRaw,
-      mint: tokenIn.mint,
-      tokenAccount: tokenAccountIn,
-      bypassAssociatedCheck,
-    });
-    txBuilder.addInstruction(inTxInstructions);
-
-    const { tokenAccount: _tokenAccountOut, ...outTxInstructions } = await account.handleTokenAccount({
-      side: "out",
-      amount: 0,
-      mint: tokenOut.mint,
-      tokenAccount: tokenAccountOut,
-      payer,
-      bypassAssociatedCheck,
-    });
-    txBuilder.addInstruction(outTxInstructions);
-    const instructionTypes =
-      fixedSide === "in"
-        ? [poolKeys.version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV5SwapBaseIn]
-        : [poolKeys.version === 4 ? InstructionType.AmmV4SwapBaseOut : InstructionType.AmmV5SwapBaseOut];
-    txBuilder.addInstruction({
-      instructions: [
-        makeAMMSwapInstruction({
-          poolKeys,
-          userKeys: {
-            tokenAccountIn: _tokenAccountIn!,
-            tokenAccountOut: _tokenAccountOut!,
-            owner: this.scope.ownerPubKey,
-          },
-          amountIn: amountInRaw,
-          amountOut: amountOutRaw,
-          fixedSide,
-        }),
-      ],
-      instructionTypes,
-    });
-    return txBuilder.buildMultiTx({ extInfo: { amountOut } }) as MakeMultiTransaction & SwapExtInfo;
-  }
-
   public async createPoolV4({
     programId,
     marketInfo,
@@ -602,6 +535,7 @@ export default class Liquidity extends ModuleBase {
     startTime,
     ownerInfo,
     associatedOnly = false,
+    checkCreateATAOwner = false,
     tokenProgram,
   }: CreatePoolV4Param): Promise<MakeTransaction & { extInfo: { address: CreatePoolV4Address } }> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
@@ -622,7 +556,9 @@ export default class Liquidity extends ModuleBase {
           : undefined,
 
         notUseTokenAccount: mintAUseSOLBalance,
+        skipCloseAccount: !mintAUseSOLBalance,
         associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
 
@@ -638,7 +574,9 @@ export default class Liquidity extends ModuleBase {
           : undefined,
 
         notUseTokenAccount: mintBUseSOLBalance,
+        skipCloseAccount: !mintAUseSOLBalance,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
 
@@ -721,7 +659,12 @@ export default class Liquidity extends ModuleBase {
     const txBuilder = this.createTxBuilder();
     const { account } = this.scope;
 
-    const bypassAssociatedCheck = !!config?.bypassAssociatedCheck;
+    const { bypassAssociatedCheck, checkCreateATAOwner } = {
+      // default
+      ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false },
+      // custom
+      ...config,
+    };
     const baseTokenAccount = await account.getCreatedTokenAccount({
       mint: baseMint,
       associatedOnly: false,
@@ -745,6 +688,7 @@ export default class Liquidity extends ModuleBase {
       mint: baseMint,
       tokenAccount: baseTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(baseTokenAccountInstruction);
 
@@ -754,6 +698,7 @@ export default class Liquidity extends ModuleBase {
       mint: quoteMint,
       tokenAccount: quoteTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(quoteTokenAccountInstruction);
     const { tokenAccount: _lpTokenAccount, ...lpTokenAccountInstruction } = await account.handleTokenAccount({
@@ -762,6 +707,7 @@ export default class Liquidity extends ModuleBase {
       mint: lpMint,
       tokenAccount: lpTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(lpTokenAccountInstruction);
     // initPoolLayout
@@ -818,7 +764,12 @@ export default class Liquidity extends ModuleBase {
         amountInB: amountInB.toFixed(),
       });
     const { account } = this.scope;
-    const bypassAssociatedCheck = config?.bypassAssociatedCheck || false;
+    const { bypassAssociatedCheck, checkCreateATAOwner } = {
+      // default
+      ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false },
+      // custom
+      ...config,
+    };
     const [tokenA, tokenB] = [amountInA.token, amountInB.token];
 
     const tokenAccountA = await account.getCreatedTokenAccount({
@@ -865,6 +816,7 @@ export default class Liquidity extends ModuleBase {
       mint: baseToken.mint,
       tokenAccount: baseTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(baseInstruction);
     const { tokenAccount: _quoteTokenAccount, ...quoteInstruction } = await account.handleTokenAccount({
@@ -873,6 +825,7 @@ export default class Liquidity extends ModuleBase {
       mint: quoteToken.mint,
       tokenAccount: quoteTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(quoteInstruction);
     const { tokenAccount: _lpTokenAccount, ...lpInstruction } = await account.handleTokenAccount({
@@ -881,6 +834,7 @@ export default class Liquidity extends ModuleBase {
       mint: poolKeys.lpMint,
       tokenAccount: lpTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(lpInstruction);
     txBuilder.addInstruction({
@@ -935,7 +889,12 @@ export default class Liquidity extends ModuleBase {
     });
 
     const txBuilder = this.createTxBuilder();
-    const bypassAssociatedCheck = config?.bypassAssociatedCheck || false;
+    const { bypassAssociatedCheck, checkCreateATAOwner } = {
+      // default
+      ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false },
+      // custom
+      ...config,
+    };
 
     const { tokenAccount: _baseTokenAccount, ...baseInstruction } = await account.handleTokenAccount({
       side: "out",
@@ -943,6 +902,7 @@ export default class Liquidity extends ModuleBase {
       mint: baseMint,
       tokenAccount: baseTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(baseInstruction);
     const { tokenAccount: _quoteTokenAccount, ...quoteInstruction } = await account.handleTokenAccount({
@@ -951,6 +911,7 @@ export default class Liquidity extends ModuleBase {
       mint: quoteMint,
       tokenAccount: quoteTokenAccount,
       bypassAssociatedCheck,
+      checkCreateATAOwner,
     });
     txBuilder.addInstruction(quoteInstruction);
 

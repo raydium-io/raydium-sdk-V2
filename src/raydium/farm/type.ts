@@ -106,6 +106,10 @@ export interface UpdateFarmReward {
 export interface FarmDWParam {
   farmId: PublicKey;
   amount: BigNumberish;
+  feePayer?: PublicKey;
+  useSOLBalance?: boolean;
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 /* ================= pool keys ================= */
 export type FarmPoolKeys = {

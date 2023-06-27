@@ -7,7 +7,7 @@ export interface ApiTokenInfo {
   mint: string;
   decimals: number;
   icon: string;
-  extensions: { [key in "coingeckoId" | "website" | "whitepaper"]?: string };
+  extensions: { coingeckoId?: string; version?: "TOKEN2022" };
 }
 
 export type ApiTokenCategory = "official" | "unOfficial" | "unNamed" | "blacklist";
@@ -15,7 +15,7 @@ export type ApiTokenCategory = "official" | "unOfficial" | "unNamed" | "blacklis
 export type ApiTokens = {
   official: ApiTokenInfo[];
   unOfficial: ApiTokenInfo[];
-  unNamed: string[];
+  unNamed: { mint: string; decimals: number; hasFreeze: 0 | 1; extensions: { version?: "TOKEN2022" } }[];
   blacklist: string[];
 };
 

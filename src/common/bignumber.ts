@@ -72,7 +72,7 @@ export function tenExponential(shift: BigNumberish): BN {
 /**
  *
  * @example
- * getIntInfo(0.34) //=> { numerator: '34', denominator: '100'}
+ * getIntInfo(0.34) => { numerator: '34', denominator: '100'}
  * getIntInfo('0.34') //=> { numerator: '34', denominator: '100'}
  */
 export function parseNumberInfo(n: Numberish | undefined): {

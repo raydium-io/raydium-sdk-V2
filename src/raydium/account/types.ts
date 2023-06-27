@@ -34,6 +34,7 @@ export interface HandleTokenAccountParams {
   payer?: PublicKey;
   bypassAssociatedCheck: boolean;
   skipCloseAccount?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface GetOrCreateTokenAccountParams {
@@ -48,4 +49,5 @@ export interface GetOrCreateTokenAccountParams {
   notUseTokenAccount?: boolean;
   skipCloseAccount?: boolean;
   tokenProgram?: PublicKey;
+  checkCreateATAOwner?: boolean;
 }

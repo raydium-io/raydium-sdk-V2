@@ -336,7 +336,7 @@ export function addComputeBudget(config: ComputeBudgetConfig): {
   }
   if (config.units) {
     ins.push(ComputeBudgetProgram.setComputeUnitLimit({ units: config.units }));
-    insTypes.push(InstructionType.SetComputeUnitPrice);
+    insTypes.push(InstructionType.SetComputeUnitLimit);
   }
 
   return {

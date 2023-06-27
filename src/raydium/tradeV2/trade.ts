@@ -1,7 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
+import { createTransferInstruction } from "@solana/spl-token";
 import BN from "bn.js";
 
-import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils, ApiAmmV3ConfigInfo } from "../ammV3";
+import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
 import {
   forecastTransactionSize,
   jsonInfo2PoolKeys,
@@ -13,10 +14,10 @@ import {
   BN_ZERO,
   SOLMint,
   PublicKeyish,
+  WSOLMint,
 } from "../../common";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { StableLayout, makeSimulatePoolInfoInstruction, LiquidityPoolJsonInfo, LiquidityPoolKeys } from "../liquidity";
-import { getAssociatedMiddleStatusAccount } from "../route/util";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
   ComputeAmountOutLayout,
@@ -28,7 +29,15 @@ import {
   RoutePathType,
 } from "./type";
 import { makeSwapInstruction } from "./instrument";
-import { MakeMultiTransaction } from "../type";
+import { MakeMultiTransaction, MakeTransaction } from "../type";
+import { InstructionType } from "../../common/txType";
+import { BigNumberish, parseBigNumberish } from "../../common/bignumber";
+import {
+  createWSolAccountInstructions,
+  closeAccountInstruction,
+  makeTransferInstruction,
+} from "../account/instruction";
+import { TokenAccount } from "../account/types";
 
 export default class TradeV2 extends ModuleBase {
   private _stableLayout: StableLayout;
@@ -317,6 +326,7 @@ export default class TradeV2 extends ModuleBase {
     tickCache,
     slippage,
     chainTime,
+    feeConfig,
   }: {
     directPath: PoolType[];
     routePathDict: RoutePathType;
@@ -326,11 +336,27 @@ export default class TradeV2 extends ModuleBase {
     outputToken: Token;
     slippage: Percent;
     chainTime: number;
+    feeConfig?: {
+      feeBps: BN;
+      feeAccount: PublicKey;
+    };
   }): Promise<{
     routes: ComputeAmountOutLayout[];
     best?: ComputeAmountOutLayout;
   }> {
-    const amountIn = this.scope.solToWsolTokenAmount(inputTokenAmount);
+    const _amountIn =
+      feeConfig === undefined
+        ? BN_ZERO
+        : inputTokenAmount.raw.mul(new BN(10000 - feeConfig.feeBps.toNumber())).div(new BN(10000));
+    const amountIn = feeConfig === undefined ? inputTokenAmount : new TokenAmount(inputTokenAmount.token, _amountIn);
+    const _inFeeConfig =
+      feeConfig === undefined
+        ? undefined
+        : {
+            feeAmount: _amountIn,
+            feeAccount: feeConfig.feeAccount,
+          };
+
     const outputToken = this.scope.mintToToken(solToWSol(orgOut.mint));
     const outRoute: ComputeAmountOutLayout[] = [];
 
@@ -359,6 +385,7 @@ export default class TradeV2 extends ModuleBase {
             middleMint: undefined,
             poolReady: (itemPool as AmmV3PoolInfo).startTime < chainTime,
             poolType: "CLMM",
+            feeConfig: _inFeeConfig,
           });
         } catch (e) {
           //
@@ -388,6 +415,7 @@ export default class TradeV2 extends ModuleBase {
             middleMint: undefined,
             poolReady: simulateCache[itemPool.id as string].startTime.toNumber() < chainTime,
             poolType: itemPool.version === 5 ? "STABLE" : undefined,
+            feeConfig: _inFeeConfig,
           });
         } catch (e) {
           //
@@ -445,6 +473,7 @@ export default class TradeV2 extends ModuleBase {
               middleMint: new PublicKey(routeMint),
               poolReady: infoAPoolOpen && infoBPoolOpen,
               poolType: [poolTypeA, poolTypeB],
+              feeConfig: _inFeeConfig,
             });
           } catch (e) {
             //
@@ -599,13 +628,112 @@ export default class TradeV2 extends ModuleBase {
     };
   }
 
+  private async getWSolAccounts(): Promise<TokenAccount[]> {
+    this.scope.checkOwner();
+    await this.scope.account.fetchWalletTokenAccounts();
+    const tokenAccounts = this.scope.account.tokenAccounts.filter((acc) => acc.mint.equals(WSOLMint));
+    tokenAccounts.sort((a, b) => {
+      if (a.isAssociated) return 1;
+      if (b.isAssociated) return -1;
+      return a.amount.lt(b.amount) ? -1 : 1;
+    });
+    return tokenAccounts;
+  }
+
+  public async unWrapWSol(amount: BigNumberish, tokenProgram?: PublicKey): Promise<MakeTransaction> {
+    const tokenAccounts = await this.getWSolAccounts();
+    const txBuilder = this.createTxBuilder();
+    const ins = await createWSolAccountInstructions({
+      connection: this.scope.connection,
+      owner: this.scope.ownerPubKey,
+      payer: this.scope.ownerPubKey,
+      amount: 0,
+    });
+    txBuilder.addInstruction(ins);
+
+    const amountBN = parseBigNumberish(amount);
+    for (let i = 0; i < tokenAccounts.length; i++) {
+      if (amountBN.gte(tokenAccounts[i].amount)) {
+        txBuilder.addInstruction({
+          instructions: [
+            closeAccountInstruction({
+              tokenAccount: tokenAccounts[i].publicKey!,
+              payer: this.scope.ownerPubKey,
+              owner: this.scope.ownerPubKey,
+            }),
+          ],
+        });
+        amountBN.sub(tokenAccounts[i].amount);
+      } else {
+        txBuilder.addInstruction({
+          instructions: [
+            closeAccountInstruction({
+              tokenAccount: tokenAccounts[i].publicKey!,
+              payer: this.scope.ownerPubKey,
+              owner: this.scope.ownerPubKey,
+            }),
+          ],
+        });
+        makeTransferInstruction({
+          destination: ins.signers![0].publicKey,
+          source: tokenAccounts[i].publicKey!,
+          amount: amountBN,
+          owner: this.scope.ownerPubKey,
+          tokenProgram,
+        });
+      }
+    }
+
+    return txBuilder.build();
+  }
+
+  public async wrapWSol(amount: BigNumberish, tokenProgram?: PublicKey): Promise<MakeTransaction> {
+    const tokenAccounts = await this.getWSolAccounts();
+
+    const txBuilder = this.createTxBuilder();
+    const ins = await createWSolAccountInstructions({
+      connection: this.scope.connection,
+      owner: this.scope.ownerPubKey,
+      payer: this.scope.ownerPubKey,
+      amount,
+      skipCloseAccount: true,
+    });
+    txBuilder.addInstruction(ins);
+
+    if (tokenAccounts.length) {
+      // already have wsol account
+      txBuilder.addInstruction({
+        instructions: [
+          makeTransferInstruction({
+            // destination: ins.signers![0].publicKey,
+            destination: tokenAccounts[0].publicKey!,
+            source: ins.signers![0].publicKey,
+            amount,
+            owner: this.scope.ownerPubKey,
+            tokenProgram,
+          }),
+        ],
+        endInstructions: [
+          closeAccountInstruction({
+            tokenAccount: ins.signers![0].publicKey,
+            payer: this.scope.ownerPubKey,
+            owner: this.scope.ownerPubKey,
+          }),
+        ],
+      });
+    }
+    return txBuilder.build();
+  }
+
   public async swap({
     swapInfo: orgSwapInfo,
     associatedOnly,
+    checkCreateATAOwner,
     checkTransaction,
   }: {
     swapInfo: ComputeAmountOutLayout;
     associatedOnly: boolean;
+    checkCreateATAOwner: boolean;
     checkTransaction: boolean;
   }): Promise<MakeMultiTransaction> {
     const swapInfo = {
@@ -636,7 +764,9 @@ export default class TradeV2 extends ModuleBase {
             }
           : undefined,
         owner: this.scope.ownerPubKey,
+        skipCloseAccount: !useSolBalance,
         associatedOnly: useSolBalance ? false : associatedOnly,
+        checkCreateATAOwner,
       });
     sourceInstructionParams && txBuilder.addInstruction(sourceInstructionParams);
     if (sourceToken === undefined) throw Error("input account check error");
@@ -651,6 +781,7 @@ export default class TradeV2 extends ModuleBase {
         },
         owner: this.scope.ownerPubKey,
         associatedOnly,
+        checkCreateATAOwner,
       });
     destinationInstructionParams && txBuilder.addInstruction(destinationInstructionParams);
 
@@ -678,26 +809,38 @@ export default class TradeV2 extends ModuleBase {
         sourceToken,
         routeToken,
         destinationToken: destinationToken!,
-        userPdaAccount:
-          swapInfo.poolKey.length === 2
-            ? await getAssociatedMiddleStatusAccount({
-                programId: routeProgram,
-                fromPoolId: new PublicKey(String(swapInfo.poolKey[0].id)),
-                owner: this.scope.ownerPubKey,
-                middleMint: swapInfo.middleMint!,
-              })
-            : undefined,
       },
     });
 
+    const transferIns =
+      swapInfo.feeConfig !== undefined
+        ? [
+            createTransferInstruction(
+              sourceToken,
+              swapInfo.feeConfig.feeAccount,
+              this.scope.ownerPubKey,
+              swapInfo.feeConfig.feeAmount.toNumber(),
+            ),
+          ]
+        : [];
+    const transferInsType = swapInfo.feeConfig !== undefined ? [InstructionType.TransferAmount] : [];
+
+    await txBuilder.calComputeBudget();
+
     const allTxBuilder: TxBuilder[] = [];
-    const tempIns = [...txBuilder.AllTxData.instructions, ...ins.instructions, ...txBuilder.AllTxData.endInstructions];
-    const tempSigner = [...txBuilder.AllTxData.signers, ...ins.signers];
+    const tempIns = [
+      ...txBuilder.AllTxData.instructions,
+      ...transferIns,
+      ...ins.instructions,
+      ...txBuilder.AllTxData.endInstructions,
+    ];
     const tempInsType = [
       ...txBuilder.AllTxData.instructionTypes,
+      ...transferInsType,
       ...ins.instructionTypes,
       ...txBuilder.AllTxData.endInstructionTypes,
     ];
+    const tempSigner = [...txBuilder.AllTxData.signers, ...ins.signers];
     if (checkTransaction) {
       if (forecastTransactionSize(tempIns, [this.scope.ownerPubKey, ...tempSigner.map((i) => i.publicKey)])) {
         allTxBuilder.push(

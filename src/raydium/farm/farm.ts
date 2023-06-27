@@ -1,15 +1,8 @@
 import { TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction } from "@solana/spl-token";
-import {
-  AccountMeta,
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  SYSVAR_CLOCK_PUBKEY,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { accountMeta, AddInstructionParam, commonSystemAccountMeta, TxBuilder } from "../../common";
+import { accountMeta, AddInstructionParam, commonSystemAccountMeta } from "../../common";
 import { isDateAfter, isDateBefore, offsetDateTime } from "../../common/date";
 import { getMax, sub, isMeaningfulNumber } from "../../common/fractionUtil";
 import {
@@ -19,9 +12,11 @@ import {
   toBN,
   parseNumberInfo,
   parseBigNumberish,
+  BN_ZERO,
 } from "../../common/bignumber";
-import { PublicKeyish, SOLMint, validateAndParsePublicKey } from "../../common/pubKey";
+import { PublicKeyish, SOLMint, WSOLMint, validateAndParsePublicKey } from "../../common/pubKey";
 import { InstructionType } from "../../common/txType";
+import { getATAAddress } from "../../common/pda";
 
 import { Fraction } from "../../module/fraction";
 import { Token as RToken } from "../../module/token";
@@ -44,8 +39,9 @@ import {
   createAssociatedLedgerAccountInstruction,
   makeCreateFarmInstruction,
   makeCreatorWithdrawFarmRewardInstruction,
+  makeDepositWithdrawInstruction,
 } from "./instruction";
-import { dwLayout, farmAddRewardLayout, farmRewardRestartLayout, farmStateV6Layout } from "./layout";
+import { farmAddRewardLayout, farmRewardRestartLayout, farmStateV6Layout } from "./layout";
 import {
   CreateFarm,
   FarmDWParam,
@@ -436,7 +432,7 @@ export default class Farm extends ModuleBase {
       if (rewardInfo.rewardOpenTime >= rewardInfo.rewardEndTime)
         this.logAndCreateError("start time error", "rewardInfo.rewardOpenTime", rewardInfo.rewardOpenTime.toString());
       if (isNaN(poolTypeV6[rewardInfo.rewardType])) this.logAndCreateError("rewardType error", rewardInfo.rewardType);
-      if (rewardInfo.rewardPerSecond <= 0)
+      if (Number(rewardInfo.rewardPerSecond.toString()) <= 0)
         this.logAndCreateError("rewardPerSecond error", rewardInfo.rewardPerSecond.toString());
 
       rewardInfoConfig.push(farmRewardInfoToConfig(rewardInfo));
@@ -450,6 +446,7 @@ export default class Farm extends ModuleBase {
       if (!rewardPubKey) this.logAndCreateError("cannot found target token accounts", this.scope.account.tokenAccounts);
 
       const rewardMint = rewardInfo.rewardMint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : rewardInfo.rewardMint;
+      // newRewardInfo.rewardMint.equals(PublicKey.default) ? Token.WSOL.mint : newRewardInfo.rewardMint
       rewardInfoKey.push({
         rewardMint,
         rewardVault: await getAssociatedLedgerPoolAccount({
@@ -567,7 +564,7 @@ export default class Farm extends ModuleBase {
     const rewardVault = getAssociatedLedgerPoolAccount({
       programId: new PublicKey(farmInfo.programId),
       poolId: new PublicKey(farmInfo.id),
-      mint: newRewardInfo.rewardMint,
+      mint: newRewardInfo.rewardMint.equals(PublicKey.default) ? WSOLMint : newRewardInfo.rewardMint,
       type: "rewardVault",
     });
 
@@ -613,120 +610,92 @@ export default class Farm extends ModuleBase {
       .build();
   }
 
-  private async _prepareFarmAccounts(params: { mint: PublicKey; farmInfo: SdkParsedFarmInfo }): Promise<{
-    txBuilder: TxBuilder;
-    lpTokenAccount: PublicKey;
-    ledgerAddress: PublicKey;
-    rewardTokenAccountsPublicKeys: PublicKey[];
-    lowVersionKeys: AccountMeta[];
-  }> {
+  public async deposit(params: FarmDWParam): Promise<MakeTransaction> {
+    const { farmId, amount, feePayer, useSOLBalance, associatedOnly = true, checkCreateATAOwner = false } = params;
+    const farmInfo = this.getParsedFarm(farmId)!;
+    const { version, rewardInfos, lpVault, ledger } = farmInfo;
+
+    if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm version:", version);
+
     const txBuilder = this.createTxBuilder();
-    const { farmInfo } = params;
+    const ownerMintToAccount: { [mint: string]: PublicKey } = {};
+    for (const item of this.scope.account.tokenAccounts) {
+      if (associatedOnly) {
+        const ata = getATAAddress(this.scope.ownerPubKey, item.mint).publicKey;
+        if (ata.equals(item.publicKey!)) ownerMintToAccount[item.mint.toString()] = item.publicKey!;
+      } else {
+        ownerMintToAccount[item.mint.toString()] = item.publicKey!;
+      }
+    }
 
-    const { pubKey: lpTokenAccount, newInstructions } = await this.scope.account.checkOrCreateAta({
-      mint: farmInfo.lpMint,
-    });
-    txBuilder.addInstruction(newInstructions);
+    const lpMint = lpVault.mint;
+    const ownerLpTokenAccount = ownerMintToAccount[lpMint.toString()];
+    if (!ownerLpTokenAccount) this.logAndCreateError("you don't have any lp", "lp zero", ownerMintToAccount);
 
-    const rewardTokenAccountsPublicKeys = await Promise.all(
-      farmInfo.rewardInfos.map(async ({ rewardMint }) => {
-        const { pubKey, newInstructions } = await this.scope.account.checkOrCreateAta({
-          mint: rewardMint,
-          autoUnwrapWSOLToSOL: true,
+    const rewardAccounts: PublicKey[] = [];
+    for (const itemReward of rewardInfos) {
+      const rewardUseSOLBalance = useSOLBalance && itemReward.rewardMint.equals(WSOLMint);
+
+      let ownerRewardAccount = ownerMintToAccount[itemReward.rewardMint.toString()];
+
+      if (!ownerRewardAccount) {
+        const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          mint: itemReward.rewardMint,
+          notUseTokenAccount: rewardUseSOLBalance,
+          createInfo: {
+            payer: feePayer || this.scope.ownerPubKey,
+            amount: 0,
+          },
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: !rewardUseSOLBalance,
+          associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
         });
-        txBuilder.addInstruction(newInstructions);
-        return pubKey;
-      }),
-    );
+        ownerRewardAccount = _ownerRewardAccount!;
+        instructionParams && txBuilder.addInstruction(instructionParams);
+      }
 
-    const ledgerAddress = await getAssociatedLedgerAccount({
-      programId: new PublicKey(farmInfo.programId),
-      poolId: new PublicKey(farmInfo.id),
-      owner: this.scope.ownerPubKey,
-      version: farmInfo.version,
-    });
+      ownerMintToAccount[itemReward.rewardMint.toString()] = ownerRewardAccount;
+      rewardAccounts.push(ownerRewardAccount);
+    }
 
-    if (!farmInfo.ledger && farmInfo.version < 6 /* start from v6, no need init ledger any more */) {
-      const { instruction, instructionType } = await createAssociatedLedgerAccountInstruction({
+    if (farmInfo.version < 6 && !ledger) {
+      const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
         id: farmInfo.id,
         programId: farmInfo.programId,
         version: farmInfo.version,
-        ledger: ledgerAddress,
+        ledger: getAssociatedLedgerAccount({
+          programId: new PublicKey(farmInfo.programId),
+          poolId: new PublicKey(farmInfo.id),
+          owner: this.scope.ownerPubKey,
+          version: farmInfo.version,
+        }),
         owner: this.scope.ownerPubKey,
       });
       txBuilder.addInstruction({ instructions: [instruction], instructionTypes: [instructionType] });
     }
 
-    const lowVersionKeys = [
-      accountMeta({ pubkey: farmInfo.id }),
-      accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
-      accountMeta({ pubkey: ledgerAddress }),
-      accountMeta({ pubkey: this.scope.ownerPubKey, isWritable: false, isSigner: true }),
-      accountMeta({ pubkey: lpTokenAccount }),
-      accountMeta({ pubkey: new PublicKey(farmInfo.jsonInfo.lpVault) }),
-      accountMeta({ pubkey: rewardTokenAccountsPublicKeys[0] }),
-      accountMeta({ pubkey: farmInfo.rewardInfos[0].rewardVault }),
-      accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
-      accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-    ];
-
-    return { txBuilder, lpTokenAccount, rewardTokenAccountsPublicKeys, ledgerAddress, lowVersionKeys };
-  }
-
-  public async deposit(params: FarmDWParam): Promise<MakeTransaction> {
-    this.scope.checkOwner();
-    const { farmId, amount } = params;
-    const farmInfo = this.getParsedFarm(farmId)!;
-    const mint = farmInfo.lpMint;
-    const { version, rewardInfos } = farmInfo;
-    if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm version:", version);
-
-    const { txBuilder, ledgerAddress, lpTokenAccount, lowVersionKeys, rewardTokenAccountsPublicKeys } =
-      await this._prepareFarmAccounts({ mint, farmInfo });
-
     const errorMsg = validateFarmRewards({
       version,
       rewardInfos,
-      rewardTokenAccountsPublicKeys,
+      rewardTokenAccountsPublicKeys: rewardAccounts,
     });
     if (errorMsg) this.logAndCreateError(errorMsg);
 
-    const data = Buffer.alloc(dwLayout.span);
-    dwLayout.encode(
-      {
-        instruction: farmDespotVersionToInstruction(version),
-        amount: parseBigNumberish(amount),
-      },
-      data,
-    );
+    const newInstruction = makeDepositWithdrawInstruction({
+      instruction: farmDespotVersionToInstruction(version),
+      amount: parseBigNumberish(amount),
+      owner: this.scope.ownerPubKey,
+      farmInfo,
+      lpAccount: ownerLpTokenAccount,
+      rewardAccounts,
+    });
 
-    const keys =
-      version === 6
-        ? [
-            accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-            accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
-            accountMeta({ pubkey: farmInfo.id }),
-            accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
-            accountMeta({ pubkey: farmInfo.lpVault.mint }),
-            accountMeta({ pubkey: ledgerAddress }),
-            accountMeta({ pubkey: this.scope.ownerPubKey, isWritable: false, isSigner: true }),
-            accountMeta({ pubkey: lpTokenAccount }),
-          ]
-        : lowVersionKeys;
-
-    if (version !== 3) {
-      for (let index = 1; index < rewardInfos.length; index++) {
-        keys.push(accountMeta({ pubkey: rewardTokenAccountsPublicKeys[index] }));
-        keys.push(accountMeta({ pubkey: rewardInfos[index].rewardVault }));
-      }
-    }
     const insType = {
       3: InstructionType.FarmV3Deposit,
       5: InstructionType.FarmV5Deposit,
       6: InstructionType.FarmV6Deposit,
     };
-
-    const newInstruction = new TransactionInstruction({ programId: farmInfo.programId, keys, data });
 
     return txBuilder
       .addInstruction({
@@ -737,44 +706,87 @@ export default class Farm extends ModuleBase {
   }
 
   public async withdraw(params: FarmDWParam): Promise<MakeTransaction> {
-    this.scope.checkOwner();
-    const { farmId, amount } = params;
+    const { farmId, amount, useSOLBalance, feePayer, associatedOnly = true, checkCreateATAOwner = false } = params;
     const farmInfo = this.getParsedFarm(farmId)!;
-    const mint = farmInfo.lpMint;
-    const { version, rewardInfos } = farmInfo;
+    const { version, rewardInfos, wrapped, lpVault } = farmInfo;
     if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm version:", version);
-    const { txBuilder, ledgerAddress, lpTokenAccount, lowVersionKeys, rewardTokenAccountsPublicKeys } =
-      await this._prepareFarmAccounts({ mint, farmInfo });
 
-    const data = Buffer.alloc(dwLayout.span);
-    dwLayout.encode(
-      {
-        instruction: farmWithdrawVersionToInstruction(version),
-        amount: parseBigNumberish(amount),
-      },
-      data,
-    );
+    const txBuilder = this.createTxBuilder();
 
-    const keys =
-      version === 6
-        ? [
-            accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-            accountMeta({ pubkey: farmInfo.id }),
-            accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
-            accountMeta({ pubkey: farmInfo.lpVault.mint }),
-            accountMeta({ pubkey: ledgerAddress }),
-            accountMeta({ pubkey: this.scope.ownerPubKey, isWritable: false, isSigner: true }),
-            accountMeta({ pubkey: lpTokenAccount }),
-          ]
-        : lowVersionKeys;
-
-    if (version !== 3) {
-      for (let index = 1; index < rewardInfos.length; index++) {
-        keys.push(accountMeta({ pubkey: rewardTokenAccountsPublicKeys[index] }));
-        keys.push(accountMeta({ pubkey: rewardInfos[index].rewardVault }));
+    const ownerMintToAccount: { [mint: string]: PublicKey } = {};
+    for (const item of this.scope.account.tokenAccounts) {
+      if (associatedOnly) {
+        const ata = getATAAddress(this.scope.ownerPubKey, item.mint).publicKey;
+        if (item.publicKey && ata.equals(item.publicKey)) ownerMintToAccount[item.mint.toString()] = item.publicKey;
+      } else {
+        ownerMintToAccount[item.mint.toString()] = item.publicKey!;
       }
     }
-    const newInstruction = new TransactionInstruction({ programId: farmInfo.programId, keys, data });
+
+    if (wrapped === undefined) this.logAndCreateError("no lp");
+    const lpMint = lpVault.mint;
+    const lpMintUseSOLBalance = useSOLBalance && lpMint.equals(WSOLMint);
+
+    let ownerLpTokenAccount = ownerMintToAccount[lpMint.toString()];
+    if (!ownerLpTokenAccount) {
+      const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        mint: lpMint,
+        notUseTokenAccount: lpMintUseSOLBalance,
+        createInfo: {
+          payer: feePayer || this.scope.ownerPubKey,
+          amount: 0,
+        },
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: true,
+        associatedOnly: lpMintUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+      ownerLpTokenAccount = _ownerRewardAccount!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    }
+    ownerMintToAccount[lpMint.toString()] = ownerLpTokenAccount;
+
+    const rewardAccounts: PublicKey[] = [];
+    for (const itemReward of rewardInfos) {
+      const rewardUseSOLBalance = useSOLBalance && itemReward.rewardMint.equals(WSOLMint);
+
+      let ownerRewardAccount = ownerMintToAccount[itemReward.rewardMint.toString()];
+      if (!ownerRewardAccount) {
+        const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          mint: itemReward.rewardMint,
+          notUseTokenAccount: rewardUseSOLBalance,
+          createInfo: {
+            payer: feePayer || this.scope.ownerPubKey,
+            amount: 0,
+          },
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: !rewardUseSOLBalance,
+          associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
+        });
+        ownerRewardAccount = _ownerRewardAccount!;
+        instructionParams && txBuilder.addInstruction(instructionParams);
+      }
+
+      ownerMintToAccount[itemReward.rewardMint.toString()] = ownerRewardAccount;
+      rewardAccounts.push(ownerRewardAccount);
+    }
+
+    const errorMsg = validateFarmRewards({
+      version,
+      rewardInfos,
+      rewardTokenAccountsPublicKeys: rewardAccounts,
+    });
+    if (errorMsg) this.logAndCreateError(errorMsg);
+
+    const newInstruction = makeDepositWithdrawInstruction({
+      instruction: farmWithdrawVersionToInstruction(version),
+      amount: parseBigNumberish(amount),
+      owner: this.scope.ownerPubKey,
+      farmInfo,
+      lpAccount: ownerLpTokenAccount,
+      rewardAccounts,
+    });
 
     const insType = {
       3: InstructionType.FarmV3Withdraw,
@@ -862,5 +874,104 @@ export default class Farm extends ModuleBase {
         instructionTypes: [instructionType],
       })
       .build();
+  }
+
+  public async harvestAllRewards(params: {
+    farmId: PublicKey;
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+    associatedOnly?: boolean;
+    checkCreateATAOwner?: boolean;
+  }): Promise<MakeTransaction> {
+    const { farmId, useSOLBalance, feePayer, associatedOnly = true, checkCreateATAOwner = false } = params;
+    const farmInfo = this.getParsedFarm(farmId)!;
+    const { version } = farmInfo;
+    if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm version:", version);
+
+    const txBuilder = this.createTxBuilder();
+
+    const ownerMintToAccount: { [mint: string]: PublicKey } = {};
+    for (const item of this.scope.account.tokenAccounts) {
+      if (associatedOnly) {
+        const ata = getATAAddress(this.scope.ownerPubKey, item.mint).publicKey;
+        if (item.publicKey && ata.equals(item.publicKey)) ownerMintToAccount[item.mint.toString()] = item.publicKey;
+      } else {
+        ownerMintToAccount[item.mint.toString()] = item.publicKey!;
+      }
+    }
+
+    for (const { lpVault, wrapped, apiPoolInfo } of Object.values(farmInfo)) {
+      if (wrapped === undefined || wrapped.pendingRewards.find((i) => i.gt(BN_ZERO)) === undefined) continue;
+
+      const lpMint = lpVault.mint;
+      const lpMintUseSOLBalance = useSOLBalance && lpMint.equals(WSOLMint);
+      let ownerLpTokenAccount = ownerMintToAccount[lpMint.toString()];
+
+      if (!ownerLpTokenAccount) {
+        const { account: _ownerLpAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          mint: lpMint,
+          notUseTokenAccount: lpMintUseSOLBalance,
+          createInfo: {
+            payer: feePayer || this.scope.ownerPubKey,
+            amount: 0,
+          },
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: true,
+          associatedOnly: lpMintUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
+        });
+        ownerLpTokenAccount = _ownerLpAccount!;
+        instructionParams && txBuilder.addInstruction(instructionParams);
+      }
+      ownerMintToAccount[lpMint.toString()] = ownerLpTokenAccount;
+
+      const rewardAccounts: PublicKey[] = [];
+      for (const itemReward of apiPoolInfo.rewardInfos) {
+        const rewardUseSOLBalance = useSOLBalance && itemReward.rewardMint.equals(WSOLMint);
+
+        let ownerRewardAccount = ownerMintToAccount[itemReward.rewardMint.toString()];
+        if (!ownerRewardAccount) {
+          const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+            mint: itemReward.rewardMint,
+            notUseTokenAccount: rewardUseSOLBalance,
+            createInfo: {
+              payer: feePayer || this.scope.ownerPubKey,
+              amount: 0,
+            },
+            owner: this.scope.ownerPubKey,
+            skipCloseAccount: !rewardUseSOLBalance,
+            associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+            checkCreateATAOwner,
+          });
+          ownerRewardAccount = _ownerRewardAccount!;
+          instructionParams && txBuilder.addInstruction(instructionParams);
+        }
+
+        ownerMintToAccount[itemReward.rewardMint.toString()] = ownerRewardAccount;
+        rewardAccounts.push(ownerRewardAccount);
+      }
+
+      const withdrawInstruction = makeDepositWithdrawInstruction({
+        instruction: farmWithdrawVersionToInstruction(version),
+        amount: BN_ZERO,
+        owner: this.scope.ownerPubKey,
+        farmInfo,
+        lpAccount: ownerLpTokenAccount,
+        rewardAccounts,
+      });
+
+      const insType = {
+        3: InstructionType.FarmV3Withdraw,
+        5: InstructionType.FarmV5Withdraw,
+        6: InstructionType.FarmV6Withdraw,
+      };
+
+      txBuilder.addInstruction({
+        instructions: [withdrawInstruction],
+        instructionTypes: [insType[version]],
+      });
+    }
+
+    return txBuilder.build();
   }
 }

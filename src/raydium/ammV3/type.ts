@@ -347,6 +347,7 @@ export interface IncreaseLiquidity {
   liquidity: BN;
   slippage: number;
   associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface AmmV3PoolRewardLayoutInfo {
@@ -374,6 +375,7 @@ export interface OpenPosition {
   liquidity: BN;
   slippage: number;
   associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface InitRewardParams {
@@ -404,6 +406,8 @@ export interface SwapInParams {
   amountOutMin: BN;
   priceLimit?: Decimal;
   remainingAccounts: PublicKey[];
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface GetAmountParams {
@@ -427,6 +431,7 @@ export interface InitRewardParams {
     perSecond: Decimal;
   };
   associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface InitRewardsParams {
@@ -442,6 +447,7 @@ export interface InitRewardsParams {
     perSecond: Decimal;
   }[];
   associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface SetRewardParams {
@@ -458,6 +464,7 @@ export interface SetRewardParams {
     perSecond: Decimal;
   };
   associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface SetRewardsParams extends Omit<SetRewardParams, "rewardInfo"> {
@@ -477,6 +484,7 @@ export interface CollectRewardParams {
   };
   rewardMint: PublicKey;
   associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export interface CollectRewardsParams extends Omit<CollectRewardParams, "rewardMint"> {
@@ -489,6 +497,7 @@ export interface HarvestAllRewardsParams {
     useSOLBalance?: boolean;
   };
   associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
   programId?: PublicKey;
 }
 

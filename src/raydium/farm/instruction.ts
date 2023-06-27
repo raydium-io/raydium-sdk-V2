@@ -3,6 +3,7 @@ import {
   PublicKey,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
+  SYSVAR_CLOCK_PUBKEY,
   TransactionInstruction,
   Connection,
 } from "@solana/web3.js";
@@ -25,7 +26,7 @@ import {
 import { InstructionType } from "../../common/txType";
 import { InstructionReturn } from "../type";
 import { associatedLedgerAccountLayout, farmRewardLayout, withdrawRewardLayout, farmLedgerLayoutV3_2 } from "./layout";
-import { FarmRewardInfoConfig, RewardInfoKey } from "./type";
+import { FarmRewardInfoConfig, RewardInfoKey, SdkParsedFarmInfo } from "./type";
 import {
   getRegistrarAddress,
   getVotingTokenMint,
@@ -34,7 +35,7 @@ import {
   getVoterWeightRecordAddress,
   getTokenOwnerRecordAddress,
 } from "./pda";
-
+import { dwLayout } from "./layout";
 import { getAssociatedLedgerAccount, getDepositEntryIndex } from "./util";
 import { struct, u8, u64, u32, bool } from "../../marshmallow";
 
@@ -646,4 +647,75 @@ export async function makeWithdrawTokenInstruction({
   );
 
   return instructions;
+}
+
+export function makeDepositWithdrawInstruction(params: {
+  instruction: number;
+  amount: BN;
+  farmInfo: SdkParsedFarmInfo;
+  lpAccount: PublicKey;
+  owner: PublicKey;
+  rewardAccounts: PublicKey[];
+  deposit?: boolean;
+}): TransactionInstruction {
+  const { lpAccount, rewardAccounts, owner, instruction, amount, farmInfo, deposit } = params;
+  const { version, rewardInfos } = farmInfo;
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId: new PublicKey(farmInfo.programId),
+    poolId: new PublicKey(farmInfo.id),
+    owner,
+    version: farmInfo.version,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction,
+      amount,
+    },
+    data,
+  );
+
+  const keys =
+    version === 6
+      ? [
+          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+          ...(deposit ? [accountMeta({ pubkey: SystemProgram.programId, isWritable: false })] : []),
+          accountMeta({ pubkey: farmInfo.id }),
+          accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
+          accountMeta({ pubkey: farmInfo.lpVault.mint }),
+          accountMeta({ pubkey: ledgerAddress }),
+          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+          accountMeta({ pubkey: lpAccount }),
+        ]
+      : [
+          accountMeta({ pubkey: farmInfo.id }),
+          accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
+          accountMeta({ pubkey: ledgerAddress }),
+          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+          accountMeta({ pubkey: lpAccount }),
+          accountMeta({ pubkey: farmInfo.lpVault.mint }),
+          accountMeta({ pubkey: rewardAccounts[0] }),
+          accountMeta({ pubkey: farmInfo.rewardInfos[0].rewardVault }),
+          // system
+          accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+        ];
+
+  if (version === 5) {
+    for (let index = 1; index < rewardInfos.length; index++) {
+      keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+      keys.push(accountMeta({ pubkey: rewardInfos[index].rewardVault }));
+    }
+  }
+
+  if (version === 6) {
+    for (let index = 0; index < rewardInfos.length; index++) {
+      keys.push(accountMeta({ pubkey: rewardInfos[index].rewardVault }));
+      keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+    }
+  }
+
+  return new TransactionInstruction({ programId: farmInfo.programId, keys, data });
 }

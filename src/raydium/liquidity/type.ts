@@ -90,6 +90,7 @@ export interface LiquiditySwapTransactionParams {
   fixedSide: SwapSide;
   config?: {
     bypassAssociatedCheck?: boolean;
+    checkCreateATAOwner?: boolean;
   };
 }
 export interface LiquiditySwapFixedOutInstructionParamsV4 {
@@ -181,6 +182,7 @@ export interface CreatePoolV4Param {
     useSOLBalance?: boolean; // if has WSOL mint
   };
   associatedOnly: boolean;
+  checkCreateATAOwner?: boolean;
   tokenProgram?: PublicKey;
 }
 
@@ -207,6 +209,7 @@ export interface InitPoolParam extends CreatePoolParam {
   startTime?: BigNumberish;
   config?: {
     bypassAssociatedCheck?: boolean;
+    checkCreateATAOwner?: boolean;
   };
   tokenProgram?: PublicKey;
 }
@@ -231,6 +234,7 @@ export interface LiquidityAddTransactionParams {
   fixedSide: LiquiditySide;
   config?: {
     bypassAssociatedCheck?: boolean;
+    checkCreateATAOwner?: boolean;
   };
 }
 
@@ -269,6 +273,7 @@ export interface LiquidityRemoveTransactionParams {
   amountIn: TokenAmount;
   config?: {
     bypassAssociatedCheck?: boolean;
+    checkCreateATAOwner?: boolean;
   };
 }
 /**

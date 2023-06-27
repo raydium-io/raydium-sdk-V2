@@ -45,6 +45,7 @@ export const InstructionType = {
   AmmV5SwapBaseIn: "AmmV5SwapBaseIn",
   AmmV5SwapBaseOut: "AmmV5SwapBaseOut",
 
+  RouteSwap: "RouteSwap",
   RouteSwap1: "RouteSwap1",
   RouteSwap2: "RouteSwap2",
 

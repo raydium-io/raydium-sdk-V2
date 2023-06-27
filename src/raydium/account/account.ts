@@ -1,5 +1,5 @@
 import { createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, AccountLayout } from "@solana/spl-token";
-import { Commitment, PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { Commitment, PublicKey, Keypair, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import { getATAAddress } from "../../common/pda";
 import { BigNumberish, InstructionType, WSOLMint } from "../../common";
 
@@ -143,6 +143,7 @@ export default class Account extends ModuleBase {
       owner,
       notUseTokenAccount = false,
       skipCloseAccount = false,
+      checkCreateATAOwner = false,
       tokenProgram,
     } = params;
     const ata = this.getAssociatedTokenAccount(mint);
@@ -163,8 +164,25 @@ export default class Account extends ModuleBase {
     };
 
     if (associatedOnly) {
-      newTxInstructions.instructions!.push(createAssociatedTokenAccountInstruction(owner, ata, owner, mint));
+      const _createATAIns = createAssociatedTokenAccountInstruction(owner, ata, owner, mint);
       newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
+
+      if (checkCreateATAOwner) {
+        const ataInfo = await this.scope.connection.getAccountInfo(ata);
+        if (ataInfo === null) {
+          newTxInstructions.instructions?.push(_createATAIns);
+        } else if (
+          ataInfo.owner.equals(TOKEN_PROGRAM_ID) &&
+          AccountLayout.decode(ataInfo.data).mint.equals(mint) &&
+          AccountLayout.decode(ataInfo.data).owner.equals(owner)
+        ) {
+          /* empty */
+        } else {
+          throw Error(`create ata check error -> mint: ${mint.toString()}, ata: ${ata.toString()}`);
+        }
+      } else {
+        newTxInstructions.instructions!.push(_createATAIns);
+      }
 
       if (mint.equals(WSOLMint)) {
         const txInstruction = await createWSolAccountInstructions({
@@ -302,6 +320,7 @@ export default class Account extends ModuleBase {
       payer = this.scope.ownerPubKey,
       bypassAssociatedCheck,
       skipCloseAccount,
+      checkCreateATAOwner,
     } = params;
 
     const ata = this.getAssociatedTokenAccount(mint);
@@ -316,11 +335,34 @@ export default class Account extends ModuleBase {
       });
       return { tokenAccount: txInstruction.signers![0].publicKey, ...txInstruction };
     } else if (!tokenAccount || (side === "out" && !ata.equals(tokenAccount) && !bypassAssociatedCheck)) {
+      const instructions: TransactionInstruction[] = [];
+      const _createATAIns = createAssociatedTokenAccountInstruction(
+        this.scope.ownerPubKey,
+        ata,
+        this.scope.ownerPubKey,
+        mint,
+      );
+
+      if (checkCreateATAOwner) {
+        const ataInfo = await this.scope.connection.getAccountInfo(ata);
+        if (ataInfo === null) {
+          instructions.push(_createATAIns);
+        } else if (
+          ataInfo.owner.equals(TOKEN_PROGRAM_ID) &&
+          AccountLayout.decode(ataInfo.data).mint.equals(mint) &&
+          AccountLayout.decode(ataInfo.data).owner.equals(this.scope.ownerPubKey)
+        ) {
+          /* empty */
+        } else {
+          throw Error(`create ata check error -> mint: ${mint.toString()}, ata: ${ata.toString()}`);
+        }
+      } else {
+        instructions.push(_createATAIns);
+      }
+
       return {
         tokenAccount: ata,
-        instructions: [
-          createAssociatedTokenAccountInstruction(this.scope.ownerPubKey, ata, this.scope.ownerPubKey, mint),
-        ],
+        instructions,
         instructionTypes: [InstructionType.CreateATA],
       };
     }
