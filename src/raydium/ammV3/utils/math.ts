@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, EpochInfo } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 
@@ -24,6 +24,9 @@ import {
 } from "./constants";
 import { TickArray } from "./tick";
 import { TickQuery } from "./tickQuery";
+import { AmmV3PoolInfo, ReturnTypeGetLiquidityAmountOut } from "../type";
+import { ReturnTypeFetchMultipleMintInfos } from "../../type";
+import { getTransferAmountFee, minExpirationTime } from "../../../common/transfer";
 
 export class MathUtil {
   public static mulDivRoundingUp(a: BN, b: BN, denominator: BN): BN {
@@ -407,10 +410,7 @@ export class LiquidityMath {
     amountMax: boolean,
     roundUp: boolean,
     amountSlippage: number,
-  ): {
-    amountSlippageA: BN;
-    amountSlippageB: BN;
-  } {
+  ): { amountSlippageA: BN; amountSlippageB: BN } {
     const { amountA, amountB } = LiquidityMath.getAmountsFromLiquidity(
       sqrtPriceCurrentX64,
       sqrtPriceX64A,
@@ -425,6 +425,67 @@ export class LiquidityMath {
     return {
       amountSlippageA: amount0Slippage,
       amountSlippageB: amount1Slippage,
+    };
+  }
+
+  public static getAmountsOutFromLiquidity({
+    poolInfo,
+    tickLower,
+    tickUpper,
+    liquidity,
+    slippage,
+    add,
+    token2022Infos,
+    epochInfo,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    tickLower: number;
+    tickUpper: number;
+    liquidity: BN;
+    slippage: number;
+    add: boolean;
+
+    token2022Infos: ReturnTypeFetchMultipleMintInfos;
+    epochInfo: EpochInfo;
+  }): ReturnTypeGetLiquidityAmountOut {
+    const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
+    const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
+
+    const coefficientRe = add ? 1 + slippage : 1 - slippage;
+
+    const amounts = LiquidityMath.getAmountsFromLiquidity(
+      poolInfo.sqrtPriceX64,
+      sqrtPriceX64A,
+      sqrtPriceX64B,
+      liquidity,
+      !add,
+    );
+    const [amountA, amountB] = [
+      getTransferAmountFee(amounts.amountA, token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig, epochInfo, !add),
+      getTransferAmountFee(amounts.amountB, token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig, epochInfo, !add),
+    ];
+    const [amountSlippageA, amountSlippageB] = [
+      getTransferAmountFee(
+        amounts.amountA.muln(coefficientRe),
+        token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig,
+        epochInfo,
+        !add,
+      ),
+      getTransferAmountFee(
+        amounts.amountB.muln(coefficientRe),
+        token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig,
+        epochInfo,
+        !add,
+      ),
+    ];
+
+    return {
+      liquidity,
+      amountA,
+      amountB,
+      amountSlippageA,
+      amountSlippageB,
+      expirationTime: minExpirationTime(amountA.expirationTime, amountB.expirationTime) as number,
     };
   }
 }

@@ -134,58 +134,39 @@ export interface ApiAmmV3ConfigInfo {
   fundOwner: string;
   description: string;
 }
+
+export interface ApiAmmV3PoolsItemStatistics {
+  volume: number;
+  volumeFee: number;
+  feeA: number;
+  feeB: number;
+  feeApr: number;
+  rewardApr: {
+    A: number;
+    B: number;
+    C: number;
+  };
+  apr: number;
+  priceMin: number;
+  priceMax: number;
+}
+
 export interface ApiAmmV3PoolInfo {
   id: string;
   mintA: string;
   mintB: string;
+  mintProgramIdA: string;
+  mintProgramIdB: string;
   mintDecimalsA: number;
   mintDecimalsB: number;
   ammConfig: ApiAmmV3ConfigInfo;
-  day: {
-    volume: number;
-    volumeFee: number;
-    feeA: number;
-    feeB: number;
-    feeApr: number;
-    rewardApr: {
-      A: number;
-      B: number;
-      C: number;
-    };
-    apr: number;
-    priceMin: number;
-    priceMax: number;
-  };
-  week: {
-    volume: number;
-    volumeFee: number;
-    feeA: number;
-    feeB: number;
-    feeApr: number;
-    rewardApr: {
-      A: number;
-      B: number;
-      C: number;
-    };
-    apr: number;
-    priceMin: number;
-    priceMax: number;
-  };
-  month: {
-    volume: number;
-    volumeFee: number;
-    feeA: number;
-    feeB: number;
-    feeApr: number;
-    rewardApr: {
-      A: number;
-      B: number;
-      C: number;
-    };
-    apr: number;
-    priceMin: number;
-    priceMax: number;
-  };
+  rewardInfos: {
+    mint: string;
+    programId: string;
+  }[];
+  day: ApiAmmV3PoolsItemStatistics;
+  week: ApiAmmV3PoolsItemStatistics;
+  month: ApiAmmV3PoolsItemStatistics;
   tvl: number;
   lookupTableAccount: string;
 }

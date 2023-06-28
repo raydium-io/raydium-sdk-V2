@@ -47,7 +47,6 @@ import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
 import { OperationLayout } from "./layout";
 import BN from "bn.js";
-import { TOKEN_WSOL } from "../token";
 export class AmmV3 extends ModuleBase {
   private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
   private _ammV3PoolMap: Map<string, ApiAmmV3PoolInfo> = new Map();
@@ -351,11 +350,13 @@ export class AmmV3 extends ModuleBase {
         creator: this.scope.ownerPubKey,
         id: insInfo.address.poolId,
         mintA: {
+          programId: mintA.programId,
           mint: mintA.mint,
           vault: insInfo.address.mintAVault,
           decimals: mintA.decimals,
         },
         mintB: {
+          programId: mint2.programId,
           mint: mintB.mint,
           vault: insInfo.address.mintBVault,
           decimals: mintB.decimals,

@@ -1,12 +1,12 @@
 import { Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { Numberish } from "../../common/bignumber";
 import { Fraction } from "../../module/fraction";
 import { SplToken } from "../token/type";
 import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
 import { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo } from "../../api/type";
+import { GetTransferAmountFee } from "../../raydium/type";
 
 export { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo };
 
@@ -44,15 +44,18 @@ export interface AmmV3PoolRewardInfo {
   rewardGrowthGlobalX64: BN;
   perSecond: Decimal;
   remainingRewards: undefined | BN;
+  tokenProgramId: PublicKey;
 }
 export interface AmmV3PoolInfo {
   id: PublicKey;
   mintA: {
+    programId: PublicKey;
     mint: PublicKey;
     vault: PublicKey;
     decimals: number;
   };
   mintB: {
+    programId: PublicKey;
     mint: PublicKey;
     vault: PublicKey;
     decimals: number;
@@ -234,6 +237,7 @@ export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
 export interface MintInfo {
   mint: PublicKey;
   decimals: number;
+  programId: PublicKey;
 }
 
 export interface ReturnTypeMakeTransaction {
@@ -253,12 +257,14 @@ export interface ReturnTypeMakeInstructions {
   instructionTypes: string[];
   address: { [name: string]: PublicKey };
 }
-export interface ReturnTypeGetLiquidityAmountOutFromAmountIn {
+
+export interface ReturnTypeGetLiquidityAmountOut {
   liquidity: BN;
-  amountSlippageA: BN;
-  amountSlippageB: BN;
-  amountA: BN;
-  amountB: BN;
+  amountSlippageA: GetTransferAmountFee;
+  amountSlippageB: GetTransferAmountFee;
+  amountA: GetTransferAmountFee;
+  amountB: GetTransferAmountFee;
+  expirationTime: number;
 }
 export interface ReturnTypeGetAmountsFromLiquidity {
   amountSlippageA: BN;

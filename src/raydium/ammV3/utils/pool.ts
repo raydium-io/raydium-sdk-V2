@@ -1,4 +1,4 @@
-import { PublicKey, Connection } from "@solana/web3.js";
+import { PublicKey, Connection, EpochInfo } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 
@@ -13,7 +13,7 @@ import {
   ReturnTypeComputeAmountOut,
   ReturnTypeComputeAmountOutFormat,
   ReturnTypeFetchMultiplePoolTickArrays,
-  ReturnTypeGetLiquidityAmountOutFromAmountIn,
+  ReturnTypeGetLiquidityAmountOut,
 } from "../type";
 import { Percent } from "../../../module/percent";
 import { Price } from "../../../module/price";
@@ -24,10 +24,12 @@ import { TokenAccountRaw } from "../../account/types";
 import {
   getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
+  getTransferAmountFee,
   BN_ZERO,
   WSOLMint,
   SOLMint,
 } from "../../../common";
+import { ReturnTypeFetchMultipleMintInfos } from "../../type";
 import { PoolInfoLayout, PositionInfoLayout, TickArrayLayout } from "../layout";
 import { NEGATIVE_ONE, Q64, ZERO, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64, ONE } from "./constants";
 import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
@@ -128,21 +130,30 @@ export class PoolUtils {
     return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 };
   }
 
-  static updatePoolRewardInfos({
+  static async updatePoolRewardInfos({
+    connection,
     chainTime,
     poolLiquidity,
     rewardInfos,
+    apiPoolInfo,
   }: {
+    connection: Connection;
     chainTime: number;
     poolLiquidity: BN;
     rewardInfos: AmmV3PoolRewardLayoutInfo[];
-  }): AmmV3PoolRewardInfo[] {
+    apiPoolInfo: ApiAmmV3PoolInfo;
+  }): Promise<AmmV3PoolRewardInfo[]> {
     const nRewardInfo: AmmV3PoolRewardInfo[] = [];
-    for (const _itemReward of rewardInfos) {
-      const itemReward = {
+    for (let i = 0; i < rewardInfos.length; i++) {
+      const _itemReward = rewardInfos[i];
+      const apiRewardProgram =
+        apiPoolInfo.rewardInfos[i].programId ?? (await connection.getAccountInfo(_itemReward.tokenMint))!.owner;
+
+      const itemReward: AmmV3PoolRewardInfo = {
         ..._itemReward,
         perSecond: MathUtil.x64ToDecimal(_itemReward.emissionsPerSecondX64),
         remainingRewards: undefined,
+        tokenProgramId: new PublicKey(apiRewardProgram),
       };
 
       if (itemReward.tokenMint.equals(PublicKey.default)) continue;
@@ -172,14 +183,12 @@ export class PoolUtils {
     poolKeys,
     chainTime,
     batchRequest = false,
-    updateOwnerRewardAndFee = true,
   }: {
     connection: Connection;
     poolKeys: ApiAmmV3PoolInfo[];
     ownerInfo?: { wallet: PublicKey; tokenAccounts: TokenAccountRaw[] };
     chainTime: number;
     batchRequest?: boolean;
-    updateOwnerRewardAndFee?: boolean;
   }): Promise<ReturnTypeFetchMultiplePoolInfos> {
     const poolAccountInfos = await getMultipleAccountsInfo(
       connection,
@@ -206,11 +215,13 @@ export class PoolUtils {
         state: {
           id: new PublicKey(apiPoolInfo.id),
           mintA: {
+            programId: new PublicKey(apiPoolInfo.mintProgramIdA),
             mint: layoutAccountInfo.mintA,
             vault: layoutAccountInfo.vaultA,
             decimals: layoutAccountInfo.mintDecimalsA,
           },
           mintB: {
+            programId: new PublicKey(apiPoolInfo.mintProgramIdB),
             mint: layoutAccountInfo.mintB,
             vault: layoutAccountInfo.vaultB,
             decimals: layoutAccountInfo.mintDecimalsB,
@@ -246,9 +257,11 @@ export class PoolUtils {
           swapOutAmountTokenA: layoutAccountInfo.swapOutAmountTokenA,
           tickArrayBitmap: layoutAccountInfo.tickArrayBitmap,
 
-          rewardInfos: PoolUtils.updatePoolRewardInfos({
+          rewardInfos: await PoolUtils.updatePoolRewardInfos({
+            connection,
             chainTime,
             poolLiquidity: layoutAccountInfo.liquidity,
+            apiPoolInfo,
             rewardInfos: layoutAccountInfo.rewardInfos.filter((i) => !i.tokenMint.equals(PublicKey.default)),
           }),
 
@@ -761,27 +774,37 @@ export class PoolUtils {
 
   static getLiquidityAmountOutFromAmountIn({
     poolInfo,
+    token2022Infos,
     inputA,
     tickLower,
     tickUpper,
     amount,
     slippage,
     add,
+    epochInfo,
   }: {
     poolInfo: AmmV3PoolInfo;
+    token2022Infos: ReturnTypeFetchMultipleMintInfos;
     inputA: boolean;
     tickLower: number;
     tickUpper: number;
     amount: BN;
     slippage: number;
     add: boolean;
-  }): ReturnTypeGetLiquidityAmountOutFromAmountIn {
+    epochInfo: EpochInfo;
+  }): ReturnTypeGetLiquidityAmountOut {
     const sqrtPriceX64 = poolInfo.sqrtPriceX64;
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
 
     const coefficient = add ? 1 - slippage : 1 + slippage;
-    const _amount = amount.mul(new BN(Math.floor(coefficient * 1000000))).div(new BN(1000000));
+    const addFeeAmount = getTransferAmountFee(
+      amount,
+      token2022Infos[inputA ? poolInfo.mintA.mint.toString() : poolInfo.mintB.mint.toString()]?.feeConfig,
+      epochInfo,
+      !add,
+    );
+    const _amount = addFeeAmount.amount.muln(coefficient);
 
     let liquidity: BN;
     if (sqrtPriceX64.lte(sqrtPriceX64A)) {
@@ -798,24 +821,16 @@ export class PoolUtils {
         : LiquidityMath.getLiquidityFromTokenAmountB(sqrtPriceX64A, sqrtPriceX64B, _amount);
     }
 
-    const amountsSlippage = LiquidityMath.getAmountsFromLiquidityWithSlippage(
-      poolInfo.sqrtPriceX64,
-      sqrtPriceX64A,
-      sqrtPriceX64B,
+    return LiquidityMath.getAmountsOutFromLiquidity({
+      poolInfo,
+      tickLower,
+      tickUpper,
       liquidity,
-      add,
-      !add,
       slippage,
-    );
-    const amounts = LiquidityMath.getAmountsFromLiquidity(
-      poolInfo.sqrtPriceX64,
-      sqrtPriceX64A,
-      sqrtPriceX64B,
-      liquidity,
-      !add,
-    );
-
-    return { liquidity, ...amountsSlippage, ...amounts };
+      add,
+      token2022Infos,
+      epochInfo,
+    });
   }
 
   static getInputAmountAndRemainAccounts(
@@ -868,6 +883,8 @@ export function getLiquidityFromAmounts({
   amountB,
   slippage,
   add,
+  token2022Infos,
+  epochInfo,
 }: {
   poolInfo: AmmV3PoolInfo;
   tickLower: number;
@@ -876,7 +893,9 @@ export function getLiquidityFromAmounts({
   amountB: BN;
   slippage: number;
   add: boolean;
-}): ReturnTypeGetLiquidityAmountOutFromAmountIn {
+  token2022Infos: ReturnTypeFetchMultipleMintInfos;
+  epochInfo: EpochInfo;
+}): ReturnTypeGetLiquidityAmountOut {
   const [_tickLower, _tickUpper, _amountA, _amountB] =
     tickLower < tickUpper ? [tickLower, tickUpper, amountA, amountB] : [tickUpper, tickLower, amountB, amountA];
   const sqrtPriceX64 = poolInfo.sqrtPriceX64;
@@ -890,16 +909,15 @@ export function getLiquidityFromAmounts({
     _amountA,
     _amountB,
   );
-  const amountsSlippage = LiquidityMath.getAmountsFromLiquidityWithSlippage(
-    sqrtPriceX64,
-    sqrtPriceX64A,
-    sqrtPriceX64B,
-    liquidity,
-    add,
-    !add,
-    slippage,
-  );
-  const amounts = LiquidityMath.getAmountsFromLiquidity(sqrtPriceX64, sqrtPriceX64A, sqrtPriceX64B, liquidity, !add);
 
-  return { liquidity, ...amountsSlippage, ...amounts };
+  return LiquidityMath.getAmountsOutFromLiquidity({
+    poolInfo,
+    tickLower,
+    tickUpper,
+    liquidity,
+    slippage,
+    add,
+    token2022Infos,
+    epochInfo,
+  });
 }

@@ -1,7 +1,9 @@
 import { PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
-
+import { Mint, TransferFeeConfig } from "@solana/spl-token";
 import { ApiTokenCategory, ApiTokenInfo } from "../api";
 import { ExecuteParam } from "../common/txTool";
+import { TokenAmount } from "../module/amount";
+import BN from "bn.js";
 
 export interface RaydiumTokenInfo extends ApiTokenInfo {
   category: ApiTokenCategory;
@@ -37,6 +39,22 @@ export interface ComputeBudgetConfig {
 
 export interface LoadParams {
   forceUpdate?: boolean;
+}
+
+export interface TransferAmountFee {
+  amount: TokenAmount;
+  fee: TokenAmount | undefined;
+  expirationTime: number | undefined;
+}
+export interface GetTransferAmountFee {
+  amount: BN;
+  fee: BN | undefined;
+  expirationTime: number | undefined;
+}
+
+export type ReturnTypeFetchMultipleMintInfo = Mint & { feeConfig: TransferFeeConfig | undefined };
+export interface ReturnTypeFetchMultipleMintInfos {
+  [mint: string]: ReturnTypeFetchMultipleMintInfo;
 }
 
 type Primitive = boolean | number | string | null | undefined | PublicKey;
