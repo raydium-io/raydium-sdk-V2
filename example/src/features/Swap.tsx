@@ -6,8 +6,8 @@ import Grid from '@mui/material/Grid'
 import OutlinedInput from '@mui/material/OutlinedInput'
 import {
   Percent,
-  RouteInfo,
-  RouteType,
+  // RouteInfo,
+  // RouteType,
   TokenAmount,
   WSOLMint,
   USDCMint,
@@ -28,8 +28,8 @@ export default function Swap() {
   const [inAmount, setInAmount] = useState<string>('')
   const [outAmount, setOutAmount] = useState<TokenAmount>()
   const [minOutAmount, setMinOutAmount] = useState<TokenAmount>()
-  const [routes, setRoutes] = useState<RouteInfo[]>([])
-  const [routeType, setRouteType] = useState<RouteType>('amm')
+  // const [routes, setRoutes] = useState<RouteInfo[]>([])
+  // const [routeType, setRouteType] = useState<RouteType>('amm')
   const [loading, setLoading] = useState<boolean>(false)
 
   // ray mint: 4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R
@@ -95,15 +95,15 @@ export default function Swap() {
        *
        * return pool options: { availablePools, best, routedPools }, default will choose routedPools
        */
-      const { routedPools } = await raydium!.trade.getAvailablePools({
-        inputMint: inToken,
-        outputMint: outToken,
-      })!
+      // const { routedPools } = await raydium!.trade.getAvailablePools({
+      //   inputMint: inToken,
+      //   outputMint: outToken,
+      // })!
 
-      if (!inAmount) {
-        setLoading(false)
-        return
-      }
+      // if (!inAmount) {
+      //   setLoading(false)
+      //   return
+      // }
 
       // const {
       //   amountOut: _amountOut,
@@ -136,16 +136,14 @@ export default function Swap() {
   }, [connected, inToken, outToken, inAmount, raydium])
 
   const handleClick = async () => {
-    const { signers, execute, extInfo } = await raydium!.trade.swap({
-      routes,
-      routeType,
-      amountIn: raydium!.mintToTokenAmount({ mint: inToken, amount: inAmount })!,
-      amountOut: minOutAmount!,
-      fixedSide: 'in',
-    })
-
-    await execute()
-
+    // const { signers, execute, extInfo } = await raydium!.trade.swap({
+    //   routes,
+    //   routeType,
+    //   amountIn: raydium!.mintToTokenAmount({ mint: inToken, amount: inAmount })!,
+    //   amountOut: minOutAmount!,
+    //   fixedSide: 'in',
+    // })
+    // await execute()
     /**
      * if you don't care about route/out amount, you can just call directSwap to execute swap
      */

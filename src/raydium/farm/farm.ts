@@ -612,9 +612,9 @@ export default class Farm extends ModuleBase {
 
   public async deposit(params: FarmDWParam): Promise<MakeTransaction> {
     const { farmId, amount, feePayer, useSOLBalance, associatedOnly = true, checkCreateATAOwner = false } = params;
+
     const farmInfo = this.getParsedFarm(farmId)!;
     const { version, rewardInfos, lpVault, ledger } = farmInfo;
-
     if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm version:", version);
 
     const txBuilder = this.createTxBuilder();
@@ -622,7 +622,7 @@ export default class Farm extends ModuleBase {
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {
         const ata = getATAAddress(this.scope.ownerPubKey, item.mint).publicKey;
-        if (ata.equals(item.publicKey!)) ownerMintToAccount[item.mint.toString()] = item.publicKey!;
+        if (item.publicKey && ata.equals(item.publicKey)) ownerMintToAccount[item.mint.toString()] = item.publicKey;
       } else {
         ownerMintToAccount[item.mint.toString()] = item.publicKey!;
       }
@@ -689,6 +689,7 @@ export default class Farm extends ModuleBase {
       farmInfo,
       lpAccount: ownerLpTokenAccount,
       rewardAccounts,
+      deposit: true,
     });
 
     const insType = {

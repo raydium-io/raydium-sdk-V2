@@ -659,7 +659,7 @@ export function makeDepositWithdrawInstruction(params: {
   deposit?: boolean;
 }): TransactionInstruction {
   const { lpAccount, rewardAccounts, owner, instruction, amount, farmInfo, deposit } = params;
-  const { version, rewardInfos } = farmInfo;
+  const { version, rewardInfos, jsonInfo } = farmInfo;
 
   const ledgerAddress = getAssociatedLedgerAccount({
     programId: new PublicKey(farmInfo.programId),
@@ -695,7 +695,7 @@ export function makeDepositWithdrawInstruction(params: {
           accountMeta({ pubkey: ledgerAddress }),
           accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
           accountMeta({ pubkey: lpAccount }),
-          accountMeta({ pubkey: farmInfo.lpVault.mint }),
+          accountMeta({ pubkey: new PublicKey(jsonInfo.lpVault) }),
           accountMeta({ pubkey: rewardAccounts[0] }),
           accountMeta({ pubkey: farmInfo.rewardInfos[0].rewardVault }),
           // system
