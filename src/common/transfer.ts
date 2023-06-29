@@ -1,8 +1,9 @@
-import { EpochInfo } from "@solana/web3.js";
-import { TransferFeeConfig, TransferFee } from "@solana/spl-token";
+import { EpochInfo, Connection, PublicKey } from "@solana/web3.js";
+import { TransferFeeConfig, TransferFee, getTransferFeeConfig, unpackMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
+import { getMultipleAccountsInfoWithCustomFlags } from "./accountInfo";
 
-import { GetTransferAmountFee } from "../raydium/type";
+import { GetTransferAmountFee, ReturnTypeFetchMultipleMintInfos } from "../raydium/type";
 
 const POINT = 10_000;
 export function getTransferAmountFee(
@@ -57,4 +58,30 @@ export function minExpirationTime(
   if (expirationTime2 === undefined) return expirationTime1;
 
   return Math.min(expirationTime1, expirationTime2);
+}
+
+export async function fetchMultipleMintInfos({
+  connection,
+  mints,
+}: {
+  connection: Connection;
+  mints: PublicKey[];
+}): Promise<ReturnTypeFetchMultipleMintInfos> {
+  if (mints.length === 0) return {};
+  const mintInfos = await getMultipleAccountsInfoWithCustomFlags(
+    connection,
+    mints.map((i) => ({ pubkey: i })),
+  );
+
+  const mintK: ReturnTypeFetchMultipleMintInfos = {};
+  for (const i of mintInfos) {
+    if (!i.accountInfo) continue;
+    const t = unpackMint(i.pubkey, i.accountInfo, i.accountInfo.owner ?? TOKEN_PROGRAM_ID);
+    mintK[i.pubkey.toString()] = {
+      ...t,
+      feeConfig: getTransferFeeConfig(t) ?? undefined,
+    };
+  }
+
+  return mintK;
 }

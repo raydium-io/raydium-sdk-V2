@@ -109,9 +109,11 @@ export default class Account extends ModuleBase {
   // user token account needed, old _selectTokenAccount
   public async getCreatedTokenAccount({
     mint,
+    programId = TOKEN_PROGRAM_ID,
     associatedOnly = true,
   }: {
     mint: PublicKey;
+    programId?: PublicKey;
     associatedOnly?: boolean;
   }): Promise<PublicKey | undefined> {
     await this.fetchWalletTokenAccounts();
@@ -120,7 +122,7 @@ export default class Account extends ModuleBase {
       // sort by balance
       .sort((a, b) => (a.amount.lt(b.amount) ? 1 : -1));
 
-    const ata = this.getAssociatedTokenAccount(mint);
+    const ata = this.getAssociatedTokenAccount(mint, programId);
     for (const tokenAccount of tokenAccounts) {
       const { publicKey } = tokenAccount;
       if (publicKey) {
@@ -146,7 +148,7 @@ export default class Account extends ModuleBase {
       checkCreateATAOwner = false,
       tokenProgram,
     } = params;
-    const ata = this.getAssociatedTokenAccount(mint);
+    const ata = this.getAssociatedTokenAccount(mint, tokenProgram);
     const accounts = (notUseTokenAccount ? [] : this.tokenAccountRawInfos)
       .filter((i) => i.accountInfo.mint.equals(mint) && (!associatedOnly || i.pubkey.equals(ata)))
       .sort((a, b) => (a.accountInfo.amount.lt(b.accountInfo.amount) ? 1 : -1));
@@ -164,7 +166,7 @@ export default class Account extends ModuleBase {
     };
 
     if (associatedOnly) {
-      const _createATAIns = createAssociatedTokenAccountInstruction(owner, ata, owner, mint);
+      const _createATAIns = createAssociatedTokenAccountInstruction(owner, ata, owner, mint, tokenProgram);
       newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
 
       if (checkCreateATAOwner) {
@@ -191,6 +193,7 @@ export default class Account extends ModuleBase {
           payer: createInfo.payer || this.scope.ownerPubKey,
           amount: createInfo.amount || 0,
           skipCloseAccount,
+          programId: tokenProgram,
         });
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
         newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
@@ -213,7 +216,12 @@ export default class Account extends ModuleBase {
 
       if (!skipCloseAccount) {
         newTxInstructions.endInstructions!.push(
-          closeAccountInstruction({ owner, payer: createInfo.payer || owner, tokenAccount: ata }),
+          closeAccountInstruction({
+            owner,
+            payer: createInfo.payer || owner,
+            tokenAccount: ata,
+            programId: tokenProgram,
+          }),
         );
         newTxInstructions.endInstructionTypes!.push(InstructionType.CloseAccount);
       }
@@ -227,6 +235,7 @@ export default class Account extends ModuleBase {
           payer: createInfo.payer || this.scope.ownerPubKey,
           amount: createInfo.amount || 0,
           skipCloseAccount,
+          programId: tokenProgram,
         });
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
         newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
@@ -244,7 +253,7 @@ export default class Account extends ModuleBase {
           newAccountPubkey: newTokenAccount.publicKey,
           lamports: balanceNeeded,
           space: AccountLayout.span,
-          programId: TOKEN_PROGRAM_ID,
+          programId: tokenProgram ?? TOKEN_PROGRAM_ID,
         });
 
         newTxInstructions.instructions!.push(
@@ -253,6 +262,7 @@ export default class Account extends ModuleBase {
             mint,
             tokenAccount: newTokenAccount.publicKey,
             owner: this.scope.ownerPubKey,
+            programId: tokenProgram,
           }),
         );
         newTxInstructions.signers!.push(newTokenAccount);
@@ -264,6 +274,7 @@ export default class Account extends ModuleBase {
               owner,
               payer: createInfo.payer || owner,
               tokenAccount: newTokenAccount.publicKey,
+              programId: tokenProgram,
             }),
           );
           newTxInstructions.endInstructionTypes!.push(InstructionType.CloseAccount);
@@ -275,9 +286,11 @@ export default class Account extends ModuleBase {
 
   public async checkOrCreateAta({
     mint,
+    programId = TOKEN_PROGRAM_ID,
     autoUnwrapWSOLToSOL,
   }: {
     mint: PublicKey;
+    programId?: PublicKey;
     autoUnwrapWSOLToSOL?: boolean;
   }): Promise<{ pubKey: PublicKey; newInstructions: AddInstructionParam }> {
     await this.fetchWalletTokenAccounts();
@@ -289,15 +302,15 @@ export default class Account extends ModuleBase {
     const newTxInstructions: AddInstructionParam = {};
 
     if (!tokenAccountAddress) {
-      const ataAddress = this.getAssociatedTokenAccount(mint);
-      const instruction = await createAssociatedTokenAccountInstruction(owner, ataAddress, owner, mint);
+      const ataAddress = this.getAssociatedTokenAccount(mint, programId);
+      const instruction = await createAssociatedTokenAccountInstruction(owner, ataAddress, owner, mint, programId);
       newTxInstructions.instructions = [instruction];
       newTxInstructions.instructionTypes = [InstructionType.CreateATA];
       tokenAccountAddress = ataAddress;
     }
     if (autoUnwrapWSOLToSOL && WSOLMint.toBase58() === mint.toBase58()) {
       newTxInstructions.endInstructions = [
-        closeAccountInstruction({ owner, payer: owner, tokenAccount: tokenAccountAddress }),
+        closeAccountInstruction({ owner, payer: owner, tokenAccount: tokenAccountAddress, programId }),
       ];
       newTxInstructions.endInstructionTypes = [InstructionType.CloseAccount];
     }
@@ -316,6 +329,7 @@ export default class Account extends ModuleBase {
       side,
       amount,
       mint,
+      programId = TOKEN_PROGRAM_ID,
       tokenAccount,
       payer = this.scope.ownerPubKey,
       bypassAssociatedCheck,
@@ -323,7 +337,7 @@ export default class Account extends ModuleBase {
       checkCreateATAOwner,
     } = params;
 
-    const ata = this.getAssociatedTokenAccount(mint);
+    const ata = this.getAssociatedTokenAccount(mint, programId);
 
     if (new PublicKey(WSOLMint).equals(mint)) {
       const txInstruction = await createWSolAccountInstructions({
@@ -331,6 +345,7 @@ export default class Account extends ModuleBase {
         owner: this.scope.ownerPubKey,
         payer,
         amount,
+        programId,
         skipCloseAccount,
       });
       return { tokenAccount: txInstruction.signers![0].publicKey, ...txInstruction };
@@ -341,6 +356,7 @@ export default class Account extends ModuleBase {
         ata,
         this.scope.ownerPubKey,
         mint,
+        programId,
       );
 
       if (checkCreateATAOwner) {
@@ -372,11 +388,12 @@ export default class Account extends ModuleBase {
 
   public async processTokenAccount(props: {
     mint: PublicKey;
+    programId?: PublicKey;
     amount?: BigNumberish;
     useSOLBalance?: boolean;
     handleTokenAccount?: boolean;
   }): Promise<Promise<AddInstructionParam & { tokenAccount?: PublicKey }>> {
-    const { mint, amount, useSOLBalance, handleTokenAccount } = props;
+    const { mint, programId = TOKEN_PROGRAM_ID, amount, useSOLBalance, handleTokenAccount } = props;
     let tokenAccount: PublicKey | undefined;
     const txBuilder = this.createTxBuilder();
 
@@ -387,6 +404,7 @@ export default class Account extends ModuleBase {
         amount: amount || 0,
         mint,
         bypassAssociatedCheck: true,
+        programId,
       });
       tokenAccount = _tokenAccount;
       txBuilder.addInstruction(instructions);
@@ -394,6 +412,7 @@ export default class Account extends ModuleBase {
       tokenAccount = await this.getCreatedTokenAccount({
         mint,
         associatedOnly: false,
+        programId,
       });
       if (!tokenAccount && handleTokenAccount) {
         const { tokenAccount: _tokenAccount, ...instructions } = await this.scope.account.handleTokenAccount({
@@ -401,6 +420,7 @@ export default class Account extends ModuleBase {
           amount: 0,
           mint,
           bypassAssociatedCheck: true,
+          programId,
         });
         tokenAccount = _tokenAccount;
         txBuilder.addInstruction(instructions);

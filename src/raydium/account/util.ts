@@ -5,6 +5,7 @@ import { createLogger } from "../../common";
 
 import { splAccountLayout } from "./layout";
 import { TokenAccount, TokenAccountRaw } from "./types";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 const logger = createLogger("Raydium_Util");
 
@@ -39,8 +40,10 @@ export function parseTokenAccountResp({ solAccountResp, tokenAccountResp }: Pars
       mint,
       amount,
       isNative: false,
+      programId: account.owner
     });
-    tokenAccountRawInfos.push({ pubkey, accountInfo });
+    // todo programId should get from api
+    tokenAccountRawInfos.push({ pubkey, accountInfo, programId: account.owner });
   }
 
   if (solAccountResp) {
@@ -48,6 +51,7 @@ export function parseTokenAccountResp({ solAccountResp, tokenAccountResp }: Pars
       mint: PublicKey.default,
       amount: new BN(solAccountResp.lamports),
       isNative: true,
+      programId: solAccountResp.owner
     });
   }
 

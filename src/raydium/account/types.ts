@@ -9,6 +9,7 @@ import { splAccountLayout } from "./layout";
 export type SplAccountLayout = typeof splAccountLayout;
 export type SplAccount = GetStructureSchema<SplAccountLayout>;
 export interface TokenAccountRaw {
+  programId: PublicKey;
   pubkey: PublicKey;
   accountInfo: SplAccount;
 }
@@ -19,6 +20,7 @@ export interface TokenAccount {
   isAssociated?: boolean;
   amount: BN;
   isNative: boolean;
+  programId: PublicKey;
 }
 
 export interface getCreatedTokenAccountParams {
@@ -30,6 +32,7 @@ export interface HandleTokenAccountParams {
   side: "in" | "out";
   amount: BigNumberish;
   mint: PublicKey;
+  programId?: PublicKey;
   tokenAccount?: PublicKey;
   payer?: PublicKey;
   bypassAssociatedCheck: boolean;

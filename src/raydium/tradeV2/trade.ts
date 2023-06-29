@@ -648,6 +648,7 @@ export default class TradeV2 extends ModuleBase {
       owner: this.scope.ownerPubKey,
       payer: this.scope.ownerPubKey,
       amount: 0,
+      programId: tokenProgram,
     });
     txBuilder.addInstruction(ins);
 
@@ -660,6 +661,7 @@ export default class TradeV2 extends ModuleBase {
               tokenAccount: tokenAccounts[i].publicKey!,
               payer: this.scope.ownerPubKey,
               owner: this.scope.ownerPubKey,
+              programId: tokenProgram,
             }),
           ],
         });
@@ -671,6 +673,7 @@ export default class TradeV2 extends ModuleBase {
               tokenAccount: tokenAccounts[i].publicKey!,
               payer: this.scope.ownerPubKey,
               owner: this.scope.ownerPubKey,
+              programId: tokenProgram,
             }),
           ],
         });
@@ -697,6 +700,7 @@ export default class TradeV2 extends ModuleBase {
       payer: this.scope.ownerPubKey,
       amount,
       skipCloseAccount: true,
+      programId: tokenProgram,
     });
     txBuilder.addInstruction(ins);
 
@@ -718,6 +722,7 @@ export default class TradeV2 extends ModuleBase {
             tokenAccount: ins.signers![0].publicKey,
             payer: this.scope.ownerPubKey,
             owner: this.scope.ownerPubKey,
+            programId: tokenProgram,
           }),
         ],
       });
