@@ -13,6 +13,7 @@ import {
   USDCMint,
   USDTMint,
   TickUtils,
+  solToWSol,
 } from '@raydium-io/raydium-sdk'
 import debounce from 'lodash/debounce'
 import { useEffect, useState } from 'react'
@@ -40,7 +41,8 @@ export default function Swap() {
   // ]
   // const [inToken, outToken] = ['4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', PublicKey.default.toBase58()]
   // const [inToken, outToken] = [PublicKey.default.toBase58(), '9gP2kCy3wA1ctvYWQk75guqXuHfrEomqydHLtcTCqiLa']
-  const [inToken, outToken] = ['9gP2kCy3wA1ctvYWQk75guqXuHfrEomqydHLtcTCqiLa', PublicKey.default.toBase58()]
+  // const [inToken, outToken] = ['4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', PublicKey.default.toBase58()]
+  const [inToken, outToken] = [PublicKey.default.toBase58(), '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R']
 
   useEffect(() => {
     async function calculateAmount() {
@@ -49,40 +51,46 @@ export default function Swap() {
       await raydium.ammV3.fetchPoolAccountPosition()
       //3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X
 
-      // const { execute } = await raydium.ammV3.openPosition({
-      //   poolId: new PublicKey('HZf7wppva3wk4dCnrUe2GE1c8aUEXsUNk5asMFQ5sYch'),
-      //   tickLower: -760,
-      //   tickUpper: -740,
-      //   liquidity: new BN('18223242651'),
-      //   ownerInfo: {
-      //     useSOLBalance: true,
-      //   },
-      //   slippage: 0.001,
-      // })
-
-      // execute()
-
       // const { routes, poolsInfo, ticks } = await raydium.tradeV2.fetchPoolAndTickData({
       //   inputMint: WSOLMint,
       //   outputMint: USDTMint,
       // })
 
-      // const { routes: xxx, best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
-      //   directPath: routes.directPath,
-      //   routePathDict: routes.routePathDict,
-      //   simulateCache: poolsInfo,
-      //   tickCache: ticks,
-      //   inputTokenAmount: raydium.mintToTokenAmount({ mint: WSOLMint, amount: 0.1 }),
-      //   outputToken: raydium.mintToToken(USDTMint),
-      //   slippage: new Percent(1, 100),
-      //   chainTime: Date.now() / 1000,
-      // })
+      const poolData = await raydium.tradeV2.fetchPoolAndTickData({
+        inputMint: inToken,
+        outputMint: outToken,
+      })
 
-      // const { execute, transactions } = await raydium.tradeV2.swap({
-      //   swapInfo: best!,
-      //   associatedOnly: true,
-      //   checkTransaction: true,
-      // })
+      const { routes, poolsInfo, ticks } = poolData
+      const { best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
+        directPath: routes.directPath,
+        routePathDict: routes.routePathDict,
+        simulateCache: poolsInfo,
+        tickCache: ticks,
+        inputTokenAmount: raydium.mintToTokenAmount({ mint: inToken, amount: '0.01' }),
+        outputToken: raydium.mintToToken(outToken),
+        slippage: new Percent(1, 100),
+        chainTime: ((await raydium.chainTimeOffset()) + Date.now()) / 1000,
+      })
+
+      console.log(123123, best?.poolType, best?.routeType)
+      best?.poolKey.forEach((p) => console.log(12312311, 'poolKey', p.id.toString()))
+
+      const { execute, transactions } = await raydium.tradeV2.swap({
+        swapInfo: best!,
+        associatedOnly: true,
+        checkTransaction: true,
+        checkCreateATAOwner: false,
+      })
+
+      transactions.forEach((t) => {
+        console.log(12312322, 'tx ins len:', t.instructions.length)
+        t.instructions.forEach((i) => {
+          console.log(123123333, i.programId.toBase58())
+        })
+      })
+
+      // execute()
 
       if (!inAmount) {
         setOutAmount(undefined)
