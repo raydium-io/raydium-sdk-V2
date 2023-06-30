@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { createTransferInstruction } from "@solana/spl-token";
 import BN from "bn.js";
 
@@ -15,6 +15,7 @@ import {
   SOLMint,
   PublicKeyish,
   WSOLMint,
+  addComputeBudget,
 } from "../../common";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { StableLayout, makeSimulatePoolInfoInstruction, LiquidityPoolJsonInfo, LiquidityPoolKeys } from "../liquidity";
@@ -344,11 +345,10 @@ export default class TradeV2 extends ModuleBase {
     routes: ComputeAmountOutLayout[];
     best?: ComputeAmountOutLayout;
   }> {
+    const input = this.scope.solToWsolTokenAmount(inputTokenAmount);
     const _amountIn =
-      feeConfig === undefined
-        ? BN_ZERO
-        : inputTokenAmount.raw.mul(new BN(10000 - feeConfig.feeBps.toNumber())).div(new BN(10000));
-    const amountIn = feeConfig === undefined ? inputTokenAmount : new TokenAmount(inputTokenAmount.token, _amountIn);
+      feeConfig === undefined ? BN_ZERO : input.raw.mul(new BN(10000 - feeConfig.feeBps.toNumber())).div(new BN(10000));
+    const amountIn = feeConfig === undefined ? input : new TokenAmount(input.token, _amountIn, true);
     const _inFeeConfig =
       feeConfig === undefined
         ? undefined
@@ -795,6 +795,7 @@ export default class TradeV2 extends ModuleBase {
         },
         owner: this.scope.ownerPubKey,
         associatedOnly: false,
+        checkCreateATAOwner,
       });
       routeToken = res.account;
       res.instructionParams && txBuilder.addInstruction(res.instructionParams);
@@ -825,18 +826,28 @@ export default class TradeV2 extends ModuleBase {
         : [];
     const transferInsType = swapInfo.feeConfig !== undefined ? [InstructionType.TransferAmount] : [];
 
-    await txBuilder.calComputeBudget();
+    // await txBuilder.calComputeBudget();
+    const instructions: TransactionInstruction[] = [];
+    const instructionsTypes: string[] = [];
+    const config = await txBuilder.getComputeBudgetConfig();
+    if (config) {
+      const { instructions: _ins, instructionTypes: _insType } = addComputeBudget(config);
+      instructions.push(..._ins);
+      instructionsTypes.push(..._insType);
+    }
 
     const allTxBuilder: TxBuilder[] = [];
     const tempIns = [
-      ...txBuilder.AllTxData.instructions,
+      ...instructions,
       ...transferIns,
+      ...txBuilder.AllTxData.instructions,
       ...ins.instructions,
       ...txBuilder.AllTxData.endInstructions,
     ];
     const tempInsType = [
-      ...txBuilder.AllTxData.instructionTypes,
+      ...instructionsTypes,
       ...transferInsType,
+      ...txBuilder.AllTxData.instructionTypes,
       ...ins.instructionTypes,
       ...txBuilder.AllTxData.endInstructionTypes,
     ];
@@ -860,21 +871,37 @@ export default class TradeV2 extends ModuleBase {
             }),
           );
         }
-        if (forecastTransactionSize(ins.instructions, [this.scope.ownerPubKey])) {
+        if (forecastTransactionSize([...instructions, ...transferIns, ...ins.instructions], [this.scope.ownerPubKey])) {
           allTxBuilder.push(
             this.createTxBuilder().addInstruction({
-              instructions: ins.instructions,
+              instructions: [...instructions, ...transferIns, ...ins.instructions],
+              signers: ins.signers,
+              instructionTypes: [...instructionsTypes, ...transferInsType, ...ins.instructionTypes],
+            }),
+          );
+        } else if (forecastTransactionSize([...instructions, ...ins.instructions], [this.scope.ownerPubKey])) {
+          allTxBuilder.push(
+            this.createTxBuilder().addInstruction({
+              instructions: [...instructions, ...ins.instructions],
+              signers: ins.signers,
+              instructionTypes: ins.instructionTypes,
+            }),
+          );
+        } else if (forecastTransactionSize(ins.instructions, [this.scope.ownerPubKey])) {
+          allTxBuilder.push(
+            this.createTxBuilder().addInstruction({
+              instructions: [...ins.instructions],
               signers: ins.signers,
               instructionTypes: ins.instructionTypes,
             }),
           );
         } else {
-          for (const i of ins.instructions) {
+          for (let index = 0; index < ins.instructions.length; index++) {
             allTxBuilder.push(
               this.createTxBuilder().addInstruction({
-                instructions: [i],
+                instructions: [...instructions, ins.instructions[index]],
                 signers: ins.signers,
-                instructionTypes: ins.instructionTypes,
+                instructionTypes: [...instructionsTypes, ins.instructionTypes[index]],
               }),
             );
           }

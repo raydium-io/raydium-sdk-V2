@@ -165,12 +165,11 @@ export default class Account extends ModuleBase {
 
     if (associatedOnly) {
       const _createATAIns = createAssociatedTokenAccountInstruction(owner, ata, owner, mint);
-      newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
-
       if (checkCreateATAOwner) {
         const ataInfo = await this.scope.connection.getAccountInfo(ata);
         if (ataInfo === null) {
           newTxInstructions.instructions?.push(_createATAIns);
+          newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
         } else if (
           ataInfo.owner.equals(TOKEN_PROGRAM_ID) &&
           AccountLayout.decode(ataInfo.data).mint.equals(mint) &&
@@ -182,6 +181,7 @@ export default class Account extends ModuleBase {
         }
       } else {
         newTxInstructions.instructions!.push(_createATAIns);
+        newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
       }
 
       if (mint.equals(WSOLMint)) {

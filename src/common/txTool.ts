@@ -109,9 +109,9 @@ export class TxBuilder {
   }
 
   public async getComputeBudgetConfig(): Promise<ComputeBudgetConfig | undefined> {
-    const json = await axios.get<SolanaFeeInfoJson>(
-      `https://solanacompass.com/api/fees?cacheFreshTime=${5 * 60 * 1000}`,
-    );
+    const json = (
+      await axios.get<SolanaFeeInfoJson>(`https://solanacompass.com/api/fees?cacheFreshTime=${5 * 60 * 1000}`)
+    ).data;
     const { avg } = json?.[15] ?? {};
     if (!avg) return undefined;
     return {
