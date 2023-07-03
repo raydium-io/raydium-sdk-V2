@@ -870,6 +870,7 @@ export class AmmV3Instrument {
       tokenAccount: PublicKey;
     };
     rewardInfo: {
+      programId: PublicKey;
       mint: PublicKey;
       openTime: number;
       endTime: number;

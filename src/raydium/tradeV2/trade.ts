@@ -1,4 +1,4 @@
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction, EpochInfo } from "@solana/web3.js";
 import { createTransferInstruction } from "@solana/spl-token";
 import BN from "bn.js";
 
@@ -16,12 +16,14 @@ import {
   PublicKeyish,
   WSOLMint,
   addComputeBudget,
+  minExpirationTime,
 } from "../../common";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { StableLayout, makeSimulatePoolInfoInstruction, LiquidityPoolJsonInfo, LiquidityPoolKeys } from "../liquidity";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
   ComputeAmountOutLayout,
+  ComputeAmountOutRouteLayout,
   PoolType,
   PoolAccountInfoV4,
   ReturnTypeGetAddLiquidityDefaultPool,
@@ -30,7 +32,7 @@ import {
   RoutePathType,
 } from "./type";
 import { makeSwapInstruction } from "./instrument";
-import { MakeMultiTransaction, MakeTransaction } from "../type";
+import { MakeMultiTransaction, MakeTransaction, ReturnTypeFetchMultipleMintInfos, TransferAmountFee } from "../type";
 import { InstructionType } from "../../common/txType";
 import { BigNumberish, parseBigNumberish } from "../../common/bignumber";
 import {
@@ -328,6 +330,8 @@ export default class TradeV2 extends ModuleBase {
     slippage,
     chainTime,
     feeConfig,
+    epochInfo,
+    mintInfos,
   }: {
     directPath: PoolType[];
     routePathDict: RoutePathType;
@@ -341,6 +345,8 @@ export default class TradeV2 extends ModuleBase {
       feeBps: BN;
       feeAccount: PublicKey;
     };
+    epochInfo: EpochInfo;
+    mintInfos: ReturnTypeFetchMultipleMintInfos;
   }): Promise<{
     routes: ComputeAmountOutLayout[];
     best?: ComputeAmountOutLayout;
@@ -363,16 +369,27 @@ export default class TradeV2 extends ModuleBase {
     for (const itemPool of directPath) {
       if (itemPool.version === 6) {
         try {
-          const { amountOut, minAmountOut, currentPrice, executionPrice, priceImpact, fee, remainingAccounts } =
-            await PoolUtils.computeAmountOutFormat({
-              poolInfo: itemPool as AmmV3PoolInfo,
-              tickArrayCache: tickCache[itemPool.id.toString()],
-              amountIn,
-              tokenOut: outputToken,
-              slippage,
-            });
-          outRoute.push({
+          const {
+            realAmountIn,
+            amountOut,
+            minAmountOut,
+            expirationTime,
+            currentPrice,
+            executionPrice,
+            priceImpact,
+            fee,
+            remainingAccounts,
+          } = await PoolUtils.computeAmountOutFormat({
+            poolInfo: itemPool as AmmV3PoolInfo,
+            tickArrayCache: tickCache[itemPool.id.toString()],
             amountIn,
+            tokenOut: outputToken,
+            slippage,
+            token2022Infos: mintInfos,
+            epochInfo,
+          });
+          outRoute.push({
+            amountIn: realAmountIn,
             amountOut,
             minAmountOut,
             currentPrice,
@@ -382,10 +399,10 @@ export default class TradeV2 extends ModuleBase {
             remainingAccounts: [remainingAccounts],
             routeType: "amm",
             poolKey: [itemPool],
-            middleMint: undefined,
             poolReady: (itemPool as AmmV3PoolInfo).startTime < chainTime,
             poolType: "CLMM",
             feeConfig: _inFeeConfig,
+            expirationTime: minExpirationTime(realAmountIn.expirationTime, expirationTime),
           });
         } catch (e) {
           //
@@ -402,9 +419,9 @@ export default class TradeV2 extends ModuleBase {
               slippage,
             });
           outRoute.push({
-            amountIn,
-            amountOut,
-            minAmountOut,
+            amountIn: { amount: amountIn, fee: undefined, expirationTime: undefined },
+            amountOut: { amount: amountOut, fee: undefined, expirationTime: undefined },
+            minAmountOut: { amount: minAmountOut, fee: undefined, expirationTime: undefined },
             currentPrice,
             executionPrice,
             priceImpact,
@@ -412,10 +429,10 @@ export default class TradeV2 extends ModuleBase {
             routeType: "amm",
             poolKey: [itemPool],
             remainingAccounts: [],
-            middleMint: undefined,
             poolReady: simulateCache[itemPool.id as string].startTime.toNumber() < chainTime,
             poolType: itemPool.version === 5 ? "STABLE" : undefined,
             feeConfig: _inFeeConfig,
+            expirationTime: undefined,
           });
         } catch (e) {
           //
@@ -432,21 +449,32 @@ export default class TradeV2 extends ModuleBase {
           if (iOutPool.version !== 6 && ![1, 6, 7].includes(simulateCache[iOutPool.id as string].status.toNumber()))
             continue;
           try {
-            const { amountOut, minAmountOut, executionPrice, priceImpact, fee, remainingAccounts } =
-              await this.computeAmountOut({
-                middleMintInfo: {
-                  mint: new PublicKey(routeMint),
-                  decimals: info.mDecimals,
-                },
-                amountIn,
-                currencyOut: outputToken,
-                slippage,
+            const {
+              amountOut,
+              minAmountOut,
+              executionPrice,
+              priceImpact,
+              fee,
+              remainingAccounts,
+              minMiddleAmountFee,
+              expirationTime,
+              realAmountIn,
+            } = await this.computeAmountOut({
+              middleMintInfo: {
+                mint: new PublicKey(routeMint),
+                decimals: info.mDecimals,
+              },
+              amountIn,
+              currencyOut: outputToken,
+              slippage,
 
-                fromPool: iFromPool,
-                toPool: iOutPool,
-                simulateCache,
-                tickCache,
-              });
+              fromPool: iFromPool,
+              toPool: iOutPool,
+              simulateCache,
+              tickCache,
+              epochInfo,
+              mintInfos,
+            });
 
             const infoAPoolOpen =
               iFromPool.version === 6
@@ -460,7 +488,7 @@ export default class TradeV2 extends ModuleBase {
             const poolTypeA = iFromPool.version === 6 ? "CLMM" : iFromPool.version === 5 ? "STABLE" : undefined;
             const poolTypeB = iOutPool.version === 6 ? "CLMM" : iOutPool.version === 5 ? "STABLE" : undefined;
             outRoute.push({
-              amountIn,
+              amountIn: realAmountIn,
               amountOut,
               minAmountOut,
               currentPrice: undefined,
@@ -470,10 +498,11 @@ export default class TradeV2 extends ModuleBase {
               routeType: "route",
               poolKey: [iFromPool, iOutPool],
               remainingAccounts,
-              middleMint: new PublicKey(routeMint),
+              minMiddleAmountFee,
               poolReady: infoAPoolOpen && infoBPoolOpen,
               poolType: [poolTypeA, poolTypeB],
               feeConfig: _inFeeConfig,
+              expirationTime,
             });
           } catch (e) {
             //
@@ -481,7 +510,7 @@ export default class TradeV2 extends ModuleBase {
         }
       }
     }
-    outRoute.sort((a, b) => (a.amountOut.raw.sub(b.amountOut.raw).gt(BN_ZERO) ? -1 : 1));
+    outRoute.sort((a, b) => (a.amountOut.amount.raw.sub(b.amountOut.amount.raw).gt(BN_ZERO) ? -1 : 1));
     const isReadyRoutes = outRoute.filter((i) => i.poolReady);
 
     return {
@@ -500,6 +529,8 @@ export default class TradeV2 extends ModuleBase {
     toPool,
     simulateCache,
     tickCache,
+    epochInfo,
+    mintInfos,
   }: {
     middleMintInfo: { mint: PublicKey; decimals: number };
     amountIn: TokenAmount;
@@ -509,21 +540,31 @@ export default class TradeV2 extends ModuleBase {
     toPool: PoolType;
     simulateCache: ReturnTypeFetchMultipleInfo;
     tickCache: ReturnTypeFetchMultiplePoolTickArrays;
+    epochInfo: EpochInfo;
+    mintInfos: ReturnTypeFetchMultipleMintInfos;
   }): Promise<{
-    minMiddleAmountOut: TokenAmount;
-    amountOut: TokenAmount;
-    minAmountOut: TokenAmount;
+    minMiddleAmountFee: TokenAmount;
+    realAmountIn: TransferAmountFee;
+    amountOut: TransferAmountFee;
+    minAmountOut: TransferAmountFee;
     executionPrice: Price | null;
     priceImpact: Fraction;
     fee: TokenAmount[];
     remainingAccounts: PublicKey[][];
+    expirationTime: number | undefined;
   }> {
     const middleToken = new Token(middleMintInfo);
 
-    let minMiddleAmountOut: TokenAmount;
     let firstPriceImpact: Percent;
     let firstFee: TokenAmount;
-    let firstRemainingAccounts: PublicKey[] = [];
+    let firstRemainingAccounts: PublicKey[] | undefined = undefined;
+    let minMiddleAmountOut: TransferAmountFee;
+    let firstExpirationTime: number | undefined = undefined;
+    let realAmountIn: TransferAmountFee = {
+      amount: amountIn,
+      fee: undefined,
+      expirationTime: undefined,
+    };
 
     const _slippage = new Percent(0, 100);
 
@@ -533,17 +574,23 @@ export default class TradeV2 extends ModuleBase {
         priceImpact: _firstPriceImpact,
         fee: _firstFee,
         remainingAccounts: _firstRemainingAccounts,
+        expirationTime: _expirationTime,
+        realAmountIn: _realAmountIn,
       } = await PoolUtils.computeAmountOutFormat({
         poolInfo: fromPool as AmmV3PoolInfo,
         tickArrayCache: tickCache[fromPool.id.toString()],
         amountIn,
         tokenOut: middleToken,
         slippage: _slippage,
+        epochInfo,
+        token2022Infos: mintInfos,
       });
       minMiddleAmountOut = _minMiddleAmountOut;
       firstPriceImpact = _firstPriceImpact;
       firstFee = _firstFee;
       firstRemainingAccounts = _firstRemainingAccounts;
+      firstExpirationTime = _expirationTime;
+      realAmountIn = _realAmountIn;
     } else {
       const {
         minAmountOut: _minMiddleAmountOut,
@@ -556,16 +603,23 @@ export default class TradeV2 extends ModuleBase {
         outputToken: middleToken,
         slippage: _slippage,
       });
-      minMiddleAmountOut = _minMiddleAmountOut;
+      minMiddleAmountOut = {
+        amount: _minMiddleAmountOut,
+        fee: undefined,
+        expirationTime: undefined,
+      };
       firstPriceImpact = _firstPriceImpact;
       firstFee = _firstFee;
     }
 
-    let amountOut: TokenAmount;
-    let minAmountOut: TokenAmount;
+    let amountOut: TransferAmountFee;
+    let minAmountOut: TransferAmountFee;
     let secondPriceImpact: Percent;
     let secondFee: TokenAmount;
-    let secondRemainingAccounts: PublicKey[] = [];
+    let secondRemainingAccounts: PublicKey[] | undefined = undefined;
+    let secondExpirationTime: number | undefined = undefined;
+    let realAmountRouteIn: TransferAmountFee = minMiddleAmountOut;
+
     if (toPool.version === 6) {
       const {
         amountOut: _amountOut,
@@ -573,18 +627,29 @@ export default class TradeV2 extends ModuleBase {
         priceImpact: _secondPriceImpact,
         fee: _secondFee,
         remainingAccounts: _secondRemainingAccounts,
+        expirationTime: _expirationTime,
+        realAmountIn: _realAmountIn,
       } = await PoolUtils.computeAmountOutFormat({
         poolInfo: toPool as AmmV3PoolInfo,
         tickArrayCache: tickCache[toPool.id.toString()],
-        amountIn: minMiddleAmountOut,
+        amountIn: new TokenAmount(
+          (minMiddleAmountOut.amount as TokenAmount).token,
+          minMiddleAmountOut.amount.raw.sub(
+            minMiddleAmountOut.fee === undefined ? BN_ZERO : minMiddleAmountOut.fee.raw,
+          ),
+        ),
         tokenOut: currencyOut,
         slippage,
+        epochInfo,
+        token2022Infos: mintInfos,
       });
       amountOut = _amountOut;
       minAmountOut = _minAmountOut;
       secondPriceImpact = _secondPriceImpact;
       secondFee = _secondFee;
       secondRemainingAccounts = _secondRemainingAccounts;
+      secondExpirationTime = _expirationTime;
+      realAmountRouteIn = _realAmountIn;
     } else {
       const {
         amountOut: _amountOut,
@@ -594,19 +659,33 @@ export default class TradeV2 extends ModuleBase {
       } = this.scope.liquidity.computeAmountOut({
         poolKeys: jsonInfo2PoolKeys(toPool) as LiquidityPoolKeys,
         poolInfo: simulateCache[toPool.id as string],
-        amountIn: minMiddleAmountOut,
+        // amountIn: minMiddleAmountOut,
+        amountIn: new TokenAmount(
+          minMiddleAmountOut.amount.token,
+          minMiddleAmountOut.amount.raw.sub(
+            minMiddleAmountOut.fee === undefined ? BN_ZERO : minMiddleAmountOut.fee.raw,
+          ),
+        ),
         outputToken: currencyOut,
         slippage,
       });
-      amountOut = _amountOut;
-      minAmountOut = _minAmountOut;
+      amountOut = {
+        amount: _amountOut,
+        fee: undefined,
+        expirationTime: undefined,
+      };
+      minAmountOut = {
+        amount: _minAmountOut,
+        fee: undefined,
+        expirationTime: undefined,
+      };
       secondPriceImpact = _secondPriceImpact;
       secondFee = _secondFee;
     }
 
     let executionPrice: Price | null = null;
     const amountInRaw = amountIn.raw;
-    const amountOutRaw = amountOut.raw;
+    const amountOutRaw = amountOut.amount.raw;
     const currencyIn = amountIn.token;
     if (!amountInRaw.isZero() && !amountOutRaw.isZero()) {
       executionPrice = new Price({
@@ -618,13 +697,18 @@ export default class TradeV2 extends ModuleBase {
     }
 
     return {
-      minMiddleAmountOut,
+      minMiddleAmountFee: new TokenAmount(
+        middleToken,
+        (minMiddleAmountOut.fee?.raw ?? new BN(0)).add(realAmountRouteIn.fee?.raw ?? new BN(0)),
+      ),
+      realAmountIn,
       amountOut,
       minAmountOut,
       executionPrice,
       priceImpact: firstPriceImpact.add(secondPriceImpact),
       fee: [firstFee, secondFee],
-      remainingAccounts: [firstRemainingAccounts, secondRemainingAccounts],
+      remainingAccounts: [firstRemainingAccounts as PublicKey[], secondRemainingAccounts as PublicKey[]],
+      expirationTime: minExpirationTime(firstExpirationTime, secondExpirationTime),
     };
   }
 
@@ -743,18 +827,22 @@ export default class TradeV2 extends ModuleBase {
   }): Promise<MakeMultiTransaction> {
     const swapInfo = {
       ...orgSwapInfo,
-      amountIn: this.scope.solToWsolTokenAmount(orgSwapInfo.amountIn),
-      amountOut: this.scope.solToWsolTokenAmount(orgSwapInfo.amountOut),
-      minAmountOut: this.scope.solToWsolTokenAmount(orgSwapInfo.minAmountOut),
-      middleMint: orgSwapInfo.middleMint ? solToWSol(orgSwapInfo.middleMint) : orgSwapInfo.middleMint,
+      amountIn: this.scope.solToWsolTransferAmountFee(orgSwapInfo.amountIn),
+      amountOut: this.scope.solToWsolTransferAmountFee(orgSwapInfo.amountOut),
+      minAmountOut: this.scope.solToWsolTransferAmountFee(orgSwapInfo.minAmountOut),
+      middleMint: (orgSwapInfo as ComputeAmountOutRouteLayout).minMiddleAmountFee
+        ? solToWSol((orgSwapInfo as ComputeAmountOutRouteLayout).minMiddleAmountFee.token.mint)
+        : undefined,
     };
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
-    const useSolBalance = amountIn.token.mint.equals(Token.WSOL.mint) || amountIn.token.mint.equals(SOLMint);
-    const outSolBalance = amountOut.token.mint.equals(Token.WSOL.mint) || amountOut.token.mint.equals(SOLMint);
-    const inputMint = amountIn.token.mint;
+    const useSolBalance =
+      amountIn.amount.token.mint.equals(Token.WSOL.mint) || amountIn.amount.token.mint.equals(SOLMint);
+    const outSolBalance =
+      amountOut.amount.token.mint.equals(Token.WSOL.mint) || amountOut.amount.token.mint.equals(SOLMint);
+    const inputMint = amountIn.amount.token.mint;
     const middleMint = swapInfo.middleMint!;
-    const outputMint = amountOut.token.mint;
+    const outputMint = amountOut.amount.token.mint;
     const routeProgram = new PublicKey("routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS");
     const txBuilder = this.createTxBuilder();
 
@@ -765,7 +853,7 @@ export default class TradeV2 extends ModuleBase {
         createInfo: useSolBalance
           ? {
               payer: this.scope.ownerPubKey,
-              amount: amountIn.raw,
+              amount: amountIn.amount.raw,
             }
           : undefined,
         owner: this.scope.ownerPubKey,

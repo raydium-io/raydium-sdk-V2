@@ -146,7 +146,7 @@ export default class Account extends ModuleBase {
       notUseTokenAccount = false,
       skipCloseAccount = false,
       checkCreateATAOwner = false,
-      tokenProgram,
+      tokenProgram = TOKEN_PROGRAM_ID,
     } = params;
     const ata = this.getAssociatedTokenAccount(mint, tokenProgram);
     const accounts = (notUseTokenAccount ? [] : this.tokenAccountRawInfos)
@@ -173,7 +173,7 @@ export default class Account extends ModuleBase {
           newTxInstructions.instructions?.push(_createATAIns);
           newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
         } else if (
-          ataInfo.owner.equals(TOKEN_PROGRAM_ID) &&
+          ataInfo.owner.equals(tokenProgram) &&
           AccountLayout.decode(ataInfo.data).mint.equals(mint) &&
           AccountLayout.decode(ataInfo.data).owner.equals(owner)
         ) {

@@ -3,13 +3,14 @@ import BN from "bn.js";
 import { TokenAmount, Price, Percent } from "../../module";
 import { AmmV3PoolInfo } from "../ammV3";
 import { LiquidityPoolJsonInfo } from "../liquidity";
+import { TransferAmountFee } from "../type";
 
 export type PoolType = AmmV3PoolInfo | LiquidityPoolJsonInfo;
 
 export interface ComputeAmountOutAmmLayout {
-  amountIn: TokenAmount;
-  amountOut: TokenAmount;
-  minAmountOut: TokenAmount;
+  amountIn: TransferAmountFee;
+  amountOut: TransferAmountFee;
+  minAmountOut: TransferAmountFee;
   currentPrice: Price | undefined;
   executionPrice: Price | null;
   priceImpact: Percent;
@@ -17,19 +18,20 @@ export interface ComputeAmountOutAmmLayout {
   routeType: "amm";
   poolKey: PoolType[];
   remainingAccounts: PublicKey[][];
-  middleMint: PublicKey | undefined;
   poolReady: boolean;
-  poolType: string | undefined;
+  poolType: "CLMM" | "STABLE" | undefined;
 
   feeConfig?: {
     feeAmount: BN;
     feeAccount: PublicKey;
   };
+
+  expirationTime: number | undefined;
 }
 export interface ComputeAmountOutRouteLayout {
-  amountIn: TokenAmount;
-  amountOut: TokenAmount;
-  minAmountOut: TokenAmount;
+  amountIn: TransferAmountFee;
+  amountOut: TransferAmountFee;
+  minAmountOut: TransferAmountFee;
   currentPrice: Price | undefined;
   executionPrice: Price | null;
   priceImpact: Percent;
@@ -37,7 +39,7 @@ export interface ComputeAmountOutRouteLayout {
   routeType: "route";
   poolKey: PoolType[];
   remainingAccounts: PublicKey[][];
-  middleMint: PublicKey | undefined;
+  minMiddleAmountFee: TokenAmount;
   poolReady: boolean;
   poolType: (string | undefined)[];
 
@@ -45,6 +47,8 @@ export interface ComputeAmountOutRouteLayout {
     feeAmount: BN;
     feeAccount: PublicKey;
   };
+
+  expirationTime: number | undefined;
 }
 
 export type ComputeAmountOutLayout = ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;

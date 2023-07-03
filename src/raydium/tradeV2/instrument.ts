@@ -403,8 +403,8 @@ export async function makeSwapInstruction({
           tokenAccountB: _poolKey.mintA.mint.equals(inputMint) ? ownerInfo.destinationToken : ownerInfo.sourceToken,
         },
         inputMint,
-        amountIn: swapInfo.amountIn.raw,
-        amountOutMin: swapInfo.minAmountOut.raw,
+        amountIn: swapInfo.amountIn.amount.raw,
+        amountOutMin: swapInfo.minAmountOut.amount.raw,
         sqrtPriceLimitX64,
         remainingAccounts: swapInfo.remainingAccounts[0],
       });
@@ -421,8 +421,8 @@ export async function makeSwapInstruction({
               tokenAccountOut: ownerInfo.destinationToken,
               owner: ownerInfo.wallet,
             },
-            amountIn: swapInfo.amountIn.raw,
-            amountOut: swapInfo.minAmountOut.raw,
+            amountIn: swapInfo.amountIn.amount.raw,
+            amountOut: swapInfo.minAmountOut.amount.raw,
             fixedSide: "in",
           }),
         ],
@@ -445,13 +445,13 @@ export async function makeSwapInstruction({
           ownerInfo.destinationToken,
 
           inputMint.toString(),
-          swapInfo.middleMint!.toString(),
+          swapInfo.minMiddleAmountFee!.token.mint.toString(),
 
           poolKey1,
           poolKey2,
 
-          swapInfo.amountIn.raw,
-          swapInfo.minAmountOut.raw,
+          swapInfo.amountIn.amount.raw,
+          swapInfo.minAmountOut.amount.raw,
 
           swapInfo.remainingAccounts,
         ),

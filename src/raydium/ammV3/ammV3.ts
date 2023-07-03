@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, EpochInfo } from "@solana/web3.js";
 import Decimal from "decimal.js";
 import { toSplToken } from "../token/util";
 import {
@@ -9,7 +9,7 @@ import {
   BigNumberish,
   recursivelyDecimalToFraction,
 } from "../../common/bignumber";
-import { InstructionType, WSOLMint, getATAAddress } from "../../common";
+import { InstructionType, WSOLMint, getATAAddress, getTransferAmountFee } from "../../common";
 import { add, mul, div } from "../../common/fractionUtil";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { TokenAmount } from "../../module/amount";
@@ -41,7 +41,7 @@ import {
   ReturnTypeComputeAmountOutBaseOut,
 } from "./type";
 import { AmmV3Instrument } from "./instrument";
-import { LoadParams, MakeTransaction, MakeMultiTransaction } from "../type";
+import { LoadParams, MakeTransaction, MakeMultiTransaction, ReturnTypeFetchMultipleMintInfos } from "../type";
 import { MathUtil } from "./utils/math";
 import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
@@ -279,6 +279,7 @@ export class AmmV3 extends ModuleBase {
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickUpper);
+
     return LiquidityMath.getAmountsFromLiquidityWithSlippage(
       poolInfo!.sqrtPriceX64,
       sqrtPriceX64A,
@@ -861,6 +862,7 @@ export class AmmV3 extends ModuleBase {
         tokenAccount: ownerRewardAccount!,
       },
       rewardInfo: {
+        programId: rewardInfo.programId,
         mint: rewardInfo.mint,
         openTime: rewardInfo.openTime,
         endTime: rewardInfo.endTime,
@@ -927,6 +929,7 @@ export class AmmV3 extends ModuleBase {
           tokenAccount: ownerRewardAccount!,
         },
         rewardInfo: {
+          programId: rewardInfo.programId,
           mint: rewardInfo.mint,
           openTime: rewardInfo.openTime,
           endTime: rewardInfo.endTime,
@@ -1280,19 +1283,20 @@ export class AmmV3 extends ModuleBase {
   }
 
   public computeAmountIn({
-    // poolInfo,
     poolId,
     tickArrayCache,
     baseMint,
+    token2022Infos,
+    epochInfo,
     amountOut,
     slippage,
     priceLimit = new Decimal(0),
   }: {
-    // poolInfo: AmmV3PoolInfo;
     poolId: string;
     tickArrayCache: { [key: string]: TickArray };
     baseMint: PublicKey;
-
+    token2022Infos: ReturnTypeFetchMultipleMintInfos;
+    epochInfo: EpochInfo;
     amountOut: BN;
     slippage: number;
     priceLimit?: Decimal;
@@ -1313,12 +1317,25 @@ export class AmmV3 extends ModuleBase {
       );
     }
 
+    const realAmountOut = getTransferAmountFee(
+      amountOut,
+      token2022Infos[baseMint.toString()]?.feeConfig,
+      epochInfo,
+      true,
+    );
+
     const {
       expectedAmountIn,
       remainingAccounts,
       executionPrice: _executionPriceX64,
       feeAmount,
-    } = PoolUtils.getInputAmountAndRemainAccounts(poolInfo, tickArrayCache, baseMint, amountOut, sqrtPriceLimitX64);
+    } = PoolUtils.getInputAmountAndRemainAccounts(
+      poolInfo,
+      tickArrayCache,
+      baseMint,
+      realAmountOut.amount.sub(realAmountOut.fee || new BN(0)),
+      sqrtPriceLimitX64,
+    );
 
     const _executionPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
       _executionPriceX64,

@@ -1,4 +1,5 @@
 import { PublicKey, Connection, EpochInfo } from "@solana/web3.js";
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 
@@ -28,6 +29,8 @@ import {
   BN_ZERO,
   WSOLMint,
   SOLMint,
+  minExpirationTime,
+  fetchMultipleMintInfos,
 } from "../../../common";
 import { ReturnTypeFetchMultipleMintInfos } from "../../type";
 import { PoolInfoLayout, PositionInfoLayout, TickArrayLayout } from "../layout";
@@ -486,10 +489,12 @@ export class PoolUtils {
     return pools;
   }
 
-  static async computeAmountOut({
+  static computeAmountOut({
     poolInfo,
     tickArrayCache,
     baseMint,
+    token2022Infos,
+    epochInfo,
     amountIn,
     slippage,
     priceLimit = new Decimal(0),
@@ -498,10 +503,13 @@ export class PoolUtils {
     tickArrayCache: { [key: string]: TickArray };
     baseMint: PublicKey;
 
+    token2022Infos: ReturnTypeFetchMultipleMintInfos;
+    epochInfo: EpochInfo;
+
     amountIn: BN;
     slippage: number;
     priceLimit?: Decimal;
-  }): Promise<ReturnTypeComputeAmountOut> {
+  }): ReturnTypeComputeAmountOut {
     let sqrtPriceLimitX64: BN;
     if (priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = baseMint.equals(poolInfo.mintA.mint)
@@ -515,17 +523,32 @@ export class PoolUtils {
       );
     }
 
+    const realAmountIn = getTransferAmountFee(
+      amountIn,
+      token2022Infos[baseMint.toString()]?.feeConfig,
+      epochInfo,
+      false,
+    );
+
     const {
-      expectedAmountOut,
+      expectedAmountOut: _expectedAmountOut,
       remainingAccounts,
       executionPrice: _executionPriceX64,
       feeAmount,
-    } = await PoolUtils.getOutputAmountAndRemainAccounts(
+    } = PoolUtils.getOutputAmountAndRemainAccounts(
       poolInfo,
       tickArrayCache,
       baseMint,
-      amountIn,
+      realAmountIn.amount.sub(realAmountIn.fee || BN_ZERO),
       sqrtPriceLimitX64,
+    );
+
+    const outMint = poolInfo.mintA.mint.equals(baseMint) ? poolInfo.mintB.mint : poolInfo.mintA.mint;
+    const amountOut = getTransferAmountFee(
+      _expectedAmountOut,
+      token2022Infos[outMint.toString()]?.feeConfig,
+      epochInfo,
+      false,
     );
 
     const _executionPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
@@ -535,21 +558,32 @@ export class PoolUtils {
     );
     const executionPrice = baseMint.equals(poolInfo.mintA.mint) ? _executionPrice : new Decimal(1).div(_executionPrice);
 
-    const minAmountOut = expectedAmountOut
+    const _minAmountOut = _expectedAmountOut
       .mul(new BN(Math.floor((1 - slippage) * 10000000000)))
       .div(new BN(10000000000));
+    const minAmountOut = getTransferAmountFee(
+      _minAmountOut,
+      token2022Infos[outMint.toString()]?.feeConfig,
+      epochInfo,
+      false,
+    );
 
     const poolPrice = poolInfo.mintA.mint.equals(baseMint)
       ? poolInfo.currentPrice
       : new Decimal(1).div(poolInfo.currentPrice);
+
+    const _numerator = new Decimal(executionPrice).sub(poolPrice).abs();
+    const _denominator = poolPrice;
     const priceImpact = new Percent(
-      parseInt(String(Math.abs(parseFloat(executionPrice.toFixed()) - parseFloat(poolPrice.toFixed())) * 1e9)),
-      parseInt(String(parseFloat(poolPrice.toFixed()) * 1e9)),
+      new Decimal(_numerator).mul(10 ** 15).toFixed(0),
+      new Decimal(_denominator).mul(10 ** 15).toFixed(0),
     );
 
     return {
-      amountOut: expectedAmountOut,
+      realAmountIn,
+      amountOut,
       minAmountOut,
+      expirationTime: minExpirationTime(realAmountIn.expirationTime, amountOut.expirationTime),
       currentPrice: poolInfo.currentPrice,
       executionPrice,
       priceImpact,
@@ -562,6 +596,8 @@ export class PoolUtils {
   static async computeAmountOutFormat({
     poolInfo,
     tickArrayCache,
+    token2022Infos,
+    epochInfo,
     amountIn,
     tokenOut: _tokenOut,
     slippage,
@@ -569,44 +605,122 @@ export class PoolUtils {
     poolInfo: AmmV3PoolInfo;
     tickArrayCache: { [key: string]: TickArray };
 
+    token2022Infos: ReturnTypeFetchMultipleMintInfos;
+    epochInfo: EpochInfo;
+
     amountIn: TokenAmount;
     tokenOut: Token;
     slippage: Percent;
   }): Promise<ReturnTypeComputeAmountOutFormat> {
     const inputMint = amountIn.token.equals(Token.WSOL) ? WSOLMint : amountIn.token.mint;
+    const _amountIn = amountIn.raw;
     const _slippage = slippage.numerator.toNumber() / slippage.denominator.toNumber();
     const tokenOut = _tokenOut.mint.equals(SOLMint)
       ? new Token({ mint: "sol", decimals: TOKEN_SOL.decimals })
       : _tokenOut;
 
-    const { amountOut, minAmountOut, currentPrice, executionPrice, priceImpact, fee, remainingAccounts } =
-      await this.computeAmountOut({
-        poolInfo,
-        tickArrayCache,
-        baseMint: inputMint,
-        amountIn: amountIn.raw,
-        slippage: _slippage,
-      });
+    const {
+      realAmountIn: _realAmountIn,
+      amountOut: _amountOut,
+      minAmountOut: _minAmountOut,
+      expirationTime,
+      currentPrice,
+      executionPrice,
+      priceImpact,
+      fee,
+      remainingAccounts,
+    } = this.computeAmountOut({
+      poolInfo,
+      tickArrayCache,
+      baseMint: inputMint,
+      amountIn: _amountIn,
+      slippage: _slippage,
+
+      token2022Infos,
+      epochInfo,
+    });
+
+    const realAmountIn = {
+      ..._realAmountIn,
+      amount: new TokenAmount(amountIn.token, _realAmountIn.amount),
+      fee: _realAmountIn.fee === undefined ? undefined : new TokenAmount(amountIn.token, _realAmountIn.fee),
+    };
+
+    const amountOut = {
+      ..._amountOut,
+      amount: new TokenAmount(tokenOut, _amountOut.amount),
+      fee: _amountOut.fee === undefined ? undefined : new TokenAmount(tokenOut, _amountOut.fee),
+    };
+    const minAmountOut = {
+      ..._minAmountOut,
+      amount: new TokenAmount(tokenOut, _minAmountOut.amount),
+      fee: _minAmountOut.fee === undefined ? undefined : new TokenAmount(tokenOut, _minAmountOut.fee),
+    };
+
+    const _currentPrice = new Price({
+      baseToken: amountIn.token,
+      denominator: new BN(10).pow(new BN(20 + amountIn.token.decimals)),
+      quoteToken: tokenOut,
+      numerator: currentPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
+    });
+
+    const _executionPrice = new Price({
+      baseToken: amountIn.token,
+      denominator: new BN(10).pow(new BN(20 + amountIn.token.decimals)),
+      quoteToken: tokenOut,
+      numerator: executionPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
+    });
+
+    const _fee = new TokenAmount(amountIn.token, fee);
 
     return {
-      amountOut: new TokenAmount(tokenOut, amountOut),
-      minAmountOut: new TokenAmount(tokenOut, minAmountOut),
-      currentPrice: new Price({
-        baseToken: amountIn.token,
-        denominator: new BN(10).pow(new BN(20 + amountIn.token.decimals)),
-        quoteToken: tokenOut,
-        numerator: currentPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
-      }),
-      executionPrice: new Price({
-        baseToken: amountIn.token,
-        denominator: new BN(10).pow(new BN(20 + amountIn.token.decimals)),
-        quoteToken: tokenOut,
-        numerator: executionPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
-      }),
+      realAmountIn,
+      amountOut,
+      minAmountOut,
+      expirationTime,
+      currentPrice: _currentPrice,
+      executionPrice: _executionPrice,
       priceImpact,
-      fee: new TokenAmount(amountIn.token, fee),
+      fee: _fee,
       remainingAccounts,
     };
+  }
+
+  static async computeAmountOutAndCheckToken({
+    connection,
+    poolInfo,
+    tickArrayCache,
+    baseMint,
+    amountIn,
+    slippage,
+    priceLimit = new Decimal(0),
+  }: {
+    connection: Connection;
+    poolInfo: AmmV3PoolInfo;
+    tickArrayCache: { [key: string]: TickArray };
+    baseMint: PublicKey;
+
+    amountIn: BN;
+    slippage: number;
+    priceLimit?: Decimal;
+  }): Promise<ReturnTypeComputeAmountOut> {
+    const epochInfo = await connection.getEpochInfo();
+    const token2022Infos = await fetchMultipleMintInfos({
+      connection,
+      mints: [poolInfo.mintA, poolInfo.mintB]
+        .filter((i) => i.programId.equals(TOKEN_2022_PROGRAM_ID))
+        .map((i) => i.mint),
+    });
+    return this.computeAmountOut({
+      poolInfo,
+      tickArrayCache,
+      baseMint,
+      amountIn,
+      slippage,
+      priceLimit,
+      token2022Infos,
+      epochInfo,
+    });
   }
 
   static estimateAprsForPriceRangeMultiplier({
@@ -804,7 +918,7 @@ export class PoolUtils {
       epochInfo,
       !add,
     );
-    const _amount = addFeeAmount.amount.muln(coefficient);
+    const _amount = addFeeAmount.amount.sub(addFeeAmount.fee || BN_ZERO).muln(coefficient);
 
     let liquidity: BN;
     if (sqrtPriceX64.lte(sqrtPriceX64A)) {

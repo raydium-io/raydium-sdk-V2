@@ -458,24 +458,25 @@ export class LiquidityMath {
       sqrtPriceX64A,
       sqrtPriceX64B,
       liquidity,
-      !add,
+      add,
     );
+
     const [amountA, amountB] = [
-      getTransferAmountFee(amounts.amountA, token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig, epochInfo, !add),
-      getTransferAmountFee(amounts.amountB, token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig, epochInfo, !add),
+      getTransferAmountFee(amounts.amountA, token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig, epochInfo, add),
+      getTransferAmountFee(amounts.amountB, token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig, epochInfo, add),
     ];
     const [amountSlippageA, amountSlippageB] = [
       getTransferAmountFee(
         amounts.amountA.muln(coefficientRe),
         token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig,
         epochInfo,
-        !add,
+        add,
       ),
       getTransferAmountFee(
         amounts.amountB.muln(coefficientRe),
         token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig,
         epochInfo,
-        !add,
+        add,
       ),
     ];
 

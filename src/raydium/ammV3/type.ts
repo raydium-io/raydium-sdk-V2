@@ -6,7 +6,7 @@ import { SplToken } from "../token/type";
 import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
 import { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo } from "../../api/type";
-import { GetTransferAmountFee } from "../../raydium/type";
+import { GetTransferAmountFee, TransferAmountFee } from "../../raydium/type";
 
 export { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo };
 
@@ -271,8 +271,10 @@ export interface ReturnTypeGetAmountsFromLiquidity {
   amountSlippageB: BN;
 }
 export interface ReturnTypeComputeAmountOutFormat {
-  amountOut: TokenAmount;
-  minAmountOut: TokenAmount;
+  realAmountIn: TransferAmountFee;
+  amountOut: TransferAmountFee;
+  minAmountOut: TransferAmountFee;
+  expirationTime: number | undefined;
   currentPrice: Price;
   executionPrice: Price;
   priceImpact: Percent;
@@ -280,8 +282,10 @@ export interface ReturnTypeComputeAmountOutFormat {
   remainingAccounts: PublicKey[];
 }
 export interface ReturnTypeComputeAmountOut {
-  amountOut: BN;
-  minAmountOut: BN;
+  realAmountIn: GetTransferAmountFee;
+  amountOut: GetTransferAmountFee;
+  minAmountOut: GetTransferAmountFee;
+  expirationTime: number | undefined;
   currentPrice: Decimal;
   executionPrice: Decimal;
   priceImpact: Percent;
@@ -431,6 +435,7 @@ export interface InitRewardParams {
     useSOLBalance?: boolean; // if has WSOL mint
   };
   rewardInfo: {
+    programId: PublicKey;
     mint: PublicKey;
     openTime: number;
     endTime: number;
@@ -447,6 +452,7 @@ export interface InitRewardsParams {
     useSOLBalance?: boolean; // if has WSOL mint
   };
   rewardInfos: {
+    programId: PublicKey;
     mint: PublicKey;
     openTime: number;
     endTime: number;

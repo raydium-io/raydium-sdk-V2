@@ -29,7 +29,7 @@ import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
 import Ido from "./ido/ido";
-import { SignAllTransactions } from "./type";
+import { SignAllTransactions, TransferAmountFee } from "./type";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */
@@ -363,12 +363,29 @@ export class Raydium {
   public mintToTokenAmount(params: MintToTokenAmount): TokenAmount {
     return this.token.mintToTokenAmount(params);
   }
+  // export interface TransferAmountFee {amount: TokenAmount | CurrencyAmount, fee: TokenAmount | CurrencyAmount | undefined, expirationTime: number | undefined}
   public solToWsolTokenAmount(tokenAmount: TokenAmount): TokenAmount {
     if (!tokenAmount.token.mint.equals(SOLMint)) return tokenAmount;
     return this.token.mintToTokenAmount({
       mint: WSOLMint,
       amount: tokenAmount.toExact(),
     });
+  }
+  public solToWsolTransferAmountFee(tokenAmountFee: TransferAmountFee): TransferAmountFee {
+    if (!tokenAmountFee.amount.token.mint.equals(SOLMint)) return tokenAmountFee;
+    return {
+      amount: this.token.mintToTokenAmount({
+        mint: WSOLMint,
+        amount: tokenAmountFee.amount.toExact(),
+      }),
+      fee: tokenAmountFee.fee
+        ? this.token.mintToTokenAmount({
+            mint: WSOLMint,
+            amount: tokenAmountFee.fee.toExact(),
+          })
+        : tokenAmountFee.fee,
+      expirationTime: tokenAmountFee.expirationTime,
+    };
   }
   public decimalAmount(params: MintToTokenAmount): BN {
     return this.token.decimalAmount(params);

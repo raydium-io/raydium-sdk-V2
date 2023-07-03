@@ -29,9 +29,9 @@ export function getTransferAmountFee(
       : undefined;
 
   if (addFee) {
-    const TAmount = amount.div(new BN(POINT - nowFeeConfig.transferFeeBasisPoints));
+    const TAmount = BNDivCeil(amount.mul(new BN(POINT)), new BN(POINT - nowFeeConfig.transferFeeBasisPoints));
 
-    const _fee = TAmount.mul(new BN(nowFeeConfig.transferFeeBasisPoints)).div(new BN(POINT));
+    const _fee = BNDivCeil(TAmount.mul(new BN(nowFeeConfig.transferFeeBasisPoints)), new BN(POINT));
     const fee = _fee.gt(maxFee) ? maxFee : _fee;
     return {
       amount: TAmount,
@@ -39,11 +39,11 @@ export function getTransferAmountFee(
       expirationTime,
     };
   } else {
-    const _fee = amount.mul(new BN(nowFeeConfig.transferFeeBasisPoints)).div(new BN(POINT));
+    const _fee = BNDivCeil(amount.mul(new BN(nowFeeConfig.transferFeeBasisPoints)), new BN(POINT));
     const fee = _fee.gt(maxFee) ? maxFee : _fee;
 
     return {
-      amount: amount.sub(fee),
+      amount,
       fee,
       expirationTime,
     };
@@ -84,4 +84,14 @@ export async function fetchMultipleMintInfos({
   }
 
   return mintK;
+}
+
+export function BNDivCeil(bn1: BN, bn2: BN): BN {
+  const { div, mod } = bn1.divmod(bn2);
+
+  if (mod.gt(new BN(0))) {
+    return div.add(new BN(1));
+  } else {
+    return div;
+  }
 }
