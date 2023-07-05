@@ -161,8 +161,8 @@ export function getAssociatedPoolKeys({
   programId,
   marketProgramId,
 }: {
-  version: number;
-  marketVersion: number;
+  version: 4 | 5;
+  marketVersion: 3;
   marketId: PublicKey;
   baseMint: PublicKey;
   quoteMint: PublicKey;
@@ -213,6 +213,7 @@ export function getAssociatedPoolKeys({
     // market keys
     marketId,
     marketAuthority,
+    lookupTableAccount: PublicKey.default,
   };
 }
 

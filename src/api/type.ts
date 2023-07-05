@@ -22,8 +22,7 @@ export type ApiTokens = {
 /* ================= liquidity ================= */
 export type LiquidityVersion = 4 | 5;
 
-export interface ApiLiquidityPoolInfo {
-  // base
+export interface ApiPoolInfoV4 {
   id: string;
   baseMint: string;
   quoteMint: string;
@@ -31,10 +30,8 @@ export interface ApiLiquidityPoolInfo {
   baseDecimals: number;
   quoteDecimals: number;
   lpDecimals: number;
-  // version
-  version: number;
+  version: 4;
   programId: string;
-  // keys
   authority: string;
   openOrders: string;
   targetOrders: string;
@@ -42,10 +39,8 @@ export interface ApiLiquidityPoolInfo {
   quoteVault: string;
   withdrawQueue: string;
   lpVault: string;
-  // market version
-  marketVersion: number;
+  marketVersion: 3;
   marketProgramId: string;
-  // market keys
   marketId: string;
   marketAuthority: string;
   marketBaseVault: string;
@@ -53,9 +48,42 @@ export interface ApiLiquidityPoolInfo {
   marketBids: string;
   marketAsks: string;
   marketEventQueue: string;
+  lookupTableAccount: string;
 }
 
-export type ApiLiquidityPools = { [key in "official" | "unOfficial"]: ApiLiquidityPoolInfo[] };
+export interface ApiPoolInfoV5 {
+  id: string;
+  baseMint: string;
+  quoteMint: string;
+  lpMint: string;
+  baseDecimals: number;
+  quoteDecimals: number;
+  lpDecimals: number;
+  version: 5;
+  programId: string;
+  authority: string;
+  openOrders: string;
+  targetOrders: string;
+  baseVault: string;
+  quoteVault: string;
+  withdrawQueue: string;
+  lpVault: string;
+  marketVersion: 3;
+  marketProgramId: string;
+  marketId: string;
+  marketAuthority: string;
+  marketBaseVault: string;
+  marketQuoteVault: string;
+  marketBids: string;
+  marketAsks: string;
+  marketEventQueue: string;
+  modelDataAccount: string;
+  lookupTableAccount: string;
+}
+
+export type ApiPoolJsonInfo = ApiPoolInfoV4 | ApiPoolInfoV5;
+
+export type ApiLiquidityPools = { [key in "official" | "unOfficial"]: ApiPoolJsonInfo[] };
 
 export interface ApiJsonPairInfo {
   ammId: string;

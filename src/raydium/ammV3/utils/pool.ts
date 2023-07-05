@@ -150,7 +150,8 @@ export class PoolUtils {
     for (let i = 0; i < rewardInfos.length; i++) {
       const _itemReward = rewardInfos[i];
       const apiRewardProgram =
-        apiPoolInfo.rewardInfos[i].programId ?? (await connection.getAccountInfo(_itemReward.tokenMint))!.owner;
+        apiPoolInfo.rewardInfos[i].programId ?? (await connection.getAccountInfo(_itemReward.tokenMint))?.owner;
+      if (apiRewardProgram === undefined) throw Error("get new reward mint info error");
 
       const itemReward: AmmV3PoolRewardInfo = {
         ..._itemReward,
@@ -290,7 +291,7 @@ export class PoolUtils {
     poolKeys: AmmV3PoolInfo[];
     batchRequest?: boolean;
   }): Promise<ReturnTypeFetchMultiplePoolTickArrays> {
-    const tickArraysToPoolId = {};
+    const tickArraysToPoolId: { [key: string]: PublicKey } = {};
     const tickArrays: { pubkey: PublicKey }[] = [];
     for (const itemPoolInfo of poolKeys) {
       const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(itemPoolInfo.tickArrayBitmap);
@@ -324,11 +325,11 @@ export class PoolUtils {
       if (!itemAccountInfo.accountInfo) continue;
       const poolId = tickArraysToPoolId[itemAccountInfo.pubkey.toString()];
       if (!poolId) continue;
-      if (tickArrayCache[poolId] === undefined) tickArrayCache[poolId] = {};
+      if (tickArrayCache[poolId.toString()] === undefined) tickArrayCache[poolId.toString()] = {};
 
       const accountLayoutData = TickArrayLayout.decode(itemAccountInfo.accountInfo.data);
 
-      tickArrayCache[poolId][accountLayoutData.startTickIndex] = {
+      tickArrayCache[poolId.toString()][accountLayoutData.startTickIndex] = {
         ...accountLayoutData,
         address: itemAccountInfo.pubkey,
       };
@@ -451,12 +452,12 @@ export class PoolUtils {
       if (updateOwnerRewardAndFee) {
         const tickArrayKeys = Object.values(keyToTickArrayAddress);
         const tickArrayDatas = await getMultipleAccountsInfo(connection, tickArrayKeys, { batchRequest });
-        const tickArrayLayout = {};
+        const tickArrayLayout: { [key: string]: TickArray } = {};
         for (let index = 0; index < tickArrayKeys.length; index++) {
           const tickArrayData = tickArrayDatas[index];
           if (tickArrayData === null) continue;
-          const key = tickArrayKeys[index].toString();
-          tickArrayLayout[key] = TickArrayLayout.decode(tickArrayData.data);
+          const key = tickArrayKeys[index];
+          tickArrayLayout[key.toString()] = { address: key, ...TickArrayLayout.decode(tickArrayData.data) };
         }
 
         for (const { state, positionAccount } of pools) {
@@ -896,6 +897,7 @@ export class PoolUtils {
     slippage,
     add,
     epochInfo,
+    amountHasFee,
   }: {
     poolInfo: AmmV3PoolInfo;
     token2022Infos: ReturnTypeFetchMultipleMintInfos;
@@ -906,6 +908,7 @@ export class PoolUtils {
     slippage: number;
     add: boolean;
     epochInfo: EpochInfo;
+    amountHasFee: boolean;
   }): ReturnTypeGetLiquidityAmountOut {
     const sqrtPriceX64 = poolInfo.sqrtPriceX64;
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
@@ -916,9 +919,9 @@ export class PoolUtils {
       amount,
       token2022Infos[inputA ? poolInfo.mintA.mint.toString() : poolInfo.mintB.mint.toString()]?.feeConfig,
       epochInfo,
-      !add,
+      !amountHasFee,
     );
-    const _amount = addFeeAmount.amount.sub(addFeeAmount.fee || BN_ZERO).muln(coefficient);
+    const _amount = addFeeAmount.amount.sub(addFeeAmount.fee ?? ZERO).muln(coefficient);
 
     let liquidity: BN;
     if (sqrtPriceX64.lte(sqrtPriceX64A)) {

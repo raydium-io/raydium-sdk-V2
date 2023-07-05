@@ -1,5 +1,5 @@
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
 
 import { parseBigNumberish } from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
@@ -26,6 +26,7 @@ import {
   LiquiditySwapFixedInInstructionParamsV4,
   LiquiditySwapFixedOutInstructionParamsV4,
   LiquiditySwapInstructionParams,
+  LiquidityInitPoolInstructionParamsV4,
 } from "./type";
 import BN from "bn.js";
 
@@ -313,7 +314,21 @@ export function makeCreatePoolV4InstructionV2({
 }
 
 export function makeInitPoolInstruction(params: LiquidityInitPoolInstructionParams): TransactionInstruction {
-  const { poolKeys, userKeys, startTime } = params;
+  const { poolKeys } = params;
+  const { version } = poolKeys;
+
+  if (version === 4) {
+    return makeInitPoolInstructionV4(params);
+  }
+
+  throw new Error(`invalid version: ${version}`);
+}
+
+export function makeInitPoolInstructionV4({
+  poolKeys,
+  userKeys,
+  startTime,
+}: LiquidityInitPoolInstructionParamsV4): TransactionInstruction {
   const data = Buffer.alloc(initPoolLayout.span);
   initPoolLayout.encode(
     {
@@ -325,7 +340,10 @@ export function makeInitPoolInstruction(params: LiquidityInitPoolInstructionPara
   );
 
   const keys = [
-    ...commonSystemAccountMeta,
+    // system
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
+    accountMeta({ pubkey: SYSVAR_RENT_PUBKEY, isWritable: false }),
     // amm
     accountMeta({ pubkey: poolKeys.id }),
     accountMeta({ pubkey: poolKeys.authority, isWritable: false }),

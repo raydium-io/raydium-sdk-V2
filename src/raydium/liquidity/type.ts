@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { ApiJsonPairInfo, ApiLiquidityPoolInfo } from "../../api/type";
+import { ApiJsonPairInfo, ApiPoolJsonInfo } from "../../api/type";
 import { GetMultipleAccountsInfoConfig } from "../../common/accountInfo";
 import { BigNumberish } from "../../common/bignumber";
 import { PublicKeyish } from "../../common/pubKey";
@@ -11,7 +11,8 @@ import { Percent, Price, Token, TokenAmount, CurrencyAmount } from "../../module
 import { ReplaceType } from "../type";
 import Decimal from "decimal.js-light";
 
-export type LiquidityPoolJsonInfo = ApiLiquidityPoolInfo;
+export type LiquidityPoolJsonInfo = ApiPoolJsonInfo;
+
 export type PairJsonInfo = ApiJsonPairInfo;
 /* ================= pool keys ================= */
 export type LiquidityPoolKeysV4 = {
@@ -147,15 +148,18 @@ export interface LiquidityAssociatedPoolKeysV4
 export type LiquidityAssociatedPoolKeys = LiquidityAssociatedPoolKeysV4;
 
 export interface CreatePoolParam {
-  version: number;
-  baseMint: PublicKey;
-  quoteMint: PublicKey;
-  marketId: PublicKey;
-  marketVersion: number;
-  baseDecimals: number;
-  quoteDecimals: number;
   programId: PublicKey;
+  baseMint: PublicKey;
+  baseDecimals: number;
+  quoteMint: PublicKey;
+  quoteDecimals: number;
+  marketId: PublicKey;
   marketProgramId: PublicKey;
+  ownerInfo: {
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  associatedOnly: boolean;
+  checkCreateATAOwner: boolean;
 }
 
 export interface CreatePoolV4Param {
@@ -336,4 +340,13 @@ export interface HydratedPairItemInfo {
 
   isStablePool: boolean;
   isOpenBook: boolean;
+}
+
+export interface LiquidityInitPoolInstructionParamsV4 {
+  poolKeys: LiquidityAssociatedPoolKeysV4;
+  userKeys: {
+    lpTokenAccount: PublicKey;
+    payer: PublicKey;
+  };
+  startTime: BigNumberish;
 }

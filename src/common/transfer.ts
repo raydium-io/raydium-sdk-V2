@@ -1,5 +1,5 @@
 import { EpochInfo, Connection, PublicKey } from "@solana/web3.js";
-import { TransferFeeConfig, TransferFee, getTransferFeeConfig, unpackMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TransferFeeConfig, TransferFee, getTransferFeeConfig, unpackMint } from "@solana/spl-token";
 import BN from "bn.js";
 import { getMultipleAccountsInfoWithCustomFlags } from "./accountInfo";
 
@@ -29,7 +29,10 @@ export function getTransferAmountFee(
       : undefined;
 
   if (addFee) {
-    const TAmount = BNDivCeil(amount.mul(new BN(POINT)), new BN(POINT - nowFeeConfig.transferFeeBasisPoints));
+    const _TAmount = BNDivCeil(amount.mul(new BN(POINT)), new BN(POINT - nowFeeConfig.transferFeeBasisPoints));
+
+    const nowMaxFee = new BN(nowFeeConfig.maximumFee.toString());
+    const TAmount = _TAmount.sub(amount).gt(nowMaxFee) ? amount.add(nowMaxFee) : _TAmount;
 
     const _fee = BNDivCeil(TAmount.mul(new BN(nowFeeConfig.transferFeeBasisPoints)), new BN(POINT));
     const fee = _fee.gt(maxFee) ? maxFee : _fee;
@@ -75,8 +78,7 @@ export async function fetchMultipleMintInfos({
 
   const mintK: ReturnTypeFetchMultipleMintInfos = {};
   for (const i of mintInfos) {
-    if (!i.accountInfo) continue;
-    const t = unpackMint(i.pubkey, i.accountInfo, i.accountInfo.owner ?? TOKEN_PROGRAM_ID);
+    const t = unpackMint(i.pubkey, i.accountInfo, i.accountInfo?.owner);
     mintK[i.pubkey.toString()] = {
       ...t,
       feeConfig: getTransferFeeConfig(t) ?? undefined,

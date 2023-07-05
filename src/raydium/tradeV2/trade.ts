@@ -550,7 +550,7 @@ export default class TradeV2 extends ModuleBase {
     executionPrice: Price | null;
     priceImpact: Fraction;
     fee: TokenAmount[];
-    remainingAccounts: PublicKey[][];
+    remainingAccounts: [PublicKey[] | undefined, PublicKey[] | undefined];
     expirationTime: number | undefined;
   }> {
     const middleToken = new Token(middleMintInfo);
@@ -659,7 +659,6 @@ export default class TradeV2 extends ModuleBase {
       } = this.scope.liquidity.computeAmountOut({
         poolKeys: jsonInfo2PoolKeys(toPool) as LiquidityPoolKeys,
         poolInfo: simulateCache[toPool.id as string],
-        // amountIn: minMiddleAmountOut,
         amountIn: new TokenAmount(
           minMiddleAmountOut.amount.token,
           minMiddleAmountOut.amount.raw.sub(
@@ -707,7 +706,7 @@ export default class TradeV2 extends ModuleBase {
       executionPrice,
       priceImpact: firstPriceImpact.add(secondPriceImpact),
       fee: [firstFee, secondFee],
-      remainingAccounts: [firstRemainingAccounts as PublicKey[], secondRemainingAccounts as PublicKey[]],
+      remainingAccounts: [firstRemainingAccounts, secondRemainingAccounts],
       expirationTime: minExpirationTime(firstExpirationTime, secondExpirationTime),
     };
   }
@@ -819,11 +818,13 @@ export default class TradeV2 extends ModuleBase {
     associatedOnly,
     checkCreateATAOwner,
     checkTransaction,
+    routeProgram = new PublicKey("routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS"),
   }: {
     swapInfo: ComputeAmountOutLayout;
     associatedOnly: boolean;
     checkCreateATAOwner: boolean;
     checkTransaction: boolean;
+    routeProgram: PublicKey;
   }): Promise<MakeMultiTransaction> {
     const swapInfo = {
       ...orgSwapInfo,
@@ -843,7 +844,6 @@ export default class TradeV2 extends ModuleBase {
     const inputMint = amountIn.amount.token.mint;
     const middleMint = swapInfo.middleMint!;
     const outputMint = amountOut.amount.token.mint;
-    const routeProgram = new PublicKey("routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS");
     const txBuilder = this.createTxBuilder();
 
     const { account: sourceToken, instructionParams: sourceInstructionParams } =

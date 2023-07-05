@@ -38,7 +38,7 @@ export interface ComputeAmountOutRouteLayout {
   fee: TokenAmount[];
   routeType: "route";
   poolKey: PoolType[];
-  remainingAccounts: PublicKey[][];
+  remainingAccounts: (PublicKey[] | undefined)[];
   minMiddleAmountFee: TokenAmount;
   poolReady: boolean;
   poolType: (string | undefined)[];
@@ -92,6 +92,7 @@ export interface ReturnTypeMakeSwapInstruction {
   instructions: TransactionInstruction[];
   instructionTypes: string[];
   address: { [key: string]: PublicKey };
+  lookupTableAddress: PublicKey[];
 }
 export interface ReturnTypeMakeSwapTransaction {
   transactions: {

@@ -486,7 +486,7 @@ export class LiquidityMath {
       amountB,
       amountSlippageA,
       amountSlippageB,
-      expirationTime: minExpirationTime(amountA.expirationTime, amountB.expirationTime) as number,
+      expirationTime: minExpirationTime(amountA.expirationTime, amountB.expirationTime),
     };
   }
 }

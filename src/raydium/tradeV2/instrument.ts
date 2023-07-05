@@ -244,7 +244,7 @@ function makeInnerInsKey(
   inMint: string,
   userInAccount: PublicKey,
   userOutAccount: PublicKey,
-  remainingAccount: PublicKey[],
+  remainingAccount: PublicKey[] | undefined,
 ): AccountMeta[] {
   if (itemPool.version === 4) {
     const poolKey = jsonInfo2PoolKeys(itemPool) as LiquidityPoolKeysV4;
@@ -311,7 +311,7 @@ function makeInnerInsKey(
       { pubkey: baseIn ? pool.mintA.vault : pool.mintB.vault, isSigner: false, isWritable: true },
       { pubkey: baseIn ? pool.mintB.vault : pool.mintA.vault, isSigner: false, isWritable: true },
       { pubkey: pool.observationId, isSigner: false, isWritable: true },
-      ...remainingAccount.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+      ...(remainingAccount ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
     ];
   } else {
     throw Error("make swap ins error");
@@ -335,7 +335,7 @@ export function routeInstruction(
   amountIn: BN,
   amountOut: BN,
 
-  remainingAccounts: PublicKey[][],
+  remainingAccounts: (PublicKey[] | undefined)[],
 ): TransactionInstruction {
   const dataLayout = struct([u8("instruction"), u64("amountIn"), u64("amountOut")]);
 
@@ -410,12 +410,13 @@ export async function makeSwapInstruction({
       });
     } else {
       const _poolKey = swapInfo.poolKey[0] as LiquidityPoolJsonInfo;
+      const poolKeys = jsonInfo2PoolKeys(_poolKey);
 
       return {
         signers: [],
         instructions: [
           makeAMMSwapInstruction({
-            poolKeys: jsonInfo2PoolKeys(_poolKey),
+            poolKeys,
             userKeys: {
               tokenAccountIn: ownerInfo.sourceToken,
               tokenAccountOut: ownerInfo.destinationToken,
@@ -426,6 +427,7 @@ export async function makeSwapInstruction({
             fixedSide: "in",
           }),
         ],
+        lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
         instructionTypes: [_poolKey.version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV5SwapBaseIn],
         address: {},
       };
@@ -434,6 +436,8 @@ export async function makeSwapInstruction({
     const poolKey1 = swapInfo.poolKey[0];
     const poolKey2 = swapInfo.poolKey[1];
 
+    if (ownerInfo.routeToken === undefined) throw Error("owner route token account check error");
+
     return {
       signers: [],
       instructions: [
@@ -441,7 +445,7 @@ export async function makeSwapInstruction({
           routeProgram,
           ownerInfo.wallet,
           ownerInfo.sourceToken,
-          ownerInfo.routeToken!,
+          ownerInfo.routeToken,
           ownerInfo.destinationToken,
 
           inputMint.toString(),
@@ -457,6 +461,7 @@ export async function makeSwapInstruction({
         ),
       ],
       instructionTypes: [InstructionType.RouteSwap],
+      lookupTableAddress: [new PublicKey(poolKey1.lookupTableAccount), new PublicKey(poolKey2.lookupTableAccount)],
       address: {},
     };
   } else {

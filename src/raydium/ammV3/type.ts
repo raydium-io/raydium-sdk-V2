@@ -256,6 +256,7 @@ export interface ReturnTypeMakeInstructions {
   instructions: TransactionInstruction[];
   instructionTypes: string[];
   address: { [name: string]: PublicKey };
+  lookupTableAddress: PublicKey[];
 }
 
 export interface ReturnTypeGetLiquidityAmountOut {
@@ -264,7 +265,7 @@ export interface ReturnTypeGetLiquidityAmountOut {
   amountSlippageB: GetTransferAmountFee;
   amountA: GetTransferAmountFee;
   amountB: GetTransferAmountFee;
-  expirationTime: number;
+  expirationTime: number | undefined;
 }
 export interface ReturnTypeGetAmountsFromLiquidity {
   amountSlippageA: BN;
@@ -344,18 +345,46 @@ export interface UserPositionAccount {
   };
 }
 
-export interface IncreaseLiquidity {
+export interface IncreasePositionFromLiquidity {
   poolId: PublicKey;
   ownerPosition: AmmV3PoolPersonalPosition;
-  amountMinA?: BN;
-  amountMinB?: BN;
   ownerInfo: {
     useSOLBalance?: boolean;
+  };
+
+  amountMaxA: BN;
+  amountMaxB: BN;
+
+  liquidity: BN;
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+}
+
+export interface IncreasePositionFromBase {
+  poolId: PublicKey;
+  ownerPosition: AmmV3PoolPersonalPosition;
+  ownerInfo: {
+    useSOLBalance?: boolean;
+  };
+  base: "MintA" | "MintB";
+  baseAmount: BN;
+  otherAmountMax: BN;
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+}
+
+export interface DecreaseLiquidity {
+  poolId: PublicKey;
+  ownerPosition: AmmV3PoolPersonalPosition;
+  ownerInfo: {
+    useSOLBalance?: boolean; // if has WSOL mint
     closePosition?: boolean;
   };
 
   liquidity: BN;
-  slippage: number;
+  amountMinA: BN;
+  amountMinB: BN;
+
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
 }
@@ -374,7 +403,7 @@ export interface AmmV3PoolRewardLayoutInfo {
   rewardGrowthGlobalX64: BN;
 }
 
-export interface OpenPosition {
+export interface OpenPositionFromBase {
   poolId: PublicKey;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
@@ -382,6 +411,23 @@ export interface OpenPosition {
   tickLower: number;
   tickUpper: number;
 
+  base: "MintA" | "MintB";
+  baseAmount: BN;
+  otherAmountMax: BN;
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+}
+
+export interface OpenPositionFromLiquidity {
+  poolId: PublicKey;
+  ownerInfo: {
+    useSOLBalance?: boolean; // if has WSOL mint (default: true)
+  };
+  amountMaxA: BN;
+  amountMaxB: BN;
+  tickLower: number;
+  tickUpper: number;
   liquidity: BN;
   slippage: number;
   associatedOnly?: boolean;
@@ -470,6 +516,7 @@ export interface SetRewardParams {
   };
 
   rewardInfo: {
+    programId: PublicKey;
     mint: PublicKey;
     openTime: number; // If the reward is being distributed, please give 0
     endTime: number; // If no modification is required, enter 0
@@ -481,6 +528,7 @@ export interface SetRewardParams {
 
 export interface SetRewardsParams extends Omit<SetRewardParams, "rewardInfo"> {
   rewardInfos: {
+    programId: PublicKey;
     mint: PublicKey;
     openTime: number; // If the reward is being distributed, please give 0
     endTime: number; // If no modification is required, enter 0

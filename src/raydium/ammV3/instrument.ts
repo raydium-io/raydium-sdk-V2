@@ -1,4 +1,4 @@
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   PublicKey,
   TransactionInstruction,
@@ -16,6 +16,8 @@ import {
   METADATA_PROGRAM_ID,
   InstructionType,
   getATAAddress,
+  BN_ZERO,
+  MEMO_PROGRAM_ID,
 } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
 import { MintInfo, ReturnTypeMakeInstructions, AmmV3PoolInfo, AmmV3PoolPersonalPosition } from "./type";
@@ -39,10 +41,10 @@ const anchorDataBuf = {
   initReward: [95, 135, 192, 196, 242, 129, 230, 68],
   setRewardEmissions: [13, 197, 86, 168, 109, 176, 27, 244],
   collectProtocolFee: [136, 136, 252, 221, 194, 66, 126, 89],
-  openPosition: [135, 128, 47, 77, 15, 152, 240, 49],
+  openPosition: [77, 184, 74, 214, 112, 86, 241, 199],
   closePosition: [123, 134, 81, 0, 49, 68, 98, 98],
-  increaseLiquidity: [46, 156, 243, 118, 13, 205, 251, 178],
-  decreaseLiquidity: [160, 38, 208, 111, 104, 91, 44, 1],
+  increaseLiquidity: [133, 29, 89, 223, 69, 238, 176, 10],
+  decreaseLiquidity: [58, 127, 188, 62, 79, 82, 196, 96],
   swap: [248, 198, 158, 145, 225, 117, 135, 200],
   collectReward: [18, 237, 166, 197, 34, 16, 213, 144],
 };
@@ -143,10 +145,11 @@ export class AmmV3Instrument {
       instructions: ins,
       instructionTypes: [InstructionType.CreateAccount, InstructionType.ClmmCreatePool],
       address: { poolId, observationId: observationId.publicKey, mintAVault, mintBVault },
+      lookupTableAddress: [],
     };
   }
 
-  static openPositionInstruction(
+  static openPositionFromLiquidityInstruction(
     programId: PublicKey,
     payer: PublicKey,
     poolId: PublicKey,
@@ -162,14 +165,16 @@ export class AmmV3Instrument {
     ownerTokenAccountB: PublicKey,
     tokenVaultA: PublicKey,
     tokenVaultB: PublicKey,
+    tokenMintA: PublicKey,
+    tokenMintB: PublicKey,
 
     tickLowerIndex: number,
     tickUpperIndex: number,
     tickArrayLowerStartIndex: number,
     tickArrayUpperStartIndex: number,
     liquidity: BN,
-    amountMinA: BN,
-    amountMinB: BN,
+    amountMaxA: BN,
+    amountMaxB: BN,
   ): TransactionInstruction {
     const dataLayout = struct([
       s32("tickLowerIndex"),
@@ -177,8 +182,10 @@ export class AmmV3Instrument {
       s32("tickArrayLowerStartIndex"),
       s32("tickArrayUpperStartIndex"),
       u128("liquidity"),
-      u64("amountMinA"),
-      u64("amountMinB"),
+      u64("amountMaxA"),
+      u64("amountMaxB"),
+      u8("optionBaseFlag"),
+      bool("baseFlag"),
     ]);
 
     const keys = [
@@ -202,6 +209,10 @@ export class AmmV3Instrument {
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+
+      { pubkey: tokenMintA, isSigner: false, isWritable: false },
+      { pubkey: tokenMintB, isSigner: false, isWritable: false },
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -212,8 +223,10 @@ export class AmmV3Instrument {
         tickArrayLowerStartIndex,
         tickArrayUpperStartIndex,
         liquidity,
-        amountMinA,
-        amountMinB,
+        amountMaxA,
+        amountMaxB,
+        baseFlag: false,
+        optionBaseFlag: 0,
       },
       data,
     );
@@ -233,8 +246,8 @@ export class AmmV3Instrument {
     tickLower,
     tickUpper,
     liquidity,
-    amountSlippageA,
-    amountSlippageB,
+    amountMaxA,
+    amountMaxB,
     programId,
   }: {
     poolInfo: AmmV3PoolInfo;
@@ -249,8 +262,8 @@ export class AmmV3Instrument {
     tickLower: number;
     tickUpper: number;
     liquidity: BN;
-    amountSlippageA: BN;
-    amountSlippageB: BN;
+    amountMaxA: BN;
+    amountMaxB: BN;
     programId?: PublicKey;
   }): ReturnTypeMakeInstructions {
     const signers: Signer[] = [];
@@ -285,7 +298,7 @@ export class AmmV3Instrument {
       tickUpper,
     );
 
-    const ins = this.openPositionInstruction(
+    const ins = this.openPositionFromLiquidityInstruction(
       poolInfo.programId,
       ownerInfo.feePayer,
       poolInfo.id,
@@ -301,21 +314,323 @@ export class AmmV3Instrument {
       ownerInfo.tokenAccountB,
       poolInfo.mintA.vault,
       poolInfo.mintB.vault,
+      poolInfo.mintA.mint,
+      poolInfo.mintB.mint,
 
       tickLower,
       tickUpper,
       tickArrayLowerStartIndex,
       tickArrayUpperStartIndex,
       liquidity,
-      amountSlippageA,
-      amountSlippageB,
+      amountMaxA,
+      amountMaxB,
     );
 
     return {
       signers: [nftMintAKeypair],
       instructions: [ins],
       instructionTypes: [InstructionType.ClmmOpenPosition],
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
       address: {},
+    };
+  }
+
+  static openPositionFromBaseInstructions({
+    poolInfo,
+    ownerInfo,
+    tickLower,
+    tickUpper,
+    base,
+    baseAmount,
+    otherAmountMax,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+
+    ownerInfo: {
+      feePayer: PublicKey;
+      wallet: PublicKey;
+      tokenAccountA: PublicKey;
+      tokenAccountB: PublicKey;
+    };
+
+    tickLower: number;
+    tickUpper: number;
+
+    base: "MintA" | "MintB";
+    baseAmount: BN;
+
+    otherAmountMax: BN;
+  }): ReturnTypeMakeInstructions {
+    const nftMintAKeypair = new Keypair();
+
+    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
+    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
+
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayLowerStartIndex,
+    );
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayUpperStartIndex,
+    );
+
+    const { publicKey: positionNftAccount } = getATAAddress(
+      ownerInfo.wallet,
+      nftMintAKeypair.publicKey,
+      TOKEN_PROGRAM_ID,
+    );
+    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAKeypair.publicKey);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(
+      poolInfo.programId,
+      nftMintAKeypair.publicKey,
+    );
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickLower,
+      tickUpper,
+    );
+
+    const ins = this.openPositionFromBaseInstruction(
+      poolInfo.programId,
+      ownerInfo.feePayer,
+      poolInfo.id,
+      ownerInfo.wallet,
+      nftMintAKeypair.publicKey,
+      positionNftAccount,
+      metadataAccount,
+      protocolPosition,
+      tickArrayLower,
+      tickArrayUpper,
+      personalPosition,
+      ownerInfo.tokenAccountA,
+      ownerInfo.tokenAccountB,
+      poolInfo.mintA.vault,
+      poolInfo.mintB.vault,
+      poolInfo.mintA.mint,
+      poolInfo.mintB.mint,
+
+      tickLower,
+      tickUpper,
+      tickArrayLowerStartIndex,
+      tickArrayUpperStartIndex,
+
+      base,
+      baseAmount,
+
+      otherAmountMax,
+    );
+
+    return {
+      address: {
+        nftMint: nftMintAKeypair.publicKey,
+        tickArrayLower,
+        tickArrayUpper,
+        positionNftAccount,
+        metadataAccount,
+        personalPosition,
+        protocolPosition,
+      },
+      instructions: [ins],
+      signers: [nftMintAKeypair],
+      instructionTypes: [InstructionType.ClmmOpenPosition],
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+    };
+  }
+
+  static openPositionFromBaseInstruction(
+    programId: PublicKey,
+    payer: PublicKey,
+    poolId: PublicKey,
+    positionNftOwner: PublicKey,
+    positionNftMint: PublicKey,
+    positionNftAccount: PublicKey,
+    metadataAccount: PublicKey,
+    protocolPosition: PublicKey,
+    tickArrayLower: PublicKey,
+    tickArrayUpper: PublicKey,
+    personalPosition: PublicKey,
+    ownerTokenAccountA: PublicKey,
+    ownerTokenAccountB: PublicKey,
+    tokenVaultA: PublicKey,
+    tokenVaultB: PublicKey,
+    tokenMintA: PublicKey,
+    tokenMintB: PublicKey,
+
+    tickLowerIndex: number,
+    tickUpperIndex: number,
+    tickArrayLowerStartIndex: number,
+    tickArrayUpperStartIndex: number,
+
+    base: "MintA" | "MintB",
+    baseAmount: BN,
+
+    otherAmountMax: BN,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      s32("tickLowerIndex"),
+      s32("tickUpperIndex"),
+      s32("tickArrayLowerStartIndex"),
+      s32("tickArrayUpperStartIndex"),
+      u128("liquidity"),
+      u64("amountMaxA"),
+      u64("amountMaxB"),
+      u8("optionBaseFlag"),
+      bool("baseFlag"),
+    ]);
+
+    const keys = [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: positionNftOwner, isSigner: false, isWritable: false },
+      { pubkey: positionNftMint, isSigner: true, isWritable: true },
+      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
+      { pubkey: metadataAccount, isSigner: false, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: true },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
+      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
+      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
+      { pubkey: tokenVaultA, isSigner: false, isWritable: true },
+      { pubkey: tokenVaultB, isSigner: false, isWritable: true },
+
+      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+
+      { pubkey: tokenMintA, isSigner: false, isWritable: false },
+      { pubkey: tokenMintB, isSigner: false, isWritable: false },
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
+      {
+        tickLowerIndex,
+        tickUpperIndex,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+        liquidity: BN_ZERO,
+        amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
+        amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
+        baseFlag: base === "MintA",
+        optionBaseFlag: 1,
+      },
+      data,
+    );
+
+    const aData = Buffer.from([...anchorDataBuf.openPosition, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static openPositionFromLiquidityInstructions({
+    poolInfo,
+    ownerInfo,
+    tickLower,
+    tickUpper,
+    liquidity,
+    amountMaxA,
+    amountMaxB,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    ownerInfo: {
+      wallet: PublicKey;
+      tokenAccountA: PublicKey;
+      tokenAccountB: PublicKey;
+    };
+
+    tickLower: number;
+    tickUpper: number;
+    liquidity: BN;
+    amountMaxA: BN;
+    amountMaxB: BN;
+  }): ReturnTypeMakeInstructions {
+    const nftMintAKeypair = new Keypair();
+
+    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
+    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
+
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayLowerStartIndex,
+    );
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayUpperStartIndex,
+    );
+
+    const { publicKey: positionNftAccount } = getATAAddress(
+      ownerInfo.wallet,
+      nftMintAKeypair.publicKey,
+      TOKEN_PROGRAM_ID,
+    );
+    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAKeypair.publicKey);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(
+      poolInfo.programId,
+      nftMintAKeypair.publicKey,
+    );
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickLower,
+      tickUpper,
+    );
+
+    const ins = this.openPositionFromLiquidityInstruction(
+      poolInfo.programId,
+      ownerInfo.wallet,
+      poolInfo.id,
+      ownerInfo.wallet,
+      nftMintAKeypair.publicKey,
+      positionNftAccount,
+      metadataAccount,
+      protocolPosition,
+      tickArrayLower,
+      tickArrayUpper,
+      personalPosition,
+      ownerInfo.tokenAccountA,
+      ownerInfo.tokenAccountB,
+      poolInfo.mintA.vault,
+      poolInfo.mintB.vault,
+      poolInfo.mintA.mint,
+      poolInfo.mintB.mint,
+
+      tickLower,
+      tickUpper,
+      tickArrayLowerStartIndex,
+      tickArrayUpperStartIndex,
+      liquidity,
+      amountMaxA,
+      amountMaxB,
+    );
+
+    return {
+      address: {
+        nftMint: nftMintAKeypair.publicKey,
+        tickArrayLower,
+        tickArrayUpper,
+        positionNftAccount,
+        metadataAccount,
+        personalPosition,
+        protocolPosition,
+      },
+      instructions: [ins],
+      signers: [nftMintAKeypair],
+      instructionTypes: [InstructionType.ClmmOpenPosition],
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
   }
 
@@ -350,24 +665,19 @@ export class AmmV3Instrument {
     });
   }
 
-  static async makeClosePositionInstructions({
+  static closePositionInstructions({
     poolInfo,
     ownerInfo,
     ownerPosition,
-    programId,
   }: {
     poolInfo: AmmV3PoolInfo;
     ownerPosition: AmmV3PoolPersonalPosition;
     ownerInfo: {
       wallet: PublicKey;
     };
-    programId?: PublicKey;
-  }): Promise<ReturnTypeMakeInstructions> {
-    const { publicKey: positionNftAccount } = await getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, programId);
-    const { publicKey: personalPosition } = await getPdaPersonalPositionAddress(
-      poolInfo.programId,
-      ownerPosition.nftMint,
-    );
+  }): ReturnTypeMakeInstructions {
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
 
     const ins: TransactionInstruction[] = [];
     ins.push(
@@ -382,14 +692,18 @@ export class AmmV3Instrument {
     );
 
     return {
+      address: {
+        positionNftAccount,
+        personalPosition,
+      },
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmClosePosition],
-      address: {},
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
   }
 
-  static increaseLiquidityInstruction(
+  static increasePositionFromLiquidityInstruction(
     programId: PublicKey,
     positionNftOwner: PublicKey,
     positionNftAccount: PublicKey,
@@ -403,12 +717,20 @@ export class AmmV3Instrument {
     ownerTokenAccountB: PublicKey,
     mintVaultA: PublicKey,
     mintVaultB: PublicKey,
+    mintMintA: PublicKey,
+    mintMintB: PublicKey,
 
     liquidity: BN,
-    amount0Max: BN,
-    amount1Max: BN,
+    amountMaxA: BN,
+    amountMaxB: BN,
   ): TransactionInstruction {
-    const dataLayout = struct([u128("liquidity"), u64("amount0Max"), u64("amount1Max")]);
+    const dataLayout = struct([
+      u128("liquidity"),
+      u64("amountMaxA"),
+      u64("amountMaxB"),
+      u8("optionBaseFlag"),
+      bool("baseFlag"),
+    ]);
 
     const keys = [
       { pubkey: positionNftOwner, isSigner: true, isWritable: false },
@@ -424,14 +746,20 @@ export class AmmV3Instrument {
       { pubkey: mintVaultB, isSigner: false, isWritable: true },
 
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+
+      { pubkey: mintMintA, isSigner: false, isWritable: false },
+      { pubkey: mintMintB, isSigner: false, isWritable: false },
     ];
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(
       {
         liquidity,
-        amount0Max,
-        amount1Max,
+        amountMaxA,
+        amountMaxB,
+        optionBaseFlag: 0,
+        baseFlag: false,
       },
       data,
     );
@@ -445,14 +773,13 @@ export class AmmV3Instrument {
     });
   }
 
-  static makeIncreaseLiquidityInstructions({
+  static increasePositionFromLiquidityInstructions({
     poolInfo,
     ownerPosition,
     ownerInfo,
     liquidity,
-    amountSlippageA,
-    amountSlippageB,
-    programId,
+    amountMaxA,
+    amountMaxB,
   }: {
     poolInfo: AmmV3PoolInfo;
     ownerPosition: AmmV3PoolPersonalPosition;
@@ -464,9 +791,8 @@ export class AmmV3Instrument {
     };
 
     liquidity: BN;
-    amountSlippageA: BN;
-    amountSlippageB: BN;
-    programId?: PublicKey;
+    amountMaxA: BN;
+    amountMaxB: BN;
   }): ReturnTypeMakeInstructions {
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
@@ -488,7 +814,7 @@ export class AmmV3Instrument {
       tickArrayUpperStartIndex,
     );
 
-    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, programId);
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
 
     const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
@@ -498,34 +824,200 @@ export class AmmV3Instrument {
       ownerPosition.tickUpper,
     );
 
-    const ins: TransactionInstruction[] = [];
-    ins.push(
-      this.increaseLiquidityInstruction(
-        poolInfo.programId,
-        ownerInfo.wallet,
-        positionNftAccount,
-        personalPosition,
-        poolInfo.id,
-        protocolPosition,
-        tickArrayLower,
-        tickArrayUpper,
-        ownerInfo.tokenAccountA,
-        ownerInfo.tokenAccountB,
-        poolInfo.mintA.vault,
-        poolInfo.mintB.vault,
+    const ins = this.increasePositionFromLiquidityInstruction(
+      poolInfo.programId,
+      ownerInfo.wallet,
+      positionNftAccount,
+      personalPosition,
+      poolInfo.id,
+      protocolPosition,
+      tickArrayLower,
+      tickArrayUpper,
+      ownerInfo.tokenAccountA,
+      ownerInfo.tokenAccountB,
+      poolInfo.mintA.vault,
+      poolInfo.mintB.vault,
+      poolInfo.mintA.mint,
+      poolInfo.mintB.mint,
 
-        liquidity,
-        amountSlippageA,
-        amountSlippageB,
-      ),
+      liquidity,
+      amountMaxA,
+      amountMaxB,
     );
 
     return {
+      address: {
+        tickArrayLower,
+        tickArrayUpper,
+        positionNftAccount,
+        personalPosition,
+        protocolPosition,
+      },
       signers: [],
-      instructions: ins,
+      instructions: [ins],
       instructionTypes: [InstructionType.ClmmIncreasePosition],
-      address: {},
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
+  }
+
+  static increasePositionFromBaseInstructions({
+    poolInfo,
+    ownerPosition,
+    ownerInfo,
+    base,
+    baseAmount,
+    otherAmountMax,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    ownerPosition: AmmV3PoolPersonalPosition;
+
+    ownerInfo: {
+      wallet: PublicKey;
+      tokenAccountA: PublicKey;
+      tokenAccountB: PublicKey;
+    };
+
+    base: "MintA" | "MintB";
+    baseAmount: BN;
+
+    otherAmountMax: BN;
+  }): ReturnTypeMakeInstructions {
+    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
+      ownerPosition.tickLower,
+      poolInfo.ammConfig.tickSpacing,
+    );
+    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
+      ownerPosition.tickUpper,
+      poolInfo.ammConfig.tickSpacing,
+    );
+
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayLowerStartIndex,
+    );
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayUpperStartIndex,
+    );
+
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
+
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
+      poolInfo.programId,
+      poolInfo.id,
+      ownerPosition.tickLower,
+      ownerPosition.tickUpper,
+    );
+
+    return {
+      address: {
+        tickArrayLower,
+        tickArrayUpper,
+        positionNftAccount,
+        personalPosition,
+        protocolPosition,
+      },
+      instructions: [
+        this.increasePositionFromBaseInstruction(
+          poolInfo.programId,
+          ownerInfo.wallet,
+          positionNftAccount,
+          personalPosition,
+          poolInfo.id,
+          protocolPosition,
+          tickArrayLower,
+          tickArrayUpper,
+          ownerInfo.tokenAccountA,
+          ownerInfo.tokenAccountB,
+          poolInfo.mintA.vault,
+          poolInfo.mintB.vault,
+          poolInfo.mintA.mint,
+          poolInfo.mintB.mint,
+
+          base,
+          baseAmount,
+
+          otherAmountMax,
+        ),
+      ],
+      signers: [],
+      instructionTypes: [InstructionType.ClmmIncreasePosition],
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+    };
+  }
+
+  static increasePositionFromBaseInstruction(
+    programId: PublicKey,
+    positionNftOwner: PublicKey,
+    positionNftAccount: PublicKey,
+    personalPosition: PublicKey,
+
+    poolId: PublicKey,
+    protocolPosition: PublicKey,
+    tickArrayLower: PublicKey,
+    tickArrayUpper: PublicKey,
+    ownerTokenAccountA: PublicKey,
+    ownerTokenAccountB: PublicKey,
+    mintVaultA: PublicKey,
+    mintVaultB: PublicKey,
+    mintMintA: PublicKey,
+    mintMintB: PublicKey,
+
+    base: "MintA" | "MintB",
+    baseAmount: BN,
+
+    otherAmountMax: BN,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u128("liquidity"),
+      u64("amountMaxA"),
+      u64("amountMaxB"),
+      u8("optionBaseFlag"),
+      bool("baseFlag"),
+    ]);
+
+    const keys = [
+      { pubkey: positionNftOwner, isSigner: true, isWritable: false },
+      { pubkey: positionNftAccount, isSigner: false, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: true },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
+      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
+      { pubkey: mintVaultA, isSigner: false, isWritable: true },
+      { pubkey: mintVaultB, isSigner: false, isWritable: true },
+
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+
+      { pubkey: mintMintA, isSigner: false, isWritable: false },
+      { pubkey: mintMintB, isSigner: false, isWritable: false },
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
+      {
+        liquidity: BN_ZERO,
+        amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
+        amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
+        baseFlag: base === "MintA",
+        optionBaseFlag: 1,
+      },
+      data,
+    );
+
+    const aData = Buffer.from([...anchorDataBuf.increaseLiquidity, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
   }
 
   static decreaseLiquidityInstruction(
@@ -542,9 +1034,12 @@ export class AmmV3Instrument {
     ownerTokenAccountB: PublicKey,
     mintVaultA: PublicKey,
     mintVaultB: PublicKey,
+    mintMintA: PublicKey,
+    mintMintB: PublicKey,
     rewardAccounts: {
       poolRewardVault: PublicKey;
       ownerRewardVault: PublicKey;
+      rewardMint: PublicKey;
     }[],
 
     liquidity: BN,
@@ -552,7 +1047,6 @@ export class AmmV3Instrument {
     amount1Max: BN,
   ): TransactionInstruction {
     const dataLayout = struct([u128("liquidity"), u64("amount0Max"), u64("amount1Max")]);
-
     const keys = [
       { pubkey: positionNftOwner, isSigner: true, isWritable: false },
       { pubkey: positionNftAccount, isSigner: false, isWritable: false },
@@ -568,11 +1062,17 @@ export class AmmV3Instrument {
       { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
 
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+
+      { pubkey: mintMintA, isSigner: false, isWritable: false },
+      { pubkey: mintMintB, isSigner: false, isWritable: false },
 
       ...rewardAccounts
         .map((i) => [
           { pubkey: i.poolRewardVault, isSigner: false, isWritable: true },
           { pubkey: i.ownerRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.rewardMint, isSigner: false, isWritable: false },
         ])
         .flat(),
     ];
@@ -596,7 +1096,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static makeDecreaseLiquidityInstructions({
+  static decreaseLiquidityInstructions({
     poolInfo,
     ownerPosition,
     ownerInfo,
@@ -652,11 +1152,13 @@ export class AmmV3Instrument {
     const rewardAccounts: {
       poolRewardVault: PublicKey;
       ownerRewardVault: PublicKey;
+      rewardMint: PublicKey;
     }[] = [];
     for (let i = 0; i < poolInfo.rewardInfos.length; i++) {
       rewardAccounts.push({
         poolRewardVault: poolInfo.rewardInfos[0].tokenVault,
         ownerRewardVault: ownerInfo.rewardAccounts[0],
+        rewardMint: poolInfo.rewardInfos[i].tokenMint,
       });
     }
 
@@ -675,6 +1177,8 @@ export class AmmV3Instrument {
         ownerInfo.tokenAccountB,
         poolInfo.mintA.vault,
         poolInfo.mintB.vault,
+        poolInfo.mintA.mint,
+        poolInfo.mintB.mint,
         rewardAccounts,
 
         liquidity,
@@ -684,10 +1188,17 @@ export class AmmV3Instrument {
     );
 
     return {
+      address: {
+        tickArrayLower,
+        tickArrayUpper,
+        positionNftAccount,
+        personalPosition,
+        protocolPosition,
+      },
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmDecreasePosition],
-      address: {},
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
   }
 
@@ -700,6 +1211,8 @@ export class AmmV3Instrument {
     outputTokenAccount: PublicKey,
     inputVault: PublicKey,
     outputVault: PublicKey,
+    inputMint: PublicKey,
+    outputMint: PublicKey,
     tickArray: PublicKey[],
     observationId: PublicKey,
 
@@ -728,6 +1241,11 @@ export class AmmV3Instrument {
       { pubkey: observationId, isSigner: false, isWritable: true },
 
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+
+      { pubkey: inputMint, isSigner: false, isWritable: false },
+      { pubkey: outputMint, isSigner: false, isWritable: false },
 
       ...tickArray.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
     ];
@@ -792,6 +1310,9 @@ export class AmmV3Instrument {
         isInputMintA ? poolInfo.mintA.vault : poolInfo.mintB.vault,
         isInputMintA ? poolInfo.mintB.vault : poolInfo.mintA.vault,
 
+        isInputMintA ? poolInfo.mintA.mint : poolInfo.mintB.mint,
+        isInputMintA ? poolInfo.mintB.mint : poolInfo.mintA.mint,
+
         remainingAccounts,
         poolInfo.observationId,
         amountIn,
@@ -804,6 +1325,7 @@ export class AmmV3Instrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSwapBaseIn],
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
       address: {},
     };
   }
@@ -859,7 +1381,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static makeInitRewardInstructions({
+  static initRewardInstructions({
     poolInfo,
     ownerInfo,
     rewardInfo,
@@ -897,10 +1419,11 @@ export class AmmV3Instrument {
       ),
     ];
     return {
+      address: { poolRewardVault, operationId },
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmInitReward],
-      address: {},
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
   }
 
@@ -913,6 +1436,7 @@ export class AmmV3Instrument {
 
     ownerTokenAccount: PublicKey,
     rewardVault: PublicKey,
+    rewardMint: PublicKey,
 
     rewardIndex: number,
     openTime: number,
@@ -927,10 +1451,12 @@ export class AmmV3Instrument {
       { pubkey: poolId, isSigner: false, isWritable: true },
       { pubkey: operationId, isSigner: false, isWritable: true },
 
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+
       { pubkey: rewardVault, isSigner: false, isWritable: true },
       { pubkey: ownerTokenAccount, isSigner: false, isWritable: true },
-
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: rewardMint, isSigner: false, isWritable: true },
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -953,7 +1479,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static makeSetRewardInstructions({
+  static setRewardInstructions({
     poolInfo,
     ownerInfo,
     rewardInfo,
@@ -972,10 +1498,12 @@ export class AmmV3Instrument {
   }): ReturnTypeMakeInstructions {
     let rewardIndex;
     let rewardVault;
+    let rewardMint;
     for (let index = 0; index < poolInfo.rewardInfos.length; index++)
       if (poolInfo.rewardInfos[index].tokenMint.equals(rewardInfo.mint)) {
         rewardIndex = index;
         rewardVault = poolInfo.rewardInfos[index].tokenVault;
+        rewardMint = poolInfo.rewardInfos[index].tokenMint;
       }
 
     if (rewardIndex === undefined || rewardVault === undefined)
@@ -993,6 +1521,7 @@ export class AmmV3Instrument {
 
         ownerInfo.tokenAccount,
         rewardVault,
+        rewardMint,
 
         rewardIndex,
         rewardInfo.openTime,
@@ -1001,10 +1530,11 @@ export class AmmV3Instrument {
       ),
     ];
     return {
+      address: { rewardVault, operationId },
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSetReward],
-      address: {},
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
   }
 
@@ -1015,6 +1545,7 @@ export class AmmV3Instrument {
 
     ownerTokenAccount: PublicKey,
     rewardVault: PublicKey,
+    rewardMint: PublicKey,
 
     rewardIndex: number,
   ): TransactionInstruction {
@@ -1025,7 +1556,10 @@ export class AmmV3Instrument {
       { pubkey: ownerTokenAccount, isSigner: false, isWritable: true },
       { pubkey: poolId, isSigner: false, isWritable: true },
       { pubkey: rewardVault, isSigner: false, isWritable: true },
+      { pubkey: rewardMint, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -1045,7 +1579,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static makeCollectRewardInstructions({
+  static collectRewardInstructions({
     poolInfo,
     ownerInfo,
     rewardMint,
@@ -1076,15 +1610,17 @@ export class AmmV3Instrument {
 
         ownerInfo.tokenAccount,
         rewardVault,
+        rewardMint,
 
         rewardIndex,
       ),
     ];
     return {
+      address: { rewardVault },
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmCollectReward],
-      address: {},
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
   }
 
@@ -1099,7 +1635,7 @@ export class AmmV3Instrument {
     ];
   }
 
-  static makeSwapBaseOutInstructions({
+  static swapBaseOutInstructions({
     poolInfo,
     ownerInfo,
     outputMint,
@@ -1139,6 +1675,9 @@ export class AmmV3Instrument {
         isInputMintA ? poolInfo.mintB.vault : poolInfo.mintA.vault,
         isInputMintA ? poolInfo.mintA.vault : poolInfo.mintB.vault,
 
+        isInputMintA ? poolInfo.mintA.mint : poolInfo.mintB.mint,
+        isInputMintA ? poolInfo.mintB.mint : poolInfo.mintA.mint,
+
         remainingAccounts,
         poolInfo.observationId,
         amountOut,
@@ -1151,6 +1690,7 @@ export class AmmV3Instrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSwapBaseOut],
+      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
       address: {},
     };
   }

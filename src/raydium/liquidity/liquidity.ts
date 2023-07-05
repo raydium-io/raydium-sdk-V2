@@ -48,7 +48,6 @@ import {
   LiquidityPoolJsonInfo,
   LiquidityRemoveTransactionParams,
   LiquiditySide,
-  LiquiditySwapTransactionParams,
   PairJsonInfo,
   SDKParsedLiquidityInfo,
   HydratedPairItemInfo,
@@ -637,24 +636,28 @@ export default class Liquidity extends ModuleBase {
     });
   }
 
-  public async createPool(params: CreatePoolParam): Promise<MakeTransaction> {
+  public createPool(params: CreatePoolParam): MakeTransaction {
     this.checkDisabled();
     this.scope.checkOwner();
-    if (params.version !== 4) this.logAndCreateError("invalid version", "poolKeys.version", params.version);
     const txBuilder = this.createTxBuilder();
-    const poolKeys = await getAssociatedPoolKeys(params);
 
-    return await txBuilder
+    const poolKeys = getAssociatedPoolKeys({
+      version: 4,
+      marketVersion: 3,
+      ...params,
+    });
+
+    return txBuilder
       .addInstruction({
         instructions: [makeCreatePoolInstruction({ ...poolKeys, owner: this.scope.ownerPubKey })],
+        lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
       })
       .build();
   }
 
   public async initPool(params: InitPoolParam): Promise<MakeTransaction> {
-    if (params.version !== 4) this.logAndCreateError("invalid version", "poolKeys.version", params.version);
     const { baseAmount, quoteAmount, startTime = 0, config, tokenProgram } = params;
-    const poolKeys = await getAssociatedPoolKeys(params);
+    const poolKeys = getAssociatedPoolKeys({ version: 4, marketVersion: 3, ...params });
     const { baseMint, quoteMint, lpMint, baseVault, quoteVault } = poolKeys;
     const txBuilder = this.createTxBuilder();
     const { account } = this.scope;
@@ -733,6 +736,7 @@ export default class Liquidity extends ModuleBase {
           startTime,
         }),
       ],
+      lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
       instructionTypes: [InstructionType.TransferAmount, InstructionType.AmmV4InitPool],
     });
 
@@ -852,6 +856,7 @@ export default class Liquidity extends ModuleBase {
           fixedSide: _fixedSide,
         }),
       ],
+      lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
       instructionTypes: [
         poolInfo!.version === 4 ? InstructionType.AmmV4AddLiquidity : InstructionType.AmmV5AddLiquidity,
       ],
@@ -931,6 +936,7 @@ export default class Liquidity extends ModuleBase {
           amountIn: amountIn.raw,
         }),
       ],
+      lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
       instructionTypes: [
         poolKeys!.version === 4 ? InstructionType.AmmV4RemoveLiquidity : InstructionType.AmmV5RemoveLiquidity,
       ],
@@ -988,8 +994,8 @@ export default class Liquidity extends ModuleBase {
       tickLower: number;
       tickUpper: number;
       liquidity: BN;
-      amountSlippageA: BN;
-      amountSlippageB: BN;
+      amountMaxA: BN;
+      amountMaxB: BN;
     };
     farmInfo?: {
       farmId: PublicKeyish;
@@ -1125,12 +1131,14 @@ export default class Liquidity extends ModuleBase {
         ...(farmWithdrawData?.instructionTypes ?? []),
         poolKeys.version === 4 ? InstructionType.AmmV4RemoveLiquidity : InstructionType.AmmV5RemoveLiquidity,
       ],
+      lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     });
 
     txBuilder.addInstruction({
       instructions: [...instructions, ...createPositionIns.instructions],
       signers: createPositionIns.signers,
       instructionTypes: [...instructionTypes, ...createPositionIns.instructionTypes],
+      lookupTableAddress: [clmmPoolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     });
 
     return txBuilder.build();

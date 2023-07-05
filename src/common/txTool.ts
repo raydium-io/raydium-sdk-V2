@@ -45,6 +45,7 @@ interface TxBuilderInit {
 export interface AddInstructionParam {
   instructions?: TransactionInstruction[];
   endInstructions?: TransactionInstruction[];
+  lookupTableAddress?: PublicKey[];
   signers?: Signer[];
   instructionTypes?: string[];
   endInstructionTypes?: string[];
@@ -75,6 +76,7 @@ export class TxBuilder {
   private owner?: Owner;
   private instructions: TransactionInstruction[] = [];
   private endInstructions: TransactionInstruction[] = [];
+  private lookupTableAddress: PublicKey[] = [];
   private signers: Signer[] = [];
   private instructionTypes: string[] = [];
   private endInstructionTypes: string[] = [];
@@ -141,12 +143,14 @@ export class TxBuilder {
     signers = [],
     instructionTypes = [],
     endInstructionTypes = [],
+    lookupTableAddress = [],
   }: AddInstructionParam): TxBuilder {
     this.instructions.push(...instructions);
     this.endInstructions.push(...endInstructions);
     this.signers.push(...signers);
     this.instructionTypes.push(...instructionTypes);
     this.endInstructionTypes.push(...endInstructionTypes);
+    this.lookupTableAddress.push(...lookupTableAddress);
     return this;
   }
 
