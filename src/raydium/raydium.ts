@@ -11,6 +11,8 @@ import {
   ApiTokens,
   ApiAmmV3PoolInfo,
   ApiIdoItem,
+  ApiV3TokenRes,
+  ApiV3Token,
 } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
@@ -73,6 +75,8 @@ interface ApiData {
   farmPools?: { fetched: number; data: ApiFarmPools };
   ammV3Pools?: { fetched: number; data: ApiAmmV3PoolInfo[] };
   idoList?: { fetched: number; data: ApiIdoItem[] };
+
+  tokenList?: { fetched: number; data: ApiV3TokenRes & { jup: ApiV3Token[] } };
 }
 
 const apiCacheData: ApiData = {};
@@ -337,6 +341,21 @@ export class Raydium {
     };
     this.apiData.idoList = dataObject;
     apiCacheData.idoList = dataObject;
+    return dataObject.data;
+  }
+
+  public async fetchV3TokenList(forceUpdate?: boolean): Promise<ApiV3TokenRes & { jup: ApiV3Token[] }> {
+    if (this.apiData.tokenList && !this.isCacheInvalidate(this.apiData.tokenList.fetched) && !forceUpdate)
+      return this.apiData.tokenList.data;
+    const raydiumList = await this.api.getTokenList();
+    const jupList = await this.api.getJupTokenList();
+    const dataObject = {
+      fetched: Date.now(),
+      data: { ...raydiumList, jup: jupList },
+    };
+    this.apiData.tokenList = dataObject;
+    apiCacheData.tokenList = dataObject;
+
     return dataObject.data;
   }
 

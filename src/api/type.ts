@@ -19,6 +19,25 @@ export type ApiTokens = {
   blacklist: string[];
 };
 
+export type ApiV3Token = {
+  chainId: number;
+  address: string;
+  programId: string;
+  logoURI: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  tags: string[];
+  extensions: {
+    coingeckoId?: string;
+  };
+};
+
+export type ApiV3TokenRes = {
+  mintList: ApiV3Token[];
+  blacklist: ApiV3Token[];
+};
+
 /* ================= liquidity ================= */
 export type LiquidityVersion = 4 | 5;
 

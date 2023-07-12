@@ -29,6 +29,7 @@ export const API_URLS = {
 
 export const DEV_API_URLS = {
   ...API_URLS,
+  BASE_HOST: "https://api-v3.asdf1234.win",
 };
 
 export type API_URL_CONFIG = Partial<typeof API_URLS>;

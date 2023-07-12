@@ -12,8 +12,9 @@ import {
   ApiAmmV3ConfigInfo,
   ApiIdoItem,
   ApiIdoInfo,
+  ApiV3Token,
 } from "./type";
-import { API_URLS, API_URL_CONFIG } from "./url";
+import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
 
 const logger = createLogger("Raydium_Api");
@@ -189,5 +190,26 @@ export class Api {
     strategy: string;
   }> {
     return this.api.get(this.urlConfigs.RPCS || API_URLS.RPCS);
+  }
+
+  async getTokenList(): Promise<{ mintList: ApiV3Token[]; blacklist: ApiV3Token[] }> {
+    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {
+      baseURL: DEV_API_URLS.BASE_HOST,
+    });
+    return res.data;
+  }
+
+  async getJupTokenList(): Promise<ApiV3Token[]> {
+    const res = await this.api.get("/strict", {
+      baseURL: "https://token.jup.ag",
+    });
+    return res.data;
+  }
+
+  async getTokenInfo(): Promise<ApiV3Token> {
+    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {
+      baseURL: DEV_API_URLS.BASE_HOST,
+    });
+    return res.data;
   }
 }
