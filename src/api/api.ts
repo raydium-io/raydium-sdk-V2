@@ -13,6 +13,7 @@ import {
   ApiIdoItem,
   ApiIdoInfo,
   ApiV3Token,
+  ApiV3PoolInfoItem,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
@@ -200,8 +201,8 @@ export class Api {
   }
 
   async getJupTokenList(): Promise<ApiV3Token[]> {
-    const res = await this.api.get("/strict", {
-      baseURL: "https://token.jup.ag",
+    const res = await this.api.get("/", {
+      baseURL: DEV_API_URLS.JUP_TOKEN_LIST,
     });
     return res.data;
   }
@@ -210,6 +211,38 @@ export class Api {
     const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {
       baseURL: DEV_API_URLS.BASE_HOST,
     });
+    return res.data;
+  }
+
+  async getPoolList(
+    props: {
+      type?: "all" | "concentrated" | "standard";
+      sort?:
+        | "liquidity"
+        | "volume_24h"
+        | "volume_7d"
+        | "volume_30d"
+        | "fee_24h"
+        | "fee_7d"
+        | "fee_30d"
+        | "apr_24h"
+        | "apr_7d"
+        | "apr_30d";
+      order?: "desc" | "asc";
+      page?: number;
+    } = {},
+  ): Promise<ApiV3PoolInfoItem[]> {
+    const { type = "all", sort = "liquidity", order = "desc", page = 1 } = props;
+    const res = await this.api.get(
+      (this.urlConfigs.LIQUIDITY || DEV_API_URLS.LIQUIDITY)
+        .replace("{type}", type)
+        .replace("{sort}", sort)
+        .replace("{order}", order)
+        .replace("{page}", String(page)),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
     return res.data;
   }
 }

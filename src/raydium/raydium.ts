@@ -13,6 +13,7 @@ import {
   ApiIdoItem,
   ApiV3TokenRes,
   ApiV3Token,
+  ApiV3PoolInfoItem,
 } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
@@ -68,15 +69,21 @@ export interface RaydiumApiBatchRequestParams {
 
 export type RaydiumConstructorParams = Required<RaydiumLoadParams> & RaydiumApiBatchRequestParams;
 
+interface DataBase<T> {
+  fetched: number;
+  data: T;
+}
 interface ApiData {
-  tokens?: { fetched: number; data: ApiTokens };
-  liquidityPools?: { fetched: number; data: ApiLiquidityPools };
-  liquidityPairsInfo?: { fetched: number; data: ApiJsonPairInfo[] };
-  farmPools?: { fetched: number; data: ApiFarmPools };
-  ammV3Pools?: { fetched: number; data: ApiAmmV3PoolInfo[] };
-  idoList?: { fetched: number; data: ApiIdoItem[] };
+  tokens?: DataBase<ApiTokens>;
+  liquidityPools?: DataBase<ApiLiquidityPools>;
+  liquidityPairsInfo?: DataBase<ApiJsonPairInfo[]>;
+  farmPools?: DataBase<ApiFarmPools>;
+  ammV3Pools?: DataBase<ApiAmmV3PoolInfo[]>;
+  idoList?: DataBase<ApiIdoItem[]>;
 
+  // v3 data
   tokenList?: { fetched: number; data: ApiV3TokenRes & { jup: ApiV3Token[] } };
+  liquidityPoolList?: { fetched: number; data: ApiV3PoolInfoItem[] };
 }
 
 const apiCacheData: ApiData = {};
@@ -253,6 +260,7 @@ export class Raydium {
     const dataObject = {
       fetched: Date.now(),
       data: await this.api.getTokens(),
+      xx: 1,
     };
     this.apiData.tokens = dataObject;
     apiCacheData.tokens = dataObject;
@@ -355,6 +363,24 @@ export class Raydium {
     };
     this.apiData.tokenList = dataObject;
     apiCacheData.tokenList = dataObject;
+
+    return dataObject.data;
+  }
+
+  public async fetchV3LiquidityPoolList(forceUpdate?: boolean): Promise<ApiV3PoolInfoItem[]> {
+    if (
+      this.apiData.liquidityPoolList &&
+      !this.isCacheInvalidate(this.apiData.liquidityPoolList.fetched) &&
+      !forceUpdate
+    )
+      return this.apiData.liquidityPoolList.data;
+    const data = await this.api.getPoolList();
+    const dataObject = {
+      fetched: Date.now(),
+      data,
+    };
+    this.apiData.liquidityPoolList = dataObject;
+    apiCacheData.liquidityPoolList = dataObject;
 
     return dataObject.data;
   }

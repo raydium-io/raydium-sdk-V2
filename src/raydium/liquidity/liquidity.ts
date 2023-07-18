@@ -48,7 +48,6 @@ import {
   LiquidityPoolJsonInfo,
   LiquidityRemoveTransactionParams,
   LiquiditySide,
-  LiquiditySwapTransactionParams,
   PairJsonInfo,
   SDKParsedLiquidityInfo,
   HydratedPairItemInfo,
