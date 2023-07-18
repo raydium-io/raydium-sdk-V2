@@ -232,7 +232,7 @@ export class Api {
       page?: number;
     } = {},
   ): Promise<ApiV3PoolInfoItem[]> {
-    const { type = "all", sort = "liquidity", order = "desc", page = 1 } = props;
+    const { type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
     const res = await this.api.get(
       (this.urlConfigs.LIQUIDITY || DEV_API_URLS.LIQUIDITY)
         .replace("{type}", type)

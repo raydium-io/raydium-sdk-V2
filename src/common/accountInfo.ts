@@ -1,6 +1,6 @@
 import { AccountInfo, Commitment, Connection, PublicKey } from "@solana/web3.js";
 
-import { chunkArray } from "./lodash";
+import { chunkArray } from "./";
 import { createLogger } from "./logger";
 
 interface MultipleAccountsJsonRpcResponse {
