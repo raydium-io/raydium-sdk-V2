@@ -235,9 +235,9 @@ export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
 }
 
 export interface MintInfo {
+  programId: PublicKey;
   mint: PublicKey;
   decimals: number;
-  programId: PublicKey;
 }
 
 export interface ReturnTypeMakeTransaction {

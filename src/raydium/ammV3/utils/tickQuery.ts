@@ -25,9 +25,7 @@ export class TickQuery {
     tickCurrent: number,
     tickSpacing: number,
     tickArrayBitmapArray: BN[],
-  ): Promise<{
-    [key: string]: TickArray;
-  }> {
+  ) {
     const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(tickArrayBitmapArray);
     const tickArraysToFetch: PublicKey[] = [];
     const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(tickCurrent, tickSpacing);
@@ -67,7 +65,7 @@ export class TickQuery {
     tickIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
-  ): { nextTick: Tick; tickArrayAddress?: PublicKey; tickArrayStartTickIndex: number } {
+  ) {
     let {
       initializedTick: nextTick,
       tickArrayAddress,
@@ -98,12 +96,51 @@ export class TickQuery {
     return { nextTick, tickArrayAddress, tickArrayStartTickIndex };
   }
 
+  public static nextInitializedTickArray(
+    programId: PublicKey,
+    poolId: PublicKey,
+    tickArrayCache: { [key: string]: TickArray },
+    tickIndex: number,
+    tickSpacing: number,
+    zeroForOne: boolean,
+  ) {
+    let {
+      initializedTick: nextTick,
+      tickArrayAddress,
+      tickArrayStartTickIndex,
+    } = this.nextInitializedTickInOneArray(programId, poolId, tickArrayCache, tickIndex, tickSpacing, zeroForOne);
+    do {
+      tickArrayStartTickIndex = TickUtils.getNextTickArrayStartIndex(tickArrayStartTickIndex, tickSpacing, zeroForOne);
+      if (
+        tickArrayStartTickIndex < MIN_TICK_ARRAY_START_INDEX ||
+        tickArrayStartTickIndex > MAX_TICK_ARRAY_START_INDEX
+      ) {
+        throw new Error("No enough initialized tickArray");
+      }
+      const cachedTickArray = tickArrayCache[tickArrayStartTickIndex];
+
+      if (cachedTickArray === undefined) throw new Error("CachedTickArray undefined");
+
+      const {
+        nextTick: _nextTick,
+        tickArrayAddress: _tickArrayAddress,
+        tickArrayStartTickIndex: _tickArrayStartTickIndex,
+      } = this.firstInitializedTickInOneArray(programId, poolId, cachedTickArray, zeroForOne);
+      [nextTick, tickArrayAddress, tickArrayStartTickIndex] = [_nextTick, _tickArrayAddress, _tickArrayStartTickIndex];
+    } while (nextTick == undefined || nextTick.liquidityGross.lten(0));
+
+    if (nextTick == undefined) {
+      throw new Error("No invaild tickArray cache");
+    }
+    return { nextTick, tickArrayAddress, tickArrayStartTickIndex };
+  }
+
   public static firstInitializedTickInOneArray(
     programId: PublicKey,
     poolId: PublicKey,
     tickArray: TickArray,
     zeroForOne: boolean,
-  ): { nextTick?: Tick; tickArrayAddress: PublicKey; tickArrayStartTickIndex: number } {
+  ) {
     let nextInitializedTick: Tick | undefined = undefined;
     if (zeroForOne) {
       let i = TICK_ARRAY_SIZE - 1;

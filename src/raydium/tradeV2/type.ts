@@ -104,6 +104,7 @@ export interface ReturnTypeMakeSwapTransaction {
 
 export type RoutePathType = {
   [routeMint: string]: {
+    mintProgram: PublicKey;
     in: PoolType[];
     out: PoolType[];
     mDecimals: number;

@@ -181,10 +181,10 @@ export interface ApiAmmV3PoolsItemStatistics {
 
 export interface ApiAmmV3PoolInfo {
   id: string;
-  mintA: string;
-  mintB: string;
   mintProgramIdA: string;
   mintProgramIdB: string;
+  mintA: string;
+  mintB: string;
   mintDecimalsA: number;
   mintDecimalsB: number;
   ammConfig: ApiAmmV3ConfigInfo;

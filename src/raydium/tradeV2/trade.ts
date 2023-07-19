@@ -1,5 +1,5 @@
 import { PublicKey, TransactionInstruction, EpochInfo } from "@solana/web3.js";
-import { createTransferInstruction } from "@solana/spl-token";
+import { createTransferInstruction, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 
 import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
@@ -53,9 +53,11 @@ export default class TradeV2 extends ModuleBase {
   public getAllRoute({
     inputMint,
     outputMint,
+    allowedRouteToken2022 = false,
   }: {
     inputMint: PublicKey;
     outputMint: PublicKey;
+    allowedRouteToken2022?: boolean;
   }): ReturnTypeGetAllRoute {
     const [input, output] = [solToWSol(inputMint), solToWSol(outputMint)];
     const needSimulate: { [poolKey: string]: LiquidityPoolJsonInfo } = {};
@@ -74,28 +76,64 @@ export default class TradeV2 extends ModuleBase {
         directPath.push(itemAmmPool);
         needTickArray[itemAmmPool.id.toString()] = itemAmmPool;
       }
-      if (itemAmmPool.mintA.mint.equals(input)) {
+
+      if (
+        itemAmmPool.mintA.mint.equals(input) &&
+        (itemAmmPool.mintB.programId.equals(TOKEN_PROGRAM_ID) || allowedRouteToken2022)
+      ) {
         const t = itemAmmPool.mintB.mint.toString();
         if (routePathDict[t] === undefined)
-          routePathDict[t] = { in: [], out: [], mDecimals: itemAmmPool.mintB.decimals };
+          routePathDict[t] = {
+            mintProgram: itemAmmPool.mintB.programId,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.mintB.decimals,
+          };
         routePathDict[t].in.push(itemAmmPool);
       }
-      if (itemAmmPool.mintB.mint.equals(input)) {
+
+      if (
+        itemAmmPool.mintB.mint.equals(input) &&
+        (itemAmmPool.mintA.programId.equals(TOKEN_PROGRAM_ID) || allowedRouteToken2022)
+      ) {
         const t = itemAmmPool.mintA.mint.toString();
         if (routePathDict[t] === undefined)
-          routePathDict[t] = { in: [], out: [], mDecimals: itemAmmPool.mintA.decimals };
+          routePathDict[t] = {
+            mintProgram: itemAmmPool.mintA.programId,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.mintA.decimals,
+          };
         routePathDict[t].in.push(itemAmmPool);
       }
-      if (itemAmmPool.mintA.mint.equals(outputMint)) {
+
+      if (
+        itemAmmPool.mintA.mint.equals(output) &&
+        (itemAmmPool.mintB.programId.equals(TOKEN_PROGRAM_ID) || allowedRouteToken2022)
+      ) {
         const t = itemAmmPool.mintB.mint.toString();
         if (routePathDict[t] === undefined)
-          routePathDict[t] = { in: [], out: [], mDecimals: itemAmmPool.mintB.decimals };
+          routePathDict[t] = {
+            mintProgram: itemAmmPool.mintB.programId,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.mintB.decimals,
+          };
         routePathDict[t].out.push(itemAmmPool);
       }
-      if (itemAmmPool.mintB.mint.equals(outputMint)) {
+
+      if (
+        itemAmmPool.mintB.mint.equals(output) &&
+        (itemAmmPool.mintA.programId.equals(TOKEN_PROGRAM_ID) || allowedRouteToken2022)
+      ) {
         const t = itemAmmPool.mintA.mint.toString();
         if (routePathDict[t] === undefined)
-          routePathDict[t] = { in: [], out: [], mDecimals: itemAmmPool.mintA.decimals };
+          routePathDict[t] = {
+            mintProgram: itemAmmPool.mintA.programId,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.mintA.decimals,
+          };
         routePathDict[t].out.push(itemAmmPool);
       }
     }
@@ -115,22 +153,42 @@ export default class TradeV2 extends ModuleBase {
       }
       if (itemAmmPool.baseMint === _inputMint) {
         if (routePathDict[itemAmmPool.quoteMint] === undefined)
-          routePathDict[itemAmmPool.quoteMint] = { in: [], out: [], mDecimals: itemAmmPool.quoteDecimals };
+          routePathDict[itemAmmPool.quoteMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.quoteDecimals,
+          };
         routePathDict[itemAmmPool.quoteMint].in.push(itemAmmPool);
       }
       if (itemAmmPool.quoteMint === _inputMint) {
         if (routePathDict[itemAmmPool.baseMint] === undefined)
-          routePathDict[itemAmmPool.baseMint] = { in: [], out: [], mDecimals: itemAmmPool.baseDecimals };
+          routePathDict[itemAmmPool.baseMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.baseDecimals,
+          };
         routePathDict[itemAmmPool.baseMint].in.push(itemAmmPool);
       }
       if (itemAmmPool.baseMint === _outputMint) {
         if (routePathDict[itemAmmPool.quoteMint] === undefined)
-          routePathDict[itemAmmPool.quoteMint] = { in: [], out: [], mDecimals: itemAmmPool.quoteDecimals };
+          routePathDict[itemAmmPool.quoteMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.quoteDecimals,
+          };
         routePathDict[itemAmmPool.quoteMint].out.push(itemAmmPool);
       }
       if (itemAmmPool.quoteMint === _outputMint) {
         if (routePathDict[itemAmmPool.baseMint] === undefined)
-          routePathDict[itemAmmPool.baseMint] = { in: [], out: [], mDecimals: itemAmmPool.baseDecimals };
+          routePathDict[itemAmmPool.baseMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.baseDecimals,
+          };
         routePathDict[itemAmmPool.baseMint].out.push(itemAmmPool);
       }
     }
@@ -146,22 +204,42 @@ export default class TradeV2 extends ModuleBase {
       }
       if (itemAmmPool.baseMint === _inputMint) {
         if (routePathDict[itemAmmPool.quoteMint] === undefined)
-          routePathDict[itemAmmPool.quoteMint] = { in: [], out: [], mDecimals: itemAmmPool.quoteDecimals };
+          routePathDict[itemAmmPool.quoteMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.quoteDecimals,
+          };
         routePathDict[itemAmmPool.quoteMint].in.push(itemAmmPool);
       }
       if (itemAmmPool.quoteMint === _inputMint) {
         if (routePathDict[itemAmmPool.baseMint] === undefined)
-          routePathDict[itemAmmPool.baseMint] = { in: [], out: [], mDecimals: itemAmmPool.baseDecimals };
+          routePathDict[itemAmmPool.baseMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.baseDecimals,
+          };
         routePathDict[itemAmmPool.baseMint].in.push(itemAmmPool);
       }
       if (itemAmmPool.baseMint === _outputMint) {
         if (routePathDict[itemAmmPool.quoteMint] === undefined)
-          routePathDict[itemAmmPool.quoteMint] = { in: [], out: [], mDecimals: itemAmmPool.quoteDecimals };
+          routePathDict[itemAmmPool.quoteMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.quoteDecimals,
+          };
         routePathDict[itemAmmPool.quoteMint].out.push(itemAmmPool);
       }
       if (itemAmmPool.quoteMint === _outputMint) {
         if (routePathDict[itemAmmPool.baseMint] === undefined)
-          routePathDict[itemAmmPool.baseMint] = { in: [], out: [], mDecimals: itemAmmPool.baseDecimals };
+          routePathDict[itemAmmPool.baseMint] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: itemAmmPool.baseDecimals,
+          };
         routePathDict[itemAmmPool.baseMint].out.push(itemAmmPool);
       }
     }

@@ -360,7 +360,7 @@ export class AmmV3 extends ModuleBase {
           decimals: mintA.decimals,
         },
         mintB: {
-          programId: mint2.programId,
+          programId: mintB.programId,
           mint: mintB.mint,
           vault: insInfo.address.mintBVault,
           decimals: mintB.decimals,
