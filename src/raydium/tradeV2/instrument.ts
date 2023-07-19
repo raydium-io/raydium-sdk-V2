@@ -1,9 +1,9 @@
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@solana/web3.js";
 import BN from "bn.js";
 
 import { AmmV3PoolInfo, AmmV3Instrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../ammV3";
-import { InstructionType, jsonInfo2PoolKeys } from "../../common";
+import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "../../common";
 import { LiquidityPoolKeysV4 } from "../liquidity";
 import { struct, u64, u8 } from "../../marshmallow";
 import { LiquidityPoolJsonInfo, makeAMMSwapInstruction } from "../liquidity";
@@ -308,9 +308,13 @@ function makeInnerInsKey(
       { pubkey: userOutAccount, isSigner: false, isWritable: true },
       { pubkey: pool.ammConfig.id, isSigner: false, isWritable: false },
       { pubkey: pool.id, isSigner: false, isWritable: true },
-      { pubkey: baseIn ? pool.mintA.vault : pool.mintB.vault, isSigner: false, isWritable: true },
-      { pubkey: baseIn ? pool.mintB.vault : pool.mintA.vault, isSigner: false, isWritable: true },
-      { pubkey: pool.observationId, isSigner: false, isWritable: true },
+      { pubkey: baseIn ? itemPool.mintA.vault : itemPool.mintB.vault, isSigner: false, isWritable: true },
+      { pubkey: baseIn ? itemPool.mintB.vault : itemPool.mintA.vault, isSigner: false, isWritable: true },
+      { pubkey: itemPool.observationId, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: baseIn ? itemPool.mintA.mint : itemPool.mintB.mint, isSigner: false, isWritable: false },
+      { pubkey: baseIn ? itemPool.mintB.mint : itemPool.mintA.mint, isSigner: false, isWritable: false },
       ...(remainingAccount ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
     ];
   } else {
@@ -404,7 +408,7 @@ export async function makeSwapInstruction({
         },
         inputMint,
         amountIn: swapInfo.amountIn.amount.raw,
-        amountOutMin: swapInfo.minAmountOut.amount.raw,
+        amountOutMin: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
         sqrtPriceLimitX64,
         remainingAccounts: swapInfo.remainingAccounts[0],
       });
@@ -423,7 +427,7 @@ export async function makeSwapInstruction({
               owner: ownerInfo.wallet,
             },
             amountIn: swapInfo.amountIn.amount.raw,
-            amountOut: swapInfo.minAmountOut.amount.raw,
+            amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
             fixedSide: "in",
           }),
         ],
@@ -455,7 +459,7 @@ export async function makeSwapInstruction({
           poolKey2,
 
           swapInfo.amountIn.amount.raw,
-          swapInfo.minAmountOut.amount.raw,
+          swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
 
           swapInfo.remainingAccounts,
         ),
