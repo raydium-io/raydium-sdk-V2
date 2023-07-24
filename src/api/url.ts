@@ -2,6 +2,7 @@ export const API_URLS = {
   BASE_HOST: "https://api.raydium.io",
   TOKEN_LIST: "/v3/mint/list",
   TOKEN_INFO: "/v3/mint/item/{mint}",
+  JUP_TOKEN_LIST: "https://token.jup.ag/strict",
   TOKEN: "/v2/sdk/token/raydium.mainnet.json",
   COINGECKO: "https://api.coingecko.com/api/v3/simple/price",
   LIQUIDITY: "/v2/sdk/liquidity/mainnet.json",
@@ -29,6 +30,17 @@ export const API_URLS = {
 
 export const DEV_API_URLS = {
   ...API_URLS,
+  BASE_HOST: "https://api-v3.asdf1234.win",
+  TOKEN_LIST: "/v3/mint/list",
+  TOKEN_INFO: "/v3/mint/item/{mint}",
+  JUP_TOKEN_LIST: "https://token.jup.ag/strict",
+  /**
+   * type: {all | concentrated | standard}
+   * sort: {liquidity | volume_24h / 7d / 30d | fee_24h / 7d / 30d | apr_24h / 7d / 30d}
+   * order: {desc/asc}
+   * page: number
+   */
+  LIQUIDITY: "/v3/pools/statistical_info/{type}/liquidity/{order}/100/{page}",
 };
 
 export type API_URL_CONFIG = Partial<typeof API_URLS>;

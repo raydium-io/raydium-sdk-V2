@@ -247,3 +247,61 @@ export type ApiIdoInfo = {
     };
   };
 };
+
+/** ====== v3 api types ======= */
+
+export type ApiV3Token = {
+  chainId: number;
+  address: string;
+  programId: string;
+  logoURI: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  tags: string[];
+  extensions: {
+    coingeckoId?: string;
+  };
+};
+
+export type ApiV3TokenRes = {
+  mintList: ApiV3Token[];
+  blacklist: ApiV3Token[];
+};
+
+export type ApiV3PoolInfoCountItem = {
+  volume: number;
+  volumeQuote: number;
+  volumeFee: number;
+  apr: number;
+  feeApr: number;
+  priceMin: number;
+  priceMax: number;
+  rewardApr: number[];
+};
+export type ApiV3PoolInfoBaseItem = {
+  id: string;
+  mintA: ApiV3Token;
+  mintB: ApiV3Token;
+  rewardMints: ApiV3Token[];
+  price: number;
+  mintAmountA: number;
+  mintAmountB: number;
+  feeRate: number;
+  openTime: number;
+  tvl: number;
+
+  day: ApiV3PoolInfoCountItem;
+  week: ApiV3PoolInfoCountItem;
+  month: ApiV3PoolInfoCountItem;
+};
+export type ApiV3PoolInfoConcentratedItem = ApiV3PoolInfoBaseItem & {
+  type: "concentrated";
+};
+export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
+  type: "standard";
+  farmIds: string[];
+  lpPrice: number;
+  lpAmount: number;
+};
+export type ApiV3PoolInfoItem = ApiV3PoolInfoConcentratedItem | ApiV3PoolInfoStandardItem;
