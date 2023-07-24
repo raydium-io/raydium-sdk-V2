@@ -2,7 +2,7 @@ import { Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from 
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { Fraction } from "../../module/fraction";
-import { SplToken } from "../token/type";
+import { TokenInfo } from "../tokenV2/type";
 import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
 import { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo } from "../../api/type";
@@ -180,8 +180,8 @@ export type SDKParsedConcentratedInfo = {
 export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
   protocolFeeRate: Percent;
   tradeFeeRate: Percent;
-  base: SplToken | undefined;
-  quote: SplToken | undefined;
+  base: TokenInfo | undefined;
+  quote: TokenInfo | undefined;
   id: PublicKey;
   userPositionAccount?: UserPositionAccount[];
   name: string;
@@ -191,7 +191,7 @@ export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
   ammConfig: AmmV3PoolInfo["ammConfig"];
   currentPrice: Fraction;
   rewardInfos: {
-    rewardToken: SplToken | undefined;
+    rewardToken: TokenInfo | undefined;
     rewardState: number;
     openTime: number;
     endTime: number;
@@ -329,8 +329,8 @@ export interface UserPositionAccount {
   priceUpper: Fraction;
   amountA?: TokenAmount;
   amountB?: TokenAmount;
-  tokenA?: SplToken;
-  tokenB?: SplToken;
+  tokenA?: TokenInfo;
+  tokenB?: TokenInfo;
   leverage: number;
   tickLower: number;
   tickUpper: number;

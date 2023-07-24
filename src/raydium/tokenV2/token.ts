@@ -7,6 +7,7 @@ import { LoadParams } from "../type";
 
 import { TokenInfo } from "./type";
 import { parseTokenPrice } from "./utils";
+import { SOL_INFO } from "./constant";
 import BN from "bn.js";
 
 export interface MintToTokenAmount {
@@ -20,6 +21,7 @@ export default class TokenModule extends ModuleBase {
   private _tokenMap: Map<string, TokenInfo> = new Map();
   private _blackTokenMap: Map<string, TokenInfo> = new Map();
   private _tokenPrice: Map<string, Price> = new Map();
+  private _mintGroup: { official: Set<string>; jup: Set<string> } = { official: new Set(), jup: new Set() };
 
   constructor(params: ModuleBaseProps) {
     super(params);
@@ -28,18 +30,28 @@ export default class TokenModule extends ModuleBase {
   public async load(params?: LoadParams): Promise<void> {
     this.checkDisabled();
     const { mintList, jup, blacklist } = await this.scope.fetchV3TokenList(params?.forceUpdate);
+    // reset all data
+    this._tokenList = [];
+    this._tokenMap = new Map();
+    this._blackTokenMap = new Map();
+    this._mintGroup = { official: new Set(), jup: new Set() };
+
+    this._tokenMap.set(SOL_INFO.address, SOL_INFO);
+    this._mintGroup.official.add(SOL_INFO.address);
     blacklist.forEach((token) => {
       this._blackTokenMap.set(token.address, { ...token, priority: 0 });
     });
 
     mintList.forEach((token) => {
       if (this._blackTokenMap.has(token.address)) return;
-      this._tokenMap.set(token.address, { ...token, priority: 2 });
+      this._tokenMap.set(token.address, { ...token, type: "raydium", priority: 2 });
+      this._mintGroup.official.add(token.address);
     });
 
     jup.forEach((token) => {
-      if (this._blackTokenMap.has(token.address)) return;
-      this._tokenMap.set(token.address, { ...token, priority: 1 });
+      if (this._blackTokenMap.has(token.address) || this._tokenMap.has(token.address)) return;
+      this._tokenMap.set(token.address, { ...token, type: "jupiter", priority: 1 });
+      this._mintGroup.jup.add(token.address);
     });
 
     this._tokenList = Array.from(this._tokenMap).map((data) => data[1]);
@@ -54,11 +66,16 @@ export default class TokenModule extends ModuleBase {
   get blackTokenMap(): Map<string, TokenInfo> {
     return this._blackTokenMap;
   }
+  get mintGroup(): { official: Set<string>; jup: Set<string> } {
+    return this._mintGroup;
+  }
+
   get tokenPriceMap(): Map<string, Price> {
     return this._tokenPrice;
   }
 
   public async fetchTokenPrices(preloadRaydiumPrice?: Record<string, number>): Promise<Map<string, Price>> {
+    this._tokenPrice = new Map();
     const coingeckoTokens = this._tokenList.filter(
       (token) => !!token.extensions?.coingeckoId && token.address !== PublicKey.default.toBase58(),
     );

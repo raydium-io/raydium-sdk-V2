@@ -1,5 +1,5 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { MintLayout, RawMint } from "@solana/spl-token";
+import { MintLayout, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Price, Token } from "../../module";
 import { parseNumberInfo, Numberish } from "../../common/bignumber";
 import { TokenInfo } from "./type";
@@ -32,4 +32,28 @@ export const parseTokenInfo = async ({
   if (!accountData || accountData.data.length !== MintLayout.span) return;
   const tokenInfo = MintLayout.decode(accountData.data);
   return tokenInfo;
+};
+
+export const toTokenInfo = ({
+  mint,
+  decimals,
+  programId = TOKEN_PROGRAM_ID,
+}: {
+  mint: PublicKey;
+  decimals: number;
+  programId?: PublicKey;
+}): TokenInfo => {
+  const pubStr = mint.toBase58().substring(0, 6);
+  return {
+    address: mint.toBase58(),
+    decimals,
+    symbol: pubStr,
+    logoURI: "",
+    extensions: {},
+    chainId: 101,
+    programId: programId.toBase58(),
+    name: pubStr,
+    tags: [],
+    priority: 2,
+  };
 };

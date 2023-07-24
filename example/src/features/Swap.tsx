@@ -42,13 +42,14 @@ export default function Swap() {
   // const [inToken, outToken] = ['4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', PublicKey.default.toBase58()]
   // const [inToken, outToken] = [PublicKey.default.toBase58(), '9gP2kCy3wA1ctvYWQk75guqXuHfrEomqydHLtcTCqiLa']
   // const [inToken, outToken] = ['4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', PublicKey.default.toBase58()]
+
   const [inToken, outToken] = [PublicKey.default.toBase58(), '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R']
 
   useEffect(() => {
     async function calculateAmount() {
       if (!raydium) return
-      await raydium.ammV3.load()
-      await raydium.ammV3.fetchPoolAccountPosition()
+      // await raydium.ammV3.load()
+      // await raydium.ammV3.fetchPoolAccountPosition()
       //3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X
 
       // const { routes, poolsInfo, ticks } = await raydium.tradeV2.fetchPoolAndTickData({
@@ -62,33 +63,33 @@ export default function Swap() {
       })
 
       const { routes, poolsInfo, ticks } = poolData
-      const { best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
-        directPath: routes.directPath,
-        routePathDict: routes.routePathDict,
-        simulateCache: poolsInfo,
-        tickCache: ticks,
-        inputTokenAmount: raydium.mintToTokenAmount({ mint: inToken, amount: '0.01' }),
-        outputToken: raydium.mintToToken(outToken),
-        slippage: new Percent(1, 100),
-        chainTime: ((await raydium.chainTimeOffset()) + Date.now()) / 1000,
-      })
+      // const { best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
+      //   directPath: routes.directPath,
+      //   routePathDict: routes.routePathDict,
+      //   simulateCache: poolsInfo,
+      //   tickCache: ticks,
+      //   inputTokenAmount: raydium.mintToTokenAmount({ mint: inToken, amount: '0.01' }),
+      //   outputToken: raydium.mintToToken(outToken),
+      //   slippage: new Percent(1, 100),
+      //   chainTime: ((await raydium.chainTimeOffset()) + Date.now()) / 1000,
+      // })
 
-      console.log(123123, best?.poolType, best?.routeType)
-      best?.poolKey.forEach((p) => console.log(12312311, 'poolKey', p.id.toString()))
+      // console.log(123123, best?.poolType, best?.routeType)
+      // best?.poolKey.forEach((p) => console.log(12312311, 'poolKey', p.id.toString()))
 
-      const { execute, transactions } = await raydium.tradeV2.swap({
-        swapInfo: best!,
-        associatedOnly: true,
-        checkTransaction: true,
-        checkCreateATAOwner: false,
-      })
+      // const { execute, transactions } = await raydium.tradeV2.swap({
+      //   swapInfo: best!,
+      //   associatedOnly: true,
+      //   checkTransaction: true,
+      //   checkCreateATAOwner: false,
+      // })
 
-      transactions.forEach((t) => {
-        console.log(12312322, 'tx ins len:', t.instructions.length)
-        t.instructions.forEach((i) => {
-          console.log(123123333, i.programId.toBase58())
-        })
-      })
+      // transactions.forEach((t) => {
+      //   console.log(12312322, 'tx ins len:', t.instructions.length)
+      //   t.instructions.forEach((i) => {
+      //     console.log(123123333, i.programId.toBase58())
+      //   })
+      // })
 
       // execute()
 
@@ -163,11 +164,7 @@ export default function Swap() {
     // })
     // const txId = execute()
   }
-
-  const [inTokenInfo, outTokenInfo] = [
-    raydium?.token.allTokenMap.get(inToken),
-    raydium?.token.allTokenMap.get(outToken),
-  ]
+  const [inTokenInfo, outTokenInfo] = [raydium?.token.tokenMap.get(inToken), raydium?.token.tokenMap.get(outToken)]
 
   return (
     <div>
@@ -178,7 +175,7 @@ export default function Swap() {
               <Avatar
                 sx={{ mr: '10px' }}
                 alt={inTokenInfo.symbol}
-                src={inTokenInfo.icon}
+                src={inTokenInfo.logoURI}
                 imgProps={{ loading: 'lazy' }}
               />
             </Grid>
@@ -200,7 +197,7 @@ export default function Swap() {
                 <Avatar
                   sx={{ mr: '10px' }}
                   alt={outTokenInfo.symbol}
-                  src={outTokenInfo.icon}
+                  src={outTokenInfo.logoURI}
                   imgProps={{ loading: 'lazy' }}
                 />
               </Grid>

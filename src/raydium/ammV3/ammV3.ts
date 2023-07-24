@@ -1,6 +1,6 @@
 import { PublicKey, EpochInfo } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import { toSplToken } from "../token/util";
+import { toTokenInfo } from "../tokenV2/utils";
 import {
   toPercent,
   toFraction,
@@ -81,7 +81,7 @@ export class AmmV3 extends ModuleBase {
     });
     this._ammV3SdkParsedPools = Object.values(sdkParsed);
     this._ammV3SdkParsedPoolMap = new Map(Object.entries(sdkParsed));
-    await this.scope.token.parseAllPoolTokens();
+    // await this.scope.token.parseAllPoolTokens();
     this.hydratePoolsInfo();
   }
 
@@ -107,14 +107,14 @@ export class AmmV3 extends ModuleBase {
     this._hydratedAmmV3Pools = this._ammV3SdkParsedPools.map((pool) => {
       const rewardLength = pool.state.rewardInfos.length;
       const [base, quote] = [
-        this.scope.token.allTokenMap.get(pool.state.mintA.mint.toBase58()) || toSplToken(pool.state.mintA),
-        this.scope.token.allTokenMap.get(pool.state.mintB.mint.toBase58()) || toSplToken(pool.state.mintB),
+        this.scope.token.tokenMap.get(pool.state.mintA.mint.toBase58()) || toTokenInfo(pool.state.mintA),
+        this.scope.token.tokenMap.get(pool.state.mintB.mint.toBase58()) || toTokenInfo(pool.state.mintB),
       ];
       const currentPrice = decimalToFraction(pool.state.currentPrice)!;
       const toMintATokenAmount = (amount: BigNumberish, decimalDone = true): TokenAmount | undefined =>
-        base ? this.scope.mintToTokenAmount({ mint: base.mint, amount, decimalDone }) : undefined;
+        base ? this.scope.mintToTokenAmount({ mint: base.address, amount, decimalDone }) : undefined;
       const toMintBTokenAmount = (amount: BigNumberish, decimalDone = true): TokenAmount | undefined =>
-        quote ? this.scope.mintToTokenAmount({ mint: quote.mint, amount, decimalDone }) : undefined;
+        quote ? this.scope.mintToTokenAmount({ mint: quote.address, amount, decimalDone }) : undefined;
 
       const parseReward = (time: "day" | "week" | "month"): Percent[] =>
         [
@@ -195,9 +195,9 @@ export class AmmV3 extends ModuleBase {
             inRange,
             rewardInfos: a.rewardInfos
               .map((info, idx) => {
-                const token = this.scope.token.allTokenMap.get(poolRewardInfos[idx]?.tokenMint.toBase58());
+                const token = this.scope.token.tokenMap.get(poolRewardInfos[idx]?.tokenMint.toBase58());
                 const pendingReward = token
-                  ? this.scope.mintToTokenAmount({ mint: token.mint, amount: info.pendingReward })
+                  ? this.scope.mintToTokenAmount({ mint: token.address, amount: info.pendingReward })
                   : undefined;
                 if (!pendingReward) return;
                 const apr24h =
@@ -222,8 +222,8 @@ export class AmmV3 extends ModuleBase {
               })
               .filter((info) => Boolean(info?.pendingReward)) as UserPositionAccount["rewardInfos"],
             getLiquidityVolume: (): any => {
-              const aPrice = this.scope.token.tokenPrices.get(pool.state.mintA.mint.toBase58());
-              const bPrice = this.scope.token.tokenPrices.get(pool.state.mintB.mint.toBase58());
+              const aPrice = this.scope.token.tokenPriceMap.get(pool.state.mintA.mint.toBase58());
+              const bPrice = this.scope.token.tokenPriceMap.get(pool.state.mintB.mint.toBase58());
               const wholeLiquidity = add(mul(amountA, aPrice), mul(amountB, bPrice));
               return {
                 wholeLiquidity,
@@ -235,7 +235,7 @@ export class AmmV3 extends ModuleBase {
         }),
 
         rewardInfos: pool.state.rewardInfos.map((r) => {
-          const rewardToken = this.scope.token.allTokenMap.get(r.tokenMint.toBase58());
+          const rewardToken = this.scope.token.tokenMap.get(r.tokenMint.toBase58());
           return {
             ...r,
             rewardToken,

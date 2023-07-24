@@ -40,7 +40,7 @@ export const DEV_API_URLS = {
    * order: {desc/asc}
    * page: number
    */
-  LIQUIDITY: "/v3/pools/statistical_info/{type}/liquidity/{order}/100/{page}",
+  LIQUIDITY: "/v3/pools/statistical_info/{type}/{sort}/{order}/100/{page}",
 };
 
 export type API_URL_CONFIG = Partial<typeof API_URLS>;

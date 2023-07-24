@@ -92,8 +92,8 @@ export default class Farm extends ModuleBase {
       (acc, cur) =>
         acc.concat(
           data[cur].map?.((data: FarmPoolJsonInfo) => {
-            const baseToken = this.scope.token.allTokenMap.get(data.baseMint);
-            const quoteToken = this.scope.token.allTokenMap.get(data.quoteMint);
+            const baseToken = this.scope.token.tokenMap.get(data.baseMint);
+            const quoteToken = this.scope.token.tokenMap.get(data.quoteMint);
             if (baseToken && quoteToken) {
               this._lpTokenInfoMap.set(
                 data.lpMint,
@@ -221,7 +221,7 @@ export default class Farm extends ModuleBase {
     );
 
     const lpPrice = isStakePool
-      ? this.scope.token.tokenPrices.get(farmInfo.lpMint.toBase58())!
+      ? this.scope.token.tokenPriceMap.get(farmInfo.lpMint.toBase58())!
       : this.scope.liquidity.lpPriceMap.get(farmInfo.lpMint.toBase58())!;
 
     const stakedLpAmount = lpToken && new TokenAmount(lpToken, farmInfo.lpVault.amount);
@@ -233,7 +233,7 @@ export default class Farm extends ModuleBase {
       currentBlockChainDate,
       rewardTokens,
       rewardTokenPrices:
-        farmInfo.rewardInfos.map(({ rewardMint }) => this.scope.token.tokenPrices.get(rewardMint.toBase58())) ?? [],
+        farmInfo.rewardInfos.map(({ rewardMint }) => this.scope.token.tokenPriceMap.get(rewardMint.toBase58())) ?? [],
       blockSlotCountForSecond,
     });
 

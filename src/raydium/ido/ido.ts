@@ -79,8 +79,8 @@ export default class Ido extends ModuleBase {
         return {
           ...info,
           ...rawInfo,
-          base: this.scope.token.allTokenMap.get(rawInfo.baseMint),
-          quote: this.scope.token.allTokenMap.get(rawInfo.quoteMint),
+          base: this.scope.token.tokenMap.get(rawInfo.baseMint),
+          quote: this.scope.token.tokenMap.get(rawInfo.quoteMint),
         };
       })
       .filter((info) => info !== undefined) as SdkIdoInfo[];

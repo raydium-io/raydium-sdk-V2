@@ -201,10 +201,9 @@ export class Api {
   }
 
   async getJupTokenList(): Promise<ApiV3Token[]> {
-    const res = await this.api.get("/", {
+    return this.api.get("/", {
       baseURL: DEV_API_URLS.JUP_TOKEN_LIST,
     });
-    return res.data;
   }
 
   async getTokenInfo(): Promise<ApiV3Token> {

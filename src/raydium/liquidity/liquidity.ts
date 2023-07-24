@@ -86,8 +86,8 @@ export default class Liquidity extends ModuleBase {
     this._poolInfos = [...official, ...unOfficial];
     this._officialIds = new Set(
       official.map((info) => {
-        const symbol = `${this.scope.token.allTokenMap.get(info.baseMint)?.symbol} - ${
-          this.scope.token.allTokenMap.get(info.quoteMint)?.symbol
+        const symbol = `${this.scope.token.tokenMap.get(info.baseMint)?.symbol} - ${
+          this.scope.token.tokenMap.get(info.quoteMint)?.symbol
         }`;
         this._poolInfoMap.set(info.id, info);
         this._lpTokenMap.set(
@@ -99,8 +99,8 @@ export default class Liquidity extends ModuleBase {
     );
     this._unOfficialIds = new Set(
       unOfficial.map((info) => {
-        const symbol = `${this.scope.token.allTokenMap.get(info.baseMint)?.symbol} - ${
-          this.scope.token.allTokenMap.get(info.quoteMint)?.symbol
+        const symbol = `${this.scope.token.tokenMap.get(info.baseMint)?.symbol} - ${
+          this.scope.token.tokenMap.get(info.quoteMint)?.symbol
         }`;
         this._poolInfoMap.set(info.id, info);
         this._lpTokenMap.set(
@@ -110,7 +110,7 @@ export default class Liquidity extends ModuleBase {
         return info.id;
       }),
     );
-    await this.scope.token.parseAllPoolTokens();
+    // await this.scope.token.parseAllPoolTokens();
   }
 
   public async loadPairs(params?: LoadParams): Promise<ApiJsonPairInfo[]> {

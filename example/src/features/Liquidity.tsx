@@ -156,8 +156,8 @@ export default function Liquidity() {
             <ListItemText
               primary={
                 <>
-                  {raydium.token.allTokenMap.get(pool.baseMint)?.symbol} - $
-                  {raydium.token.allTokenMap.get(pool.quoteMint)?.symbol}
+                  {raydium.token.tokenMap.get(pool.baseMint)?.symbol} - $
+                  {raydium.token.tokenMap.get(pool.quoteMint)?.symbol}
                   <Button sx={{ m: '5px' }} size="small" variant="contained" onClick={() => handleClickAdd(pool)}>
                     Deposit
                   </Button>

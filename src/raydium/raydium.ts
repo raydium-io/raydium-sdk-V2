@@ -31,7 +31,9 @@ import { AmmV3 } from "./ammV3";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
-import Ido from "./ido/ido";
+// import Ido from "./ido/ido";
+
+import TokenV2 from "./tokenV2/token";
 import { SignAllTransactions, TransferAmountFee } from "./type";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
@@ -93,11 +95,12 @@ export class Raydium {
   public account: Account;
   public liquidity: Liquidity;
   public ammV3: AmmV3;
-  public token: TokenModule;
+  // public token: TokenModule;
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
   public marketV2: MarketV2;
-  public ido: Ido;
+  // public ido: Ido;
+  public token: TokenV2;
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
 
@@ -148,12 +151,13 @@ export class Raydium {
       tokenAccountRawInfos: config.tokenAccountRawInfos,
     });
     this.liquidity = new Liquidity({ scope: this, moduleName: "Raydium_Liquidity" });
-    this.token = new TokenModule({ scope: this, moduleName: "Raydium_token" });
+    // this.token = new Token({ scope: this, moduleName: "Raydium_token" });
+    this.token = new TokenV2({ scope: this, moduleName: "Raydium_tokenV2" });
     this.tradeV2 = new TradeV2({ scope: this, moduleName: "Raydium_tradeV2" });
     this.ammV3 = new AmmV3({ scope: this, moduleName: "Raydium_ammV3" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
-    this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
+    // this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
 
     const now = new Date().getTime();
 
@@ -202,7 +206,7 @@ export class Raydium {
       },
       config,
     );
-    const { cluster, apiRequestTimeout, logCount, logRequests, urlConfigs, prefetchLiquidity = true } = custom;
+    const { cluster, apiRequestTimeout, logCount, logRequests, urlConfigs, prefetchLiquidity = false } = custom;
 
     const api = new Api({ cluster, timeout: apiRequestTimeout, urlConfigs, logCount, logRequests });
     const raydium = new Raydium({
@@ -211,7 +215,7 @@ export class Raydium {
     });
 
     await raydium.token.load();
-    if (prefetchLiquidity) await raydium.liquidity.load();
+    // if (prefetchLiquidity) await raydium.liquidity.load();
 
     return raydium;
   }

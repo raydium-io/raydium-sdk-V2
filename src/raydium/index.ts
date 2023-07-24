@@ -4,6 +4,7 @@ export * from "./farm";
 export * from "./liquidity";
 export * from "./route";
 export * from "./token";
+export * from "./tokenV2";
 export * from "./tradeV2";
 export * from "./ammV3";
 export * from "./serum";
