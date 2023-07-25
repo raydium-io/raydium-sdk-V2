@@ -1,5 +1,5 @@
-import { PublicKey, TransactionInstruction, EpochInfo } from "@solana/web3.js";
-import { createTransferInstruction, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { createTransferInstruction, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 
 import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
@@ -62,6 +62,7 @@ export default class TradeV2 extends ModuleBase {
     const [input, output] = [solToWSol(inputMint), solToWSol(outputMint)];
     const needSimulate: { [poolKey: string]: LiquidityPoolJsonInfo } = {};
     const needTickArray: { [poolKey: string]: AmmV3PoolInfo } = {};
+    const needCheckToken: Set<string> = new Set();
 
     const directPath: PoolType[] = [];
 
@@ -264,15 +265,31 @@ export default class TradeV2 extends ModuleBase {
         for (const infoOut of info.out) {
           if (infoIn.version === 6 && needTickArray[infoIn.id.toString()] === undefined) {
             needTickArray[infoIn.id.toString()] = infoIn as AmmV3PoolInfo;
+
+            if (infoIn.mintA.programId.equals(TOKEN_2022_PROGRAM_ID)) needCheckToken.add(infoIn.mintA.mint.toString());
+            if (infoIn.mintB.programId.equals(TOKEN_2022_PROGRAM_ID)) needCheckToken.add(infoIn.mintB.mint.toString());
           } else if (infoIn.version !== 6 && needSimulate[infoIn.id as string] === undefined) {
             needSimulate[infoIn.id as string] = infoIn as LiquidityPoolJsonInfo;
           }
+
           if (infoOut.version === 6 && needTickArray[infoOut.id.toString()] === undefined) {
             needTickArray[infoOut.id.toString()] = infoOut as AmmV3PoolInfo;
+
+            if (infoOut.mintA.programId.equals(TOKEN_2022_PROGRAM_ID))
+              needCheckToken.add(infoOut.mintA.mint.toString());
+            if (infoOut.mintB.programId.equals(TOKEN_2022_PROGRAM_ID))
+              needCheckToken.add(infoOut.mintB.mint.toString());
           } else if (infoOut.version !== 6 && needSimulate[infoOut.id as string] === undefined) {
             needSimulate[infoOut.id as string] = infoOut as LiquidityPoolJsonInfo;
           }
         }
+      }
+    }
+
+    for (const item of directPath) {
+      if (item.version === 6) {
+        if (item.mintA.programId.equals(TOKEN_2022_PROGRAM_ID)) needCheckToken.add(item.mintA.mint.toString());
+        if (item.mintB.programId.equals(TOKEN_2022_PROGRAM_ID)) needCheckToken.add(item.mintB.mint.toString());
       }
     }
 
@@ -282,6 +299,7 @@ export default class TradeV2 extends ModuleBase {
       routePathDict,
       needSimulate: Object.values(needSimulate),
       needTickArray: Object.values(needTickArray),
+      needCheckToken: [...needCheckToken],
     };
   }
 
@@ -408,7 +426,6 @@ export default class TradeV2 extends ModuleBase {
     slippage,
     chainTime,
     feeConfig,
-    epochInfo,
     mintInfos,
   }: {
     directPath: PoolType[];
@@ -423,12 +440,12 @@ export default class TradeV2 extends ModuleBase {
       feeBps: BN;
       feeAccount: PublicKey;
     };
-    epochInfo: EpochInfo;
     mintInfos: ReturnTypeFetchMultipleMintInfos;
   }): Promise<{
     routes: ComputeAmountOutLayout[];
     best?: ComputeAmountOutLayout;
   }> {
+    const epochInfo = await this.scope.fetchEpochInfo();
     const input = this.scope.solToWsolTokenAmount(inputTokenAmount);
     const _amountIn =
       feeConfig === undefined ? BN_ZERO : input.raw.mul(new BN(10000 - feeConfig.feeBps.toNumber())).div(new BN(10000));
@@ -550,7 +567,6 @@ export default class TradeV2 extends ModuleBase {
               toPool: iOutPool,
               simulateCache,
               tickCache,
-              epochInfo,
               mintInfos,
             });
 
@@ -607,7 +623,6 @@ export default class TradeV2 extends ModuleBase {
     toPool,
     simulateCache,
     tickCache,
-    epochInfo,
     mintInfos,
   }: {
     middleMintInfo: { mint: PublicKey; decimals: number };
@@ -618,7 +633,6 @@ export default class TradeV2 extends ModuleBase {
     toPool: PoolType;
     simulateCache: ReturnTypeFetchMultipleInfo;
     tickCache: ReturnTypeFetchMultiplePoolTickArrays;
-    epochInfo: EpochInfo;
     mintInfos: ReturnTypeFetchMultipleMintInfos;
   }): Promise<{
     minMiddleAmountFee: TokenAmount;
@@ -631,6 +645,7 @@ export default class TradeV2 extends ModuleBase {
     remainingAccounts: [PublicKey[] | undefined, PublicKey[] | undefined];
     expirationTime: number | undefined;
   }> {
+    const epochInfo = await this.scope.fetchEpochInfo();
     const middleToken = new Token(middleMintInfo);
 
     let firstPriceImpact: Percent;

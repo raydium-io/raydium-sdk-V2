@@ -17,6 +17,7 @@ import {
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
+import { PublicKey } from "@solana/web3.js";
 
 const logger = createLogger("Raydium_Api");
 
@@ -206,10 +207,13 @@ export class Api {
     });
   }
 
-  async getTokenInfo(): Promise<ApiV3Token> {
-    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {
-      baseURL: DEV_API_URLS.BASE_HOST,
-    });
+  async getTokenInfo(mint: string | PublicKey): Promise<ApiV3Token> {
+    const res = await this.api.get(
+      (this.urlConfigs.TOKEN_INFO || DEV_API_URLS.TOKEN_INFO).replace("{mint}", mint.toString()),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
     return res.data;
   }
 

@@ -117,4 +117,5 @@ export interface ReturnTypeGetAllRoute {
   routePathDict: RoutePathType;
   needSimulate: LiquidityPoolJsonInfo[];
   needTickArray: AmmV3PoolInfo[];
+  needCheckToken: string[];
 }

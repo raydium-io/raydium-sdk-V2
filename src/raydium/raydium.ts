@@ -1,4 +1,4 @@
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, EpochInfo } from "@solana/web3.js";
 import BN from "bn.js";
 import { merge } from "lodash";
 
@@ -116,6 +116,10 @@ export class Raydium {
       chainTime: number;
       offset: number;
     };
+  };
+  private _epochInfo?: {
+    fetched: number;
+    value: EpochInfo;
   };
 
   constructor(config: RaydiumConstructorParams) {
@@ -404,6 +408,15 @@ export class Raydium {
       return this._chainTime.value.chainTime;
     await this.fetchChainTime();
     return this._chainTime?.value.chainTime || Date.now();
+  }
+
+  public async fetchEpochInfo(): Promise<EpochInfo> {
+    if (this._epochInfo && Date.now() - this._epochInfo.fetched <= 1000 * 30) return this._epochInfo.value;
+    this._epochInfo = {
+      fetched: Date.now(),
+      value: await this.connection.getEpochInfo(),
+    };
+    return this._epochInfo.value;
   }
 
   public mintToToken(mint: PublicKeyish): Token {

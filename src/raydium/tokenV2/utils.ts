@@ -38,22 +38,26 @@ export const toTokenInfo = ({
   mint,
   decimals,
   programId = TOKEN_PROGRAM_ID,
+  logoURI = "",
+  priority = 3,
 }: {
   mint: PublicKey;
   decimals: number;
-  programId?: PublicKey;
+  programId?: PublicKey | string;
+  priority?: number;
+  logoURI?: string;
 }): TokenInfo => {
   const pubStr = mint.toBase58().substring(0, 6);
   return {
     address: mint.toBase58(),
     decimals,
     symbol: pubStr,
-    logoURI: "",
+    logoURI,
     extensions: {},
     chainId: 101,
-    programId: programId.toBase58(),
+    programId: programId.toString(),
     name: pubStr,
     tags: [],
-    priority: 2,
+    priority,
   };
 };

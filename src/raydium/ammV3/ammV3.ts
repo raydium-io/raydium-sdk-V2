@@ -1,4 +1,4 @@
-import { PublicKey, EpochInfo } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import Decimal from "decimal.js";
 import { toTokenInfo } from "../tokenV2/utils";
 import {
@@ -1562,12 +1562,11 @@ export class AmmV3 extends ModuleBase {
     return whitelistMintsInfo.whitelistMints.filter((i) => !i.equals(PublicKey.default));
   }
 
-  public computeAmountIn({
+  public async computeAmountIn({
     poolId,
     tickArrayCache,
     baseMint,
     token2022Infos,
-    epochInfo,
     amountOut,
     slippage,
     priceLimit = new Decimal(0),
@@ -1576,11 +1575,11 @@ export class AmmV3 extends ModuleBase {
     tickArrayCache: { [key: string]: TickArray };
     baseMint: PublicKey;
     token2022Infos: ReturnTypeFetchMultipleMintInfos;
-    epochInfo: EpochInfo;
     amountOut: BN;
     slippage: number;
     priceLimit?: Decimal;
-  }): ReturnTypeComputeAmountOutBaseOut {
+  }): Promise<ReturnTypeComputeAmountOutBaseOut> {
+    const epochInfo = await this.scope.fetchEpochInfo();
     const poolInfo = this._hydratedAmmV3PoolsMap.get(poolId)?.state;
     if (!poolInfo) throw new Error(`pool not found ${poolId}`);
 
