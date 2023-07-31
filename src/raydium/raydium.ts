@@ -35,6 +35,7 @@ import MarketV2 from "./marketV2";
 
 import TokenV2, { MintToTokenAmount } from "./tokenV2/token";
 import { SignAllTransactions, TransferAmountFee } from "./type";
+import { TokenInfo } from "./tokenV2";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */
@@ -399,6 +400,10 @@ export class Raydium {
       value: await this.connection.getEpochInfo(),
     };
     return this._epochInfo.value;
+  }
+
+  public async getChainTokenInfo(mint: PublicKeyish): Promise<{ token: Token; tokenInfo: TokenInfo }> {
+    return this.token.getChainTokenInfo(mint);
   }
 
   public mintToToken(mint: PublicKeyish): Token {

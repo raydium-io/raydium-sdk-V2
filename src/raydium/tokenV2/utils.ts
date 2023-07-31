@@ -1,7 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { MintLayout, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Price, Token } from "../../module";
-import { parseNumberInfo, Numberish } from "../../common/bignumber";
+import { Price, Token, TokenAmount } from "../../module";
+import { parseNumberInfo, Numberish, BigNumberish } from "../../common/bignumber";
 import { TokenInfo } from "./type";
 
 import BN from "bn.js";
@@ -69,3 +69,25 @@ export const toToken = (props: Omit<TokenInfo, "priority">): Token =>
     symbol: props.symbol,
     name: props.name,
   });
+
+export const toTokenAmount = ({
+  amount,
+  isRaw,
+  name,
+  ...props
+}: Omit<TokenInfo, "priority"> & {
+  amount: BigNumberish;
+  isRaw?: boolean;
+  name?: string;
+}): TokenAmount =>
+  new TokenAmount(
+    new Token({
+      mint: props.address,
+      decimals: props.decimals,
+      symbol: props.symbol,
+      name,
+    }),
+    amount,
+    isRaw,
+    name,
+  );

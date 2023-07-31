@@ -11,7 +11,7 @@ export const SOL_INFO: TokenInfo = {
   name: "solana",
   logoURI: `https://img.raydium.io/icon/So11111111111111111111111111111111111111112.png`,
   tags: [],
-  priority: 1,
+  priority: 2,
   type: "raydium",
   extensions: {
     coingeckoId: "solana",

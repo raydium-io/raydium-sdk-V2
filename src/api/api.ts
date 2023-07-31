@@ -210,7 +210,7 @@ export class Api {
     });
   }
 
-  async getTokenInfo(mint: string | PublicKey): Promise<ApiV3Token> {
+  async getTokenInfo(mint: string | PublicKey): Promise<ApiV3Token | undefined> {
     const res = await this.api.get(
       (this.urlConfigs.TOKEN_INFO || DEV_API_URLS.TOKEN_INFO).replace("{mint}", mint.toString()),
       {
