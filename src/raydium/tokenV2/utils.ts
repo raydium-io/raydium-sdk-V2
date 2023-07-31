@@ -61,3 +61,11 @@ export const toTokenInfo = ({
     priority,
   };
 };
+
+export const toToken = (props: Omit<TokenInfo, "priority">): Token =>
+  new Token({
+    mint: props.address,
+    decimals: props.decimals,
+    symbol: props.symbol,
+    name: props.name,
+  });

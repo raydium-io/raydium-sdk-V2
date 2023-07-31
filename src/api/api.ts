@@ -14,6 +14,9 @@ import {
   ApiIdoInfo,
   ApiV3Token,
   ApiV3PoolInfoItem,
+  FetchPoolParams,
+  PoolsApiReturn,
+  SearchPoolsApiReturn,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
@@ -217,27 +220,74 @@ export class Api {
     return res.data;
   }
 
-  async getPoolList(
-    props: {
-      type?: "all" | "concentrated" | "standard";
-      sort?:
-        | "liquidity"
-        | "volume_24h"
-        | "volume_7d"
-        | "volume_30d"
-        | "fee_24h"
-        | "fee_7d"
-        | "fee_30d"
-        | "apr_24h"
-        | "apr_7d"
-        | "apr_30d";
-      order?: "desc" | "asc";
-      page?: number;
-    } = {},
-  ): Promise<ApiV3PoolInfoItem[]> {
+  async getPoolList(props: FetchPoolParams = {}): Promise<PoolsApiReturn> {
     const { type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
+    const res = await this.api.get<PoolsApiReturn>(
+      (this.urlConfigs.POOL_LIST || DEV_API_URLS.POOL_LIST)
+        .replace("{type}", type)
+        .replace("{sort}", sort)
+        .replace("{order}", order)
+        .replace("{page}", String(page)),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
+    return res.data;
+  }
+
+  async searchPools(props: FetchPoolParams & { search: string }): Promise<SearchPoolsApiReturn> {
+    const { search, type = "all", sort = "liquidity", order = "desc", page = 0 } = props || { search: "" };
     const res = await this.api.get(
-      (this.urlConfigs.LIQUIDITY || DEV_API_URLS.LIQUIDITY)
+      (this.urlConfigs.POOL_SEARCH || DEV_API_URLS.POOL_SEARCH)
+        .replace("{search_text}", search)
+        .replace("{type}", type)
+        .replace("{sort}", sort)
+        .replace("{order}", order)
+        .replace("{page}", String(page)),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
+    return res.data;
+  }
+
+  async searchPoolById(props: { id: string }): Promise<SearchPoolsApiReturn> {
+    const { id } = props;
+    const res = await this.api.get(
+      (this.urlConfigs.POOL_SEARCH_BY_ID || DEV_API_URLS.POOL_SEARCH_BY_ID).replace("{id}", id),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
+    return res.data;
+  }
+
+  async searchPoolByMint(props: FetchPoolParams & { mint: string }): Promise<PoolsApiReturn> {
+    const { mint, type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
+
+    const res = await this.api.get<PoolsApiReturn>(
+      (this.urlConfigs.POOL_SEARCH_MINT || DEV_API_URLS.POOL_SEARCH_MINT)
+        .replace("{mint1}", mint)
+        .replace("{type}", type)
+        .replace("{sort}", sort)
+        .replace("{order}", order)
+        .replace("{page}", String(page)),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
+    return res.data;
+  }
+
+  async searchPoolByMints(props: FetchPoolParams & { mint1: string; mint2: string }): Promise<PoolsApiReturn> {
+    const { mint1, mint2, type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
+
+    const [mintA, mintB] = mint1 > mint2 ? [mint1, mint2] : [mint2, mint1];
+
+    const res = await this.api.get<PoolsApiReturn>(
+      (this.urlConfigs.POOL_SEARCH_MINT_2 || DEV_API_URLS.POOL_SEARCH_MINT_2)
+        .replace("{mint1}", mintB)
+        .replace("{mint2}", mintA)
         .replace("{type}", type)
         .replace("{sort}", sort)
         .replace("{order}", order)

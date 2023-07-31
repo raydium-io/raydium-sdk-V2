@@ -250,6 +250,41 @@ export type ApiIdoInfo = {
 
 /** ====== v3 api types ======= */
 
+export interface PoolsApiReturn {
+  count: number;
+  hasNextPage: boolean;
+  data: ApiV3PoolInfoItem[];
+}
+
+export interface SearchPoolsApiReturn {
+  hasNextPage: boolean;
+  data: ApiV3PoolInfoItem[];
+  bestUse: "id" | "mint" | null;
+  search: string;
+}
+
+export interface TransferFeeDataBaseType {
+  transferFeeConfigAuthority: string;
+  withdrawWithheldAuthority: string;
+  withheldAmount: string;
+  olderTransferFee: {
+    epoch: string;
+    maximumFee: string;
+    transferFeeBasisPoints: number;
+  };
+  newerTransferFee: {
+    epoch: string;
+    maximumFee: string;
+    transferFeeBasisPoints: number;
+  };
+}
+
+type TagsItem = "hasFreeze" | "hasTransferFee";
+type ExtensionsItem = {
+  coingeckoId?: string;
+  feeConfig?: TransferFeeDataBaseType;
+};
+
 export type ApiV3Token = {
   chainId: number;
   address: string;
@@ -258,10 +293,8 @@ export type ApiV3Token = {
   symbol: string;
   name: string;
   decimals: number;
-  tags: string[];
-  extensions: {
-    coingeckoId?: string;
-  };
+  tags: TagsItem[];
+  extensions: ExtensionsItem;
 };
 
 export type ApiV3TokenRes = {
@@ -269,7 +302,7 @@ export type ApiV3TokenRes = {
   blacklist: ApiV3Token[];
 };
 
-export type ApiV3PoolInfoCountItem = {
+export interface ApiV3PoolInfoCountItem {
   volume: number;
   volumeQuote: number;
   volumeFee: number;
@@ -278,8 +311,11 @@ export type ApiV3PoolInfoCountItem = {
   priceMin: number;
   priceMax: number;
   rewardApr: number[];
-};
-export type ApiV3PoolInfoBaseItem = {
+}
+
+type PoolTypeItem = "StablePool" | "OpenBookMarket";
+
+export interface ApiV3PoolInfoBaseItem {
   id: string;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
@@ -294,14 +330,33 @@ export type ApiV3PoolInfoBaseItem = {
   day: ApiV3PoolInfoCountItem;
   week: ApiV3PoolInfoCountItem;
   month: ApiV3PoolInfoCountItem;
-};
+  pooltype: PoolTypeItem[];
+}
 export type ApiV3PoolInfoConcentratedItem = ApiV3PoolInfoBaseItem & {
   type: "concentrated";
 };
 export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
   type: "standard";
+  marketId: string;
   farmIds: string[];
   lpPrice: number;
   lpAmount: number;
 };
 export type ApiV3PoolInfoItem = ApiV3PoolInfoConcentratedItem | ApiV3PoolInfoStandardItem;
+
+export interface FetchPoolParams {
+  type?: "all" | "concentrated" | "standard";
+  sort?:
+    | "liquidity"
+    | "volume_24h"
+    | "volume_7d"
+    | "volume_30d"
+    | "fee_24h"
+    | "fee_7d"
+    | "fee_30d"
+    | "apr_24h"
+    | "apr_7d"
+    | "apr_30d";
+  order?: "desc" | "asc";
+  page?: number;
+}

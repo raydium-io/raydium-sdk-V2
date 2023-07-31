@@ -365,7 +365,7 @@ export class PoolUtils {
       const allPositionKey: PublicKey[] = [];
       for (const itemMint of allMint) {
         for (const itemProgramId of programIds) {
-          allPositionKey.push(await (await getPdaPersonalPositionAddress(itemProgramId, itemMint)).publicKey);
+          allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
         }
       }
       const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });

@@ -26,7 +26,7 @@ export class Token {
    *
    * @param mint - pass "sol" as mint will auto generate wsol token config
    */
-  public constructor({ mint, decimals, symbol = "UNKNOWN", name = "UNKNOWN", skipMint = false }: TokenProps) {
+  public constructor({ mint, decimals, symbol, name, skipMint = false }: TokenProps) {
     if (mint === SOLMint.toBase58() || (mint instanceof PublicKey && SOLMint.equals(mint))) {
       this.decimals = TOKEN_WSOL.decimals;
       this.symbol = TOKEN_WSOL.symbol;
@@ -36,8 +36,8 @@ export class Token {
     }
 
     this.decimals = decimals;
-    this.symbol = symbol;
-    this.name = name;
+    this.symbol = symbol || mint.toString().substring(0, 6);
+    this.name = name || mint.toString().substring(0, 6);
     this.mint = skipMint ? PublicKey.default : validateAndParsePublicKey({ publicKey: mint });
   }
 
