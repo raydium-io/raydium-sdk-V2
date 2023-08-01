@@ -32,7 +32,7 @@ import {
   makeCreatePoolV4InstructionV2,
 } from "./instruction";
 import { getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice, StableLayout } from "./stable";
-import { LpToken, SplToken } from "../token/type";
+import { LpToken, SplToken } from "../token_old/type";
 import {
   AmountSide,
   CreatePoolParam,

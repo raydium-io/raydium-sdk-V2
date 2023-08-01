@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import { toTokenInfo } from "../tokenV2/utils";
+import { toTokenInfo } from "../token/utils";
 import {
   toPercent,
   toFraction,

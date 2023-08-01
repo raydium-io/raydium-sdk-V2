@@ -1,4 +1,4 @@
-import { TOKEN_SOL } from "../raydium/token/constant";
+import { TOKEN_SOL } from "../raydium/token_old/constant";
 
 import { Token } from "./token";
 

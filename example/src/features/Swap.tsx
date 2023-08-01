@@ -14,6 +14,7 @@ import {
   USDTMint,
   TickUtils,
   solToWSol,
+  JupTokenType,
 } from '@raydium-io/raydium-sdk'
 import debounce from 'lodash/debounce'
 import { useEffect, useState } from 'react'
@@ -48,6 +49,8 @@ export default function Swap() {
   useEffect(() => {
     async function calculateAmount() {
       if (!raydium) return
+      console.log(123123, raydium)
+      // await raydium.token.load({ type: JupTokenType.ALL })
       // await raydium.ammV3.load()
       // await raydium.ammV3.fetchPoolAccountPosition()
       //3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X
@@ -57,12 +60,12 @@ export default function Swap() {
       //   outputMint: USDTMint,
       // })
 
-      const poolData = await raydium.tradeV2.fetchPoolAndTickData({
-        inputMint: inToken,
-        outputMint: outToken,
-      })
+      // const poolData = await raydium.tradeV2.fetchPoolAndTickData({
+      //   inputMint: inToken,
+      //   outputMint: outToken,
+      // })
 
-      const { routes, poolsInfo, ticks } = poolData
+      // const { routes, poolsInfo, ticks } = poolData
       // const { best } = await raydium.tradeV2.getAllRouteComputeAmountOut({
       //   directPath: routes.directPath,
       //   routePathDict: routes.routePathDict,
@@ -138,7 +141,7 @@ export default function Swap() {
       calculateAmount()
     }, 500)
 
-    if (connected && inToken && outToken) {
+    if (connected) {
       debounceCalculate()
     }
     return () => debounceCalculate.cancel()

@@ -6,7 +6,7 @@ import { GetMultipleAccountsInfoConfig } from "../../common/accountInfo";
 import { BigNumberish } from "../../common/bignumber";
 import { PublicKeyish } from "../../common/pubKey";
 import { JsonFileMetaData } from "../../common/json-file";
-import { SplToken } from "../token";
+import { SplToken } from "../token_old/type";
 import { Percent, Price, Token, TokenAmount, CurrencyAmount } from "../../module";
 import { ReplaceType } from "../type";
 import Decimal from "decimal.js-light";

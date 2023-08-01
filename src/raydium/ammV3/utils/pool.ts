@@ -20,7 +20,7 @@ import { Percent } from "../../../module/percent";
 import { Price } from "../../../module/price";
 import { Token } from "../../../module/token";
 import { TokenAmount } from "../../../module/amount";
-import { TOKEN_SOL } from "../../token";
+import { SOL_INFO } from "../../token";
 import { TokenAccountRaw } from "../../account/types";
 import {
   getMultipleAccountsInfo,
@@ -617,7 +617,7 @@ export class PoolUtils {
     const _amountIn = amountIn.raw;
     const _slippage = slippage.numerator.toNumber() / slippage.denominator.toNumber();
     const tokenOut = _tokenOut.mint.equals(SOLMint)
-      ? new Token({ mint: "sol", decimals: TOKEN_SOL.decimals })
+      ? new Token({ mint: "sol", decimals: SOL_INFO.decimals })
       : _tokenOut;
 
     const {

@@ -13,7 +13,7 @@ import {
   ApiIdoItem,
   ApiV3TokenRes,
   ApiV3Token,
-  ApiV3PoolInfoItem,
+  JupTokenType,
 } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
@@ -33,9 +33,9 @@ import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
 // import Ido from "./ido/ido";
 
-import TokenV2, { MintToTokenAmount } from "./tokenV2/token";
+import TokenModule, { MintToTokenAmount } from "./token/token";
 import { SignAllTransactions, TransferAmountFee } from "./type";
-import { TokenInfo } from "./tokenV2";
+import { TokenInfo } from "./token";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */
@@ -55,19 +55,14 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   urlConfigs?: API_URL_CONFIG;
   logRequests?: boolean;
   logCount?: number;
-  prefetchLiquidity?: boolean;
+  jupTokenType?: JupTokenType;
+  preloadTokenPrice?: boolean;
 }
 
 export interface RaydiumApiBatchRequestParams {
   api: Api;
   defaultChainTimeOffset?: number;
   defaultChainTime?: number;
-  defaultApiTokens?: ApiTokens;
-  defaultApiLiquidityPools?: ApiLiquidityPools;
-  defaultApiFarmPools?: ApiFarmPools;
-  defaultApiPairsInfo?: ApiJsonPairInfo[];
-  defaultApiAmmV3PoolsInfo?: ApiAmmV3PoolInfo[];
-  defaultApiIdoList?: ApiIdoItem[];
 }
 
 export type RaydiumConstructorParams = Required<RaydiumLoadParams> & RaydiumApiBatchRequestParams;
@@ -75,6 +70,7 @@ export type RaydiumConstructorParams = Required<RaydiumLoadParams> & RaydiumApiB
 interface DataBase<T> {
   fetched: number;
   data: T;
+  extInfo?: Record<string, any>;
 }
 interface ApiData {
   tokens?: DataBase<ApiTokens>;
@@ -85,10 +81,13 @@ interface ApiData {
   idoList?: DataBase<ApiIdoItem[]>;
 
   // v3 data
-  tokenList?: { fetched: number; data: ApiV3TokenRes & { jup: ApiV3Token[] } };
+  tokenList?: DataBase<ApiV3TokenRes>;
+  jupTokenList?: {
+    [JupTokenType.ALL]?: DataBase<ApiV3Token[]>;
+    [JupTokenType.Strict]?: DataBase<ApiV3Token[]>;
+  };
 }
 
-const apiCacheData: ApiData = {};
 export class Raydium {
   public cluster: Cluster;
   public farm: Farm;
@@ -96,12 +95,11 @@ export class Raydium {
   public liquidity: Liquidity;
   public liquidityV2: LiquidityV2;
   public ammV3: AmmV3;
-  // public token: TokenModule;
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
   public marketV2: MarketV2;
   // public ido: Ido;
-  public token: TokenV2;
+  public token: TokenModule;
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
 
@@ -124,21 +122,7 @@ export class Raydium {
   };
 
   constructor(config: RaydiumConstructorParams) {
-    const {
-      connection,
-      cluster,
-      owner,
-      api,
-      defaultApiTokens,
-      defaultApiLiquidityPools,
-      defaultApiFarmPools,
-      defaultApiPairsInfo,
-      defaultApiAmmV3PoolsInfo,
-      defaultApiIdoList,
-      defaultChainTime,
-      defaultChainTimeOffset,
-      apiCacheTime,
-    } = config;
+    const { connection, cluster, owner, api, defaultChainTime, defaultChainTimeOffset, apiCacheTime } = config;
 
     this._connection = connection;
     this.cluster = cluster;
@@ -157,7 +141,7 @@ export class Raydium {
     });
     this.liquidity = new Liquidity({ scope: this, moduleName: "Raydium_Liquidity" });
     this.liquidityV2 = new LiquidityV2({ scope: this, moduleName: "Raydium_LiquidityV2" });
-    this.token = new TokenV2({ scope: this, moduleName: "Raydium_tokenV2" });
+    this.token = new TokenModule({ scope: this, moduleName: "Raydium_tokenV2" });
     this.tradeV2 = new TradeV2({ scope: this, moduleName: "Raydium_tradeV2" });
     this.ammV3 = new AmmV3({ scope: this, moduleName: "Raydium_ammV3" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
@@ -165,22 +149,8 @@ export class Raydium {
     // this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
 
     const now = new Date().getTime();
+    this.apiData = {};
 
-    const [
-      apiTokensCache,
-      apiLiquidityPoolsCache,
-      apiFarmPoolsCache,
-      apiLiquidityPairsInfoCache,
-      apiAmmV3PoolsCache,
-      apiIdoListCache,
-    ] = [
-      defaultApiTokens ? { fetched: now, data: defaultApiTokens } : apiCacheData.tokens,
-      defaultApiLiquidityPools ? { fetched: now, data: defaultApiLiquidityPools } : apiCacheData.liquidityPools,
-      defaultApiFarmPools ? { fetched: now, data: defaultApiFarmPools } : apiCacheData.farmPools,
-      defaultApiPairsInfo ? { fetched: now, data: defaultApiPairsInfo } : apiCacheData.liquidityPairsInfo,
-      defaultApiAmmV3PoolsInfo ? { fetched: now, data: defaultApiAmmV3PoolsInfo } : apiCacheData.ammV3Pools,
-      defaultApiIdoList ? { fetched: now, data: defaultApiIdoList } : apiCacheData.idoList,
-    ];
     if (defaultChainTimeOffset)
       this._chainTime = {
         fetched: now,
@@ -189,15 +159,6 @@ export class Raydium {
           offset: defaultChainTimeOffset,
         },
       };
-
-    this.apiData = {
-      ...(apiTokensCache ? { tokens: apiTokensCache } : {}),
-      ...(apiLiquidityPoolsCache ? { liquidityPools: apiLiquidityPoolsCache } : {}),
-      ...(apiFarmPoolsCache ? { farmPools: apiFarmPoolsCache } : {}),
-      ...(apiLiquidityPairsInfoCache ? { liquidityPairsInfo: apiLiquidityPairsInfoCache } : {}),
-      ...(apiAmmV3PoolsCache ? { ammV3Pools: apiAmmV3PoolsCache } : {}),
-      ...(apiIdoListCache ? { idoList: apiIdoListCache } : {}),
-    };
   }
 
   static async load(config: RaydiumLoadParams): Promise<Raydium> {
@@ -211,7 +172,7 @@ export class Raydium {
       },
       config,
     );
-    const { cluster, apiRequestTimeout, logCount, logRequests, urlConfigs, prefetchLiquidity = false } = custom;
+    const { cluster, apiRequestTimeout, logCount, logRequests, urlConfigs } = custom;
 
     const api = new Api({ cluster, timeout: apiRequestTimeout, urlConfigs, logCount, logRequests });
     const raydium = new Raydium({
@@ -219,8 +180,10 @@ export class Raydium {
       api,
     });
 
-    await raydium.token.load();
-    // if (prefetchLiquidity) await raydium.liquidity.load();
+    await raydium.token.load({
+      type: config.jupTokenType,
+      fetchTokenPrice: config.preloadTokenPrice,
+    });
 
     return raydium;
   }
@@ -272,7 +235,6 @@ export class Raydium {
       xx: 1,
     };
     this.apiData.tokens = dataObject;
-    apiCacheData.tokens = dataObject;
 
     return dataObject.data;
   }
@@ -285,7 +247,6 @@ export class Raydium {
       data: await this.api.getLiquidityPools(),
     };
     this.apiData.liquidityPools = dataObject;
-    apiCacheData.liquidityPools = dataObject;
     return dataObject.data;
   }
 
@@ -301,7 +262,6 @@ export class Raydium {
       data: await this.api.getPairsInfo(),
     };
     this.apiData.liquidityPairsInfo = dataObject;
-    apiCacheData.liquidityPairsInfo = dataObject;
     return dataObject.data;
   }
 
@@ -314,7 +274,6 @@ export class Raydium {
       data: await this.api.getFarmPools(),
     };
     this.apiData.farmPools = dataObject;
-    apiCacheData.farmPools = dataObject;
 
     return dataObject.data;
   }
@@ -328,7 +287,6 @@ export class Raydium {
       data: await this.api.getConcentratedPools(),
     };
     this.apiData.ammV3Pools = dataObject;
-    apiCacheData.ammV3Pools = dataObject;
 
     return dataObject.data;
   }
@@ -357,23 +315,35 @@ export class Raydium {
       data: (await this.api.getIdoList()).data,
     };
     this.apiData.idoList = dataObject;
-    apiCacheData.idoList = dataObject;
     return dataObject.data;
   }
 
-  public async fetchV3TokenList(forceUpdate?: boolean): Promise<ApiV3TokenRes & { jup: ApiV3Token[] }> {
+  public async fetchV3TokenList(forceUpdate?: boolean): Promise<ApiV3TokenRes> {
     if (this.apiData.tokenList && !this.isCacheInvalidate(this.apiData.tokenList.fetched) && !forceUpdate)
       return this.apiData.tokenList.data;
     const raydiumList = await this.api.getTokenList();
-    const jupList = await this.api.getJupTokenList();
     const dataObject = {
       fetched: Date.now(),
-      data: { ...raydiumList, jup: jupList },
+      data: raydiumList,
     };
     this.apiData.tokenList = dataObject;
-    apiCacheData.tokenList = dataObject;
 
     return dataObject.data;
+  }
+
+  public async fetchJupTokenList(type: JupTokenType, forceUpdate?: boolean): Promise<ApiV3Token[]> {
+    const prevFetched = this.apiData.jupTokenList?.[type];
+    if (prevFetched && !this.isCacheInvalidate(prevFetched.fetched) && !forceUpdate) return prevFetched.data;
+    const jupList = await this.api.getJupTokenList(type);
+    this.apiData.jupTokenList = {
+      ...this.apiData.jupTokenList,
+      [type]: {
+        fetched: Date.now(),
+        data: jupList,
+      },
+    };
+
+    return this.apiData.jupTokenList[type]!.data;
   }
 
   get chainTimeData(): { offset: number; chainTime: number } | undefined {

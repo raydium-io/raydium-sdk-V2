@@ -250,6 +250,10 @@ export type ApiIdoInfo = {
 
 /** ====== v3 api types ======= */
 
+export enum JupTokenType {
+  ALL = "all",
+  Strict = "strict",
+}
 export interface PoolsApiReturn {
   count: number;
   hasNextPage: boolean;
@@ -316,6 +320,7 @@ export interface ApiV3PoolInfoCountItem {
 type PoolTypeItem = "StablePool" | "OpenBookMarket";
 
 export interface ApiV3PoolInfoBaseItem {
+  programId: string;
   id: string;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
@@ -341,6 +346,7 @@ export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
   farmIds: string[];
   lpPrice: number;
   lpAmount: number;
+  lpMint: string;
 };
 export type ApiV3PoolInfoItem = ApiV3PoolInfoConcentratedItem | ApiV3PoolInfoStandardItem;
 

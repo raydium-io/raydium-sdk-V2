@@ -1,4 +1,4 @@
-import { Raydium, RaydiumLoadParams, setLoggerLevel, LogLevel } from '@raydium-io/raydium-sdk'
+import { Raydium, RaydiumLoadParams, setLoggerLevel, LogLevel, JupTokenType } from '@raydium-io/raydium-sdk'
 import create from 'zustand'
 
 interface AppState {
@@ -20,9 +20,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set(() => ({ initialing: true }))
     setLoggerLevel('Raydium_Liquidity', LogLevel.Error)
     setLoggerLevel('Raydium_route', LogLevel.Error)
-    console.log(123123123)
+    payload.jupTokenType = JupTokenType.Strict
     const raydium = await Raydium.load(payload)
-    console.log(123123444)
     raydium.token.fetchTokenPrices()
     set(() => ({ raydium, initialing: false, farmLoaded: false }))
   },

@@ -18,7 +18,7 @@ import BN from "bn.js";
 import { BigNumberish, parseBigNumberish } from "../../common";
 import { AddInstructionParam } from "../../common/txTool";
 import { InstructionType } from "../../common/txType";
-import { TOKEN_WSOL } from "../token/constant";
+import { TOKEN_WSOL } from "../token_old/constant";
 
 import { splAccountLayout } from "./layout";
 

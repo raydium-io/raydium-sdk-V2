@@ -2,7 +2,7 @@ import { Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from 
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { Fraction } from "../../module/fraction";
-import { TokenInfo } from "../tokenV2/type";
+import { TokenInfo } from "../token/type";
 import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
 import { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo } from "../../api/type";

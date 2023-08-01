@@ -1,183 +1,112 @@
-import { RawMint } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
+import { MintLayout, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 
-import { BigNumberish, parseNumberInfo, toBN, toTokenPrice } from "../../common/bignumber";
-import { PublicKeyish, SOLMint, validateAndParsePublicKey } from "../../common/pubKey";
-import { Token, TokenAmount, Fraction, Price } from "../../module";
+import { Price, Token, TokenAmount, Fraction } from "../../module";
+import { PublicKeyish, validateAndParsePublicKey, SOLMint } from "../../common/pubKey";
+import { BigNumberish, parseNumberInfo, toBN } from "../../common/bignumber";
+import { JupTokenType } from "../../api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { LoadParams } from "../type";
 
-import { quantumSOLHydratedTokenJsonInfo, TOKEN_WSOL } from "./constant";
-import { SplToken, TokenJson } from "./type";
-import { getTokenInfo } from "./util";
+import { TokenInfo } from "./type";
+import { parseTokenPrice } from "./utils";
+import { SOL_INFO } from "./constant";
+import BN from "bn.js";
 
 export interface MintToTokenAmount {
+  token?: Token;
   mint: PublicKeyish;
   amount: BigNumberish;
   decimalDone?: boolean;
 }
 
 export default class TokenModule extends ModuleBase {
-  private _tokens: TokenJson[] = [];
-  private _tokenMap: Map<string, SplToken> = new Map();
+  private _tokenList: TokenInfo[] = [];
+  private _tokenMap: Map<string, TokenInfo> = new Map();
+  private _blackTokenMap: Map<string, TokenInfo> = new Map();
   private _tokenPrice: Map<string, Price> = new Map();
-  private _mintList: {
-    official: string[];
-    unOfficial: string[];
-    unNamed: string[];
-    otherLiquiditySupportedMints: string[];
+  private _tokenPriceFetched = { prevCount: 0, fetched: 0 };
+  private _mintGroup: { official: Set<string>; jup: Set<string>; extra: Set<string> } = {
+    official: new Set(),
+    jup: new Set(),
+    extra: new Set(),
   };
-  private _mintSets: {
-    official: Set<string>;
-    unOfficial: Set<string>;
-    unNamed: Set<string>;
-    otherLiquiditySupportedMints: Set<string>;
-  };
+  private _extraTokenList: TokenInfo[] = [];
 
   constructor(params: ModuleBaseProps) {
     super(params);
-    this._mintList = { official: [], unOfficial: [], unNamed: [], otherLiquiditySupportedMints: [] };
-    this._mintSets = {
-      official: new Set(),
-      unOfficial: new Set(),
-      unNamed: new Set(),
-      otherLiquiditySupportedMints: new Set(),
-    };
   }
 
-  public async load(params?: LoadParams): Promise<void> {
+  public async load(params?: LoadParams & { fetchTokenPrice?: boolean; type?: JupTokenType }): Promise<void> {
     this.checkDisabled();
-    await this.scope.fetchTokens(params?.forceUpdate);
-    // unofficial: solana token list
-    // official: raydium token list
-    this._mintList = { official: [], unOfficial: [], unNamed: [], otherLiquiditySupportedMints: [] };
-    this._tokens = [];
+    const { forceUpdate = false, type = JupTokenType.ALL, fetchTokenPrice = false } = params || {};
+    const { mintList, blacklist } = await this.scope.fetchV3TokenList(forceUpdate);
+    const jup = await this.scope.fetchJupTokenList(type, forceUpdate);
+    // reset all data
+    this._tokenList = [];
     this._tokenMap = new Map();
-    const { data } = this.scope.apiData.tokens || {
-      data: { official: [], unOfficial: [], unNamed: [], blacklist: [] },
-    };
+    this._blackTokenMap = new Map();
+    this._mintGroup = { official: new Set(), jup: new Set(), extra: new Set() };
 
-    const blacklistSet = new Set(data.blacklist);
-    [data.official, data.unOfficial, data.unNamed].forEach((tokenGroup, idx) => {
-      tokenGroup.forEach((token) => {
-        const category = ["official", "unOfficial", "unNamed"][idx];
-        if (!blacklistSet.has(token.mint) && token.mint !== SOLMint.toBase58()) {
-          this._tokens.push({
-            ...token,
-            symbol: token.symbol || "",
-            name: token.name || "",
-          });
-          this._mintList[category].push(token.mint);
-        }
-      });
+    this._tokenMap.set(SOL_INFO.address, SOL_INFO);
+    this._mintGroup.official.add(SOL_INFO.address);
+    blacklist.forEach((token) => {
+      this._blackTokenMap.set(token.address, { ...token, priority: -1 });
     });
-    this._mintList["official"].push(quantumSOLHydratedTokenJsonInfo.mint.toBase58());
-    // this._tokens = sortTokens(this._tokens, this._mintList);
-    this._tokens.push({
-      ...quantumSOLHydratedTokenJsonInfo,
-      mint: SOLMint.toBase58(),
+
+    mintList.forEach((token) => {
+      if (this._blackTokenMap.has(token.address)) return;
+      this._tokenMap.set(token.address, { ...token, type: "raydium", priority: 2 });
+      this._mintGroup.official.add(token.address);
     });
-    this._tokens.forEach((token) => {
-      this._tokenMap.set(token.mint, {
-        ...token,
-        id: token.mint,
-      });
+
+    jup.forEach((token) => {
+      if (this._blackTokenMap.has(token.address) || this._tokenMap.has(token.address)) return;
+      this._tokenMap.set(token.address, { ...token, type: "jupiter", priority: 1 });
+      this._mintGroup.jup.add(token.address);
     });
-    this._tokenMap.set(TOKEN_WSOL.mint, { ...TOKEN_WSOL, icon: quantumSOLHydratedTokenJsonInfo.icon, id: "wsol" });
-    this._tokenMap.set(SOLMint.toBase58(), { ...quantumSOLHydratedTokenJsonInfo, mint: SOLMint.toBase58() });
-    await this.parseAllPoolTokens();
+
+    this._extraTokenList.forEach((token) => {
+      if (this._blackTokenMap.has(token.address) || this._tokenMap.has(token.address)) return;
+      this._tokenMap.set(token.address, { ...token, type: "extra", priority: 1 });
+      this._mintGroup.extra.add(token.address);
+    });
+
+    this._tokenList = Array.from(this._tokenMap).map((data) => data[1]);
+    if (fetchTokenPrice) await this.fetchTokenPrices(forceUpdate);
   }
 
-  get allTokens(): TokenJson[] {
-    return this._tokens;
+  get tokenList(): TokenInfo[] {
+    return this._tokenList;
   }
-  get allTokenMap(): Map<string, SplToken> {
+  get tokenMap(): Map<string, TokenInfo> {
     return this._tokenMap;
   }
-  get tokenMints(): { official: string[]; unOfficial: string[] } {
-    return this._mintList;
+  get blackTokenMap(): Map<string, TokenInfo> {
+    return this._blackTokenMap;
   }
-  get tokenPrices(): Map<string, Price> {
+  get mintGroup(): { official: Set<string>; jup: Set<string> } {
+    return this._mintGroup;
+  }
+
+  get tokenPriceMap(): Map<string, Price> {
     return this._tokenPrice;
   }
 
-  public async isVerifiedToken(mint: PublicKeyish, tokenInfo?: RawMint): Promise<boolean> {
-    const mintStr = mint.toString();
-    const tokenData = tokenInfo || (await getTokenInfo({ connection: this.scope.connection, mint }));
-    if (!tokenData) return false;
+  public async fetchTokenPrices(forceUpdate?: boolean): Promise<Map<string, Price>> {
+    const totalCount = this._mintGroup.official.size + this._mintGroup.jup.size;
+    if (
+      !forceUpdate &&
+      totalCount <= this._tokenPriceFetched.prevCount &&
+      Date.now() - this._tokenPriceFetched.fetched < 60 * 1000 * 5
+    )
+      return this._tokenPrice;
 
-    const isAPIToken = this._mintSets.official.has(mintStr) || this._mintSets.unOfficial.has(mintStr);
-    if (tokenData.decimals !== null && !isAPIToken && tokenData.freezeAuthorityOption === 1) return false;
-
-    return true;
-  }
-
-  public async parseAllPoolTokens(): Promise<void> {
-    this._mintList.otherLiquiditySupportedMints = [];
-    await this.parseV2PoolTokens();
-    await this.parseV3PoolTokens();
-    this._mintSets.otherLiquiditySupportedMints = new Set(this._mintList.otherLiquiditySupportedMints);
-  }
-
-  public async parseV2PoolTokens(): Promise<void> {
-    for (let i = 0; i < this.scope.liquidity.allPools.length; i++) {
-      const pool = this.scope.liquidity.allPools[i];
-      const toToken = (mint: string, decimals: number): TokenJson => ({
-        symbol: mint.substring(0, 6),
-        name: mint.substring(0, 6),
-        mint,
-        decimals,
-        extensions: {},
-        icon: "",
-      });
-      if (!this._tokenMap.has(pool.baseMint)) {
-        const hasFreeze = !(await this.isVerifiedToken(pool.baseMint));
-        const token = { ...toToken(pool.baseMint, pool.baseDecimals), hasFreeze };
-        this._tokens.push(token);
-        this._tokenMap.set(token.mint, { ...token, id: token.mint });
-        this._mintList.otherLiquiditySupportedMints.push(pool.baseMint);
-      }
-      if (!this._tokenMap.has(pool.quoteMint)) {
-        const hasFreeze = !(await this.isVerifiedToken(pool.quoteMint));
-        const token = { ...toToken(pool.quoteMint, pool.quoteDecimals), hasFreeze };
-        this._tokens.push(token);
-        this._tokenMap.set(token.mint, { ...token, id: token.mint });
-        this._mintList.otherLiquiditySupportedMints.push(pool.baseMint);
-      }
-    }
-  }
-
-  public async parseV3PoolTokens(): Promise<void> {
-    for (let i = 0; i < this.scope.ammV3.pools.data.length; i++) {
-      const pool = this.scope.ammV3.pools.data[i];
-      const toToken = (mint: string, decimals: number): TokenJson => ({
-        symbol: mint.substring(0, 6),
-        name: mint.substring(0, 6),
-        mint,
-        decimals,
-        extensions: {},
-        icon: "",
-      });
-      if (!this._tokenMap.has(pool.mintA)) {
-        const hasFreeze = !(await this.isVerifiedToken(pool.mintA));
-        const token = { ...toToken(pool.mintA, pool.mintDecimalsA), hasFreeze };
-        this._tokens.push(token);
-        this._tokenMap.set(token.mint, { ...token, id: token.mint });
-      }
-      if (!this._tokenMap.has(pool.mintB)) {
-        const hasFreeze = !(await this.isVerifiedToken(pool.mintB));
-        const token = { ...toToken(pool.mintB, pool.mintDecimalsB), hasFreeze };
-        this._tokens.push(token);
-        this._tokenMap.set(token.mint, { ...token, id: token.mint });
-      }
-    }
-  }
-
-  public async fetchTokenPrices(preloadRaydiumPrice?: Record<string, number>): Promise<Map<string, Price>> {
-    const coingeckoTokens = this.allTokens.filter(
-      (token) => !!token.extensions?.coingeckoId && token.mint !== PublicKey.default.toBase58(),
+    this._tokenPrice = new Map();
+    const coingeckoTokens = this._tokenList.filter(
+      (token) => !!token.extensions?.coingeckoId && token.address !== PublicKey.default.toBase58(),
     );
+
     const coingeckoIds = coingeckoTokens.map((token) => token.extensions.coingeckoId!);
     const coingeckoPriceRes = await this.scope.api.getCoingeckoPrice(coingeckoIds);
 
@@ -186,8 +115,8 @@ export default class TokenModule extends ModuleBase {
         coingeckoPriceRes[token.extensions.coingeckoId!]?.usd
           ? {
               ...acc,
-              [token.mint]: toTokenPrice({
-                token: this._tokenMap.get(token.mint)!,
+              [token.address]: parseTokenPrice({
+                token: this._tokenMap.get(token.address)!,
                 numberPrice: coingeckoPriceRes[token.extensions.coingeckoId!].usd!,
                 decimalDone: true,
               }),
@@ -196,13 +125,13 @@ export default class TokenModule extends ModuleBase {
       {},
     );
 
-    const raydiumPriceRes = preloadRaydiumPrice || (await this.scope.api.getRaydiumTokenPrice());
+    const raydiumPriceRes = await this.scope.api.getRaydiumTokenPrice();
     const raydiumPrices: { [key: string]: Price } = Object.keys(raydiumPriceRes).reduce(
       (acc, key) =>
         this._tokenMap.get(key)
           ? {
               ...acc,
-              [key]: toTokenPrice({
+              [key]: parseTokenPrice({
                 token: this._tokenMap.get(key)!,
                 numberPrice: raydiumPriceRes[key],
                 decimalDone: true,
@@ -212,41 +141,123 @@ export default class TokenModule extends ModuleBase {
       {},
     );
     this._tokenPrice = new Map([...Object.entries(coingeckoPrices), ...Object.entries(raydiumPrices)]);
+    this._tokenPriceFetched = { prevCount: totalCount, fetched: Date.now() };
     return this._tokenPrice;
+  }
+
+  /** === util functions === */
+
+  public async getChainTokenInfo(mint: PublicKeyish): Promise<{ token: Token; tokenInfo: TokenInfo }> {
+    const _mint = validateAndParsePublicKey({ publicKey: mint });
+    const mintStr = _mint.toBase58();
+    const mintSymbol = _mint.toString().substring(0, 6);
+    const isSol = _mint.equals(SOLMint);
+
+    if (isSol) {
+      return {
+        token: new Token({
+          decimals: SOL_INFO.decimals,
+          name: SOL_INFO.name,
+          symbol: SOL_INFO.symbol,
+          skipMint: true,
+          mint: "",
+        }),
+        tokenInfo: SOL_INFO,
+      };
+    }
+
+    const tokenInfo = await this.scope.api.getTokenInfo(_mint);
+    if (tokenInfo) {
+      this._mintGroup.extra.add(mintStr);
+      const fullInfo = { ...tokenInfo, priority: 2 };
+      this._tokenMap.set(mintStr, fullInfo);
+      return {
+        token: new Token({
+          mint: _mint,
+          decimals: tokenInfo.decimals,
+          symbol: tokenInfo.symbol || mintSymbol,
+          name: tokenInfo.name || mintSymbol,
+          isToken2022: tokenInfo.programId === TOKEN_2022_PROGRAM_ID.toBase58(),
+        }),
+        tokenInfo: fullInfo,
+      };
+    }
+
+    const info = await this.scope.connection.getAccountInfo(_mint);
+    if (!info) this.logAndCreateError("On chain token not found, mint:", _mint.toBase58());
+
+    const data = MintLayout.decode(info!.data);
+
+    const fullInfo = {
+      chainId: 101,
+      address: mintStr,
+      programId: info!.owner.toBase58(),
+      logoURI: "",
+      symbol: mintSymbol,
+      name: mintSymbol,
+      decimals: data.decimals,
+      tags: [],
+      extensions: {},
+      priority: 0,
+    };
+
+    if (!this._tokenMap.has(mintStr)) {
+      this._mintGroup.extra.add(mintStr);
+      this._tokenMap.set(mintStr, fullInfo);
+    }
+
+    return {
+      token: new Token({
+        mint: _mint,
+        decimals: data.decimals,
+        symbol: mintSymbol,
+        name: mintSymbol,
+        isToken2022: info!.owner.equals(TOKEN_2022_PROGRAM_ID),
+      }),
+      tokenInfo: fullInfo,
+    };
   }
 
   public mintToToken(mint: PublicKeyish): Token {
     const _mint = validateAndParsePublicKey({ publicKey: mint });
-    const tokenInfo = this.allTokenMap.get(_mint.toBase58());
-    if (!tokenInfo) this.logAndCreateError("token not found, mint:", _mint.toBase58());
+    const tokenInfo = this._tokenMap.get(_mint.toBase58());
+    if (!tokenInfo)
+      this.logAndCreateError("token not found, mint:", _mint.toBase58(), ", use getChainTokenInfo to get info instead");
     const { decimals, name, symbol } = tokenInfo!;
     const isSol = _mint.equals(SOLMint);
-    return new Token({ decimals, name, symbol, skipMint: isSol, mint: isSol ? "" : mint });
+    return new Token({
+      decimals,
+      name,
+      symbol,
+      skipMint: isSol,
+      mint: isSol ? "" : mint,
+      isToken2022: tokenInfo!.programId === TOKEN_2022_PROGRAM_ID.toBase58(),
+    });
   }
 
-  public mintToTokenAmount({ mint, amount, decimalDone }: MintToTokenAmount): TokenAmount {
-    const token = this.mintToToken(mint);
+  public mintToTokenAmount({ mint, amount, decimalDone, token }: MintToTokenAmount): TokenAmount {
+    const _token = token || this.mintToToken(mint);
 
     if (decimalDone) {
       const numberDetails = parseNumberInfo(amount);
       const amountBigNumber = toBN(new Fraction(numberDetails.numerator, numberDetails.denominator));
-      return new TokenAmount(token, amountBigNumber);
+      return new TokenAmount(_token, amountBigNumber);
     }
-    return new TokenAmount(token, this.decimalAmount({ mint, amount, decimalDone }));
+    return new TokenAmount(_token, this.decimalAmount({ mint, amount, decimalDone }));
   }
 
-  public decimalAmount({ mint, amount }: MintToTokenAmount): BN {
+  public decimalAmount({ mint, amount, token }: MintToTokenAmount): BN {
     const numberDetails = parseNumberInfo(amount);
-    const token = this.mintToToken(mint);
-    return toBN(new Fraction(numberDetails.numerator, numberDetails.denominator).mul(new BN(10 ** token.decimals)));
+    const _token = token || this.mintToToken(mint);
+    return toBN(new Fraction(numberDetails.numerator, numberDetails.denominator).mul(new BN(10 ** _token.decimals)));
   }
 
-  public uiAmount({ mint, amount }: MintToTokenAmount): string {
+  public uiAmount({ mint, amount, token }: MintToTokenAmount): string {
     const numberDetails = parseNumberInfo(amount);
-    const token = this.mintToToken(mint);
-    if (!token) return "";
+    const _token = token || this.mintToToken(mint);
+    if (!_token) return "";
     return new Fraction(numberDetails.numerator, numberDetails.denominator)
-      .div(new BN(10 ** token.decimals))
-      .toSignificant(token.decimals);
+      .div(new BN(10 ** _token.decimals))
+      .toSignificant(_token.decimals);
   }
 }

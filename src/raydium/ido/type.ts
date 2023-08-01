@@ -1,6 +1,6 @@
 import { PublicKey, Connection } from "@solana/web3.js";
 import { Token, TokenAmount, Price } from "../../module";
-import { SplToken } from "../token/type";
+import { SplToken } from "../token_old/type";
 import { GetMultipleAccountsInfoConfig } from "../../common/accountInfo";
 import { BigNumberish } from "../../common/bignumber";
 import { IdoStateLayoutV3, IdoLedgerLayoutV3, SnapshotStateLayoutV1 } from "./layout";

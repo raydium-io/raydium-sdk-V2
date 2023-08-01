@@ -28,7 +28,7 @@ export const API_URLS = {
   // api v3
   TOKEN_LIST: "/v3/mint/list",
   TOKEN_INFO: "/v3/mint/item/{mint}",
-  JUP_TOKEN_LIST: "https://token.jup.ag/strict",
+  JUP_TOKEN_LIST: "https://token.jup.ag/{type}",
   POOL_LIST: "/v3/pools/info/{type}/{sort}/{order}/100/{page}",
   POOL_SEARCH_BY_ID: "/v3/pools/info/id/{id}",
   POOL_SEARCH: "/v3/pools/info/search/{search_text}/{type}/{sort}/{order}/100/{page}",
@@ -41,7 +41,7 @@ export const DEV_API_URLS = {
   BASE_HOST: "https://api-v3.asdf1234.win",
   TOKEN_LIST: "/v3/mint/list",
   TOKEN_INFO: "/v3/mint/item/{mint}",
-  JUP_TOKEN_LIST: "https://token.jup.ag/strict",
+  JUP_TOKEN_LIST: "https://token.jup.ag/{type}",
   /**
    * type: {all | concentrated | standard}
    * sort: {liquidity | volume_24h / 7d / 30d | fee_24h / 7d / 30d | apr_24h / 7d / 30d}

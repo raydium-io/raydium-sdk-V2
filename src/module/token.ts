@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 
 import { PublicKeyish, SOLMint, validateAndParsePublicKey } from "../common/pubKey";
-import { TOKEN_WSOL } from "../raydium/token/constant";
+import { TOKEN_WSOL } from "../raydium/token_old/constant";
 
 /**
  * A token is any fungible financial instrument on Solana, including SOL and all SPL tokens.

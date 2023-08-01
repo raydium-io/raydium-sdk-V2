@@ -13,10 +13,10 @@ import {
   ApiIdoItem,
   ApiIdoInfo,
   ApiV3Token,
-  ApiV3PoolInfoItem,
   FetchPoolParams,
   PoolsApiReturn,
   SearchPoolsApiReturn,
+  JupTokenType,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
@@ -204,9 +204,9 @@ export class Api {
     return res.data;
   }
 
-  async getJupTokenList(): Promise<ApiV3Token[]> {
+  async getJupTokenList(type?: JupTokenType): Promise<ApiV3Token[]> {
     return this.api.get("/", {
-      baseURL: DEV_API_URLS.JUP_TOKEN_LIST,
+      baseURL: DEV_API_URLS.JUP_TOKEN_LIST.replace("{type}", type || JupTokenType.ALL),
     });
   }
 
