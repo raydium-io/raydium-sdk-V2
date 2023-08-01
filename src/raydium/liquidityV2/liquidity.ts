@@ -122,7 +122,7 @@ export default class LiquidityModule extends ModuleBase {
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", account.tokenAccounts);
 
     const lpTokenAccount = await account.getCreatedTokenAccount({
-      mint: new PublicKey(poolInfo.lpMint),
+      mint: new PublicKey(poolInfo.lpMint.address),
     });
 
     const tokens = [tokenA, tokenB];
@@ -168,7 +168,7 @@ export default class LiquidityModule extends ModuleBase {
     const { tokenAccount: _lpTokenAccount, ...lpInstruction } = await account.handleTokenAccount({
       side: "out",
       amount: 0,
-      mint: new PublicKey(poolInfo.lpMint),
+      mint: new PublicKey(poolInfo.lpMint.address),
       tokenAccount: lpTokenAccount,
       bypassAssociatedCheck,
       checkCreateATAOwner,

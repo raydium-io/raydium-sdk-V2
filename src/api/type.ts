@@ -319,12 +319,19 @@ export interface ApiV3PoolInfoCountItem {
 
 type PoolTypeItem = "StablePool" | "OpenBookMarket";
 
+export interface PoolRewardInfoItem {
+  mint: ApiV3Token;
+  perSecond?: number;
+  startTime?: number;
+  endTime?: number;
+}
+
 export interface ApiV3PoolInfoBaseItem {
   programId: string;
   id: string;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
-  rewardMints: ApiV3Token[];
+  rewardInfos: PoolRewardInfoItem[];
   price: number;
   mintAmountA: number;
   mintAmountB: number;
@@ -346,7 +353,7 @@ export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
   farmIds: string[];
   lpPrice: number;
   lpAmount: number;
-  lpMint: string;
+  lpMint: ApiV3Token;
 };
 export type ApiV3PoolInfoItem = ApiV3PoolInfoConcentratedItem | ApiV3PoolInfoStandardItem;
 
