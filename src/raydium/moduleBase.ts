@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 
 import { createLogger, Logger } from "../common/logger";
-import { TxBuilder } from "../common/txTool";
+import { TxBuilder } from "../common/txTool/txTool";
 
 import { Raydium } from "./";
 

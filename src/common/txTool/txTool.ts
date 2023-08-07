@@ -5,13 +5,21 @@ import {
   Signer,
   Transaction,
   TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import axios from "axios";
 
-import { SignAllTransactions, ComputeBudgetConfig } from "../raydium/type";
+import { SignAllTransactions, ComputeBudgetConfig } from "../../raydium/type";
 
-import { Owner } from "./owner";
-import { forecastTransactionSize, getRecentBlockHash, addComputeBudget } from "./txUtils";
+import { Owner } from "../owner";
+import {
+  forecastTransactionSize,
+  getRecentBlockHash,
+  addComputeBudget,
+  checkLegacyTxSize,
+  checkV0TxSize,
+} from "./txUtils";
 
 interface SolanaFeeInfo {
   min: number;
@@ -53,12 +61,28 @@ export interface TxBuildData<T = Record<string, any>> {
   extInfo: T;
 }
 
+export interface TxV0BuildData<T = Record<string, any>> {
+  transaction: VersionedTransaction;
+  instructionTypes: string[];
+  signers: Signer[];
+  execute: () => Promise<string>;
+  extInfo: T;
+}
+
 export interface ExecuteParam {
   sequentially: boolean;
   onTxUpdate?: (completeTxs: { txId: string; status: "success" | "error" | "sent" }[]) => void;
 }
 export interface MultiTxBuildData {
   transactions: Transaction[];
+  instructionTypes: string[];
+  signers: Signer[][];
+  execute: (executeParams?: ExecuteParam) => Promise<string[]>;
+  extInfo: Record<string, any>;
+}
+
+export interface MultiTxV0BuildData {
+  transactions: VersionedTransaction[];
   instructionTypes: string[];
   signers: Signer[][];
   execute: (executeParams?: ExecuteParam) => Promise<string[]>;
@@ -252,7 +276,128 @@ export class TxBuilder {
     };
   }
 
-  public sizeCheckBuild(extInfo?: Record<string, any>): MultiTxBuildData {
+  public async buildV0<T = Record<string, any>>(extInfo?: T): Promise<TxV0BuildData<T>> {
+    const messageV0 = new TransactionMessage({
+      payerKey: this.feePayer,
+      recentBlockhash: await getRecentBlockHash(this.connection),
+      instructions: [...this.allInstructions],
+    }).compileToV0Message();
+    const transaction = new VersionedTransaction(messageV0);
+
+    return {
+      transaction,
+      signers: this.signers,
+      instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
+      execute: async (): Promise<string> => {
+        if (this.owner?.isKeyPair) {
+          transaction.sign([this.owner.signer as Signer]);
+          return await this.connection.sendTransaction(transaction);
+        }
+        if (this.signAllTransactions) {
+          const txs = await this.signAllTransactions<VersionedTransaction>([transaction]);
+          return await this.connection.sendTransaction(txs[0], { skipPreflight: true });
+        }
+        throw new Error("please connect wallet first");
+      },
+      extInfo: extInfo || ({} as T),
+    };
+  }
+
+  public async buildV0MultiTx<T = Record<string, any>>(params: {
+    extraPreBuildData?: TxV0BuildData[];
+    extInfo?: T;
+  }): Promise<MultiTxV0BuildData> {
+    const { extraPreBuildData = [], extInfo } = params;
+    const { transaction } = await this.buildV0(extInfo);
+
+    const filterExtraBuildData = extraPreBuildData.filter(
+      (data) => TransactionMessage.decompile(data.transaction.message).instructions.length > 0,
+    );
+
+    const allTransactions: VersionedTransaction[] = [
+      transaction,
+      ...filterExtraBuildData.map((data) => data.transaction),
+    ];
+    const allSigners: Signer[][] = [this.signers, ...filterExtraBuildData.map((data) => data.signers)];
+    const allInstructionTypes: string[] = [
+      ...this.instructionTypes,
+      ...filterExtraBuildData.map((data) => data.instructionTypes).flat(),
+    ];
+
+    return {
+      transactions: allTransactions,
+      signers: allSigners,
+      instructionTypes: allInstructionTypes,
+      execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+        const { sequentially, onTxUpdate } = executeParams || {};
+        if (this.owner?.isKeyPair) {
+          return await Promise.all(
+            allTransactions.map(async (tx) => {
+              tx.sign([this.owner!.signer as Signer]);
+              return await this.connection.sendTransaction(tx);
+            }),
+          );
+        }
+
+        if (this.signAllTransactions) {
+          const signedTxs = await this.signAllTransactions(allTransactions);
+
+          if (sequentially) {
+            let i = 0;
+            const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
+            const checkSendTx = async (): Promise<void> => {
+              if (!signedTxs[i]) return;
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              processedTxs.push({ txId, status: "sent" });
+              onTxUpdate?.([...processedTxs]);
+              i++;
+              this.connection.onSignature(
+                txId,
+                (signatureResult) => {
+                  const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
+                  if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+                  onTxUpdate?.([...processedTxs]);
+                  checkSendTx();
+                },
+                "processed",
+              );
+              this.connection.getSignatureStatus(txId);
+            };
+            checkSendTx();
+            return [];
+          } else {
+            const txIds: string[] = [];
+            for (let i = 0; i < signedTxs.length; i += 1) {
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              txIds.push(txId);
+            }
+            return txIds;
+          }
+        }
+        throw new Error("please connect wallet first");
+      },
+      extInfo: extInfo || {},
+    };
+  }
+
+  public async sizeCheckBuild(
+    props?: Record<string, any> & { autoComputeBudget?: boolean },
+  ): Promise<MultiTxBuildData> {
+    const { autoComputeBudget = false, ...extInfo } = props || {};
+
+    let computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } = {
+      instructions: [],
+      instructionTypes: [],
+    };
+
+    if (autoComputeBudget) {
+      const computeConfig = autoComputeBudget ? await this.getComputeBudgetConfig() : undefined;
+      computeBudgetData =
+        autoComputeBudget && computeConfig
+          ? addComputeBudget(computeConfig)
+          : { instructions: [], instructionTypes: [] };
+    }
+
     const signerKey: { [key: string]: Signer } = this.signers.reduce(
       (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
       {},
@@ -264,14 +409,34 @@ export class TxBuilder {
     let instructionQueue: TransactionInstruction[] = [];
     this.allInstructions.forEach((item) => {
       const _itemIns = [...instructionQueue, item];
+      const _itemInsWithCompute = autoComputeBudget ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
       const _signerStrs = new Set<string>(
         _itemIns.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
       );
       const _signer = [..._signerStrs.values()].map((i) => new PublicKey(i));
-      if (forecastTransactionSize(_itemIns, [this.feePayer, ..._signer])) {
+
+      if (
+        checkLegacyTxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, signers: _signer }) ||
+        checkLegacyTxSize({ instructions: _itemIns, payer: this.feePayer, signers: _signer })
+      ) {
+        // current ins add to queue still not exceed tx size limit
         instructionQueue.push(item);
       } else {
-        allTransactions.push(new Transaction().add(...instructionQueue));
+        if (instructionQueue.length === 0) throw Error("item ins too big");
+
+        // if add computeBudget still not exceed tx size limit
+        if (
+          autoComputeBudget &&
+          checkLegacyTxSize({
+            instructions: [...computeBudgetData.instructions, ...instructionQueue],
+            payer: this.feePayer,
+            signers: _signer,
+          })
+        ) {
+          allTransactions.push(new Transaction().add(...computeBudgetData.instructions, ...instructionQueue));
+        } else {
+          allTransactions.push(new Transaction().add(...instructionQueue));
+        }
         allSigners.push([..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined));
         instructionQueue = [item];
       }
@@ -281,8 +446,21 @@ export class TxBuilder {
       const _signerStrs = new Set<string>(
         instructionQueue.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
       );
-      allTransactions.push(new Transaction().add(...instructionQueue));
-      allSigners.push([..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined));
+      const _signers = [..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined);
+
+      if (
+        autoComputeBudget &&
+        checkLegacyTxSize({
+          instructions: [...computeBudgetData.instructions, ...instructionQueue],
+          payer: this.feePayer,
+          signers: _signers.map((s) => s.publicKey),
+        })
+      ) {
+        allTransactions.push(new Transaction().add(...computeBudgetData.instructions, ...instructionQueue));
+      } else {
+        allTransactions.push(new Transaction().add(...instructionQueue));
+      }
+      allSigners.push(_signers);
     }
     allTransactions.forEach((tx) => (tx.feePayer = this.feePayer));
 

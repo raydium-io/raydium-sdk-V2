@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import ModuleBase from "../moduleBase";
-import { TxBuildData } from "../../common/txTool";
+import { TxBuildData } from "../../common/txTool/txTool";
 import { generatePubKey } from "../account/util";
 import { BN_ZERO } from "../../common/bignumber";
 import { makeCreateMarketInstruction } from "./instrument";

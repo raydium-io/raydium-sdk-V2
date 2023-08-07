@@ -1,7 +1,7 @@
-import { PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, Signer, Transaction, TransactionInstruction, VersionedTransaction } from "@solana/web3.js";
 import { Mint, TransferFeeConfig } from "@solana/spl-token";
 import { ApiTokenCategory, ApiTokenInfo } from "../api";
-import { ExecuteParam } from "../common/txTool";
+import { ExecuteParam } from "../common/txTool/txTool";
 import { TokenAmount } from "../module/amount";
 import BN from "bn.js";
 
@@ -9,7 +9,9 @@ export interface RaydiumTokenInfo extends ApiTokenInfo {
   category: ApiTokenCategory;
 }
 
-export type SignAllTransactions = ((transaction: Transaction[]) => Promise<Transaction[]>) | undefined;
+export type SignAllTransactions =
+  | (<T extends Transaction | VersionedTransaction>(transaction: T[]) => Promise<T[]>)
+  | undefined;
 
 export interface MakeTransaction<T = Record<string, any>> {
   signers: Signer[];

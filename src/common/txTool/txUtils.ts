@@ -9,11 +9,11 @@ import {
   Keypair,
 } from "@solana/web3.js";
 
-import { createLogger } from "./logger";
+import { createLogger } from "../logger";
 import { InstructionType } from "./txType";
-import { CacheLTA } from "./lookupTable";
+import { CacheLTA } from "../lookupTable";
 
-import { ComputeBudgetConfig } from "../raydium/type";
+import { ComputeBudgetConfig } from "../../raydium/type";
 
 const logger = createLogger("Raydium_txUtil");
 
@@ -224,7 +224,7 @@ export async function simulateTransaction(
   return results;
 }
 
-export function _checkLegacyTx({
+export function checkLegacyTxSize({
   instructions,
   payer,
   signers,
@@ -236,7 +236,7 @@ export function _checkLegacyTx({
   return forecastTransactionSize(instructions, [payer, ...signers]);
 }
 
-export function _checkV0Tx({
+export function checkV0TxSize({
   instructions,
   payer,
   lookupTableAddressAccount,

@@ -4,7 +4,7 @@ import { PublicKey, SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY } 
 import { parseBigNumberish } from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
 import { accountMeta, commonSystemAccountMeta, RENT_PROGRAM_ID } from "../../common/pubKey";
-import { InstructionType } from "../../common/txType";
+import { InstructionType } from "../../common/txTool/txType";
 import { InstructionReturn } from "../type";
 import { struct, u8, u64 } from "../../marshmallow";
 

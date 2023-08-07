@@ -15,8 +15,8 @@ import {
 import { createLogger } from "../../common/logger";
 import { PublicKeyish, SOLMint, validateAndParsePublicKey, WSOLMint, solToWSol } from "../../common/pubKey";
 import { jsonInfo2PoolKeys } from "../../common/utility";
-import { InstructionType } from "../../common/txType";
-import { addComputeBudget } from "../../common/txUtils";
+import { InstructionType } from "../../common/txTool/txType";
+import { addComputeBudget } from "../../common/txTool/txUtils";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { makeTransferInstruction } from "../account/instruction";
 import { getATAAddress } from "../../common/pda";

@@ -3,7 +3,7 @@ import { Commitment, PublicKey, Keypair, SystemProgram, TransactionInstruction }
 import { getATAAddress } from "../../common/pda";
 import { BigNumberish, InstructionType, WSOLMint } from "../../common";
 
-import { AddInstructionParam } from "../../common/txTool";
+import { AddInstructionParam } from "../../common/txTool/txTool";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 
 import {

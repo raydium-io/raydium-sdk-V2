@@ -5,7 +5,7 @@ import { GetMultipleAccountsInfoConfig, getMultipleAccountsInfoWithCustomFlags }
 import { parseBigNumberish, BN_ONE, BN_TEN, toTotalPrice, toFraction } from "../../common/bignumber";
 import { createLogger } from "../../common/logger";
 import { RAYMint } from "../../common/pubKey";
-import { findProgramAddress, ProgramAddress } from "../../common/txUtils";
+import { findProgramAddress, ProgramAddress } from "../../common/txTool/txUtils";
 import { DateParam, isDateAfter, isDateBefore } from "../../common/date";
 import { splAccountLayout } from "../account/layout";
 import { SplAccount } from "../account/types";

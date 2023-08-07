@@ -15,7 +15,7 @@ import {
   BN_ZERO,
 } from "../../common/bignumber";
 import { PublicKeyish, SOLMint, WSOLMint, validateAndParsePublicKey } from "../../common/pubKey";
-import { InstructionType } from "../../common/txType";
+import { InstructionType } from "../../common/txTool/txType";
 import { getATAAddress } from "../../common/pda";
 
 import { Fraction } from "../../module/fraction";

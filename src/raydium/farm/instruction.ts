@@ -23,7 +23,7 @@ import {
   RENT_PROGRAM_ID,
   INSTRUCTION_PROGRAM_ID,
 } from "../../common/pubKey";
-import { InstructionType } from "../../common/txType";
+import { InstructionType } from "../../common/txTool/txType";
 import { InstructionReturn } from "../type";
 import { associatedLedgerAccountLayout, farmRewardLayout, withdrawRewardLayout, farmLedgerLayoutV3_2 } from "./layout";
 import { FarmRewardInfoConfig, RewardInfoKey, SdkParsedFarmInfo } from "./type";

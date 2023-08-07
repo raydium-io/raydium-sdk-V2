@@ -8,7 +8,7 @@ import BN from "bn.js";
 import { AmountSide, AddLiquidityParams } from "./type";
 import { MakeTransaction } from "../../raydium/type";
 import { makeAddLiquidityInstruction } from "./instruction";
-import { InstructionType } from "../../common/txType";
+import { InstructionType } from "../../common/txTool/txType";
 
 export default class LiquidityModule extends ModuleBase {
   constructor(params: ModuleBaseProps) {

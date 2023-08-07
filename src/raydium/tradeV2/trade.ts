@@ -33,7 +33,7 @@ import {
 } from "./type";
 import { makeSwapInstruction } from "./instrument";
 import { MakeMultiTransaction, MakeTransaction, ReturnTypeFetchMultipleMintInfos, TransferAmountFee } from "../type";
-import { InstructionType } from "../../common/txType";
+import { InstructionType } from "../../common/txTool/txType";
 import { BigNumberish, parseBigNumberish } from "../../common/bignumber";
 import {
   createWSolAccountInstructions,

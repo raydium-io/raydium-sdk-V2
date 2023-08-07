@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
-import { findProgramAddress } from "./txUtils";
+import { findProgramAddress } from "./txTool/txUtils";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 export function getATAAddress(
