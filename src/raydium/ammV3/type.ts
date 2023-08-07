@@ -417,6 +417,8 @@ export interface OpenPositionFromBase {
 
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  withMetadata?: "create" | "no-create";
+  getEphemeralSigners?: (k: number) => any;
 }
 
 export interface OpenPositionFromLiquidity {
@@ -432,6 +434,8 @@ export interface OpenPositionFromLiquidity {
   slippage: number;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  withMetadata?: "create" | "no-create";
+  getEphemeralSigners?: (k: number) => any;
 }
 
 export interface InitRewardParams {

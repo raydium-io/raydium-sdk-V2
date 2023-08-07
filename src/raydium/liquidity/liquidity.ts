@@ -16,7 +16,7 @@ import { createLogger } from "../../common/logger";
 import { PublicKeyish, SOLMint, validateAndParsePublicKey, WSOLMint, solToWSol } from "../../common/pubKey";
 import { jsonInfo2PoolKeys } from "../../common/utility";
 import { InstructionType } from "../../common/txType";
-import { addComputeBudget } from "../../common/txTool";
+import { addComputeBudget } from "../../common/txUtils";
 import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
 import { makeTransferInstruction } from "../account/instruction";
 import { getATAAddress } from "../../common/pda";
@@ -986,6 +986,7 @@ export default class Liquidity extends ModuleBase {
     computeBudgetConfig,
     payer,
     tokenProgram,
+    getEphemeralSigners,
   }: {
     poolId: PublicKeyish;
     removeLpAmount: BN;
@@ -1004,6 +1005,7 @@ export default class Liquidity extends ModuleBase {
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
     tokenProgram?: PublicKey;
+    getEphemeralSigners?: (k: number) => any;
   }): Promise<MakeTransaction> {
     const poolInfo = this._poolInfoMap.get(poolId.toString());
     if (!poolInfo) throw new Error("pool not found");
@@ -1092,7 +1094,9 @@ export default class Liquidity extends ModuleBase {
         tokenAccountA,
         tokenAccountB,
       },
+      withMetadata: "create",
       ...createPositionInfo,
+      getEphemeralSigners,
     });
 
     const farmKeys = this.scope.farm.allParsedFarmMap.get(farmInfo?.farmId.toString() || "");

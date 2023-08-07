@@ -1,7 +1,9 @@
-import { Keypair, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import ModuleBase from "../moduleBase";
 import { TxBuildData } from "../../common/txTool";
+import { generatePubKey } from "../account/util";
 import { BN_ZERO } from "../../common/bignumber";
 import { makeCreateMarketInstruction } from "./instrument";
 import { MakeMultiTransaction } from "../type";
@@ -32,13 +34,14 @@ export default class MarketV2 extends ModuleBase {
     tickSize: number;
     dexProgramId: PublicKey;
   }): Promise<MakeMultiTransaction & ExtInfo> {
-    const market = Keypair.generate();
-    const requestQueue = Keypair.generate();
-    const eventQueue = Keypair.generate();
-    const bids = Keypair.generate();
-    const asks = Keypair.generate();
-    const baseVault = Keypair.generate();
-    const quoteVault = Keypair.generate();
+    const wallet = this.scope.ownerPubKey;
+    const market = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
+    const requestQueue = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
+    const eventQueue = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
+    const bids = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
+    const asks = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
+    const baseVault = generatePubKey({ fromPublicKey: wallet, programId: TOKEN_PROGRAM_ID });
+    const quoteVault = generatePubKey({ fromPublicKey: wallet, programId: TOKEN_PROGRAM_ID });
     const feeRateBps = 0;
     const quoteDustThreshold = new BN(100);
 

@@ -1,7 +1,7 @@
-export const TxVersion = {
-  V0: "V0",
-  LEGACY: "LEGACY",
-};
+export enum TxVersion {
+  "V0",
+  "LEGACY",
+}
 
 export const InstructionType = {
   CreateAccount: "CreateAccount",

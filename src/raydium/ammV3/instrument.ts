@@ -175,6 +175,7 @@ export class AmmV3Instrument {
     liquidity: BN,
     amountMaxA: BN,
     amountMaxB: BN,
+    withMetadata: "create" | "no-create",
   ): TransactionInstruction {
     const dataLayout = struct([
       s32("tickLowerIndex"),
@@ -184,6 +185,7 @@ export class AmmV3Instrument {
       u128("liquidity"),
       u64("amountMaxA"),
       u64("amountMaxB"),
+      bool("withMetadata"),
       u8("optionBaseFlag"),
       bool("baseFlag"),
     ]);
@@ -225,6 +227,7 @@ export class AmmV3Instrument {
         liquidity,
         amountMaxA,
         amountMaxB,
+        withMetadata: withMetadata === "create",
         baseFlag: false,
         optionBaseFlag: 0,
       },
@@ -249,6 +252,8 @@ export class AmmV3Instrument {
     amountMaxA,
     amountMaxB,
     programId,
+    withMetadata,
+    getEphemeralSigners,
   }: {
     poolInfo: AmmV3PoolInfo;
 
@@ -265,6 +270,8 @@ export class AmmV3Instrument {
     amountMaxA: BN;
     amountMaxB: BN;
     programId?: PublicKey;
+    withMetadata: "create" | "no-create";
+    getEphemeralSigners?: (k: number) => any;
   }): ReturnTypeMakeInstructions {
     const signers: Signer[] = [];
 
@@ -324,6 +331,7 @@ export class AmmV3Instrument {
       liquidity,
       amountMaxA,
       amountMaxB,
+      withMetadata,
     );
 
     return {
@@ -335,7 +343,7 @@ export class AmmV3Instrument {
     };
   }
 
-  static openPositionFromBaseInstructions({
+  static async openPositionFromBaseInstructions({
     poolInfo,
     ownerInfo,
     tickLower,
@@ -343,6 +351,8 @@ export class AmmV3Instrument {
     base,
     baseAmount,
     otherAmountMax,
+    withMetadata,
+    getEphemeralSigners,
   }: {
     poolInfo: AmmV3PoolInfo;
 
@@ -360,8 +370,19 @@ export class AmmV3Instrument {
     baseAmount: BN;
 
     otherAmountMax: BN;
-  }): ReturnTypeMakeInstructions {
-    const nftMintAKeypair = new Keypair();
+    withMetadata: "create" | "no-create";
+    getEphemeralSigners?: (k: number) => any;
+  }): Promise<ReturnTypeMakeInstructions> {
+    const signers: Signer[] = [];
+
+    let nftMintAccount: PublicKey;
+    if (getEphemeralSigners) {
+      nftMintAccount = new PublicKey((await getEphemeralSigners(1))[0]);
+    } else {
+      const _k = Keypair.generate();
+      signers.push(_k);
+      nftMintAccount = _k.publicKey;
+    }
 
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
     const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
@@ -377,16 +398,9 @@ export class AmmV3Instrument {
       tickArrayUpperStartIndex,
     );
 
-    const { publicKey: positionNftAccount } = getATAAddress(
-      ownerInfo.wallet,
-      nftMintAKeypair.publicKey,
-      TOKEN_PROGRAM_ID,
-    );
-    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAKeypair.publicKey);
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(
-      poolInfo.programId,
-      nftMintAKeypair.publicKey,
-    );
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, nftMintAccount, TOKEN_PROGRAM_ID);
+    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAccount);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, nftMintAccount);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
       poolInfo.programId,
       poolInfo.id,
@@ -399,7 +413,7 @@ export class AmmV3Instrument {
       ownerInfo.feePayer,
       poolInfo.id,
       ownerInfo.wallet,
-      nftMintAKeypair.publicKey,
+      nftMintAccount,
       positionNftAccount,
       metadataAccount,
       protocolPosition,
@@ -418,6 +432,8 @@ export class AmmV3Instrument {
       tickArrayLowerStartIndex,
       tickArrayUpperStartIndex,
 
+      withMetadata,
+
       base,
       baseAmount,
 
@@ -426,7 +442,7 @@ export class AmmV3Instrument {
 
     return {
       address: {
-        nftMint: nftMintAKeypair.publicKey,
+        nftMint: nftMintAccount,
         tickArrayLower,
         tickArrayUpper,
         positionNftAccount,
@@ -435,7 +451,7 @@ export class AmmV3Instrument {
         protocolPosition,
       },
       instructions: [ins],
-      signers: [nftMintAKeypair],
+      signers,
       instructionTypes: [InstructionType.ClmmOpenPosition],
       lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };
@@ -464,7 +480,7 @@ export class AmmV3Instrument {
     tickUpperIndex: number,
     tickArrayLowerStartIndex: number,
     tickArrayUpperStartIndex: number,
-
+    withMetadata: "create" | "no-create",
     base: "MintA" | "MintB",
     baseAmount: BN,
 
@@ -478,6 +494,7 @@ export class AmmV3Instrument {
       u128("liquidity"),
       u64("amountMaxA"),
       u64("amountMaxB"),
+      bool("withMetadata"),
       u8("optionBaseFlag"),
       bool("baseFlag"),
     ]);
@@ -519,6 +536,7 @@ export class AmmV3Instrument {
         liquidity: BN_ZERO,
         amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
         amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
+        withMetadata: withMetadata === "create",
         baseFlag: base === "MintA",
         optionBaseFlag: 1,
       },
@@ -534,7 +552,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static openPositionFromLiquidityInstructions({
+  static async openPositionFromLiquidityInstructions({
     poolInfo,
     ownerInfo,
     tickLower,
@@ -542,6 +560,8 @@ export class AmmV3Instrument {
     liquidity,
     amountMaxA,
     amountMaxB,
+    withMetadata,
+    getEphemeralSigners,
   }: {
     poolInfo: AmmV3PoolInfo;
     ownerInfo: {
@@ -555,8 +575,18 @@ export class AmmV3Instrument {
     liquidity: BN;
     amountMaxA: BN;
     amountMaxB: BN;
-  }): ReturnTypeMakeInstructions {
-    const nftMintAKeypair = new Keypair();
+    withMetadata: "create" | "no-create";
+    getEphemeralSigners?: (k: number) => any;
+  }): Promise<ReturnTypeMakeInstructions> {
+    let nftMintAccount: PublicKey;
+    const signers: Keypair[] = [];
+    if (getEphemeralSigners) {
+      nftMintAccount = new PublicKey((await getEphemeralSigners(1))[0]);
+    } else {
+      const _k = Keypair.generate();
+      signers.push(_k);
+      nftMintAccount = _k.publicKey;
+    }
 
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
     const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
@@ -572,16 +602,9 @@ export class AmmV3Instrument {
       tickArrayUpperStartIndex,
     );
 
-    const { publicKey: positionNftAccount } = getATAAddress(
-      ownerInfo.wallet,
-      nftMintAKeypair.publicKey,
-      TOKEN_PROGRAM_ID,
-    );
-    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAKeypair.publicKey);
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(
-      poolInfo.programId,
-      nftMintAKeypair.publicKey,
-    );
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, nftMintAccount, TOKEN_PROGRAM_ID);
+    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAccount);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, nftMintAccount);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
       poolInfo.programId,
       poolInfo.id,
@@ -594,7 +617,7 @@ export class AmmV3Instrument {
       ownerInfo.wallet,
       poolInfo.id,
       ownerInfo.wallet,
-      nftMintAKeypair.publicKey,
+      nftMintAccount,
       positionNftAccount,
       metadataAccount,
       protocolPosition,
@@ -615,11 +638,12 @@ export class AmmV3Instrument {
       liquidity,
       amountMaxA,
       amountMaxB,
+      withMetadata,
     );
 
     return {
       address: {
-        nftMint: nftMintAKeypair.publicKey,
+        nftMint: nftMintAccount,
         tickArrayLower,
         tickArrayUpper,
         positionNftAccount,
@@ -628,7 +652,7 @@ export class AmmV3Instrument {
         protocolPosition,
       },
       instructions: [ins],
-      signers: [nftMintAKeypair],
+      signers,
       instructionTypes: [InstructionType.ClmmOpenPosition],
       lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
     };

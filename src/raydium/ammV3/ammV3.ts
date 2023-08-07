@@ -389,6 +389,8 @@ export class AmmV3 extends ModuleBase {
     otherAmountMax,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    withMetadata = "create",
+    getEphemeralSigners,
   }: OpenPositionFromBase): Promise<MakeTransaction> {
     this.scope.checkOwner();
     const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
@@ -443,7 +445,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const insInfo = AmmV3Instrument.openPositionFromBaseInstructions({
+    const insInfo = await AmmV3Instrument.openPositionFromBaseInstructions({
       poolInfo,
       ownerInfo: {
         ...ownerInfo,
@@ -457,6 +459,8 @@ export class AmmV3 extends ModuleBase {
       base,
       baseAmount,
       otherAmountMax,
+      withMetadata,
+      getEphemeralSigners,
     });
     txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
@@ -473,6 +477,8 @@ export class AmmV3 extends ModuleBase {
     liquidity,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    withMetadata = "create",
+    getEphemeralSigners,
   }: OpenPositionFromLiquidity): Promise<MakeTransaction> {
     const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found:", poolId.toBase58());
@@ -528,7 +534,7 @@ export class AmmV3 extends ModuleBase {
     if (ownerTokenAccountA === undefined || ownerTokenAccountB === undefined)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const makeOpenPositionInstructions = AmmV3Instrument.openPositionFromLiquidityInstructions({
+    const makeOpenPositionInstructions = await AmmV3Instrument.openPositionFromLiquidityInstructions({
       poolInfo,
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -540,6 +546,8 @@ export class AmmV3 extends ModuleBase {
       liquidity,
       amountMaxA,
       amountMaxB,
+      withMetadata,
+      getEphemeralSigners,
     });
 
     txBuilder.addInstruction(makeOpenPositionInstructions);

@@ -13,7 +13,7 @@ import {
   initTokenAccountInstruction,
 } from "./instruction";
 import { HandleTokenAccountParams, TokenAccount, TokenAccountRaw, GetOrCreateTokenAccountParams } from "./types";
-import { parseTokenAccountResp } from "./util";
+import { parseTokenAccountResp, generatePubKey } from "./util";
 
 export interface TokenAccountDataProp {
   tokenAccounts?: TokenAccount[];
@@ -193,7 +193,6 @@ export default class Account extends ModuleBase {
           payer: createInfo.payer || this.scope.ownerPubKey,
           amount: createInfo.amount || 0,
           skipCloseAccount,
-          programId: tokenProgram,
         });
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
         newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
@@ -235,7 +234,6 @@ export default class Account extends ModuleBase {
           payer: createInfo.payer || this.scope.ownerPubKey,
           amount: createInfo.amount || 0,
           skipCloseAccount,
-          programId: tokenProgram,
         });
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
         newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
@@ -245,15 +243,17 @@ export default class Account extends ModuleBase {
 
         return { account: txInstruction.signers![0].publicKey, instructionParams: newTxInstructions };
       } else {
-        const newTokenAccount = Keypair.generate();
+        const newTokenAccount = generatePubKey({ fromPublicKey: owner, programId: tokenProgram });
         const balanceNeeded = await this.scope.connection.getMinimumBalanceForRentExemption(AccountLayout.span);
 
-        const createAccountIns = SystemProgram.createAccount({
+        const createAccountIns = SystemProgram.createAccountWithSeed({
           fromPubkey: owner,
+          basePubkey: owner,
+          seed: newTokenAccount.seed,
           newAccountPubkey: newTokenAccount.publicKey,
           lamports: balanceNeeded,
           space: AccountLayout.span,
-          programId: tokenProgram ?? TOKEN_PROGRAM_ID,
+          programId: tokenProgram,
         });
 
         newTxInstructions.instructions!.push(
@@ -265,7 +265,6 @@ export default class Account extends ModuleBase {
             programId: tokenProgram,
           }),
         );
-        newTxInstructions.signers!.push(newTokenAccount);
         newTxInstructions.instructionTypes!.push(InstructionType.CreateAccount);
         newTxInstructions.instructionTypes!.push(InstructionType.InitAccount);
         if (!skipCloseAccount) {
@@ -345,7 +344,6 @@ export default class Account extends ModuleBase {
         owner: this.scope.ownerPubKey,
         payer,
         amount,
-        programId,
         skipCloseAccount,
       });
       return { tokenAccount: txInstruction.signers![0].publicKey, ...txInstruction };

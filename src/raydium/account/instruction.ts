@@ -4,17 +4,9 @@ import {
   createTransferInstruction,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import {
-  Commitment,
-  Connection,
-  Keypair,
-  PublicKey,
-  Signer,
-  SystemProgram,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { Commitment, Connection, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-
+import { generatePubKey } from "./util";
 import { BigNumberish, parseBigNumberish } from "../../common";
 import { AddInstructionParam } from "../../common/txTool";
 import { InstructionType } from "../../common/txType";
@@ -49,34 +41,35 @@ interface CreateWSolTokenAccount {
   owner: PublicKey;
   amount: BigNumberish;
   commitment?: Commitment;
-  programId?: PublicKey;
   skipCloseAccount?: boolean;
 }
 /**
  * WrappedNative account = wsol account
  */
 export async function createWSolAccountInstructions(params: CreateWSolTokenAccount): Promise<AddInstructionParam> {
-  const { connection, amount, commitment, payer, owner, programId = TOKEN_PROGRAM_ID, skipCloseAccount } = params;
+  const { connection, amount, commitment, payer, owner, skipCloseAccount } = params;
 
   const balanceNeeded = await connection.getMinimumBalanceForRentExemption(splAccountLayout.span, commitment);
   const lamports = parseBigNumberish(amount).add(new BN(balanceNeeded));
-  const newAccount = Keypair.generate();
+  const newAccount = generatePubKey({ fromPublicKey: payer, programId: TOKEN_PROGRAM_ID });
 
   return {
-    signers: [newAccount],
+    signers: [],
     instructions: [
-      SystemProgram.createAccount({
+      SystemProgram.createAccountWithSeed({
         fromPubkey: payer,
+        basePubkey: payer,
+        seed: newAccount.seed,
         newAccountPubkey: newAccount.publicKey,
         lamports: lamports.toNumber(),
         space: splAccountLayout.span,
-        programId,
+        programId: TOKEN_PROGRAM_ID,
       }),
       initTokenAccountInstruction({
         mint: new PublicKey(TOKEN_WSOL.mint),
         tokenAccount: newAccount.publicKey,
         owner,
-        programId,
+        programId: TOKEN_PROGRAM_ID,
       }),
     ],
     instructionTypes: [InstructionType.CreateAccount, InstructionType.InitAccount],

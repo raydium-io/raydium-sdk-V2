@@ -552,6 +552,7 @@ export default class TradeV2 extends ModuleBase {
               fee,
               remainingAccounts,
               minMiddleAmountFee,
+              middleToken,
               expirationTime,
               realAmountIn,
             } = await this.computeAmountOut({
@@ -593,6 +594,7 @@ export default class TradeV2 extends ModuleBase {
               poolKey: [iFromPool, iOutPool],
               remainingAccounts,
               minMiddleAmountFee,
+              middleToken,
               poolReady: infoAPoolOpen && infoBPoolOpen,
               poolType: [poolTypeA, poolTypeB],
               feeConfig: _inFeeConfig,
@@ -635,7 +637,8 @@ export default class TradeV2 extends ModuleBase {
     tickCache: ReturnTypeFetchMultiplePoolTickArrays;
     mintInfos: ReturnTypeFetchMultipleMintInfos;
   }): Promise<{
-    minMiddleAmountFee: TokenAmount;
+    minMiddleAmountFee: TokenAmount | undefined;
+    middleToken: Token;
     realAmountIn: TransferAmountFee;
     amountOut: TransferAmountFee;
     minAmountOut: TransferAmountFee;
@@ -789,10 +792,14 @@ export default class TradeV2 extends ModuleBase {
     }
 
     return {
-      minMiddleAmountFee: new TokenAmount(
-        middleToken,
-        (minMiddleAmountOut.fee?.raw ?? new BN(0)).add(realAmountRouteIn.fee?.raw ?? new BN(0)),
-      ),
+      minMiddleAmountFee:
+        minMiddleAmountOut.fee !== undefined
+          ? new TokenAmount(
+              middleToken,
+              (minMiddleAmountOut.fee?.raw ?? new BN(0)).add(realAmountRouteIn.fee?.raw ?? new BN(0)),
+            )
+          : undefined,
+      middleToken,
       realAmountIn,
       amountOut,
       minAmountOut,
@@ -824,7 +831,6 @@ export default class TradeV2 extends ModuleBase {
       owner: this.scope.ownerPubKey,
       payer: this.scope.ownerPubKey,
       amount: 0,
-      programId: tokenProgram,
     });
     txBuilder.addInstruction(ins);
 
@@ -876,7 +882,6 @@ export default class TradeV2 extends ModuleBase {
       payer: this.scope.ownerPubKey,
       amount,
       skipCloseAccount: true,
-      programId: tokenProgram,
     });
     txBuilder.addInstruction(ins);
 
@@ -925,7 +930,7 @@ export default class TradeV2 extends ModuleBase {
       amountOut: this.scope.solToWsolTransferAmountFee(orgSwapInfo.amountOut),
       minAmountOut: this.scope.solToWsolTransferAmountFee(orgSwapInfo.minAmountOut),
       middleMint: (orgSwapInfo as ComputeAmountOutRouteLayout).minMiddleAmountFee
-        ? solToWSol((orgSwapInfo as ComputeAmountOutRouteLayout).minMiddleAmountFee.token.mint)
+        ? solToWSol((orgSwapInfo as ComputeAmountOutRouteLayout).middleToken.mint)
         : undefined,
     };
     const amountIn = swapInfo.amountIn;

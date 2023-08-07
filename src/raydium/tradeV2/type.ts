@@ -1,6 +1,6 @@
 import { PublicKey, Keypair, Signer, TransactionInstruction, Transaction } from "@solana/web3.js";
 import BN from "bn.js";
-import { TokenAmount, Price, Percent } from "../../module";
+import { TokenAmount, Price, Percent, Token } from "../../module";
 import { AmmV3PoolInfo } from "../ammV3";
 import { LiquidityPoolJsonInfo } from "../liquidity";
 import { TransferAmountFee } from "../type";
@@ -39,7 +39,8 @@ export interface ComputeAmountOutRouteLayout {
   routeType: "route";
   poolKey: PoolType[];
   remainingAccounts: (PublicKey[] | undefined)[];
-  minMiddleAmountFee: TokenAmount;
+  minMiddleAmountFee: TokenAmount | undefined;
+  middleToken: Token;
   poolReady: boolean;
   poolType: (string | undefined)[];
 

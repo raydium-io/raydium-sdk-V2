@@ -100,17 +100,17 @@ export async function makeCreateMarketInstruction({
   wallet: PublicKey;
   marketInfo: {
     programId: PublicKey;
-    id: Keypair;
+    id: { publicKey: PublicKey; seed: string };
     baseMint: PublicKey;
     quoteMint: PublicKey;
-    baseVault: Keypair;
-    quoteVault: Keypair;
+    baseVault: { publicKey: PublicKey; seed: string };
+    quoteVault: { publicKey: PublicKey; seed: string };
     vaultOwner: PublicKey;
 
-    requestQueue: Keypair;
-    eventQueue: Keypair;
-    bids: Keypair;
-    asks: Keypair;
+    requestQueue: { publicKey: PublicKey; seed: string };
+    eventQueue: { publicKey: PublicKey; seed: string };
+    bids: { publicKey: PublicKey; seed: string };
+    asks: { publicKey: PublicKey; seed: string };
 
     feeRateBps: number;
     vaultSignerNonce: BN;
@@ -121,18 +121,23 @@ export async function makeCreateMarketInstruction({
   };
 }): Promise<Transactions> {
   const tx1 = new Transaction();
+  const accountLamports = await connection.getMinimumBalanceForRentExemption(165);
   tx1.add(
-    SystemProgram.createAccount({
+    SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
+      basePubkey: wallet,
+      seed: marketInfo.baseVault.seed,
       newAccountPubkey: marketInfo.baseVault.publicKey,
-      lamports: await connection.getMinimumBalanceForRentExemption(165),
+      lamports: accountLamports,
       space: 165,
       programId: TOKEN_PROGRAM_ID,
     }),
-    SystemProgram.createAccount({
+    SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
+      basePubkey: wallet,
+      seed: marketInfo.quoteVault.seed,
       newAccountPubkey: marketInfo.quoteVault.publicKey,
-      lamports: await connection.getMinimumBalanceForRentExemption(165),
+      lamports: accountLamports,
       space: 165,
       programId: TOKEN_PROGRAM_ID,
     }),
@@ -142,36 +147,46 @@ export async function makeCreateMarketInstruction({
 
   const tx2 = new Transaction();
   tx2.add(
-    SystemProgram.createAccount({
+    SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
+      basePubkey: wallet,
+      seed: marketInfo.id.seed,
       newAccountPubkey: marketInfo.id.publicKey,
       lamports: await connection.getMinimumBalanceForRentExemption(MARKET_STATE_LAYOUT_V2.span),
       space: MARKET_STATE_LAYOUT_V2.span,
       programId: marketInfo.programId,
     }),
-    SystemProgram.createAccount({
+    SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
+      basePubkey: wallet,
+      seed: marketInfo.requestQueue.seed,
       newAccountPubkey: marketInfo.requestQueue.publicKey,
       lamports: await connection.getMinimumBalanceForRentExemption(5120 + 12),
       space: 5120 + 12,
       programId: marketInfo.programId,
     }),
-    SystemProgram.createAccount({
+    SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
+      basePubkey: wallet,
+      seed: marketInfo.eventQueue.seed,
       newAccountPubkey: marketInfo.eventQueue.publicKey,
       lamports: await connection.getMinimumBalanceForRentExemption(262144 + 12),
       space: 262144 + 12,
       programId: marketInfo.programId,
     }),
-    SystemProgram.createAccount({
+    SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
+      basePubkey: wallet,
+      seed: marketInfo.bids.seed,
       newAccountPubkey: marketInfo.bids.publicKey,
       lamports: await connection.getMinimumBalanceForRentExemption(65536 + 12),
       space: 65536 + 12,
       programId: marketInfo.programId,
     }),
-    SystemProgram.createAccount({
+    SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
+      basePubkey: wallet,
+      seed: marketInfo.asks.seed,
       newAccountPubkey: marketInfo.asks.publicKey,
       lamports: await connection.getMinimumBalanceForRentExemption(65536 + 12),
       space: 65536 + 12,
@@ -200,10 +215,10 @@ export async function makeCreateMarketInstruction({
   );
 
   return [
-    { transaction: tx1, signer: [marketInfo.baseVault, marketInfo.quoteVault] },
+    { transaction: tx1, signer: [] },
     {
       transaction: tx2,
-      signer: [marketInfo.id, marketInfo.requestQueue, marketInfo.eventQueue, marketInfo.bids, marketInfo.asks],
+      signer: [],
     },
   ];
 }
