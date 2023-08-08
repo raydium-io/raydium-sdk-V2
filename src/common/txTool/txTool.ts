@@ -13,13 +13,8 @@ import axios from "axios";
 import { SignAllTransactions, ComputeBudgetConfig } from "../../raydium/type";
 
 import { Owner } from "../owner";
-import {
-  forecastTransactionSize,
-  getRecentBlockHash,
-  addComputeBudget,
-  checkLegacyTxSize,
-  checkV0TxSize,
-} from "./txUtils";
+import { getRecentBlockHash, addComputeBudget, checkLegacyTxSize, checkV0TxSize } from "./txUtils";
+import { CacheLTA, getMultipleLookupTableInfo } from "../lookupTable";
 
 interface SolanaFeeInfo {
   min: number;
@@ -276,12 +271,27 @@ export class TxBuilder {
     };
   }
 
-  public async buildV0<T = Record<string, any>>(extInfo?: T): Promise<TxV0BuildData<T>> {
+  public async buildV0<T = Record<string, any>>(
+    props?: T & {
+      lookupTableCache?: CacheLTA;
+      lookupTableAddress?: string[];
+    },
+  ): Promise<TxV0BuildData<T>> {
+    const { lookupTableCache, lookupTableAddress, ...extInfo } = props || {};
+    const lookupTableAddressAccount = lookupTableCache ?? {};
+    const allLTA = [...new Set<string>(lookupTableAddress)];
+    const needCacheLTA: PublicKey[] = [];
+    for (const item of allLTA) {
+      if (lookupTableAddressAccount[item] === undefined) needCacheLTA.push(new PublicKey(item));
+    }
+    const newCacheLTA = await getMultipleLookupTableInfo({ connection: this.connection, address: needCacheLTA });
+    for (const [key, value] of Object.entries(newCacheLTA)) lookupTableAddressAccount[key] = value;
+
     const messageV0 = new TransactionMessage({
       payerKey: this.feePayer,
       recentBlockhash: await getRecentBlockHash(this.connection),
       instructions: [...this.allInstructions],
-    }).compileToV0Message();
+    }).compileToV0Message(Object.values(lookupTableAddressAccount));
     const transaction = new VersionedTransaction(messageV0);
 
     return {
@@ -291,7 +301,7 @@ export class TxBuilder {
       execute: async (): Promise<string> => {
         if (this.owner?.isKeyPair) {
           transaction.sign([this.owner.signer as Signer]);
-          return await this.connection.sendTransaction(transaction);
+          return await this.connection.sendTransaction(transaction, { skipPreflight: true });
         }
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions<VersionedTransaction>([transaction]);
@@ -299,16 +309,19 @@ export class TxBuilder {
         }
         throw new Error("please connect wallet first");
       },
-      extInfo: extInfo || ({} as T),
+      extInfo: (extInfo || {}) as T,
     };
   }
 
   public async buildV0MultiTx<T = Record<string, any>>(params: {
     extraPreBuildData?: TxV0BuildData[];
-    extInfo?: T;
+    buildProps?: T & {
+      lookupTableCache?: CacheLTA;
+      lookupTableAddress?: string[];
+    };
   }): Promise<MultiTxV0BuildData> {
-    const { extraPreBuildData = [], extInfo } = params;
-    const { transaction } = await this.buildV0(extInfo);
+    const { extraPreBuildData = [], buildProps } = params;
+    const { transaction } = await this.buildV0(buildProps);
 
     const filterExtraBuildData = extraPreBuildData.filter(
       (data) => TransactionMessage.decompile(data.transaction.message).instructions.length > 0,
@@ -376,7 +389,7 @@ export class TxBuilder {
         }
         throw new Error("please connect wallet first");
       },
-      extInfo: extInfo || {},
+      extInfo: buildProps || {},
     };
   }
 
@@ -489,6 +502,155 @@ export class TxBuilder {
           const txIds: string[] = [];
           for (let i = 0; i < signedTxs.length; i += 1) {
             const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+            txIds.push(txId);
+          }
+          return txIds;
+        }
+        throw new Error("please connect wallet first");
+      },
+      extInfo: extInfo || {},
+    };
+  }
+
+  public async sizeCheckBuildV0(
+    props?: Record<string, any> & {
+      autoComputeBudget?: boolean;
+      lookupTableCache?: CacheLTA;
+      lookupTableAddress?: string[];
+    },
+  ): Promise<MultiTxV0BuildData> {
+    const { autoComputeBudget = false, lookupTableCache, lookupTableAddress = [], ...extInfo } = props || {};
+    const lookupTableAddressAccount = lookupTableCache ?? {};
+    const allLTA = [...new Set<string>(lookupTableAddress)];
+    const needCacheLTA: PublicKey[] = [];
+    for (const item of allLTA) {
+      if (lookupTableAddressAccount[item] === undefined) needCacheLTA.push(new PublicKey(item));
+    }
+    const newCacheLTA = await getMultipleLookupTableInfo({ connection: this.connection, address: needCacheLTA });
+    for (const [key, value] of Object.entries(newCacheLTA)) lookupTableAddressAccount[key] = value;
+
+    let computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } = {
+      instructions: [],
+      instructionTypes: [],
+    };
+
+    if (autoComputeBudget) {
+      const computeConfig = autoComputeBudget ? await this.getComputeBudgetConfig() : undefined;
+      computeBudgetData =
+        autoComputeBudget && computeConfig
+          ? addComputeBudget(computeConfig)
+          : { instructions: [], instructionTypes: [] };
+    }
+
+    const blockHash = await getRecentBlockHash(this.connection);
+
+    const signerKey: { [key: string]: Signer } = this.signers.reduce(
+      (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
+      {},
+    );
+
+    const allTransactions: VersionedTransaction[] = [];
+    const allSigners: Signer[][] = [];
+
+    let instructionQueue: TransactionInstruction[] = [];
+    this.allInstructions.forEach((item) => {
+      const _itemIns = [...instructionQueue, item];
+      const _itemInsWithCompute = autoComputeBudget ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
+      const _signerStrs = new Set<string>(
+        _itemIns.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+      );
+
+      if (
+        checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount }) ||
+        checkV0TxSize({ instructions: _itemIns, payer: this.feePayer, lookupTableAddressAccount })
+      ) {
+        // current ins add to queue still not exceed tx size limit
+        instructionQueue.push(item);
+      } else {
+        if (instructionQueue.length === 0) throw Error("item ins too big");
+
+        const lookupTableAddress: undefined | CacheLTA = {};
+        for (const item of [...new Set<string>(allLTA)]) {
+          if (lookupTableAddressAccount[item] !== undefined) lookupTableAddress[item] = lookupTableAddressAccount[item];
+        }
+        // if add computeBudget still not exceed tx size limit
+        if (
+          autoComputeBudget &&
+          checkV0TxSize({
+            instructions: [...computeBudgetData.instructions, ...instructionQueue],
+            payer: this.feePayer,
+            lookupTableAddressAccount,
+          })
+        ) {
+          const messageV0 = new TransactionMessage({
+            payerKey: this.feePayer,
+            recentBlockhash: blockHash,
+            instructions: [...computeBudgetData.instructions, ...instructionQueue],
+          }).compileToV0Message(Object.values(lookupTableAddressAccount));
+          allTransactions.push(new VersionedTransaction(messageV0));
+        } else {
+          const messageV0 = new TransactionMessage({
+            payerKey: this.feePayer,
+            recentBlockhash: blockHash,
+            instructions: [...instructionQueue],
+          }).compileToV0Message(Object.values(lookupTableAddressAccount));
+          allTransactions.push(new VersionedTransaction(messageV0));
+        }
+        allSigners.push([..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined));
+        instructionQueue = [item];
+      }
+    });
+
+    if (instructionQueue.length > 0) {
+      const _signerStrs = new Set<string>(
+        instructionQueue.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+      );
+      const _signers = [..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined);
+
+      if (
+        autoComputeBudget &&
+        checkV0TxSize({
+          instructions: [...computeBudgetData.instructions, ...instructionQueue],
+          payer: this.feePayer,
+          lookupTableAddressAccount,
+        })
+      ) {
+        const messageV0 = new TransactionMessage({
+          payerKey: this.feePayer,
+          recentBlockhash: blockHash,
+          instructions: [...computeBudgetData.instructions, ...instructionQueue],
+        }).compileToV0Message(Object.values(lookupTableAddressAccount));
+        allTransactions.push(new VersionedTransaction(messageV0));
+      } else {
+        const messageV0 = new TransactionMessage({
+          payerKey: this.feePayer,
+          recentBlockhash: blockHash,
+          instructions: [...instructionQueue],
+        }).compileToV0Message(Object.values(lookupTableAddressAccount));
+        allTransactions.push(new VersionedTransaction(messageV0));
+      }
+      allSigners.push(_signers);
+    }
+
+    return {
+      transactions: allTransactions,
+      signers: allSigners,
+      instructionTypes: this.instructionTypes,
+      execute: async (): Promise<string[]> => {
+        if (this.owner?.isKeyPair) {
+          return await Promise.all(
+            allTransactions.map(async (tx) => {
+              tx.sign([this.owner!.signer as Signer]);
+              return await this.connection.sendTransaction(tx, { skipPreflight: true });
+            }),
+          );
+        }
+        if (this.signAllTransactions) {
+          const signedTxs = await this.signAllTransactions(allTransactions);
+
+          const txIds: string[] = [];
+          for (let i = 0; i < signedTxs.length; i += 1) {
+            const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
             txIds.push(txId);
           }
           return txIds;
