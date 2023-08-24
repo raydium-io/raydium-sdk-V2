@@ -3,7 +3,7 @@
 
   "compilerOptions": {
     "target": "es6",
-    "lib": ["es2019"],
+    "lib": ["es2019", "DOM"],
     "outDir": "./lib",
     "allowJs": true,
     "checkJs": true,

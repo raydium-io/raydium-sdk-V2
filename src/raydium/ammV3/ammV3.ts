@@ -50,6 +50,7 @@ import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
 import { OperationLayout } from "./layout";
 import BN from "bn.js";
+
 export class AmmV3 extends ModuleBase {
   private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
   private _ammV3PoolMap: Map<string, ApiAmmV3PoolInfo> = new Map();
@@ -431,7 +432,7 @@ export class AmmV3 extends ModuleBase {
         createInfo: mintBUseSOLBalance
           ? {
               payer: this.scope.ownerPubKey!,
-              amount: base === "MintA" ? otherAmountMax : baseAmount,
+              amount: undefined,
             }
           : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
@@ -468,7 +469,7 @@ export class AmmV3 extends ModuleBase {
   }
 
   public async openPositionFromLiquidity({
-    poolId,
+    poolInfo,
     ownerInfo,
     amountMaxA,
     amountMaxB,
@@ -480,20 +481,17 @@ export class AmmV3 extends ModuleBase {
     withMetadata = "create",
     getEphemeralSigners,
   }: OpenPositionFromLiquidity): Promise<MakeTransaction> {
-    const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
-    if (!pool) this.logAndCreateError("pool not found:", poolId.toBase58());
-    const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
 
     let ownerTokenAccountA: PublicKey | null = null;
     let ownerTokenAccountB: PublicKey | null = null;
-    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.mint.equals(WSOLMint);
-    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.mint.equals(WSOLMint);
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toBase58();
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toBase58();
 
     const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: poolInfo.mintA.programId,
-        mint: poolInfo.mintA.mint,
+        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        mint: new PublicKey(poolInfo.mintA.address),
         owner: this.scope.ownerPubKey,
 
         createInfo: mintAUseSOLBalance
@@ -513,8 +511,8 @@ export class AmmV3 extends ModuleBase {
 
     const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: poolInfo.mintB.programId,
-        mint: poolInfo.mintB.mint,
+        tokenProgram: new PublicKey(poolInfo.mintB.programId),
+        mint: new PublicKey(poolInfo.mintB.address),
         owner: this.scope.ownerPubKey,
 
         createInfo: mintBUseSOLBalance
@@ -535,7 +533,7 @@ export class AmmV3 extends ModuleBase {
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
     const makeOpenPositionInstructions = await AmmV3Instrument.openPositionFromLiquidityInstructions({
-      poolInfo,
+      poolInfo: poolInfo as any, // to do
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
         tokenAccountA: ownerTokenAccountA!,

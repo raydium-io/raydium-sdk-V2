@@ -5,7 +5,7 @@ import { Fraction } from "../../module/fraction";
 import { TokenInfo } from "../token/type";
 import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
-import { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo } from "../../api/type";
+import { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo, ApiV3PoolInfoConcentratedItem } from "../../api/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../../raydium/type";
 
 export { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo };
@@ -422,7 +422,7 @@ export interface OpenPositionFromBase {
 }
 
 export interface OpenPositionFromLiquidity {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
   };
