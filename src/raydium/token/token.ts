@@ -25,6 +25,7 @@ export default class TokenModule extends ModuleBase {
   private _tokenMap: Map<string, TokenInfo> = new Map();
   private _blackTokenMap: Map<string, TokenInfo> = new Map();
   private _tokenPrice: Map<string, Price> = new Map();
+  private _tokenPriceOrg: Map<string, number> = new Map();
   private _tokenPriceFetched = { prevCount: 0, fetched: 0 };
   private _mintGroup: { official: Set<string>; jup: Set<string>; extra: Set<string> } = {
     official: new Set(),
@@ -93,6 +94,10 @@ export default class TokenModule extends ModuleBase {
     return this._tokenPrice;
   }
 
+  get tokenPriceOrgMap(): Map<string, number> {
+    return this._tokenPriceOrg;
+  }
+
   public async fetchTokenPrices(forceUpdate?: boolean): Promise<Map<string, Price>> {
     const totalCount = this._mintGroup.official.size + this._mintGroup.jup.size;
     if (
@@ -110,36 +115,34 @@ export default class TokenModule extends ModuleBase {
     const coingeckoIds = coingeckoTokens.map((token) => token.extensions.coingeckoId!);
     const coingeckoPriceRes = await this.scope.api.getCoingeckoPrice(coingeckoIds);
 
-    const coingeckoPrices: { [key: string]: Price } = coingeckoTokens.reduce(
-      (acc, token) =>
-        coingeckoPriceRes[token.extensions.coingeckoId!]?.usd
-          ? {
-              ...acc,
-              [token.address]: parseTokenPrice({
-                token: this._tokenMap.get(token.address)!,
-                numberPrice: coingeckoPriceRes[token.extensions.coingeckoId!].usd!,
-                decimalDone: true,
-              }),
-            }
-          : acc,
-      {},
-    );
+    const coingeckoPrices: { [key: string]: Price } = coingeckoTokens.reduce((acc, token) => {
+      this._tokenPriceOrg.set(token.address, coingeckoPriceRes[token.extensions.coingeckoId!].usd!);
+      return coingeckoPriceRes[token.extensions.coingeckoId!]?.usd
+        ? {
+            ...acc,
+            [token.address]: parseTokenPrice({
+              token: this._tokenMap.get(token.address)!,
+              numberPrice: coingeckoPriceRes[token.extensions.coingeckoId!].usd!,
+              decimalDone: true,
+            }),
+          }
+        : acc;
+    }, {});
 
     const raydiumPriceRes = await this.scope.api.getRaydiumTokenPrice();
-    const raydiumPrices: { [key: string]: Price } = Object.keys(raydiumPriceRes).reduce(
-      (acc, key) =>
-        this._tokenMap.get(key)
-          ? {
-              ...acc,
-              [key]: parseTokenPrice({
-                token: this._tokenMap.get(key)!,
-                numberPrice: raydiumPriceRes[key],
-                decimalDone: true,
-              }),
-            }
-          : acc,
-      {},
-    );
+    const raydiumPrices: { [key: string]: Price } = Object.keys(raydiumPriceRes).reduce((acc, key) => {
+      this._tokenPriceOrg.set(key, raydiumPriceRes[key]);
+      return this._tokenMap.get(key)
+        ? {
+            ...acc,
+            [key]: parseTokenPrice({
+              token: this._tokenMap.get(key)!,
+              numberPrice: raydiumPriceRes[key],
+              decimalDone: true,
+            }),
+          }
+        : acc;
+    }, {});
     this._tokenPrice = new Map([...Object.entries(coingeckoPrices), ...Object.entries(raydiumPrices)]);
     this._tokenPriceFetched = { prevCount: totalCount, fetched: Date.now() };
     return this._tokenPrice;

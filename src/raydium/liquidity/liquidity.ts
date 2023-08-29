@@ -1086,7 +1086,7 @@ export default class Liquidity extends ModuleBase {
     const [tokenAccountA, tokenAccountB] = poolKeys.baseMint.equals(clmmPoolKeys.mintA.mint)
       ? [baseTokenAccount, quoteTokenAccount]
       : [quoteTokenAccount, baseTokenAccount];
-    const createPositionIns = AmmV3Instrument.openPositionInstructions({
+    const createPositionIns = await AmmV3Instrument.openPositionInstructions({
       poolInfo: clmmPoolKeys,
       ownerInfo: {
         feePayer: payer ?? this.scope.ownerPubKey,

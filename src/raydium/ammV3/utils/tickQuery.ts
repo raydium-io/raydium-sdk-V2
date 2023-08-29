@@ -4,9 +4,10 @@ import BN from "bn.js";
 import { getMultipleAccountsInfo } from "../../../common";
 import { TickArrayLayout } from "../layout";
 
-import { MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX } from "./constants";
+import { MAX_TICK, MIN_TICK } from "./constants";
 import { getPdaTickArrayAddress } from "./pda";
 import { Tick, TICK_ARRAY_SIZE, TickArray, TickUtils } from "./tick";
+import { TickArrayBitmapExtension } from "../type";
 
 export const FETCH_TICKARRAY_COUNT = 15;
 
@@ -25,13 +26,14 @@ export class TickQuery {
     tickCurrent: number,
     tickSpacing: number,
     tickArrayBitmapArray: BN[],
-  ) {
-    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(tickArrayBitmapArray);
+    exTickArrayBitmap: TickArrayBitmapExtension,
+  ): Promise<{ [key: string]: TickArray }> {
     const tickArraysToFetch: PublicKey[] = [];
     const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(tickCurrent, tickSpacing);
 
     const startIndexArray = TickUtils.getInitializedTickArrayInRange(
-      tickArrayBitmap,
+      tickArrayBitmapArray,
+      exTickArrayBitmap,
       tickSpacing,
       currentTickArrayStartIndex,
       Math.floor(FETCH_TICKARRAY_COUNT / 2),
@@ -65,7 +67,11 @@ export class TickQuery {
     tickIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
-  ) {
+  ): {
+    nextTick: Tick;
+    tickArrayAddress: PublicKey | undefined;
+    tickArrayStartTickIndex: number;
+  } {
     let {
       initializedTick: nextTick,
       tickArrayAddress,
@@ -73,10 +79,7 @@ export class TickQuery {
     } = this.nextInitializedTickInOneArray(programId, poolId, tickArrayCache, tickIndex, tickSpacing, zeroForOne);
     while (nextTick == undefined || nextTick.liquidityGross.lten(0)) {
       tickArrayStartTickIndex = TickUtils.getNextTickArrayStartIndex(tickArrayStartTickIndex, tickSpacing, zeroForOne);
-      if (
-        tickArrayStartTickIndex < MIN_TICK_ARRAY_START_INDEX ||
-        tickArrayStartTickIndex > MAX_TICK_ARRAY_START_INDEX
-      ) {
+      if (this.checkIsValidStartIndex(tickArrayStartTickIndex, tickSpacing)) {
         throw new Error("No enough initialized tickArray");
       }
       const cachedTickArray = tickArrayCache[tickArrayStartTickIndex];
@@ -97,42 +100,21 @@ export class TickQuery {
   }
 
   public static nextInitializedTickArray(
-    programId: PublicKey,
-    poolId: PublicKey,
-    tickArrayCache: { [key: string]: TickArray },
     tickIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
-  ) {
-    let {
-      initializedTick: nextTick,
-      tickArrayAddress,
-      tickArrayStartTickIndex,
-    } = this.nextInitializedTickInOneArray(programId, poolId, tickArrayCache, tickIndex, tickSpacing, zeroForOne);
-    do {
-      tickArrayStartTickIndex = TickUtils.getNextTickArrayStartIndex(tickArrayStartTickIndex, tickSpacing, zeroForOne);
-      if (
-        tickArrayStartTickIndex < MIN_TICK_ARRAY_START_INDEX ||
-        tickArrayStartTickIndex > MAX_TICK_ARRAY_START_INDEX
-      ) {
-        throw new Error("No enough initialized tickArray");
-      }
-      const cachedTickArray = tickArrayCache[tickArrayStartTickIndex];
+    tickArrayBitmap: BN[],
+    exBitmapInfo: TickArrayBitmapExtension,
+  ): {
+    isExist: boolean;
+    nextStartIndex: number;
+  } {
+    const currentOffset = Math.floor(tickIndex / TickQuery.tickCount(tickSpacing)) * TickQuery.tickCount(tickSpacing);
+    const result: number[] = !zeroForOne
+      ? TickUtils.searchLowBitFromStart(tickArrayBitmap, exBitmapInfo, currentOffset - 1, 1, tickSpacing)
+      : TickUtils.searchHightBitFromStart(tickArrayBitmap, exBitmapInfo, currentOffset + 1, 1, tickSpacing);
 
-      if (cachedTickArray === undefined) throw new Error("CachedTickArray undefined");
-
-      const {
-        nextTick: _nextTick,
-        tickArrayAddress: _tickArrayAddress,
-        tickArrayStartTickIndex: _tickArrayStartTickIndex,
-      } = this.firstInitializedTickInOneArray(programId, poolId, cachedTickArray, zeroForOne);
-      [nextTick, tickArrayAddress, tickArrayStartTickIndex] = [_nextTick, _tickArrayAddress, _tickArrayStartTickIndex];
-    } while (nextTick == undefined || nextTick.liquidityGross.lten(0));
-
-    if (nextTick == undefined) {
-      throw new Error("No invaild tickArray cache");
-    }
-    return { nextTick, tickArrayAddress, tickArrayStartTickIndex };
+    return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 };
   }
 
   public static firstInitializedTickInOneArray(
@@ -140,7 +122,11 @@ export class TickQuery {
     poolId: PublicKey,
     tickArray: TickArray,
     zeroForOne: boolean,
-  ) {
+  ): {
+    nextTick: Tick | undefined;
+    tickArrayAddress: PublicKey;
+    tickArrayStartTickIndex: number;
+  } {
     let nextInitializedTick: Tick | undefined = undefined;
     if (zeroForOne) {
       let i = TICK_ARRAY_SIZE - 1;
@@ -216,5 +202,27 @@ export class TickQuery {
       tickArrayAddress,
       tickArrayStartTickIndex: cachedTickArray.startTickIndex,
     };
+  }
+
+  public static getArrayStartIndex(tickIndex: number, tickSpacing: number): number {
+    const ticksInArray = this.tickCount(tickSpacing);
+    const start = Math.floor(tickIndex / ticksInArray);
+
+    return start * ticksInArray;
+  }
+
+  public static checkIsValidStartIndex(tickIndex: number, tickSpacing: number): boolean {
+    if (TickUtils.checkIsOutOfBoundary(tickIndex)) {
+      if (tickIndex > MAX_TICK) {
+        return false;
+      }
+      const minStartIndex = TickUtils.getTickArrayStartIndexByTick(MIN_TICK, tickSpacing);
+      return tickIndex == minStartIndex;
+    }
+    return tickIndex % this.tickCount(tickSpacing) == 0;
+  }
+
+  public static tickCount(tickSpacing: number): number {
+    return TICK_ARRAY_SIZE * tickSpacing;
   }
 }

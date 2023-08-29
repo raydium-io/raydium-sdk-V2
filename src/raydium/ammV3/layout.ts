@@ -1,6 +1,7 @@
 import { blob, bool, i128, publicKey, s32, seq, struct, u128, u16, u32, u64, u8 } from "../../marshmallow";
 
 import { TICK_ARRAY_SIZE } from "./utils/tick";
+import { EXTENSION_TICKARRAY_BITMAP_SIZE } from "./utils/tickarrayBitmap";
 
 export const AmmConfigLayout = struct([
   blob(8),
@@ -146,3 +147,10 @@ export const TickArrayLayout = struct([
 ]);
 
 export const OperationLayout = struct([blob(329), seq(publicKey(), 100, "whitelistMints")]);
+
+export const TickArrayBitmapExtensionLayout = struct([
+  blob(8),
+  publicKey("poolId"),
+  seq(seq(u64(), 8), EXTENSION_TICKARRAY_BITMAP_SIZE, "positiveTickArrayBitmap"),
+  seq(seq(u64(), 8), EXTENSION_TICKARRAY_BITMAP_SIZE, "negativeTickArrayBitmap"),
+]);

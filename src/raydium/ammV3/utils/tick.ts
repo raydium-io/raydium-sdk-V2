@@ -3,12 +3,14 @@ import BN from "bn.js";
 import Decimal from "decimal.js";
 
 import { getPdaTickArrayAddress } from "./pda";
-import { TickMath, SqrtPriceMath } from "./math";
+import { TickArrayBitmapExtension } from "../type";
+import { TickQuery } from "./tickQuery";
+import { MIN_TICK, MAX_TICK } from "./constants";
+import { SqrtPriceMath } from "./math";
 import { AmmV3PoolInfo } from "../type";
-// import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
 
 export const TICK_ARRAY_SIZE = 60;
-export const TICK_ARRAY_BITMAP_SIZE = 1024;
+export const TICK_ARRAY_BITMAP_SIZE = 512;
 
 export interface ReturnTypeGetTickPrice {
   tick: number;
@@ -73,22 +75,28 @@ export class TickUtils {
     if (tickIndex % tickSpacing != 0) {
       throw new Error("tickIndex % tickSpacing not equal 0");
     }
-    const start_tickIndex = TickUtils.getTickArrayStartIndexByTick(tickIndex, tickSpacing);
-    const offset_in_array = Math.floor((tickIndex - start_tickIndex) / tickSpacing);
-    if (offset_in_array < 0 || offset_in_array >= TICK_ARRAY_SIZE) {
+    const startTickIndex = TickUtils.getTickArrayStartIndexByTick(tickIndex, tickSpacing);
+    const offsetInArray = Math.floor((tickIndex - startTickIndex) / tickSpacing);
+    if (offsetInArray < 0 || offsetInArray >= TICK_ARRAY_SIZE) {
       throw new Error("tick offset in array overflow");
     }
-    return offset_in_array;
+    return offsetInArray;
   }
 
-  public static getTickArrayStartIndexByTick(tickIndex: number, tickSpacing: number): number {
-    let startIndex: number = tickIndex / (TICK_ARRAY_SIZE * tickSpacing);
-    if (tickIndex < 0 && tickIndex % (TICK_ARRAY_SIZE * tickSpacing) != 0) {
+  public static getTickArrayBitIndex(tickIndex: number, tickSpacing: number): number {
+    const ticksInArray = TickQuery.tickCount(tickSpacing);
+
+    let startIndex: number = tickIndex / ticksInArray;
+    if (tickIndex < 0 && tickIndex % ticksInArray != 0) {
       startIndex = Math.ceil(startIndex) - 1;
     } else {
       startIndex = Math.floor(startIndex);
     }
-    return startIndex * (tickSpacing * TICK_ARRAY_SIZE);
+    return startIndex;
+  }
+
+  public static getTickArrayStartIndexByTick(tickIndex: number, tickSpacing: number): number {
+    return this.getTickArrayBitIndex(tickIndex, tickSpacing) * TickQuery.tickCount(tickSpacing);
   }
 
   public static getTickArrayOffsetInBitmapByTick(tick: number, tickSpacing: number): number {
@@ -101,13 +109,16 @@ export class TickUtils {
     bitmap: BN,
     tick: number,
     tickSpacing: number,
-  ): { isInitialized: boolean; startIndex: number } {
+  ): {
+    isInitialized: boolean;
+    startIndex: number;
+  } {
     const multiplier = tickSpacing * TICK_ARRAY_SIZE;
     const compressed = Math.floor(tick / multiplier) + 512;
-    const bit_pos = Math.abs(compressed);
+    const bitPos = Math.abs(compressed);
     return {
-      isInitialized: bitmap.testn(bit_pos),
-      startIndex: (bit_pos - 512) * multiplier,
+      isInitialized: bitmap.testn(bitPos),
+      startIndex: (bitPos - 512) * multiplier,
     };
   }
 
@@ -122,55 +133,52 @@ export class TickUtils {
   }
 
   public static mergeTickArrayBitmap(bns: BN[]): BN {
-    return bns[0]
-      .add(bns[1].shln(64))
-      .add(bns[2].shln(128))
-      .add(bns[3].shln(192))
-      .add(bns[4].shln(256))
-      .add(bns[5].shln(320))
-      .add(bns[6].shln(384))
-      .add(bns[7].shln(448))
-      .add(bns[8].shln(512))
-      .add(bns[9].shln(576))
-      .add(bns[10].shln(640))
-      .add(bns[11].shln(704))
-      .add(bns[12].shln(768))
-      .add(bns[13].shln(832))
-      .add(bns[14].shln(896))
-      .add(bns[15].shln(960));
+    let b = new BN(0);
+    for (let i = 0; i < bns.length; i++) {
+      b = b.add(bns[i].shln(64 * i));
+    }
+    return b;
   }
 
   public static getInitializedTickArrayInRange(
-    tickArrayBitmap: BN,
+    tickArrayBitmap: BN[],
+    exTickArrayBitmap: TickArrayBitmapExtension,
     tickSpacing: number,
     tickArrayStartIndex: number,
     expectedCount: number,
   ): number[] {
-    if (tickArrayStartIndex % (tickSpacing * TICK_ARRAY_SIZE) != 0) {
-      throw new Error("Invild tickArrayStartIndex");
-    }
-    const tickArrayOffset = Math.floor(tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)) + 512;
+    const tickArrayOffset = Math.floor(tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE));
     return [
       // find right of currenct offset
-      ...TickUtils.searchLowBitFromStart(tickArrayBitmap, tickArrayOffset - 1, 0, expectedCount, tickSpacing),
+      ...TickUtils.searchLowBitFromStart(
+        tickArrayBitmap,
+        exTickArrayBitmap,
+        tickArrayOffset - 1,
+        expectedCount,
+        tickSpacing,
+      ),
 
       // find left of current offset
       ...TickUtils.searchHightBitFromStart(
         tickArrayBitmap,
+        exTickArrayBitmap,
         tickArrayOffset,
-        TICK_ARRAY_BITMAP_SIZE,
         expectedCount,
         tickSpacing,
       ),
     ];
   }
 
-  public static getAllInitializedTickArrayStartIndex(tickArrayBitmap: BN, tickSpacing: number): number[] {
+  public static getAllInitializedTickArrayStartIndex(
+    tickArrayBitmap: BN[],
+    exTickArrayBitmap: TickArrayBitmapExtension,
+    tickSpacing: number,
+  ): number[] {
     // find from offset 0 to 1024
     return TickUtils.searchHightBitFromStart(
       tickArrayBitmap,
+      exTickArrayBitmap,
       0,
-      TICK_ARRAY_BITMAP_SIZE,
       TICK_ARRAY_BITMAP_SIZE,
       tickSpacing,
     );
@@ -179,7 +187,8 @@ export class TickUtils {
   public static getAllInitializedTickArrayInfo(
     programId: PublicKey,
     poolId: PublicKey,
-    tickArrayBitmap: BN,
+    tickArrayBitmap: BN[],
+    exTickArrayBitmap: TickArrayBitmapExtension,
     tickSpacing: number,
   ): {
     tickArrayStartIndex: number;
@@ -191,6 +200,7 @@ export class TickUtils {
     }[] = [];
     const allInitializedTickArrayIndex: number[] = TickUtils.getAllInitializedTickArrayStartIndex(
       tickArrayBitmap,
+      exTickArrayBitmap,
       tickSpacing,
     );
     for (const startIndex of allInitializedTickArrayIndex) {
@@ -208,50 +218,119 @@ export class TickUtils {
   }
 
   public static searchLowBitFromStart(
-    tickArrayBitmap: BN,
-    start: number,
-    end: number,
+    tickArrayBitmap: BN[],
+    exTickArrayBitmap: TickArrayBitmapExtension,
+    currentTickArrayBitStartIndex: number,
     expectedCount: number,
     tickSpacing: number,
   ): number[] {
-    let fetchNum = 0;
+    const tickArrayBitmaps = [
+      ...exTickArrayBitmap.negativeTickArrayBitmap.reverse(),
+      tickArrayBitmap.slice(0, 8),
+      tickArrayBitmap.slice(8, 16),
+      ...exTickArrayBitmap.positiveTickArrayBitmap,
+    ].map((i) => TickUtils.mergeTickArrayBitmap(i));
     const result: number[] = [];
-    for (let i = start; i >= end; i--) {
-      if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
-        const nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
-        result.push(nextStartIndex);
-        fetchNum++;
-      }
-      if (fetchNum >= expectedCount) {
-        break;
-      }
+    while (currentTickArrayBitStartIndex >= -7680) {
+      const arrayIndex = Math.floor((currentTickArrayBitStartIndex + 7680) / 512);
+      const searchIndex = (currentTickArrayBitStartIndex + 7680) % 512;
+
+      if (tickArrayBitmaps[arrayIndex].testn(searchIndex)) result.push(currentTickArrayBitStartIndex);
+
+      currentTickArrayBitStartIndex--;
+      if (result.length === expectedCount) break;
     }
-    return result;
+
+    const tickCount = TickQuery.tickCount(tickSpacing);
+    return result.map((i) => i * tickCount);
   }
 
   public static searchHightBitFromStart(
-    tickArrayBitmap: BN,
-    start: number,
-    end: number,
+    tickArrayBitmap: BN[],
+    exTickArrayBitmap: TickArrayBitmapExtension,
+    currentTickArrayBitStartIndex: number,
     expectedCount: number,
     tickSpacing: number,
   ): number[] {
-    let fetchNum = 0;
+    const tickArrayBitmaps = [
+      ...exTickArrayBitmap.negativeTickArrayBitmap.reverse(),
+      tickArrayBitmap.slice(0, 8),
+      tickArrayBitmap.slice(8, 16),
+      ...exTickArrayBitmap.positiveTickArrayBitmap,
+    ].map((i) => TickUtils.mergeTickArrayBitmap(i));
     const result: number[] = [];
-    for (let i = start; i < end; i++) {
-      if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
-        const nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
-        result.push(nextStartIndex);
-        fetchNum++;
-      }
-      if (fetchNum >= expectedCount) {
-        break;
-      }
+    while (currentTickArrayBitStartIndex < 7680) {
+      const arrayIndex = Math.floor((currentTickArrayBitStartIndex + 7680) / 512);
+      const searchIndex = (currentTickArrayBitStartIndex + 7680) % 512;
+
+      if (tickArrayBitmaps[arrayIndex].testn(searchIndex)) result.push(currentTickArrayBitStartIndex);
+
+      currentTickArrayBitStartIndex++;
+      if (result.length === expectedCount) break;
     }
-    return result;
+
+    const tickCount = TickQuery.tickCount(tickSpacing);
+    return result.map((i) => i * tickCount);
   }
 
-  static getTickPrice({
+  public static checkIsOutOfBoundary(tick: number): boolean {
+    return tick < MIN_TICK || tick > MAX_TICK;
+  }
+
+  public static nextInitTick(
+    tickArrayCurrent: TickArray,
+    currentTickIndex: number,
+    tickSpacing: number,
+    zeroForOne: boolean,
+  ): Tick | null {
+    const currentTickArrayStartIndex = TickQuery.getArrayStartIndex(currentTickIndex, tickSpacing);
+    if (currentTickArrayStartIndex != tickArrayCurrent.startTickIndex) {
+      return null;
+    }
+    let offsetInArray = Math.floor((currentTickIndex - tickArrayCurrent.startTickIndex) / tickSpacing);
+
+    if (zeroForOne) {
+      while (offsetInArray >= 0) {
+        if (tickArrayCurrent.ticks[offsetInArray].liquidityGross.gtn(0)) {
+          return tickArrayCurrent.ticks[offsetInArray];
+        }
+        offsetInArray = offsetInArray - 1;
+      }
+    } else {
+      offsetInArray = offsetInArray + 1;
+      while (offsetInArray < TICK_ARRAY_SIZE) {
+        if (tickArrayCurrent.ticks[offsetInArray].liquidityGross.gtn(0)) {
+          return tickArrayCurrent.ticks[offsetInArray];
+        }
+        offsetInArray = offsetInArray + 1;
+      }
+    }
+    return null;
+  }
+
+  public static firstInitializedTick(tickArrayCurrent: TickArray, zeroForOne: boolean): Tick {
+    if (zeroForOne) {
+      let i = TICK_ARRAY_SIZE - 1;
+      while (i >= 0) {
+        if (tickArrayCurrent.ticks[i].liquidityGross.gtn(0)) {
+          return tickArrayCurrent.ticks[i];
+        }
+        i = i - 1;
+      }
+    } else {
+      let i = 0;
+      while (i < TICK_ARRAY_SIZE) {
+        if (tickArrayCurrent.ticks[i].liquidityGross.gtn(0)) {
+          return tickArrayCurrent.ticks[i];
+        }
+        i = i + 1;
+      }
+    }
+
+    throw Error(`firstInitializedTick check error: ${tickArrayCurrent} - ${zeroForOne}`);
+  }
+
+  public static getTickPrice({
     poolInfo,
     tick,
     baseIn,
@@ -271,80 +350,4 @@ export class TickUtils {
       ? { tick, price: tickPrice, tickSqrtPriceX64 }
       : { tick, price: new Decimal(1).div(tickPrice), tickSqrtPriceX64 };
   }
-  static getPriceAndTick({
-    poolInfo,
-    price,
-    baseIn,
-  }: {
-    poolInfo: AmmV3PoolInfo;
-    price: Decimal;
-    baseIn: boolean;
-  }): ReturnTypeGetPriceAndTick {
-    const _price = baseIn ? price : new Decimal(1).div(price);
-
-    const tick = TickMath.getTickWithPriceAndTickspacing(
-      _price,
-      poolInfo.ammConfig.tickSpacing,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
-    const tickSqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
-    const tickPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
-      tickSqrtPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
-
-    return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
-  }
-
-  /** new method for api return */
-  // static getTickPriceV2({
-  //   poolInfo,
-  //   tick,
-  //   baseIn,
-  // }: {
-  //   poolInfo: ApiV3PoolInfoConcentratedItem;
-  //   tick: number;
-  //   baseIn: boolean;
-  // }): ReturnTypeGetTickPrice {
-  //   const tickSqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
-  //   const tickPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
-  //     tickSqrtPriceX64,
-  //     poolInfo.mintA.decimals,
-  //     poolInfo.mintB.decimals,
-  //   );
-
-  //   return baseIn
-  //     ? { tick, price: tickPrice, tickSqrtPriceX64 }
-  //     : { tick, price: new Decimal(1).div(tickPrice), tickSqrtPriceX64 };
-  // }
-
-  // static getPriceAndTickV2({
-  //   poolInfo,
-  //   price,
-  //   baseIn,
-  // }: {
-  //   poolInfo: ApiV3PoolInfoConcentratedItem;
-  //   price: Decimal;
-  //   baseIn: boolean;
-  // }): ReturnTypeGetPriceAndTick {
-  //   const _price = baseIn ? price : new Decimal(1).div(price);
-
-  //   const tick = TickMath.getTickWithPriceAndTickspacing(
-  //     _price,
-  //     // poolInfo.ammConfig.tickSpacing,
-  //     4, // to do fix
-  //     poolInfo.mintA.decimals,
-  //     poolInfo.mintB.decimals,
-  //   );
-  //   const tickSqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
-  //   const tickPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
-  //     tickSqrtPriceX64,
-  //     poolInfo.mintA.decimals,
-  //     poolInfo.mintB.decimals,
-  //   );
-
-  //   return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
-  // }
 }

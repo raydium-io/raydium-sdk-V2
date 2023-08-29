@@ -50,6 +50,7 @@ import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
 import { OperationLayout } from "./layout";
 import BN from "bn.js";
+import { EXTENSION_TICKARRAY_BITMAP_SIZE } from "./utils/tickarrayBitmap";
 
 export class AmmV3 extends ModuleBase {
   private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
@@ -376,6 +377,15 @@ export class AmmV3 extends ModuleBase {
         version: 6,
         lookupTableAccount: PublicKey.default,
         startTime: startTime.toNumber(),
+        exBitmapInfo: {
+          poolId: insInfo.address.poolId,
+          positiveTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
+            Array.from({ length: 8 }, (_) => new BN(0)),
+          ),
+          negativeTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
+            Array.from({ length: 8 }, (_) => new BN(0)),
+          ),
+        },
       },
     });
   }

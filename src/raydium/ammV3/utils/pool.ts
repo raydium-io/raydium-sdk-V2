@@ -1,54 +1,57 @@
 import { PublicKey, Connection, EpochInfo } from "@solana/web3.js";
-import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
-import Decimal from "decimal.js";
 
 import {
   AmmV3PoolInfo,
   AmmV3PoolRewardInfo,
   AmmV3PoolRewardLayoutInfo,
   ApiAmmV3PoolInfo,
-  AmmV3PoolPersonalPosition,
-  SDKParsedConcentratedInfo,
+  ReturnTypeGetLiquidityAmountOut,
+  TickArrayBitmapExtension,
+  ReturnTypeFetchExBitmaps,
   ReturnTypeFetchMultiplePoolInfos,
+  ReturnTypeFetchMultiplePoolTickArrays,
+  SDKParsedConcentratedInfo,
   ReturnTypeComputeAmountOut,
   ReturnTypeComputeAmountOutFormat,
-  ReturnTypeFetchMultiplePoolTickArrays,
-  ReturnTypeGetLiquidityAmountOut,
 } from "../type";
-import { Percent } from "../../../module/percent";
-import { Price } from "../../../module/price";
-import { Token } from "../../../module/token";
-import { TokenAmount } from "../../../module/amount";
-import { SOL_INFO } from "../../token";
-import { TokenAccountRaw } from "../../account/types";
+
+import { ReturnTypeFetchMultipleMintInfos } from "../../type";
+import { NEGATIVE_ONE, Q64, ZERO, MAX_TICK, MIN_TICK, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "./constants";
+import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
+import { getPdaTickArrayAddress, getPdaExBitmapAccount, getPdaPersonalPositionAddress } from "./pda";
+import { TickArray, TickUtils, TICK_ARRAY_BITMAP_SIZE, Tick } from "./tick";
+import { TickArrayBitmap, TickArrayBitmapExtensionUtils } from "./tickarrayBitmap";
+import { TickQuery } from "./tickQuery";
+import { TickArrayBitmapExtensionLayout, PoolInfoLayout, PositionInfoLayout, TickArrayLayout } from "../layout";
 import {
   getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
   getTransferAmountFee,
-  BN_ZERO,
+  minExpirationTime,
   WSOLMint,
   SOLMint,
-  minExpirationTime,
-  fetchMultipleMintInfos,
 } from "../../../common";
-import { ReturnTypeFetchMultipleMintInfos } from "../../type";
-import { PoolInfoLayout, PositionInfoLayout, TickArrayLayout } from "../layout";
-import { NEGATIVE_ONE, Q64, ZERO, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64, ONE } from "./constants";
-import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
-import { getPdaTickArrayAddress, getPdaPersonalPositionAddress } from "./pda";
-import { TickArray, TickUtils, Tick } from "./tick";
-import { FETCH_TICKARRAY_COUNT } from "./tickQuery";
+import { SOL_INFO } from "../../token/constant";
+import { TokenAccountRaw } from "../../account/types";
+import { splAccountLayout } from "../../account/layout";
+import { Price, Percent, TokenAmount, Token } from "../../../module";
 import { PositionUtils } from "./position";
+import Decimal from "decimal.js";
 
 export class PoolUtils {
-  static getOutputAmountAndRemainAccounts(
+  public static getOutputAmountAndRemainAccounts(
     poolInfo: AmmV3PoolInfo,
     tickArrayCache: { [key: string]: TickArray },
     inputTokenMint: PublicKey,
     inputAmount: BN,
     sqrtPriceLimitX64?: BN,
-  ): { expectedAmountOut: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
+  ): {
+    expectedAmountOut: BN;
+    remainingAccounts: PublicKey[];
+    executionPrice: BN;
+    feeAmount: BN;
+  } {
     const zeroForOne = inputTokenMint.equals(poolInfo.mintA.mint);
 
     const allNeededAccounts: PublicKey[] = [];
@@ -58,6 +61,18 @@ export class PoolUtils {
       nextAccountMeta,
     } = this.getFirstInitializedTickArray(poolInfo, zeroForOne);
     if (!isExist || firstTickArrayStartIndex === undefined || !nextAccountMeta) throw new Error("Invalid tick array");
+
+    // try {
+    //   const preTick = this.preInitializedTickArrayStartIndex(poolInfo, !zeroForOne)
+    //   if (preTick.isExist) {
+    //     const { publicKey: address } = getPdaTickArrayAddress(
+    //       poolInfo.programId,
+    //       poolInfo.id,
+    //       preTick.nextStartIndex
+    //     );
+    //     allNeededAccounts.push(address)
+    //   }
+    // } catch (e) { /* empty */ }
 
     allNeededAccounts.push(nextAccountMeta);
     const {
@@ -69,6 +84,8 @@ export class PoolUtils {
       poolInfo.programId,
       poolInfo.id,
       tickArrayCache,
+      poolInfo.tickArrayBitmap,
+      poolInfo.exBitmapInfo,
       zeroForOne,
       poolInfo.ammConfig.tradeFeeRate,
       poolInfo.liquidity,
@@ -88,18 +105,79 @@ export class PoolUtils {
     };
   }
 
-  static getFirstInitializedTickArray(
+  public static getInputAmountAndRemainAccounts(
+    poolInfo: AmmV3PoolInfo,
+    tickArrayCache: { [key: string]: TickArray },
+    outputTokenMint: PublicKey,
+    outputAmount: BN,
+    sqrtPriceLimitX64?: BN,
+  ): { expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
+    const zeroForOne = outputTokenMint.equals(poolInfo.mintB.mint);
+
+    const allNeededAccounts: PublicKey[] = [];
+    const {
+      isExist,
+      startIndex: firstTickArrayStartIndex,
+      nextAccountMeta,
+    } = this.getFirstInitializedTickArray(poolInfo, zeroForOne);
+    if (!isExist || firstTickArrayStartIndex === undefined || !nextAccountMeta) throw new Error("Invalid tick array");
+
+    try {
+      const preTick = this.preInitializedTickArrayStartIndex(poolInfo, !zeroForOne);
+      if (preTick.isExist) {
+        const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, preTick.nextStartIndex);
+        allNeededAccounts.push(address);
+      }
+    } catch (e) {
+      /* empty */
+    }
+
+    allNeededAccounts.push(nextAccountMeta);
+    const {
+      amountCalculated: inputAmount,
+      accounts: reaminAccounts,
+      sqrtPriceX64: executionPrice,
+      feeAmount,
+    } = SwapMath.swapCompute(
+      poolInfo.programId,
+      poolInfo.id,
+      tickArrayCache,
+      poolInfo.tickArrayBitmap,
+      poolInfo.exBitmapInfo,
+      zeroForOne,
+      poolInfo.ammConfig.tradeFeeRate,
+      poolInfo.liquidity,
+      poolInfo.tickCurrent,
+      poolInfo.tickSpacing,
+      poolInfo.sqrtPriceX64,
+      outputAmount.mul(NEGATIVE_ONE),
+      firstTickArrayStartIndex,
+      sqrtPriceLimitX64,
+    );
+    allNeededAccounts.push(...reaminAccounts);
+    return { expectedAmountIn: inputAmount, remainingAccounts: allNeededAccounts, executionPrice, feeAmount };
+  }
+
+  public static getFirstInitializedTickArray(
     poolInfo: AmmV3PoolInfo,
     zeroForOne: boolean,
   ):
     | { isExist: true; startIndex: number; nextAccountMeta: PublicKey }
     | { isExist: false; startIndex: undefined; nextAccountMeta: undefined } {
-    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap);
-    const { isInitialized, startIndex } = TickUtils.checkTickArrayIsInitialized(
-      tickArrayBitmap,
+    const { isInitialized, startIndex } = PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
       poolInfo.tickCurrent,
-      poolInfo.tickSpacing,
-    );
+    ])
+      ? TickArrayBitmapExtensionUtils.checkTickArrayIsInit(
+          TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
+          poolInfo.tickSpacing,
+          poolInfo.exBitmapInfo,
+        )
+      : TickUtils.checkTickArrayIsInitialized(
+          TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
+          poolInfo.tickCurrent,
+          poolInfo.tickSpacing,
+        );
+
     if (isInitialized) {
       const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, startIndex);
       return {
@@ -108,7 +186,11 @@ export class PoolUtils {
         nextAccountMeta: address,
       };
     }
-    const { isExist, nextStartIndex } = this.nextInitializedTickArrayStartIndex(poolInfo, zeroForOne);
+    const { isExist, nextStartIndex } = this.nextInitializedTickArrayStartIndex(
+      poolInfo,
+      TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
+      zeroForOne,
+    );
     if (isExist) {
       const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, nextStartIndex);
       return {
@@ -120,37 +202,115 @@ export class PoolUtils {
     return { isExist: false, nextAccountMeta: undefined, startIndex: undefined };
   }
 
-  static nextInitializedTickArrayStartIndex(
+  public static preInitializedTickArrayStartIndex(
     poolInfo: AmmV3PoolInfo,
     zeroForOne: boolean,
   ): { isExist: boolean; nextStartIndex: number } {
-    const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap);
-    const currentOffset = TickUtils.getTickArrayOffsetInBitmapByTick(poolInfo.tickCurrent, poolInfo.tickSpacing);
+    const currentOffset =
+      Math.floor(poolInfo.tickCurrent / TickQuery.tickCount(poolInfo.tickSpacing)) *
+      TickQuery.tickCount(poolInfo.tickSpacing);
     const result: number[] = zeroForOne
-      ? TickUtils.searchLowBitFromStart(tickArrayBitmap, currentOffset - 1, 0, 1, poolInfo.tickSpacing)
-      : TickUtils.searchHightBitFromStart(tickArrayBitmap, currentOffset, 1024, 1, poolInfo.tickSpacing);
+      ? TickUtils.searchLowBitFromStart(
+          poolInfo.tickArrayBitmap,
+          poolInfo.exBitmapInfo,
+          currentOffset - 1,
+          1,
+          poolInfo.tickSpacing,
+        )
+      : TickUtils.searchHightBitFromStart(
+          poolInfo.tickArrayBitmap,
+          poolInfo.exBitmapInfo,
+          currentOffset + 1,
+          1,
+          poolInfo.tickSpacing,
+        );
 
     return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 };
   }
 
-  static async updatePoolRewardInfos({
+  public static nextInitializedTickArrayStartIndex(
+    poolInfo:
+      | {
+          tickCurrent: number;
+          tickSpacing: number;
+          tickArrayBitmap: BN[];
+          exBitmapInfo: TickArrayBitmapExtension;
+        }
+      | AmmV3PoolInfo,
+    lastTickArrayStartIndex: number,
+    zeroForOne: boolean,
+  ): { isExist: boolean; nextStartIndex: number } {
+    lastTickArrayStartIndex = TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing);
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { isInit: startIsInit, tickIndex: startIndex } = TickArrayBitmap.nextInitializedTickArrayStartIndex(
+        TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
+        lastTickArrayStartIndex,
+        poolInfo.tickSpacing,
+        zeroForOne,
+      );
+      if (startIsInit) {
+        return { isExist: true, nextStartIndex: startIndex };
+      }
+      lastTickArrayStartIndex = startIndex;
+
+      const { isInit, tickIndex } = TickArrayBitmapExtensionUtils.nextInitializedTickArrayFromOneBitmap(
+        lastTickArrayStartIndex,
+        poolInfo.tickSpacing,
+        zeroForOne,
+        poolInfo.exBitmapInfo,
+      );
+      if (isInit) return { isExist: true, nextStartIndex: tickIndex };
+
+      lastTickArrayStartIndex = tickIndex;
+
+      if (lastTickArrayStartIndex < MIN_TICK || lastTickArrayStartIndex > MAX_TICK)
+        return { isExist: false, nextStartIndex: 0 };
+    }
+
+    // const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(
+    //   poolInfo.tickArrayBitmap
+    // );
+    // const currentOffset = TickUtils.getTickArrayOffsetInBitmapByTick(
+    //   poolInfo.tickCurrent,
+    //   poolInfo.tickSpacing
+    // );
+    // const result: number[] = zeroForOne ? TickUtils.searchLowBitFromStart(
+    //   tickArrayBitmap,
+    //   currentOffset - 1,
+    //   0,
+    //   1,
+    //   poolInfo.tickSpacing
+    // ) : TickUtils.searchHightBitFromStart(
+    //   tickArrayBitmap,
+    //   currentOffset,
+    //   1024,
+    //   1,
+    //   poolInfo.tickSpacing
+    // );
+
+    // return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 }
+  }
+
+  public static async updatePoolRewardInfos({
     connection,
+    apiPoolInfo,
     chainTime,
     poolLiquidity,
     rewardInfos,
-    apiPoolInfo,
   }: {
     connection: Connection;
+    apiPoolInfo: ApiAmmV3PoolInfo;
     chainTime: number;
     poolLiquidity: BN;
     rewardInfos: AmmV3PoolRewardLayoutInfo[];
-    apiPoolInfo: ApiAmmV3PoolInfo;
   }): Promise<AmmV3PoolRewardInfo[]> {
     const nRewardInfo: AmmV3PoolRewardInfo[] = [];
     for (let i = 0; i < rewardInfos.length; i++) {
       const _itemReward = rewardInfos[i];
       const apiRewardProgram =
-        apiPoolInfo.rewardInfos[i].programId ?? (await connection.getAccountInfo(_itemReward.tokenMint))?.owner;
+        apiPoolInfo.rewardInfos[i]?.programId ?? (await connection.getAccountInfo(_itemReward.tokenMint))?.owner;
       if (apiRewardProgram === undefined) throw Error("get new reward mint info error");
 
       const itemReward: AmmV3PoolRewardInfo = {
@@ -182,34 +342,116 @@ export class PoolUtils {
     return nRewardInfo;
   }
 
+  public static isOverflowDefaultTickarrayBitmap(tickSpacing: number, tickarrayStartIndexs: number[]): boolean {
+    const { maxTickBoundary, minTickBoundary } = this.tickRange(tickSpacing);
+
+    for (const tickIndex of tickarrayStartIndexs) {
+      const tickarrayStartIndex = TickUtils.getTickArrayStartIndexByTick(tickIndex, tickSpacing);
+
+      if (tickarrayStartIndex >= maxTickBoundary || tickarrayStartIndex < minTickBoundary) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  public static tickRange(tickSpacing: number): {
+    maxTickBoundary: number;
+    minTickBoundary: number;
+  } {
+    let maxTickBoundary = TickArrayBitmap.maxTickInTickarrayBitmap(tickSpacing);
+    let minTickBoundary = -maxTickBoundary;
+
+    if (maxTickBoundary > MAX_TICK) {
+      maxTickBoundary = MAX_TICK;
+    }
+    if (minTickBoundary < MIN_TICK) {
+      minTickBoundary = MIN_TICK;
+    }
+    return { maxTickBoundary, minTickBoundary };
+  }
+
+  public static get_tick_array_offset(tickarrayStartIndex: number, tickSpacing: number): number {
+    if (!TickQuery.checkIsValidStartIndex(tickarrayStartIndex, tickSpacing)) {
+      throw new Error("No enough initialized tickArray");
+    }
+
+    return (tickarrayStartIndex / TickQuery.tickCount(tickSpacing)) * TICK_ARRAY_BITMAP_SIZE;
+  }
+
+  static async fetchExBitmaps({
+    connection,
+    exBitmapAddress,
+    batchRequest,
+  }: {
+    connection: Connection;
+    exBitmapAddress: PublicKey[];
+    batchRequest: boolean;
+  }): Promise<ReturnTypeFetchExBitmaps> {
+    const fetchedBitmapAccount = await getMultipleAccountsInfoWithCustomFlags(
+      connection,
+      exBitmapAddress.map((i) => ({ pubkey: i })),
+      { batchRequest },
+    );
+
+    const returnTypeFetchExBitmaps: ReturnTypeFetchExBitmaps = {};
+    for (const item of fetchedBitmapAccount) {
+      if (item.accountInfo === null) continue;
+
+      returnTypeFetchExBitmaps[item.pubkey.toString()] = TickArrayBitmapExtensionLayout.decode(item.accountInfo.data);
+    }
+    return returnTypeFetchExBitmaps;
+  }
+
   static async fetchMultiplePoolInfos({
     connection,
     poolKeys,
+    ownerInfo,
     chainTime,
     batchRequest = false,
+    updateOwnerRewardAndFee = true,
   }: {
     connection: Connection;
     poolKeys: ApiAmmV3PoolInfo[];
     ownerInfo?: { wallet: PublicKey; tokenAccounts: TokenAccountRaw[] };
     chainTime: number;
     batchRequest?: boolean;
+    updateOwnerRewardAndFee?: boolean;
   }): Promise<ReturnTypeFetchMultiplePoolInfos> {
     const poolAccountInfos = await getMultipleAccountsInfo(
       connection,
       poolKeys.map((i) => new PublicKey(i.id)),
       { batchRequest },
     );
+    const exBitmapAddress: { [poolId: string]: PublicKey } = {};
+    for (let index = 0; index < poolKeys.length; index++) {
+      const apiPoolInfo = poolKeys[index];
+      const accountInfo = poolAccountInfos[index];
 
-    const poolsInfo: {
-      [id: string]: {
-        state: AmmV3PoolInfo;
-        positionAccount?: AmmV3PoolPersonalPosition[];
-      };
-    } = {};
+      if (accountInfo === null) continue;
+      exBitmapAddress[apiPoolInfo.id] = getPdaExBitmapAccount(
+        accountInfo.owner,
+        new PublicKey(apiPoolInfo.id),
+      ).publicKey;
+    }
+
+    const exBitmapAccountInfos = await this.fetchExBitmaps({
+      connection,
+      exBitmapAddress: Object.values(exBitmapAddress),
+      batchRequest,
+    });
+
+    const programIds: PublicKey[] = [];
+
+    const poolsInfo: ReturnTypeFetchMultiplePoolInfos = {};
+
+    const updateRewardInfos: AmmV3PoolRewardInfo[] = [];
 
     for (let index = 0; index < poolKeys.length; index++) {
       const apiPoolInfo = poolKeys[index];
       const accountInfo = poolAccountInfos[index];
+      const exBitmapInfo = exBitmapAccountInfos[exBitmapAddress[apiPoolInfo.id].toString()];
 
       if (accountInfo === null) continue;
 
@@ -263,9 +505,9 @@ export class PoolUtils {
 
           rewardInfos: await PoolUtils.updatePoolRewardInfos({
             connection,
+            apiPoolInfo,
             chainTime,
             poolLiquidity: layoutAccountInfo.liquidity,
-            apiPoolInfo,
             rewardInfos: layoutAccountInfo.rewardInfos.filter((i) => !i.tokenMint.equals(PublicKey.default)),
           }),
 
@@ -274,9 +516,170 @@ export class PoolUtils {
           month: apiPoolInfo.month,
           tvl: apiPoolInfo.tvl,
           lookupTableAccount: new PublicKey(apiPoolInfo.lookupTableAccount),
+
           startTime: layoutAccountInfo.startTime.toNumber(),
+
+          exBitmapInfo,
         },
       };
+
+      if (ownerInfo) {
+        updateRewardInfos.push(
+          ...poolsInfo[apiPoolInfo.id].state.rewardInfos.filter((i) => i.creator.equals(ownerInfo.wallet)),
+        );
+      }
+
+      if (!programIds.find((i) => i.equals(accountInfo.owner))) programIds.push(accountInfo.owner);
+    }
+
+    if (ownerInfo) {
+      const allMint = ownerInfo.tokenAccounts
+        .filter((i) => i.accountInfo.amount.eq(new BN(1)))
+        .map((i) => i.accountInfo.mint);
+      const allPositionKey: PublicKey[] = [];
+      for (const itemMint of allMint) {
+        for (const itemProgramId of programIds) {
+          allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
+        }
+      }
+      const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });
+
+      const keyToTickArrayAddress: { [key: string]: PublicKey } = {};
+      for (const itemAccountInfo of positionAccountInfos) {
+        if (itemAccountInfo === null) continue;
+        const position = PositionInfoLayout.decode(itemAccountInfo.data);
+        const itemPoolId = position.poolId.toString();
+        const poolInfoA = poolsInfo[itemPoolId];
+        if (poolInfoA === undefined) continue;
+
+        const poolInfo = poolInfoA.state;
+
+        const priceLower = TickUtils.getTickPrice({
+          poolInfo,
+          tick: position.tickLower,
+          baseIn: true,
+        });
+        const priceUpper = TickUtils.getTickPrice({
+          poolInfo,
+          tick: position.tickUpper,
+          baseIn: true,
+        });
+        const { amountA, amountB } = LiquidityMath.getAmountsFromLiquidity(
+          poolInfo.sqrtPriceX64,
+          priceLower.tickSqrtPriceX64,
+          priceUpper.tickSqrtPriceX64,
+          position.liquidity,
+          false,
+        );
+
+        const leverage = 1 / (1 - Math.sqrt(Math.sqrt(priceLower.price.div(priceUpper.price).toNumber())));
+
+        poolsInfo[itemPoolId].positionAccount = [
+          ...(poolsInfo[itemPoolId].positionAccount ?? []),
+          {
+            poolId: position.poolId,
+            nftMint: position.nftMint,
+
+            priceLower: priceLower.price,
+            priceUpper: priceUpper.price,
+            amountA,
+            amountB,
+            tickLower: position.tickLower,
+            tickUpper: position.tickUpper,
+            liquidity: position.liquidity,
+            feeGrowthInsideLastX64A: position.feeGrowthInsideLastX64A,
+            feeGrowthInsideLastX64B: position.feeGrowthInsideLastX64B,
+            tokenFeesOwedA: position.tokenFeesOwedA,
+            tokenFeesOwedB: position.tokenFeesOwedB,
+            rewardInfos: position.rewardInfos.map((i) => ({
+              ...i,
+              pendingReward: new BN(0),
+            })),
+
+            leverage,
+            tokenFeeAmountA: new BN(0),
+            tokenFeeAmountB: new BN(0),
+          },
+        ];
+
+        const tickArrayLowerAddress = TickUtils.getTickArrayAddressByTick(
+          poolsInfo[itemPoolId].state.programId,
+          position.poolId,
+          position.tickLower,
+          poolsInfo[itemPoolId].state.tickSpacing,
+        );
+        const tickArrayUpperAddress = TickUtils.getTickArrayAddressByTick(
+          poolsInfo[itemPoolId].state.programId,
+          position.poolId,
+          position.tickUpper,
+          poolsInfo[itemPoolId].state.tickSpacing,
+        );
+        keyToTickArrayAddress[
+          `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickLower}`
+        ] = tickArrayLowerAddress;
+        keyToTickArrayAddress[
+          `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickUpper}`
+        ] = tickArrayUpperAddress;
+      }
+
+      if (updateOwnerRewardAndFee) {
+        const tickArrayKeys = Object.values(keyToTickArrayAddress);
+        const tickArrayDatas = await getMultipleAccountsInfo(connection, tickArrayKeys, { batchRequest });
+        const tickArrayLayout: { [key: string]: TickArray } = {};
+        for (let index = 0; index < tickArrayKeys.length; index++) {
+          const tickArrayData = tickArrayDatas[index];
+          if (tickArrayData === null) continue;
+          const key = tickArrayKeys[index];
+          tickArrayLayout[key.toString()] = {
+            address: key,
+            ...TickArrayLayout.decode(tickArrayData.data),
+          };
+        }
+
+        for (const { state, positionAccount } of Object.values(poolsInfo)) {
+          if (!positionAccount) continue;
+          for (const itemPA of positionAccount) {
+            const keyLower = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickLower}`;
+            const keyUpper = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickUpper}`;
+            const tickArrayLower = tickArrayLayout[keyToTickArrayAddress[keyLower].toString()];
+            const tickArrayUpper = tickArrayLayout[keyToTickArrayAddress[keyUpper].toString()];
+            const tickLowerState: Tick =
+              tickArrayLower.ticks[TickUtils.getTickOffsetInArray(itemPA.tickLower, state.tickSpacing)];
+            const tickUpperState: Tick =
+              tickArrayUpper.ticks[TickUtils.getTickOffsetInArray(itemPA.tickUpper, state.tickSpacing)];
+            const { tokenFeeAmountA, tokenFeeAmountB } = PositionUtils.GetPositionFees(
+              state,
+              itemPA,
+              tickLowerState,
+              tickUpperState,
+            );
+            const rewardInfos = PositionUtils.GetPositionRewards(state, itemPA, tickLowerState, tickUpperState);
+            itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(ZERO) ? tokenFeeAmountA : ZERO;
+            itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(ZERO) ? tokenFeeAmountB : ZERO;
+            for (let i = 0; i < rewardInfos.length; i++) {
+              itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(ZERO) ? rewardInfos[i] : ZERO;
+            }
+          }
+        }
+      }
+    }
+
+    if (updateRewardInfos.length > 0) {
+      const vaults = updateRewardInfos.map((i) => i.tokenVault);
+      const rewardVaultInfos = await getMultipleAccountsInfo(connection, vaults, { batchRequest });
+      const rewardVaultAmount: { [mint: string]: BN } = {};
+      for (let index = 0; index < vaults.length; index++) {
+        const valutKey = vaults[index].toString();
+        const itemRewardVaultInfo = rewardVaultInfos[index];
+        if (itemRewardVaultInfo === null) continue;
+        const info = splAccountLayout.decode(itemRewardVaultInfo.data);
+        rewardVaultAmount[valutKey] = info.amount;
+      }
+      for (const item of updateRewardInfos) {
+        const vaultAmount = rewardVaultAmount[item.tokenVault.toString()];
+        item.remainingRewards =
+          vaultAmount !== undefined ? vaultAmount.sub(item.rewardTotalEmissioned.sub(item.rewardClaimed)) : ZERO;
+      }
     }
 
     return poolsInfo;
@@ -294,17 +697,16 @@ export class PoolUtils {
     const tickArraysToPoolId: { [key: string]: PublicKey } = {};
     const tickArrays: { pubkey: PublicKey }[] = [];
     for (const itemPoolInfo of poolKeys) {
-      const tickArrayBitmap = TickUtils.mergeTickArrayBitmap(itemPoolInfo.tickArrayBitmap);
       const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
         itemPoolInfo.tickCurrent,
         itemPoolInfo.tickSpacing,
       );
-
       const startIndexArray = TickUtils.getInitializedTickArrayInRange(
-        tickArrayBitmap,
+        itemPoolInfo.tickArrayBitmap,
+        itemPoolInfo.exBitmapInfo,
         itemPoolInfo.tickSpacing,
         currentTickArrayStartIndex,
-        Math.floor(FETCH_TICKARRAY_COUNT / 2),
+        7,
       );
       for (const itemIndex of startIndexArray) {
         const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(
@@ -365,7 +767,7 @@ export class PoolUtils {
       const allPositionKey: PublicKey[] = [];
       for (const itemMint of allMint) {
         for (const itemProgramId of programIds) {
-          allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
+          allPositionKey.push(await (await getPdaPersonalPositionAddress(itemProgramId, itemMint)).publicKey);
         }
       }
       const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });
@@ -452,12 +854,12 @@ export class PoolUtils {
       if (updateOwnerRewardAndFee) {
         const tickArrayKeys = Object.values(keyToTickArrayAddress);
         const tickArrayDatas = await getMultipleAccountsInfo(connection, tickArrayKeys, { batchRequest });
-        const tickArrayLayout: { [key: string]: TickArray } = {};
+        const tickArrayLayout = {};
         for (let index = 0; index < tickArrayKeys.length; index++) {
           const tickArrayData = tickArrayDatas[index];
           if (tickArrayData === null) continue;
-          const key = tickArrayKeys[index];
-          tickArrayLayout[key.toString()] = { address: key, ...TickArrayLayout.decode(tickArrayData.data) };
+          const key = tickArrayKeys[index].toString();
+          tickArrayLayout[key] = TickArrayLayout.decode(tickArrayData.data);
         }
 
         for (const { state, positionAccount } of pools) {
@@ -478,10 +880,10 @@ export class PoolUtils {
               tickUpperState,
             );
             const rewardInfos = await PositionUtils.GetPositionRewards(state, itemPA, tickLowerState, tickUpperState);
-            itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(BN_ZERO) ? tokenFeeAmountA : BN_ZERO;
-            itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(BN_ZERO) ? tokenFeeAmountB : BN_ZERO;
+            itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(new BN(0)) ? tokenFeeAmountA : new BN(0);
+            itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(new BN(0)) ? tokenFeeAmountB : new BN(0);
             for (let i = 0; i < rewardInfos.length; i++) {
-              itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(BN_ZERO) ? rewardInfos[i] : BN_ZERO;
+              itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(new BN(0)) ? rewardInfos[i] : new BN(0);
             }
           }
         }
@@ -514,8 +916,8 @@ export class PoolUtils {
     let sqrtPriceLimitX64: BN;
     if (priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = baseMint.equals(poolInfo.mintA.mint)
-        ? MIN_SQRT_PRICE_X64.add(ONE)
-        : MAX_SQRT_PRICE_X64.sub(ONE);
+        ? MIN_SQRT_PRICE_X64.add(new BN(1))
+        : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
       sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
         priceLimit,
@@ -540,7 +942,7 @@ export class PoolUtils {
       poolInfo,
       tickArrayCache,
       baseMint,
-      realAmountIn.amount.sub(realAmountIn.fee || BN_ZERO),
+      realAmountIn.amount.sub(realAmountIn.fee ?? ZERO),
       sqrtPriceLimitX64,
     );
 
@@ -598,23 +1000,20 @@ export class PoolUtils {
     poolInfo,
     tickArrayCache,
     token2022Infos,
-    epochInfo,
     amountIn,
     tokenOut: _tokenOut,
     slippage,
+    epochInfo,
   }: {
     poolInfo: AmmV3PoolInfo;
     tickArrayCache: { [key: string]: TickArray };
-
     token2022Infos: ReturnTypeFetchMultipleMintInfos;
-    epochInfo: EpochInfo;
-
     amountIn: TokenAmount;
     tokenOut: Token;
     slippage: Percent;
+    epochInfo: EpochInfo;
   }): Promise<ReturnTypeComputeAmountOutFormat> {
     const inputMint = amountIn.token.equals(Token.WSOL) ? WSOLMint : amountIn.token.mint;
-    const _amountIn = amountIn.raw;
     const _slippage = slippage.numerator.toNumber() / slippage.denominator.toNumber();
     const tokenOut = _tokenOut.mint.equals(SOLMint)
       ? new Token({ mint: "sol", decimals: SOL_INFO.decimals })
@@ -630,13 +1029,12 @@ export class PoolUtils {
       priceImpact,
       fee,
       remainingAccounts,
-    } = this.computeAmountOut({
+    } = await PoolUtils.computeAmountOut({
       poolInfo,
       tickArrayCache,
       baseMint: inputMint,
-      amountIn: _amountIn,
+      amountIn: amountIn.raw,
       slippage: _slippage,
-
       token2022Infos,
       epochInfo,
     });
@@ -664,14 +1062,12 @@ export class PoolUtils {
       quoteToken: tokenOut,
       numerator: currentPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
     });
-
     const _executionPrice = new Price({
       baseToken: amountIn.token,
       denominator: new BN(10).pow(new BN(20 + amountIn.token.decimals)),
       quoteToken: tokenOut,
       numerator: executionPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
     });
-
     const _fee = new TokenAmount(amountIn.token, fee);
 
     return {
@@ -685,43 +1081,6 @@ export class PoolUtils {
       fee: _fee,
       remainingAccounts,
     };
-  }
-
-  static async computeAmountOutAndCheckToken({
-    connection,
-    poolInfo,
-    tickArrayCache,
-    baseMint,
-    amountIn,
-    slippage,
-    priceLimit = new Decimal(0),
-  }: {
-    connection: Connection;
-    poolInfo: AmmV3PoolInfo;
-    tickArrayCache: { [key: string]: TickArray };
-    baseMint: PublicKey;
-
-    amountIn: BN;
-    slippage: number;
-    priceLimit?: Decimal;
-  }): Promise<ReturnTypeComputeAmountOut> {
-    const epochInfo = await connection.getEpochInfo();
-    const token2022Infos = await fetchMultipleMintInfos({
-      connection,
-      mints: [poolInfo.mintA, poolInfo.mintB]
-        .filter((i) => i.programId.equals(TOKEN_2022_PROGRAM_ID))
-        .map((i) => i.mint),
-    });
-    return this.computeAmountOut({
-      poolInfo,
-      tickArrayCache,
-      baseMint,
-      amountIn,
-      slippage,
-      priceLimit,
-      token2022Infos,
-      epochInfo,
-    });
   }
 
   static estimateAprsForPriceRangeMultiplier({
@@ -889,26 +1248,27 @@ export class PoolUtils {
 
   static getLiquidityAmountOutFromAmountIn({
     poolInfo,
-    token2022Infos,
     inputA,
     tickLower,
     tickUpper,
     amount,
     slippage,
     add,
+    token2022Infos,
     epochInfo,
     amountHasFee,
   }: {
     poolInfo: AmmV3PoolInfo;
-    token2022Infos: ReturnTypeFetchMultipleMintInfos;
     inputA: boolean;
     tickLower: number;
     tickUpper: number;
     amount: BN;
     slippage: number;
     add: boolean;
-    epochInfo: EpochInfo;
     amountHasFee: boolean;
+
+    token2022Infos: ReturnTypeFetchMultipleMintInfos;
+    epochInfo: EpochInfo;
   }): ReturnTypeGetLiquidityAmountOut {
     const sqrtPriceX64 = poolInfo.sqrtPriceX64;
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
@@ -938,7 +1298,7 @@ export class PoolUtils {
         : LiquidityMath.getLiquidityFromTokenAmountB(sqrtPriceX64A, sqrtPriceX64B, _amount);
     }
 
-    return LiquidityMath.getAmountsOutFromLiquidity({
+    return PoolUtils.getAmountsFromLiquidity({
       poolInfo,
       tickLower,
       tickUpper,
@@ -950,45 +1310,65 @@ export class PoolUtils {
     });
   }
 
-  static getInputAmountAndRemainAccounts(
-    poolInfo: AmmV3PoolInfo,
-    tickArrayCache: { [key: string]: TickArray },
-    outputTokenMint: PublicKey,
-    outputAmount: BN,
-    sqrtPriceLimitX64?: BN,
-  ): { expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
-    const zeroForOne = outputTokenMint.equals(poolInfo.mintB.mint);
+  static getAmountsFromLiquidity({
+    poolInfo,
+    tickLower,
+    tickUpper,
+    liquidity,
+    slippage,
+    add,
+    token2022Infos,
+    epochInfo,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    tickLower: number;
+    tickUpper: number;
+    liquidity: BN;
+    slippage: number;
+    add: boolean;
 
-    const allNeededAccounts: PublicKey[] = [];
-    const {
-      isExist,
-      startIndex: firstTickArrayStartIndex,
-      nextAccountMeta,
-    } = this.getFirstInitializedTickArray(poolInfo, zeroForOne);
-    if (!isExist || firstTickArrayStartIndex === undefined || !nextAccountMeta) throw new Error("Invalid tick array");
+    token2022Infos: ReturnTypeFetchMultipleMintInfos;
+    epochInfo: EpochInfo;
+  }): ReturnTypeGetLiquidityAmountOut {
+    const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
+    const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
 
-    allNeededAccounts.push(nextAccountMeta);
-    const {
-      amountCalculated: inputAmount,
-      accounts: reaminAccounts,
-      sqrtPriceX64: executionPrice,
-      feeAmount,
-    } = SwapMath.swapCompute(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayCache,
-      zeroForOne,
-      poolInfo.ammConfig.tradeFeeRate,
-      poolInfo.liquidity,
-      poolInfo.tickCurrent,
-      poolInfo.tickSpacing,
+    const coefficientRe = add ? 1 + slippage : 1 - slippage;
+
+    const amounts = LiquidityMath.getAmountsFromLiquidity(
       poolInfo.sqrtPriceX64,
-      outputAmount.mul(NEGATIVE_ONE),
-      firstTickArrayStartIndex,
-      sqrtPriceLimitX64,
+      sqrtPriceX64A,
+      sqrtPriceX64B,
+      liquidity,
+      add,
     );
-    allNeededAccounts.push(...reaminAccounts);
-    return { expectedAmountIn: inputAmount, remainingAccounts: allNeededAccounts, executionPrice, feeAmount };
+    const [amountA, amountB] = [
+      getTransferAmountFee(amounts.amountA, token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig, epochInfo, true),
+      getTransferAmountFee(amounts.amountB, token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig, epochInfo, true),
+    ];
+    const [amountSlippageA, amountSlippageB] = [
+      getTransferAmountFee(
+        amounts.amountA.muln(coefficientRe),
+        token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig,
+        epochInfo,
+        true,
+      ),
+      getTransferAmountFee(
+        amounts.amountB.muln(coefficientRe),
+        token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig,
+        epochInfo,
+        true,
+      ),
+    ];
+
+    return {
+      liquidity,
+      amountA,
+      amountB,
+      amountSlippageA,
+      amountSlippageB,
+      expirationTime: minExpirationTime(amountA.expirationTime, amountB.expirationTime),
+    };
   }
 }
 

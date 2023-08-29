@@ -16,7 +16,6 @@ import {
   METADATA_PROGRAM_ID,
   InstructionType,
   getATAAddress,
-  BN_ZERO,
   MEMO_PROGRAM_ID,
 } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
@@ -29,10 +28,13 @@ import {
   getPdaMetadataKey,
   getPdaProtocolPositionAddress,
   getPdaPersonalPositionAddress,
-  getPdaPoolRewardVaultId,
   getPdaOperationAccount,
+  getPdaExBitmapAccount,
+  getPdaPoolRewardVaulId,
 } from "./utils/pda";
 import { TickUtils } from "./utils/tick";
+import { PoolUtils } from "./utils/pool";
+import { generatePubKey } from "../account/util";
 
 const logger = createLogger("Raydium_AmmV3");
 
@@ -69,8 +71,11 @@ export class AmmV3Instrument {
     observationId: PublicKey,
     mintA: PublicKey,
     mintVaultA: PublicKey,
+    mintProgramIdA: PublicKey,
     mintB: PublicKey,
     mintVaultB: PublicKey,
+    mintProgramIdB: PublicKey,
+    exTickArrayBitmap: PublicKey,
     sqrtPriceX64: BN,
     startTime: BN,
   ): TransactionInstruction {
@@ -85,7 +90,9 @@ export class AmmV3Instrument {
       { pubkey: mintVaultA, isSigner: false, isWritable: true },
       { pubkey: mintVaultB, isSigner: false, isWritable: true },
       { pubkey: observationId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: exTickArrayBitmap, isSigner: false, isWritable: true },
+      { pubkey: mintProgramIdA, isSigner: false, isWritable: false },
+      { pubkey: mintProgramIdB, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
     ];
@@ -109,10 +116,12 @@ export class AmmV3Instrument {
 
   static async createPoolInstructions(props: CreatePoolInstruction): Promise<ReturnTypeMakeInstructions> {
     const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } = props;
-    const observationId = new Keypair();
+    const observationId = generatePubKey({ fromPublicKey: owner, programId });
     const ins = [
-      SystemProgram.createAccount({
+      SystemProgram.createAccountWithSeed({
         fromPubkey: owner,
+        basePubkey: owner,
+        seed: observationId.seed,
         newAccountPubkey: observationId.publicKey,
         lamports: await connection.getMinimumBalanceForRentExemption(ObservationInfoLayout.span),
         space: ObservationInfoLayout.span,
@@ -133,15 +142,18 @@ export class AmmV3Instrument {
         observationId.publicKey,
         mintA.mint,
         mintAVault,
+        mintA.programId,
         mintB.mint,
         mintBVault,
+        mintB.programId,
+        getPdaExBitmapAccount(programId, poolId).publicKey,
         initialPriceX64,
         startTime,
       ),
     );
 
     return {
-      signers: [observationId],
+      signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.CreateAccount, InstructionType.ClmmCreatePool],
       address: { poolId, observationId: observationId.publicKey, mintAVault, mintBVault },
@@ -176,6 +188,8 @@ export class AmmV3Instrument {
     amountMaxA: BN,
     amountMaxB: BN,
     withMetadata: "create" | "no-create",
+
+    exTickArrayBitmap?: PublicKey,
   ): TransactionInstruction {
     const dataLayout = struct([
       s32("tickLowerIndex"),
@@ -189,6 +203,10 @@ export class AmmV3Instrument {
       u8("optionBaseFlag"),
       bool("baseFlag"),
     ]);
+
+    const remainingAccounts = [
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+    ];
 
     const keys = [
       { pubkey: payer, isSigner: true, isWritable: true },
@@ -215,6 +233,8 @@ export class AmmV3Instrument {
 
       { pubkey: tokenMintA, isSigner: false, isWritable: false },
       { pubkey: tokenMintB, isSigner: false, isWritable: false },
+
+      ...remainingAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -243,7 +263,7 @@ export class AmmV3Instrument {
     });
   }
 
-  static openPositionInstructions({
+  static async openPositionInstructions({
     poolInfo,
     ownerInfo,
     tickLower,
@@ -272,11 +292,18 @@ export class AmmV3Instrument {
     programId?: PublicKey;
     withMetadata: "create" | "no-create";
     getEphemeralSigners?: (k: number) => any;
-  }): ReturnTypeMakeInstructions {
+  }): Promise<ReturnTypeMakeInstructions> {
     const signers: Signer[] = [];
 
     const nftMintAKeypair = new Keypair();
-    signers.push(nftMintAKeypair);
+    let nftMintAccount;
+    if (getEphemeralSigners) {
+      nftMintAccount = new PublicKey((await getEphemeralSigners(1))[0]);
+    } else {
+      const _k = Keypair.generate();
+      signers.push(_k);
+      nftMintAccount = _k.publicKey;
+    }
 
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
     const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
@@ -438,6 +465,12 @@ export class AmmV3Instrument {
       baseAmount,
 
       otherAmountMax,
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+      ])
+        ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+        : undefined,
     );
 
     return {
@@ -480,11 +513,14 @@ export class AmmV3Instrument {
     tickUpperIndex: number,
     tickArrayLowerStartIndex: number,
     tickArrayUpperStartIndex: number,
+
     withMetadata: "create" | "no-create",
     base: "MintA" | "MintB",
     baseAmount: BN,
 
     otherAmountMax: BN,
+
+    exTickArrayBitmap?: PublicKey,
   ): TransactionInstruction {
     const dataLayout = struct([
       s32("tickLowerIndex"),
@@ -498,6 +534,10 @@ export class AmmV3Instrument {
       u8("optionBaseFlag"),
       bool("baseFlag"),
     ]);
+
+    const remainingAccounts = [
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+    ];
 
     const keys = [
       { pubkey: payer, isSigner: true, isWritable: true },
@@ -524,6 +564,8 @@ export class AmmV3Instrument {
 
       { pubkey: tokenMintA, isSigner: false, isWritable: false },
       { pubkey: tokenMintB, isSigner: false, isWritable: false },
+
+      ...remainingAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -533,7 +575,7 @@ export class AmmV3Instrument {
         tickUpperIndex,
         tickArrayLowerStartIndex,
         tickArrayUpperStartIndex,
-        liquidity: BN_ZERO,
+        liquidity: new BN(0),
         amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
         amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
         withMetadata: withMetadata === "create",
@@ -639,6 +681,12 @@ export class AmmV3Instrument {
       amountMaxA,
       amountMaxB,
       withMetadata,
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+      ])
+        ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+        : undefined,
     );
 
     return {
@@ -747,6 +795,8 @@ export class AmmV3Instrument {
     liquidity: BN,
     amountMaxA: BN,
     amountMaxB: BN,
+
+    exTickArrayBitmap?: PublicKey,
   ): TransactionInstruction {
     const dataLayout = struct([
       u128("liquidity"),
@@ -755,6 +805,10 @@ export class AmmV3Instrument {
       u8("optionBaseFlag"),
       bool("baseFlag"),
     ]);
+
+    const remainingAccounts = [
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+    ];
 
     const keys = [
       { pubkey: positionNftOwner, isSigner: true, isWritable: false },
@@ -774,6 +828,8 @@ export class AmmV3Instrument {
 
       { pubkey: mintMintA, isSigner: false, isWritable: false },
       { pubkey: mintMintB, isSigner: false, isWritable: false },
+
+      ...remainingAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -867,6 +923,12 @@ export class AmmV3Instrument {
       liquidity,
       amountMaxA,
       amountMaxB,
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+      ])
+        ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+        : undefined,
     );
 
     return {
@@ -965,6 +1027,12 @@ export class AmmV3Instrument {
           baseAmount,
 
           otherAmountMax,
+          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+            tickArrayLowerStartIndex,
+            tickArrayUpperStartIndex,
+          ])
+            ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+            : undefined,
         ),
       ],
       signers: [],
@@ -994,6 +1062,8 @@ export class AmmV3Instrument {
     baseAmount: BN,
 
     otherAmountMax: BN,
+
+    exTickArrayBitmap?: PublicKey,
   ): TransactionInstruction {
     const dataLayout = struct([
       u128("liquidity"),
@@ -1002,6 +1072,10 @@ export class AmmV3Instrument {
       u8("optionBaseFlag"),
       bool("baseFlag"),
     ]);
+
+    const remainingAccounts = [
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+    ];
 
     const keys = [
       { pubkey: positionNftOwner, isSigner: true, isWritable: false },
@@ -1021,12 +1095,14 @@ export class AmmV3Instrument {
 
       { pubkey: mintMintA, isSigner: false, isWritable: false },
       { pubkey: mintMintB, isSigner: false, isWritable: false },
+
+      ...remainingAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(
       {
-        liquidity: BN_ZERO,
+        liquidity: new BN(0),
         amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
         amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
         baseFlag: base === "MintA",
@@ -1067,10 +1143,24 @@ export class AmmV3Instrument {
     }[],
 
     liquidity: BN,
-    amount0Max: BN,
-    amount1Max: BN,
+    amountMinA: BN,
+    amountMinB: BN,
+
+    exTickArrayBitmap?: PublicKey,
   ): TransactionInstruction {
-    const dataLayout = struct([u128("liquidity"), u64("amount0Max"), u64("amount1Max")]);
+    const dataLayout = struct([u128("liquidity"), u64("amountMinA"), u64("amountMinB")]);
+
+    const remainingAccounts = [
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+      ...rewardAccounts
+        .map((i) => [
+          { pubkey: i.poolRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.ownerRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.rewardMint, isSigner: false, isWritable: false },
+        ])
+        .flat(),
+    ];
+
     const keys = [
       { pubkey: positionNftOwner, isSigner: true, isWritable: false },
       { pubkey: positionNftAccount, isSigner: false, isWritable: false },
@@ -1092,21 +1182,15 @@ export class AmmV3Instrument {
       { pubkey: mintMintA, isSigner: false, isWritable: false },
       { pubkey: mintMintB, isSigner: false, isWritable: false },
 
-      ...rewardAccounts
-        .map((i) => [
-          { pubkey: i.poolRewardVault, isSigner: false, isWritable: true },
-          { pubkey: i.ownerRewardVault, isSigner: false, isWritable: true },
-          { pubkey: i.rewardMint, isSigner: false, isWritable: false },
-        ])
-        .flat(),
+      ...remainingAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(
       {
         liquidity,
-        amount0Max,
-        amount1Max,
+        amountMinA,
+        amountMinB,
       },
       data,
     );
@@ -1208,6 +1292,12 @@ export class AmmV3Instrument {
         liquidity,
         amountMinA,
         amountMinB,
+        PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+          tickArrayLowerStartIndex,
+          tickArrayUpperStartIndex,
+        ])
+          ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+          : undefined,
       ),
     );
 
@@ -1244,6 +1334,8 @@ export class AmmV3Instrument {
     otherAmountThreshold: BN,
     sqrtPriceLimitX64: BN,
     isBaseInput: boolean,
+
+    exTickArrayBitmap?: PublicKey,
   ): TransactionInstruction {
     const dataLayout = struct([
       u64("amount"),
@@ -1251,6 +1343,11 @@ export class AmmV3Instrument {
       u128("sqrtPriceLimitX64"),
       bool("isBaseInput"),
     ]);
+
+    const remainingAccounts = [
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+      ...tickArray.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+    ];
 
     const keys = [
       { pubkey: payer, isSigner: true, isWritable: false },
@@ -1271,7 +1368,7 @@ export class AmmV3Instrument {
       { pubkey: inputMint, isSigner: false, isWritable: false },
       { pubkey: outputMint, isSigner: false, isWritable: false },
 
-      ...tickArray.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+      ...remainingAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -1343,6 +1440,7 @@ export class AmmV3Instrument {
         amountOutMin,
         sqrtPriceLimitX64,
         true,
+        getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey,
       ),
     ];
     return {
@@ -1423,7 +1521,7 @@ export class AmmV3Instrument {
       emissionsPerSecondX64: BN;
     };
   }): ReturnTypeMakeInstructions {
-    const poolRewardVault = getPdaPoolRewardVaultId(poolInfo.programId, poolInfo.id, rewardInfo.mint).publicKey;
+    const poolRewardVault = getPdaPoolRewardVaulId(poolInfo.programId, poolInfo.id, rewardInfo.mint).publicKey;
     const operationId = getPdaOperationAccount(poolInfo.programId).publicKey;
     const ins = [
       this.initRewardInstruction(

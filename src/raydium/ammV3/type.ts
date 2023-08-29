@@ -136,6 +136,8 @@ export interface AmmV3PoolInfo {
   lookupTableAccount: PublicKey;
 
   startTime: number;
+
+  exBitmapInfo: TickArrayBitmapExtension;
 }
 
 export interface ReturnTypeMakeHarvestTransaction {
@@ -579,4 +581,14 @@ export interface ReturnTypeMakeTransaction {
   signers: (Signer | Keypair)[];
   transaction: Transaction;
   address: { [name: string]: PublicKey };
+}
+
+export interface TickArrayBitmapExtension {
+  poolId: PublicKey;
+  positiveTickArrayBitmap: BN[][];
+  negativeTickArrayBitmap: BN[][];
+}
+
+export interface ReturnTypeFetchExBitmaps {
+  [exBitmapId: string]: TickArrayBitmapExtension;
 }
