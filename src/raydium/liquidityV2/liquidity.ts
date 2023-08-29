@@ -5,6 +5,7 @@ import { Token, TokenAmount, Percent } from "../../module";
 import { SOLMint, WSOLMint, solToWSol } from "../../common/pubKey";
 import { BN_ZERO, BN_ONE, divCeil } from "../../common/bignumber";
 import BN from "bn.js";
+import Decimal from "decimal.js";
 import { AmountSide, AddLiquidityParams } from "./type";
 import { MakeTransaction } from "../../raydium/type";
 import { makeAddLiquidityInstruction } from "./instruction";
@@ -31,7 +32,7 @@ export default class LiquidityModule extends ModuleBase {
     slippage: Percent;
   }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount } {
     const _amount = amount.token.mint.equals(SOLMint)
-      ? this.scope.mintToTokenAmount({ mint: WSOLMint, amount: amount.toExact() })
+      ? this.scope.mintToTokenAmount({ mint: WSOLMint, amount: amount.raw, decimalDone: true })
       : amount;
     const _anotherToken = anotherToken.mint.equals(SOLMint)
       ? this.scope.mintToToken(WSOLMint)
@@ -42,7 +43,10 @@ export default class LiquidityModule extends ModuleBase {
           name: anotherToken.name,
         });
 
-    const [baseReserve, quoteReserve] = [new BN(poolInfo.mintAmountA), new BN(poolInfo.mintAmountB)];
+    const [baseReserve, quoteReserve] = [
+      new BN(new Decimal(poolInfo.mintAmountA).mul(10 ** poolInfo.mintA.decimals).toString()),
+      new BN(new Decimal(poolInfo.mintAmountB).mul(10 ** poolInfo.mintB.decimals).toString()),
+    ];
     this.logDebug("baseReserve:", baseReserve.toString(), "quoteReserve:", quoteReserve.toString());
 
     const tokenIn = _amount.token;
