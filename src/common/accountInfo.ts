@@ -1,7 +1,8 @@
 import { AccountInfo, Commitment, Connection, PublicKey } from "@solana/web3.js";
-
+import { getTransferFeeConfig, unpackMint } from "@solana/spl-token";
 import { chunkArray } from "./";
 import { createLogger } from "./logger";
+import { ReturnTypeFetchMultipleMintInfos } from "../raydium/type";
 
 interface MultipleAccountsJsonRpcResponse {
   jsonrpc: string;
@@ -98,4 +99,36 @@ export async function getMultipleAccountsInfoWithCustomFlags<T extends { pubkey:
   );
 
   return publicKeysWithCustomFlag.map((o, idx) => ({ ...o, accountInfo: multipleAccountsInfo[idx] }));
+}
+
+export enum AccountType {
+  Uninitialized,
+  Mint,
+  Account,
+}
+export const ACCOUNT_TYPE_SIZE = 1;
+
+export async function fetchMultipleMintInfos({
+  connection,
+  mints,
+}: {
+  connection: Connection;
+  mints: PublicKey[];
+}): Promise<ReturnTypeFetchMultipleMintInfos> {
+  if (mints.length === 0) return {};
+  const mintInfos = await getMultipleAccountsInfoWithCustomFlags(
+    connection,
+    mints.map((i) => ({ pubkey: i })),
+  );
+
+  const mintK: ReturnTypeFetchMultipleMintInfos = {};
+  for (const i of mintInfos) {
+    const t = unpackMint(i.pubkey, i.accountInfo, i.accountInfo?.owner);
+    mintK[i.pubkey.toString()] = {
+      ...t,
+      feeConfig: getTransferFeeConfig(t) ?? undefined,
+    };
+  }
+
+  return mintK;
 }

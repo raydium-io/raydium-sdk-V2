@@ -7,6 +7,7 @@ import {
   TransactionInstruction,
   TransactionMessage,
   Keypair,
+  EpochInfo,
 } from "@solana/web3.js";
 
 import { createLogger } from "../logger";
@@ -257,5 +258,23 @@ export function checkV0TxSize({
     return true;
   } catch (error) {
     return false;
+  }
+}
+
+let epochInfoCache: { time: number; data?: EpochInfo } = {
+  time: 0,
+  data: undefined,
+};
+
+export async function getEpochInfo(connection: Connection): Promise<EpochInfo> {
+  if (!epochInfoCache.data || (Date.now() - epochInfoCache.time) / 1000 > 30) {
+    const data = await connection.getEpochInfo();
+    epochInfoCache = {
+      time: Date.now(),
+      data,
+    };
+    return data;
+  } else {
+    return epochInfoCache.data;
   }
 }

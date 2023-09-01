@@ -16,6 +16,8 @@ import {
   ReturnTypeComputeAmountOutFormat,
 } from "../type";
 
+import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
+
 import { ReturnTypeFetchMultipleMintInfos } from "../../type";
 import { NEGATIVE_ONE, Q64, ZERO, MAX_TICK, MIN_TICK, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "./constants";
 import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
@@ -28,9 +30,11 @@ import {
   getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
   getTransferAmountFee,
+  getTransferAmountFeeV2,
   minExpirationTime,
   WSOLMint,
   SOLMint,
+  getEpochInfo,
 } from "../../../common";
 import { SOL_INFO } from "../../token/constant";
 import { TokenAccountRaw } from "../../account/types";
@@ -1246,7 +1250,8 @@ export class PoolUtils {
     };
   }
 
-  static getLiquidityAmountOutFromAmountIn({
+  static async getLiquidityAmountOutFromAmountIn({
+    connection,
     poolInfo,
     inputA,
     tickLower,
@@ -1254,11 +1259,11 @@ export class PoolUtils {
     amount,
     slippage,
     add,
-    token2022Infos,
     epochInfo,
     amountHasFee,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    connection: Connection;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
     inputA: boolean;
     tickLower: number;
     tickUpper: number;
@@ -1267,17 +1272,20 @@ export class PoolUtils {
     add: boolean;
     amountHasFee: boolean;
 
-    token2022Infos: ReturnTypeFetchMultipleMintInfos;
     epochInfo: EpochInfo;
-  }): ReturnTypeGetLiquidityAmountOut {
-    const sqrtPriceX64 = poolInfo.sqrtPriceX64;
+  }): Promise<ReturnTypeGetLiquidityAmountOut> {
+    const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
+      new Decimal(poolInfo.price),
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
 
     const coefficient = add ? 1 - slippage : 1 + slippage;
-    const addFeeAmount = getTransferAmountFee(
+    const addFeeAmount = getTransferAmountFeeV2(
       amount,
-      token2022Infos[inputA ? poolInfo.mintA.mint.toString() : poolInfo.mintB.mint.toString()]?.feeConfig,
+      poolInfo[inputA ? "mintA" : "mintB"].extensions.feeConfig,
       epochInfo,
       !amountHasFee,
     );
@@ -1299,66 +1307,54 @@ export class PoolUtils {
     }
 
     return PoolUtils.getAmountsFromLiquidity({
+      connection,
       poolInfo,
       tickLower,
       tickUpper,
       liquidity,
       slippage,
       add,
-      token2022Infos,
-      epochInfo,
     });
   }
 
-  static getAmountsFromLiquidity({
+  static async getAmountsFromLiquidity({
+    connection,
     poolInfo,
     tickLower,
     tickUpper,
     liquidity,
     slippage,
     add,
-    token2022Infos,
-    epochInfo,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    connection: Connection;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
     tickLower: number;
     tickUpper: number;
     liquidity: BN;
     slippage: number;
     add: boolean;
+  }): Promise<ReturnTypeGetLiquidityAmountOut> {
+    const epochInfo = await getEpochInfo(connection);
 
-    token2022Infos: ReturnTypeFetchMultipleMintInfos;
-    epochInfo: EpochInfo;
-  }): ReturnTypeGetLiquidityAmountOut {
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
 
     const coefficientRe = add ? 1 + slippage : 1 - slippage;
 
     const amounts = LiquidityMath.getAmountsFromLiquidity(
-      poolInfo.sqrtPriceX64,
+      SqrtPriceMath.priceToSqrtPriceX64(new Decimal(poolInfo.price), poolInfo.mintA.decimals, poolInfo.mintB.decimals),
       sqrtPriceX64A,
       sqrtPriceX64B,
       liquidity,
       add,
     );
     const [amountA, amountB] = [
-      getTransferAmountFee(amounts.amountA, token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig, epochInfo, true),
-      getTransferAmountFee(amounts.amountB, token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amounts.amountA, poolInfo.mintA.extensions.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions.feeConfig, epochInfo, true),
     ];
     const [amountSlippageA, amountSlippageB] = [
-      getTransferAmountFee(
-        amounts.amountA.muln(coefficientRe),
-        token2022Infos[poolInfo.mintA.mint.toString()]?.feeConfig,
-        epochInfo,
-        true,
-      ),
-      getTransferAmountFee(
-        amounts.amountB.muln(coefficientRe),
-        token2022Infos[poolInfo.mintB.mint.toString()]?.feeConfig,
-        epochInfo,
-        true,
-      ),
+      getTransferAmountFeeV2(amounts.amountA.muln(coefficientRe), poolInfo.mintA.extensions.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amounts.amountB.muln(coefficientRe), poolInfo.mintB.extensions.feeConfig, epochInfo, true),
     ];
 
     return {

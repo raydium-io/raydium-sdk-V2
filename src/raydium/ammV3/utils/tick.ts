@@ -6,8 +6,9 @@ import { getPdaTickArrayAddress } from "./pda";
 import { TickArrayBitmapExtension } from "../type";
 import { TickQuery } from "./tickQuery";
 import { MIN_TICK, MAX_TICK } from "./constants";
-import { SqrtPriceMath } from "./math";
+import { SqrtPriceMath, TickMath } from "./math";
 import { AmmV3PoolInfo } from "../type";
+import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
 
 export const TICK_ARRAY_SIZE = 60;
 export const TICK_ARRAY_BITMAP_SIZE = 512;
@@ -349,5 +350,81 @@ export class TickUtils {
     return baseIn
       ? { tick, price: tickPrice, tickSqrtPriceX64 }
       : { tick, price: new Decimal(1).div(tickPrice), tickSqrtPriceX64 };
+  }
+
+  public static getPriceAndTick({
+    poolInfo,
+    price,
+    baseIn,
+  }: {
+    poolInfo: AmmV3PoolInfo;
+    price: Decimal;
+    baseIn: boolean;
+  }): ReturnTypeGetPriceAndTick {
+    const _price = baseIn ? price : new Decimal(1).div(price);
+
+    const tick = TickMath.getTickWithPriceAndTickspacing(
+      _price,
+      poolInfo.ammConfig.tickSpacing,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+    const tickSqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
+    const tickPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
+      tickSqrtPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+
+    return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
+  }
+
+  public static getTickPriceV2({
+    poolInfo,
+    tick,
+    baseIn,
+  }: {
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    tick: number;
+    baseIn: boolean;
+  }): ReturnTypeGetTickPrice {
+    const tickSqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
+    const tickPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
+      tickSqrtPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+
+    return baseIn
+      ? { tick, price: tickPrice, tickSqrtPriceX64 }
+      : { tick, price: new Decimal(1).div(tickPrice), tickSqrtPriceX64 };
+  }
+
+  public static getPriceAndTickV2({
+    poolInfo,
+    price,
+    baseIn,
+  }: {
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    price: Decimal;
+    baseIn: boolean;
+  }): ReturnTypeGetPriceAndTick {
+    const _price = baseIn ? price : new Decimal(1).div(price);
+
+    const tick = TickMath.getTickWithPriceAndTickspacing(
+      _price,
+      // poolInfo.ammConfig.tickSpacing,
+      6,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+    const tickSqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
+    const tickPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
+      tickSqrtPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+
+    return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
   }
 }
