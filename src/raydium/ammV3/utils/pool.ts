@@ -35,6 +35,7 @@ import {
   WSOLMint,
   SOLMint,
   getEpochInfo,
+  solToWSol,
 } from "../../../common";
 import { SOL_INFO } from "../../token/constant";
 import { TokenAccountRaw } from "../../account/types";
@@ -408,6 +409,7 @@ export class PoolUtils {
     return returnTypeFetchExBitmaps;
   }
 
+  // deprecated, new api doesn't need
   static async fetchMultiplePoolInfos({
     connection,
     poolKeys,
@@ -558,12 +560,12 @@ export class PoolUtils {
 
         const poolInfo = poolInfoA.state;
 
-        const priceLower = TickUtils.getTickPrice({
+        const priceLower = TickUtils._getTickPriceLegacy({
           poolInfo,
           tick: position.tickLower,
           baseIn: true,
         });
-        const priceUpper = TickUtils.getTickPrice({
+        const priceUpper = TickUtils._getTickPriceLegacy({
           poolInfo,
           tick: position.tickUpper,
           baseIn: true,
@@ -743,6 +745,7 @@ export class PoolUtils {
     return tickArrayCache;
   }
 
+  // deprecated, new api doesn't need
   static async fetchPoolsAccountPosition({
     pools,
     connection,
@@ -787,12 +790,12 @@ export class PoolUtils {
 
         const poolInfo = poolInfoA.state;
 
-        const priceLower = TickUtils.getTickPrice({
+        const priceLower = TickUtils._getTickPriceLegacy({
           poolInfo,
           tick: position.tickLower,
           baseIn: true,
         });
-        const priceUpper = TickUtils.getTickPrice({
+        const priceUpper = TickUtils._getTickPriceLegacy({
           poolInfo,
           tick: position.tickUpper,
           baseIn: true,
@@ -1093,7 +1096,7 @@ export class PoolUtils {
     positionTickLowerIndex,
     positionTickUpperIndex,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
     aprType: "day" | "week" | "month";
 
     positionTickLowerIndex: number;
@@ -1124,7 +1127,7 @@ export class PoolUtils {
     const userRange = priceUpper - priceLower;
     const tradeRange = aprInfo.priceMax - aprInfo.priceMin;
 
-    let p;
+    let p: number;
 
     if (sub <= 0) p = 0;
     else if (userRange === sub) p = tradeRange / sub;
@@ -1133,7 +1136,7 @@ export class PoolUtils {
 
     return {
       feeApr: aprInfo.feeApr * p,
-      rewardsApr: [aprInfo.rewardApr.A * p, aprInfo.rewardApr.B * p, aprInfo.rewardApr.C * p],
+      rewardsApr: [aprInfo.rewardApr[0] ?? 0 * p, aprInfo.rewardApr[1] ?? 0 * p, aprInfo.rewardApr[2] ?? 0 * p],
       apr: aprInfo.apr * p,
     };
   }
@@ -1148,7 +1151,7 @@ export class PoolUtils {
     positionTickUpperIndex,
     chainTime,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
     aprType: "day" | "week" | "month";
 
     mintPrice: { [mint: string]: Price };
@@ -1167,29 +1170,36 @@ export class PoolUtils {
   } {
     const aprTypeDay = aprType === "day" ? 1 : aprType === "week" ? 7 : aprType === "month" ? 30 : 0;
     const aprInfo = poolInfo[aprType];
-    const mintPriceA = mintPrice[poolInfo.mintA.mint.toString()];
-    const mintPriceB = mintPrice[poolInfo.mintB.mint.toString()];
+    const mintPriceA = mintPrice[solToWSol(poolInfo.mintA.address).toString()];
+    const mintPriceB = mintPrice[solToWSol(poolInfo.mintB.address).toString()];
     const mintDecimalsA = poolInfo.mintA.decimals;
     const mintDecimalsB = poolInfo.mintB.decimals;
 
     if (!aprInfo || !mintPriceA || !mintPriceB) return { feeApr: 0, rewardsApr: [0, 0, 0], apr: 0 };
+
+    const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
+      new Decimal(poolInfo.price),
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
 
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(positionTickLowerIndex);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(positionTickUpperIndex);
 
     const { amountSlippageA: poolLiquidityA, amountSlippageB: poolLiquidityB } =
       LiquidityMath.getAmountsFromLiquidityWithSlippage(
-        poolInfo.sqrtPriceX64,
+        sqrtPriceX64,
         sqrtPriceX64A,
         sqrtPriceX64B,
-        poolInfo.liquidity,
+        new BN(0), // to do
+        // poolInfo.liquidity,
         false,
         false,
         0,
       );
     const { amountSlippageA: userLiquidityA, amountSlippageB: userLiquidityB } =
       LiquidityMath.getAmountsFromLiquidityWithSlippage(
-        poolInfo.sqrtPriceX64,
+        sqrtPriceX64,
         sqrtPriceX64A,
         sqrtPriceX64B,
         liquidity,
@@ -1223,20 +1233,20 @@ export class PoolUtils {
     const SECONDS_PER_YEAR = 3600 * 24 * 365;
 
     const rewardsApr = poolInfo.rewardInfos.map((i) => {
-      const iDecimal = rewardMintDecimals[i.tokenMint.toString()];
-      const iPrice = mintPrice[i.tokenMint.toString()];
+      const iDecimal = rewardMintDecimals[i.mint.address];
+      const iPrice = mintPrice[i.mint.address];
 
       if (
-        chainTime < i.openTime.toNumber() ||
-        chainTime > i.endTime.toNumber() ||
-        i.perSecond.equals(0) ||
+        chainTime < (i.startTime ?? 0) ||
+        chainTime > (i.endTime ?? 0) ||
+        !i.perSecond ||
         !iPrice ||
         iDecimal === undefined
       )
         return 0;
 
       return new Decimal(iPrice.toFixed(iDecimal))
-        .mul(i.perSecond.mul(SECONDS_PER_YEAR))
+        .mul(new Decimal(i.perSecond).mul(SECONDS_PER_YEAR))
         .div(new Decimal(10).pow(iDecimal))
         .mul(p)
         .mul(100)

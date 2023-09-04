@@ -331,7 +331,7 @@ export class TickUtils {
     throw Error(`firstInitializedTick check error: ${tickArrayCurrent} - ${zeroForOne}`);
   }
 
-  public static getTickPrice({
+  public static _getTickPriceLegacy({
     poolInfo,
     tick,
     baseIn,
@@ -352,7 +352,7 @@ export class TickUtils {
       : { tick, price: new Decimal(1).div(tickPrice), tickSqrtPriceX64 };
   }
 
-  public static getPriceAndTick({
+  public static _getPriceAndTickLegacy({
     poolInfo,
     price,
     baseIn,
@@ -379,7 +379,7 @@ export class TickUtils {
     return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
   }
 
-  public static getTickPriceV2({
+  public static getTickPrice({
     poolInfo,
     tick,
     baseIn,
@@ -400,7 +400,7 @@ export class TickUtils {
       : { tick, price: new Decimal(1).div(tickPrice), tickSqrtPriceX64 };
   }
 
-  public static getPriceAndTickV2({
+  public static getPriceAndTick({
     poolInfo,
     price,
     baseIn,
