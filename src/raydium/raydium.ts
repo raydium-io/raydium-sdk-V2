@@ -9,7 +9,7 @@ import {
   ApiJsonPairInfo,
   ApiLiquidityPools,
   ApiTokens,
-  ApiAmmV3PoolInfo,
+  ApiClmmPoolInfo,
   ApiIdoItem,
   ApiV3TokenRes,
   ApiV3Token,
@@ -27,7 +27,7 @@ import Account, { TokenAccountDataProp } from "./account/account";
 import Farm from "./farm/farm";
 import Liquidity from "./liquidity/liquidity";
 import LiquidityV2 from "./liquidityV2/liquidity";
-import { AmmV3 } from "./ammV3";
+import { Clmm } from "./clmm";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
@@ -77,7 +77,7 @@ interface ApiData {
   liquidityPools?: DataBase<ApiLiquidityPools>;
   liquidityPairsInfo?: DataBase<ApiJsonPairInfo[]>;
   farmPools?: DataBase<ApiFarmPools>;
-  ammV3Pools?: DataBase<ApiAmmV3PoolInfo[]>;
+  clmmPools?: DataBase<ApiClmmPoolInfo[]>;
   idoList?: DataBase<ApiIdoItem[]>;
 
   // v3 data
@@ -94,7 +94,7 @@ export class Raydium {
   public account: Account;
   public liquidity: Liquidity;
   public liquidityV2: LiquidityV2;
-  public ammV3: AmmV3;
+  public clmm: Clmm;
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
   public marketV2: MarketV2;
@@ -143,7 +143,7 @@ export class Raydium {
     this.liquidityV2 = new LiquidityV2({ scope: this, moduleName: "Raydium_LiquidityV2" });
     this.token = new TokenModule({ scope: this, moduleName: "Raydium_tokenV2" });
     this.tradeV2 = new TradeV2({ scope: this, moduleName: "Raydium_tradeV2" });
-    this.ammV3 = new AmmV3({ scope: this, moduleName: "Raydium_ammV3" });
+    this.clmm = new Clmm({ scope: this, moduleName: "Raydium_clmm" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
     // this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
@@ -278,15 +278,15 @@ export class Raydium {
     return dataObject.data;
   }
 
-  public async fetchAmmV3Pools(forceUpdate?: boolean): Promise<ApiAmmV3PoolInfo[]> {
-    if (this.apiData.ammV3Pools && !this.isCacheInvalidate(this.apiData.ammV3Pools.fetched) && !forceUpdate)
-      return this.apiData.ammV3Pools.data;
+  public async fetchClmmPools(forceUpdate?: boolean): Promise<ApiClmmPoolInfo[]> {
+    if (this.apiData.clmmPools && !this.isCacheInvalidate(this.apiData.clmmPools.fetched) && !forceUpdate)
+      return this.apiData.clmmPools.data;
 
     const dataObject = {
       fetched: Date.now(),
       data: await this.api.getConcentratedPools(),
     };
-    this.apiData.ammV3Pools = dataObject;
+    this.apiData.clmmPools = dataObject;
 
     return dataObject.data;
   }

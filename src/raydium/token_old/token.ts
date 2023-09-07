@@ -149,8 +149,8 @@ export default class TokenModule extends ModuleBase {
   }
 
   public async parseV3PoolTokens(): Promise<void> {
-    for (let i = 0; i < this.scope.ammV3.pools.data.length; i++) {
-      const pool = this.scope.ammV3.pools.data[i];
+    for (let i = 0; i < this.scope.clmm.pools.data.length; i++) {
+      const pool = this.scope.clmm.pools.data[i];
       const toToken = (mint: string, decimals: number): TokenJson => ({
         symbol: mint.substring(0, 6),
         name: mint.substring(0, 6),

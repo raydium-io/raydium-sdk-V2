@@ -8,8 +8,8 @@ import {
   ApiJsonPairInfo,
   ApiLiquidityPools,
   ApiTokens,
-  ApiAmmV3PoolInfo,
-  ApiAmmV3ConfigInfo,
+  ApiClmmPoolInfo,
+  ApiClmmConfigInfo,
   ApiIdoItem,
   ApiIdoInfo,
   ApiV3Token,
@@ -139,17 +139,17 @@ export class Api {
     return this.api.get(this.urlConfigs.FARMS || API_URLS.FARMS);
   }
 
-  async getConcentratedPools(): Promise<ApiAmmV3PoolInfo[]> {
+  async getConcentratedPools(): Promise<ApiClmmPoolInfo[]> {
     const res = await this.api.get(this.urlConfigs.AMM_V3 || API_URLS.AMM_V3);
     return res.data;
   }
 
-  async getAmmV3Configs(): Promise<Record<string, ApiAmmV3ConfigInfo>> {
+  async getClmmConfigs(): Promise<Record<string, ApiClmmConfigInfo>> {
     const res = await this.api.get(this.urlConfigs.AMM_V3_CONFIG || API_URLS.AMM_V3_CONFIG);
     return res.data;
   }
 
-  async getAmmV3PoolLines(poolId: string): Promise<{ price: string; liquidity: string }[]> {
+  async getClmmPoolLines(poolId: string): Promise<{ price: string; liquidity: string }[]> {
     const res = await this.api.get(`${this.urlConfigs.AMM_V3_LINES || API_URLS.AMM_V3_LINES}?pool_id=${poolId}`);
     return res.data;
   }

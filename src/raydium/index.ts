@@ -5,7 +5,7 @@ export * from "./liquidity";
 export * from "./route";
 export * from "./token";
 export * from "./tradeV2";
-export * from "./ammV3";
+export * from "./clmm";
 export * from "./serum";
 export * from "./utils1216";
 export * from "./marketV2";

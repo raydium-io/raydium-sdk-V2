@@ -152,7 +152,7 @@ export interface ApiFarmPools {
   ecosystem: ApiFarmPoolInfo[];
 }
 
-export interface ApiAmmV3ConfigInfo {
+export interface ApiClmmConfigInfo {
   id: string;
   index: number;
   protocolFeeRate: number;
@@ -163,7 +163,7 @@ export interface ApiAmmV3ConfigInfo {
   description: string;
 }
 
-export interface ApiAmmV3PoolsItemStatistics {
+export interface ApiClmmPoolsItemStatistics {
   volume: number;
   volumeFee: number;
   feeA: number;
@@ -179,7 +179,7 @@ export interface ApiAmmV3PoolsItemStatistics {
   priceMax: number;
 }
 
-export interface ApiAmmV3PoolInfo {
+export interface ApiClmmPoolInfo {
   id: string;
   mintProgramIdA: string;
   mintProgramIdB: string;
@@ -187,14 +187,14 @@ export interface ApiAmmV3PoolInfo {
   mintB: string;
   mintDecimalsA: number;
   mintDecimalsB: number;
-  ammConfig: ApiAmmV3ConfigInfo;
+  ammConfig: ApiClmmConfigInfo;
   rewardInfos: {
     mint: string;
     programId: string;
   }[];
-  day: ApiAmmV3PoolsItemStatistics;
-  week: ApiAmmV3PoolsItemStatistics;
-  month: ApiAmmV3PoolsItemStatistics;
+  day: ApiClmmPoolsItemStatistics;
+  week: ApiClmmPoolsItemStatistics;
+  month: ApiClmmPoolsItemStatistics;
   tvl: number;
   lookupTableAccount: string;
 }

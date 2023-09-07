@@ -61,7 +61,7 @@ import {
   makeSimulationPoolInfo,
 } from "./util";
 import Decimal from "decimal.js-light";
-import { AmmV3Instrument } from "../ammV3/instrument";
+import { ClmmInstrument } from "../clmm/instrument";
 export default class Liquidity extends ModuleBase {
   private _poolInfos: LiquidityPoolJsonInfo[] = [];
   private _poolInfoMap: Map<string, LiquidityPoolJsonInfo> = new Map();
@@ -1011,7 +1011,7 @@ export default class Liquidity extends ModuleBase {
     if (!poolInfo) throw new Error("pool not found");
     const poolKeys = jsonInfo2PoolKeys(poolInfo);
 
-    const clmmPoolKeys = this.scope.ammV3.pools.sdkParsedDataMap.get(clmmPoolId.toString())?.state;
+    const clmmPoolKeys = this.scope.clmm.pools.sdkParsedDataMap.get(clmmPoolId.toString())?.state;
     if (!clmmPoolKeys) throw new Error("clmm pool not found");
 
     const { instructions, instructionTypes } = computeBudgetConfig
@@ -1086,7 +1086,7 @@ export default class Liquidity extends ModuleBase {
     const [tokenAccountA, tokenAccountB] = poolKeys.baseMint.equals(clmmPoolKeys.mintA.mint)
       ? [baseTokenAccount, quoteTokenAccount]
       : [quoteTokenAccount, baseTokenAccount];
-    const createPositionIns = await AmmV3Instrument.openPositionInstructions({
+    const createPositionIns = await ClmmInstrument.openPositionInstructions({
       poolInfo: clmmPoolKeys,
       ownerInfo: {
         feePayer: payer ?? this.scope.ownerPubKey,

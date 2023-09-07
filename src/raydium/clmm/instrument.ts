@@ -19,7 +19,7 @@ import {
   MEMO_PROGRAM_ID,
 } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
-import { MintInfo, ReturnTypeMakeInstructions, AmmV3PoolInfo, AmmV3PoolPersonalPosition } from "./type";
+import { MintInfo, ReturnTypeMakeInstructions, ClmmPoolInfo, ClmmPoolPersonalPosition } from "./type";
 import { ObservationInfoLayout } from "./layout";
 import {
   getPdaPoolId,
@@ -36,7 +36,7 @@ import { TickUtils } from "./utils/tick";
 import { PoolUtils } from "./utils/pool";
 import { generatePubKey } from "../account/util";
 
-const logger = createLogger("Raydium_AmmV3");
+const logger = createLogger("Raydium_Clmm");
 
 const anchorDataBuf = {
   createPool: [233, 146, 209, 142, 207, 104, 64, 188],
@@ -62,7 +62,7 @@ interface CreatePoolInstruction {
   startTime: BN;
 }
 
-export class AmmV3Instrument {
+export class ClmmInstrument {
   static createPoolInstruction(
     programId: PublicKey,
     poolId: PublicKey,
@@ -275,7 +275,7 @@ export class AmmV3Instrument {
     withMetadata,
     getEphemeralSigners,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
 
     ownerInfo: {
       feePayer: PublicKey;
@@ -381,7 +381,7 @@ export class AmmV3Instrument {
     withMetadata,
     getEphemeralSigners,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
 
     ownerInfo: {
       feePayer: PublicKey;
@@ -605,7 +605,7 @@ export class AmmV3Instrument {
     withMetadata,
     getEphemeralSigners,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccountA: PublicKey;
@@ -742,8 +742,8 @@ export class AmmV3Instrument {
     ownerInfo,
     ownerPosition,
   }: {
-    poolInfo: AmmV3PoolInfo;
-    ownerPosition: AmmV3PoolPersonalPosition;
+    poolInfo: ClmmPoolInfo;
+    ownerPosition: ClmmPoolPersonalPosition;
     ownerInfo: {
       wallet: PublicKey;
     };
@@ -861,8 +861,8 @@ export class AmmV3Instrument {
     amountMaxA,
     amountMaxB,
   }: {
-    poolInfo: AmmV3PoolInfo;
-    ownerPosition: AmmV3PoolPersonalPosition;
+    poolInfo: ClmmPoolInfo;
+    ownerPosition: ClmmPoolPersonalPosition;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -954,8 +954,8 @@ export class AmmV3Instrument {
     baseAmount,
     otherAmountMax,
   }: {
-    poolInfo: AmmV3PoolInfo;
-    ownerPosition: AmmV3PoolPersonalPosition;
+    poolInfo: ClmmPoolInfo;
+    ownerPosition: ClmmPoolPersonalPosition;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -1213,8 +1213,8 @@ export class AmmV3Instrument {
     amountMinB,
     programId,
   }: {
-    poolInfo: AmmV3PoolInfo;
-    ownerPosition: AmmV3PoolPersonalPosition;
+    poolInfo: ClmmPoolInfo;
+    ownerPosition: ClmmPoolPersonalPosition;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -1400,7 +1400,7 @@ export class AmmV3Instrument {
     sqrtPriceLimitX64,
     remainingAccounts,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -1508,7 +1508,7 @@ export class AmmV3Instrument {
     ownerInfo,
     rewardInfo,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccount: PublicKey;
@@ -1606,7 +1606,7 @@ export class AmmV3Instrument {
     ownerInfo,
     rewardInfo,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccount: PublicKey;
@@ -1706,7 +1706,7 @@ export class AmmV3Instrument {
     ownerInfo,
     rewardMint,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccount: PublicKey;
@@ -1766,7 +1766,7 @@ export class AmmV3Instrument {
     sqrtPriceLimitX64,
     remainingAccounts,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
 
     ownerInfo: {
       wallet: PublicKey;

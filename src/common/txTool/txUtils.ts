@@ -18,6 +18,8 @@ import { ComputeBudgetConfig } from "../../raydium/type";
 
 const logger = createLogger("Raydium_txUtil");
 
+export const MAX_BASE64_SIZE = 1644;
+
 export function addComputeBudget(config: ComputeBudgetConfig): {
   instructions: TransactionInstruction[];
   instructionTypes: string[];
@@ -60,8 +62,7 @@ export function forecastTransactionSize(instructions: TransactionInstruction[], 
   transaction.add(...instructions);
 
   try {
-    transaction.serialize({ verifySignatures: false });
-    return true;
+    return Buffer.from(transaction.serialize({ verifySignatures: false })).toString("base64").length < MAX_BASE64_SIZE;
   } catch (error) {
     return false;
   }
@@ -254,8 +255,7 @@ export function checkV0TxSize({
 
   const messageV0 = transactionMessage.compileToV0Message(Object.values(lookupTableAddressAccount ?? {}));
   try {
-    messageV0.serialize();
-    return true;
+    return Buffer.from(messageV0.serialize()).toString("base64").length < MAX_BASE64_SIZE;
   } catch (error) {
     return false;
   }

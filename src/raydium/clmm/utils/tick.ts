@@ -7,7 +7,7 @@ import { TickArrayBitmapExtension } from "../type";
 import { TickQuery } from "./tickQuery";
 import { MIN_TICK, MAX_TICK } from "./constants";
 import { SqrtPriceMath, TickMath } from "./math";
-import { AmmV3PoolInfo } from "../type";
+import { ClmmPoolInfo } from "../type";
 import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
 
 export const TICK_ARRAY_SIZE = 60;
@@ -336,7 +336,7 @@ export class TickUtils {
     tick,
     baseIn,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     tick: number;
     baseIn: boolean;
   }): ReturnTypeGetTickPrice {
@@ -357,7 +357,7 @@ export class TickUtils {
     price,
     baseIn,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     price: Decimal;
     baseIn: boolean;
   }): ReturnTypeGetPriceAndTick {

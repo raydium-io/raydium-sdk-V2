@@ -2,10 +2,10 @@ import { PublicKey, Connection, EpochInfo } from "@solana/web3.js";
 import BN from "bn.js";
 
 import {
-  AmmV3PoolInfo,
-  AmmV3PoolRewardInfo,
-  AmmV3PoolRewardLayoutInfo,
-  ApiAmmV3PoolInfo,
+  ClmmPoolInfo,
+  ClmmPoolRewardInfo,
+  ClmmPoolRewardLayoutInfo,
+  ApiClmmPoolInfo,
   ReturnTypeGetLiquidityAmountOut,
   TickArrayBitmapExtension,
   ReturnTypeFetchExBitmaps,
@@ -46,7 +46,7 @@ import Decimal from "decimal.js";
 
 export class PoolUtils {
   public static getOutputAmountAndRemainAccounts(
-    poolInfo: AmmV3PoolInfo,
+    poolInfo: ClmmPoolInfo,
     tickArrayCache: { [key: string]: TickArray },
     inputTokenMint: PublicKey,
     inputAmount: BN,
@@ -111,7 +111,7 @@ export class PoolUtils {
   }
 
   public static getInputAmountAndRemainAccounts(
-    poolInfo: AmmV3PoolInfo,
+    poolInfo: ClmmPoolInfo,
     tickArrayCache: { [key: string]: TickArray },
     outputTokenMint: PublicKey,
     outputAmount: BN,
@@ -164,7 +164,7 @@ export class PoolUtils {
   }
 
   public static getFirstInitializedTickArray(
-    poolInfo: AmmV3PoolInfo,
+    poolInfo: ClmmPoolInfo,
     zeroForOne: boolean,
   ):
     | { isExist: true; startIndex: number; nextAccountMeta: PublicKey }
@@ -208,7 +208,7 @@ export class PoolUtils {
   }
 
   public static preInitializedTickArrayStartIndex(
-    poolInfo: AmmV3PoolInfo,
+    poolInfo: ClmmPoolInfo,
     zeroForOne: boolean,
   ): { isExist: boolean; nextStartIndex: number } {
     const currentOffset =
@@ -241,7 +241,7 @@ export class PoolUtils {
           tickArrayBitmap: BN[];
           exBitmapInfo: TickArrayBitmapExtension;
         }
-      | AmmV3PoolInfo,
+      | ClmmPoolInfo,
     lastTickArrayStartIndex: number,
     zeroForOne: boolean,
   ): { isExist: boolean; nextStartIndex: number } {
@@ -306,19 +306,19 @@ export class PoolUtils {
     rewardInfos,
   }: {
     connection: Connection;
-    apiPoolInfo: ApiAmmV3PoolInfo;
+    apiPoolInfo: ApiClmmPoolInfo;
     chainTime: number;
     poolLiquidity: BN;
-    rewardInfos: AmmV3PoolRewardLayoutInfo[];
-  }): Promise<AmmV3PoolRewardInfo[]> {
-    const nRewardInfo: AmmV3PoolRewardInfo[] = [];
+    rewardInfos: ClmmPoolRewardLayoutInfo[];
+  }): Promise<ClmmPoolRewardInfo[]> {
+    const nRewardInfo: ClmmPoolRewardInfo[] = [];
     for (let i = 0; i < rewardInfos.length; i++) {
       const _itemReward = rewardInfos[i];
       const apiRewardProgram =
         apiPoolInfo.rewardInfos[i]?.programId ?? (await connection.getAccountInfo(_itemReward.tokenMint))?.owner;
       if (apiRewardProgram === undefined) throw Error("get new reward mint info error");
 
-      const itemReward: AmmV3PoolRewardInfo = {
+      const itemReward: ClmmPoolRewardInfo = {
         ..._itemReward,
         perSecond: MathUtil.x64ToDecimal(_itemReward.emissionsPerSecondX64),
         remainingRewards: undefined,
@@ -419,7 +419,7 @@ export class PoolUtils {
     updateOwnerRewardAndFee = true,
   }: {
     connection: Connection;
-    poolKeys: ApiAmmV3PoolInfo[];
+    poolKeys: ApiClmmPoolInfo[];
     ownerInfo?: { wallet: PublicKey; tokenAccounts: TokenAccountRaw[] };
     chainTime: number;
     batchRequest?: boolean;
@@ -452,7 +452,7 @@ export class PoolUtils {
 
     const poolsInfo: ReturnTypeFetchMultiplePoolInfos = {};
 
-    const updateRewardInfos: AmmV3PoolRewardInfo[] = [];
+    const updateRewardInfos: ClmmPoolRewardInfo[] = [];
 
     for (let index = 0; index < poolKeys.length; index++) {
       const apiPoolInfo = poolKeys[index];
@@ -462,7 +462,6 @@ export class PoolUtils {
       if (accountInfo === null) continue;
 
       const layoutAccountInfo = PoolInfoLayout.decode(accountInfo.data);
-
       poolsInfo[apiPoolInfo.id] = {
         state: {
           id: new PublicKey(apiPoolInfo.id),
@@ -697,7 +696,7 @@ export class PoolUtils {
     batchRequest,
   }: {
     connection: Connection;
-    poolKeys: AmmV3PoolInfo[];
+    poolKeys: ClmmPoolInfo[];
     batchRequest?: boolean;
   }): Promise<ReturnTypeFetchMultiplePoolTickArrays> {
     const tickArraysToPoolId: { [key: string]: PublicKey } = {};
@@ -774,7 +773,7 @@ export class PoolUtils {
       const allPositionKey: PublicKey[] = [];
       for (const itemMint of allMint) {
         for (const itemProgramId of programIds) {
-          allPositionKey.push(await (await getPdaPersonalPositionAddress(itemProgramId, itemMint)).publicKey);
+          allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
         }
       }
       const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });
@@ -909,7 +908,7 @@ export class PoolUtils {
     slippage,
     priceLimit = new Decimal(0),
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     tickArrayCache: { [key: string]: TickArray };
     baseMint: PublicKey;
 
@@ -1012,7 +1011,7 @@ export class PoolUtils {
     slippage,
     epochInfo,
   }: {
-    poolInfo: AmmV3PoolInfo;
+    poolInfo: ClmmPoolInfo;
     tickArrayCache: { [key: string]: TickArray };
     token2022Infos: ReturnTypeFetchMultipleMintInfos;
     amountIn: TokenAmount;
@@ -1389,7 +1388,7 @@ export function getLiquidityFromAmounts({
   token2022Infos,
   epochInfo,
 }: {
-  poolInfo: AmmV3PoolInfo;
+  poolInfo: ClmmPoolInfo;
   tickLower: number;
   tickUpper: number;
   amountA: BN;

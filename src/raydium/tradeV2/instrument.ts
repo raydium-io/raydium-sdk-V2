@@ -2,7 +2,7 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { AmmV3PoolInfo, AmmV3Instrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../ammV3";
+import { ClmmPoolInfo, ClmmInstrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../clmm";
 import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "../../common";
 import { LiquidityPoolKeysV4 } from "../liquidity";
 import { struct, u64, u8 } from "../../marshmallow";
@@ -45,7 +45,7 @@ export function route1Instruction(
   ];
 
   if (poolKeyA.version === 6) {
-    const poolKey = poolKeyA as AmmV3PoolInfo;
+    const poolKey = poolKeyA as ClmmPoolInfo;
     keys.push(
       ...[
         { pubkey: poolKey.ammConfig.id, isSigner: false, isWritable: false },
@@ -159,7 +159,7 @@ export function route2Instruction(
   ];
 
   if (poolKeyB.version === 6) {
-    const poolKey = poolKeyB as AmmV3PoolInfo;
+    const poolKey = poolKeyB as ClmmPoolInfo;
     keys.push(
       ...[
         { pubkey: poolKey.ammConfig.id, isSigner: false, isWritable: false },
@@ -300,7 +300,7 @@ function makeInnerInsKey(
       { pubkey: poolKey.id, isSigner: false, isWritable: true },
     ];
   } else if (itemPool.version === 6) {
-    const pool = itemPool as AmmV3PoolInfo;
+    const pool = itemPool as ClmmPoolInfo;
     const baseIn = pool.mintA.mint.toString() === inMint;
     return [
       { pubkey: new PublicKey(String(itemPool.programId)), isSigner: false, isWritable: false },
@@ -399,12 +399,12 @@ export async function makeSwapInstruction({
 }: MakeSwapInstructionParam): Promise<ReturnTypeMakeSwapInstruction> {
   if (swapInfo.routeType === "amm") {
     if (swapInfo.poolKey[0].version === 6) {
-      const _poolKey = swapInfo.poolKey[0] as AmmV3PoolInfo;
+      const _poolKey = swapInfo.poolKey[0] as ClmmPoolInfo;
       const sqrtPriceLimitX64 = inputMint.equals(_poolKey.mintA.mint)
         ? MIN_SQRT_PRICE_X64.add(ONE)
         : MAX_SQRT_PRICE_X64.sub(ONE);
 
-      return await AmmV3Instrument.makeSwapBaseInInstructions({
+      return await ClmmInstrument.makeSwapBaseInInstructions({
         poolInfo: _poolKey,
         ownerInfo: {
           wallet: ownerInfo.wallet,

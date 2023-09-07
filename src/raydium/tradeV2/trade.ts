@@ -2,7 +2,7 @@ import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { createTransferInstruction, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 
-import { AmmV3PoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../ammV3";
+import { ClmmPoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../clmm";
 import {
   forecastTransactionSize,
   jsonInfo2PoolKeys,
@@ -61,14 +61,14 @@ export default class TradeV2 extends ModuleBase {
   }): ReturnTypeGetAllRoute {
     const [input, output] = [solToWSol(inputMint), solToWSol(outputMint)];
     const needSimulate: { [poolKey: string]: LiquidityPoolJsonInfo } = {};
-    const needTickArray: { [poolKey: string]: AmmV3PoolInfo } = {};
+    const needTickArray: { [poolKey: string]: ClmmPoolInfo } = {};
     const needCheckToken: Set<string> = new Set();
 
     const directPath: PoolType[] = [];
 
     const routePathDict: RoutePathType = {}; // {[route mint: string]: {in: [] , out: []}}
 
-    for (const pool of this.scope.ammV3.pools.sdkParsedData) {
+    for (const pool of this.scope.clmm.pools.sdkParsedData) {
       const itemAmmPool = pool.state;
       if (
         (itemAmmPool.mintA.mint.equals(input) && itemAmmPool.mintB.mint.equals(output)) ||
@@ -264,7 +264,7 @@ export default class TradeV2 extends ModuleBase {
       for (const infoIn of info.in) {
         for (const infoOut of info.out) {
           if (infoIn.version === 6 && needTickArray[infoIn.id.toString()] === undefined) {
-            needTickArray[infoIn.id.toString()] = infoIn as AmmV3PoolInfo;
+            needTickArray[infoIn.id.toString()] = infoIn as ClmmPoolInfo;
 
             if (infoIn.mintA.programId.equals(TOKEN_2022_PROGRAM_ID)) needCheckToken.add(infoIn.mintA.mint.toString());
             if (infoIn.mintB.programId.equals(TOKEN_2022_PROGRAM_ID)) needCheckToken.add(infoIn.mintB.mint.toString());
@@ -273,7 +273,7 @@ export default class TradeV2 extends ModuleBase {
           }
 
           if (infoOut.version === 6 && needTickArray[infoOut.id.toString()] === undefined) {
-            needTickArray[infoOut.id.toString()] = infoOut as AmmV3PoolInfo;
+            needTickArray[infoOut.id.toString()] = infoOut as ClmmPoolInfo;
 
             if (infoOut.mintA.programId.equals(TOKEN_2022_PROGRAM_ID))
               needCheckToken.add(infoOut.mintA.mint.toString());
@@ -475,7 +475,7 @@ export default class TradeV2 extends ModuleBase {
             fee,
             remainingAccounts,
           } = await PoolUtils.computeAmountOutFormat({
-            poolInfo: itemPool as AmmV3PoolInfo,
+            poolInfo: itemPool as ClmmPoolInfo,
             tickArrayCache: tickCache[itemPool.id.toString()],
             amountIn,
             tokenOut: outputToken,
@@ -494,7 +494,7 @@ export default class TradeV2 extends ModuleBase {
             remainingAccounts: [remainingAccounts],
             routeType: "amm",
             poolKey: [itemPool],
-            poolReady: (itemPool as AmmV3PoolInfo).startTime < chainTime,
+            poolReady: (itemPool as ClmmPoolInfo).startTime < chainTime,
             poolType: "CLMM",
             feeConfig: _inFeeConfig,
             expirationTime: minExpirationTime(realAmountIn.expirationTime, expirationTime),
@@ -573,11 +573,11 @@ export default class TradeV2 extends ModuleBase {
 
             const infoAPoolOpen =
               iFromPool.version === 6
-                ? (iFromPool as AmmV3PoolInfo).startTime < chainTime
+                ? (iFromPool as ClmmPoolInfo).startTime < chainTime
                 : simulateCache[iFromPool.id as string].startTime.toNumber() < chainTime;
             const infoBPoolOpen =
               iOutPool.version === 6
-                ? (iOutPool as AmmV3PoolInfo).startTime < chainTime
+                ? (iOutPool as ClmmPoolInfo).startTime < chainTime
                 : simulateCache[iOutPool.id as string].startTime.toNumber() < chainTime;
 
             const poolTypeA = iFromPool.version === 6 ? "CLMM" : iFromPool.version === 5 ? "STABLE" : undefined;
@@ -673,7 +673,7 @@ export default class TradeV2 extends ModuleBase {
         expirationTime: _expirationTime,
         realAmountIn: _realAmountIn,
       } = await PoolUtils.computeAmountOutFormat({
-        poolInfo: fromPool as AmmV3PoolInfo,
+        poolInfo: fromPool as ClmmPoolInfo,
         tickArrayCache: tickCache[fromPool.id.toString()],
         amountIn,
         tokenOut: middleToken,
@@ -726,7 +726,7 @@ export default class TradeV2 extends ModuleBase {
         expirationTime: _expirationTime,
         realAmountIn: _realAmountIn,
       } = await PoolUtils.computeAmountOutFormat({
-        poolInfo: toPool as AmmV3PoolInfo,
+        poolInfo: toPool as ClmmPoolInfo,
         tickArrayCache: tickCache[toPool.id.toString()],
         amountIn: new TokenAmount(
           (minMiddleAmountOut.amount as TokenAmount).token,

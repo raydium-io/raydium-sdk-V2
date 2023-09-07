@@ -1,11 +1,11 @@
 import { PublicKey, Keypair, Signer, TransactionInstruction, Transaction } from "@solana/web3.js";
 import BN from "bn.js";
 import { TokenAmount, Price, Percent, Token } from "../../module";
-import { AmmV3PoolInfo } from "../ammV3";
+import { ClmmPoolInfo } from "../clmm";
 import { LiquidityPoolJsonInfo } from "../liquidity";
 import { TransferAmountFee } from "../type";
 
-export type PoolType = AmmV3PoolInfo | LiquidityPoolJsonInfo;
+export type PoolType = ClmmPoolInfo | LiquidityPoolJsonInfo;
 
 export interface ComputeAmountOutAmmLayout {
   amountIn: TransferAmountFee;
@@ -117,6 +117,6 @@ export interface ReturnTypeGetAllRoute {
   addLiquidityPools: LiquidityPoolJsonInfo[];
   routePathDict: RoutePathType;
   needSimulate: LiquidityPoolJsonInfo[];
-  needTickArray: AmmV3PoolInfo[];
+  needTickArray: ClmmPoolInfo[];
   needCheckToken: string[];
 }

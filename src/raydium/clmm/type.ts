@@ -5,21 +5,21 @@ import { Fraction } from "../../module/fraction";
 import { TokenInfo } from "../token/type";
 import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
-import { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo, ApiV3PoolInfoConcentratedItem } from "../../api/type";
-import { GetTransferAmountFee, TransferAmountFee } from "../../raydium/type";
+import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem } from "../../api/type";
+import { GetTransferAmountFee, TransferAmountFee } from "../type";
 
-export { ApiAmmV3PoolInfo, ApiAmmV3ConfigInfo };
+export { ApiClmmPoolInfo, ApiClmmConfigInfo };
 
-export interface ApiAmmV3Point {
+export interface ApiClmmPoint {
   price: string;
   liquidity: string;
 }
 
-export interface ApiAmmV3ConfigInfos {
-  [configId: string]: ApiAmmV3ConfigInfo;
+export interface ApiClmmConfigInfos {
+  [configId: string]: ApiClmmConfigInfo;
 }
 
-export interface AmmV3ConfigInfo {
+export interface ClmmConfigInfo {
   id: PublicKey;
   index: number;
   protocolFeeRate: number;
@@ -30,7 +30,7 @@ export interface AmmV3ConfigInfo {
   description: string;
 }
 
-export interface AmmV3PoolRewardInfo {
+export interface ClmmPoolRewardInfo {
   rewardState: number;
   openTime: BN;
   endTime: BN;
@@ -46,7 +46,7 @@ export interface AmmV3PoolRewardInfo {
   remainingRewards: undefined | BN;
   tokenProgramId: PublicKey;
 }
-export interface AmmV3PoolInfo {
+export interface ClmmPoolInfo {
   id: PublicKey;
   mintA: {
     programId: PublicKey;
@@ -61,7 +61,7 @@ export interface AmmV3PoolInfo {
     decimals: number;
   };
 
-  ammConfig: AmmV3ConfigInfo;
+  ammConfig: ClmmConfigInfo;
   observationId: PublicKey;
 
   creator: PublicKey;
@@ -85,7 +85,7 @@ export interface AmmV3PoolInfo {
   swapOutAmountTokenA: BN;
   tickArrayBitmap: BN[];
 
-  rewardInfos: AmmV3PoolRewardInfo[];
+  rewardInfos: ClmmPoolRewardInfo[];
 
   day: {
     volume: number;
@@ -148,7 +148,7 @@ export interface ReturnTypeMakeHarvestTransaction {
   address: { [key: string]: PublicKey };
 }
 
-export interface AmmV3PoolPersonalPosition {
+export interface ClmmPoolPersonalPosition {
   poolId: PublicKey;
   nftMint: PublicKey;
 
@@ -175,8 +175,8 @@ export interface AmmV3PoolPersonalPosition {
 }
 
 export type SDKParsedConcentratedInfo = {
-  state: AmmV3PoolInfo;
-  positionAccount?: AmmV3PoolPersonalPosition[];
+  state: ClmmPoolInfo;
+  positionAccount?: ClmmPoolPersonalPosition[];
 };
 
 export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
@@ -190,7 +190,7 @@ export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
   idString: string;
   decimals: number;
 
-  ammConfig: AmmV3PoolInfo["ammConfig"];
+  ammConfig: ClmmPoolInfo["ammConfig"];
   currentPrice: Fraction;
   rewardInfos: {
     rewardToken: TokenInfo | undefined;
@@ -251,7 +251,7 @@ export interface ReturnTypeMakeTransaction {
 export interface ReturnTypeMakeCreatePoolTransaction {
   signers: (Signer | Keypair)[];
   transaction: Transaction;
-  mockPoolInfo: AmmV3PoolInfo;
+  mockPoolInfo: ClmmPoolInfo;
 }
 export interface ReturnTypeMakeInstructions {
   signers: (Signer | Keypair)[];
@@ -297,8 +297,8 @@ export interface ReturnTypeComputeAmountOut {
 }
 export interface ReturnTypeFetchMultiplePoolInfos {
   [id: string]: {
-    state: AmmV3PoolInfo;
-    positionAccount?: AmmV3PoolPersonalPosition[] | undefined;
+    state: ClmmPoolInfo;
+    positionAccount?: ClmmPoolPersonalPosition[] | undefined;
   };
 }
 export interface ReturnTypeFetchMultiplePoolTickArrays {
@@ -310,14 +310,14 @@ export interface CreateConcentratedPool {
   owner?: PublicKey;
   mint1: MintInfo;
   mint2: MintInfo;
-  ammConfig: AmmV3ConfigInfo;
+  ammConfig: ClmmConfigInfo;
   initialPrice: Decimal;
   startTime: BN;
 }
 
 export interface UserPositionAccount {
   /** transform to SDK function, should not used directlly in UI */
-  sdkParsed: AmmV3PoolPersonalPosition;
+  sdkParsed: ClmmPoolPersonalPosition;
   rewardInfos: {
     pendingReward: TokenAmount | undefined;
     apr24h: Percent;
@@ -349,7 +349,7 @@ export interface UserPositionAccount {
 
 export interface IncreasePositionFromLiquidity {
   poolId: PublicKey;
-  ownerPosition: AmmV3PoolPersonalPosition;
+  ownerPosition: ClmmPoolPersonalPosition;
   ownerInfo: {
     useSOLBalance?: boolean;
   };
@@ -364,7 +364,7 @@ export interface IncreasePositionFromLiquidity {
 
 export interface IncreasePositionFromBase {
   poolId: PublicKey;
-  ownerPosition: AmmV3PoolPersonalPosition;
+  ownerPosition: ClmmPoolPersonalPosition;
   ownerInfo: {
     useSOLBalance?: boolean;
   };
@@ -377,7 +377,7 @@ export interface IncreasePositionFromBase {
 
 export interface DecreaseLiquidity {
   poolId: PublicKey;
-  ownerPosition: AmmV3PoolPersonalPosition;
+  ownerPosition: ClmmPoolPersonalPosition;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint
     closePosition?: boolean;
@@ -391,7 +391,7 @@ export interface DecreaseLiquidity {
   checkCreateATAOwner?: boolean;
 }
 
-export interface AmmV3PoolRewardLayoutInfo {
+export interface ClmmPoolRewardLayoutInfo {
   rewardState: number;
   openTime: BN;
   endTime: BN;
@@ -474,7 +474,7 @@ export interface SwapInParams {
 
 export interface GetAmountParams {
   poolId: string | PublicKey;
-  ownerPosition: AmmV3PoolPersonalPosition;
+  ownerPosition: ClmmPoolPersonalPosition;
   liquidity: BN;
   slippage: number;
   add: boolean;

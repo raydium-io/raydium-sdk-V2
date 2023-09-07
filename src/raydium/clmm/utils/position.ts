@@ -1,6 +1,6 @@
 import BN from "bn.js";
 
-import { AmmV3PoolInfo, AmmV3PoolPersonalPosition, AmmV3PoolRewardInfo, SDKParsedConcentratedInfo } from "../type";
+import { ClmmPoolInfo, ClmmPoolPersonalPosition, ClmmPoolRewardInfo, SDKParsedConcentratedInfo } from "../type";
 import { decimalToFraction } from "../../../common/bignumber";
 import { gt, lt } from "../../../common/fractionUtil";
 import { Q64 } from "./constants";
@@ -9,7 +9,7 @@ import { Tick } from "./tick";
 
 export class PositionUtils {
   static getfeeGrowthInside(
-    poolState: AmmV3PoolInfo,
+    poolState: ClmmPoolInfo,
     tickLowerState: Tick,
     tickUpperState: Tick,
   ): { feeGrowthInsideX64A: BN; feeGrowthInsideBX64: BN } {
@@ -45,8 +45,8 @@ export class PositionUtils {
   }
 
   static GetPositionFees(
-    ammPool: AmmV3PoolInfo,
-    positionState: AmmV3PoolPersonalPosition,
+    ammPool: ClmmPoolInfo,
+    positionState: ClmmPoolPersonalPosition,
     tickLowerState: Tick,
     tickUpperState: Tick,
   ): { tokenFeeAmountA: BN; tokenFeeAmountB: BN } {
@@ -74,8 +74,8 @@ export class PositionUtils {
   }
 
   static GetPositionRewards(
-    ammPool: AmmV3PoolInfo,
-    positionState: AmmV3PoolPersonalPosition,
+    ammPool: ClmmPoolInfo,
+    positionState: ClmmPoolPersonalPosition,
     tickLowerState: Tick,
     tickUpperState: Tick,
   ): BN[] {
@@ -103,7 +103,7 @@ export class PositionUtils {
     tickCurrentIndex: number,
     tickLowerState: Tick,
     tickUpperState: Tick,
-    rewardInfos: AmmV3PoolRewardInfo[],
+    rewardInfos: ClmmPoolRewardInfo[],
   ): BN[] {
     const rewardGrowthsInside: BN[] = [];
     for (let i = 0; i < rewardInfos.length; i++) {
@@ -138,7 +138,7 @@ export class PositionUtils {
 
   static checkIsInRange(
     sdkConcentratedInfo: SDKParsedConcentratedInfo,
-    userPositionAccount: AmmV3PoolPersonalPosition,
+    userPositionAccount: ClmmPoolPersonalPosition,
   ): boolean {
     const currentPrice = decimalToFraction(sdkConcentratedInfo.state.currentPrice);
     const priceLower = decimalToFraction(userPositionAccount.priceLower);

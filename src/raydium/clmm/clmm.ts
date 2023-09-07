@@ -20,15 +20,15 @@ import { PoolUtils } from "./utils/pool";
 import { PositionUtils } from "./utils/position";
 import {
   CreateConcentratedPool,
-  AmmV3PoolInfo,
-  ApiAmmV3PoolInfo,
+  ClmmPoolInfo,
+  ApiClmmPoolInfo,
   UserPositionAccount,
   HydratedConcentratedInfo,
   SDKParsedConcentratedInfo,
   IncreasePositionFromLiquidity,
   IncreasePositionFromBase,
   DecreaseLiquidity,
-  AmmV3PoolPersonalPosition,
+  ClmmPoolPersonalPosition,
   OpenPositionFromBase,
   OpenPositionFromLiquidity,
   ReturnTypeGetAmountsFromLiquidity,
@@ -43,7 +43,7 @@ import {
   HarvestAllRewardsParams,
   ReturnTypeComputeAmountOutBaseOut,
 } from "./type";
-import { AmmV3Instrument } from "./instrument";
+import { ClmmInstrument } from "./instrument";
 import { LoadParams, MakeTransaction, MakeMultiTransaction, ReturnTypeFetchMultipleMintInfos } from "../type";
 import { MathUtil } from "./utils/math";
 import { TickArray } from "./utils/tick";
@@ -52,60 +52,60 @@ import { OperationLayout } from "./layout";
 import BN from "bn.js";
 import { EXTENSION_TICKARRAY_BITMAP_SIZE } from "./utils/tickarrayBitmap";
 
-export class AmmV3 extends ModuleBase {
-  private _ammV3Pools: ApiAmmV3PoolInfo[] = [];
-  private _ammV3PoolMap: Map<string, ApiAmmV3PoolInfo> = new Map();
-  private _ammV3SdkParsedPools: SDKParsedConcentratedInfo[] = [];
-  private _ammV3SdkParsedPoolMap: Map<string, SDKParsedConcentratedInfo> = new Map();
-  private _hydratedAmmV3Pools: HydratedConcentratedInfo[] = [];
-  private _hydratedAmmV3PoolsMap: Map<string, HydratedConcentratedInfo> = new Map();
+export class Clmm extends ModuleBase {
+  private _clmmPools: ApiClmmPoolInfo[] = [];
+  private _clmmPoolMap: Map<string, ApiClmmPoolInfo> = new Map();
+  private _clmmSdkParsedPools: SDKParsedConcentratedInfo[] = [];
+  private _clmmSdkParsedPoolMap: Map<string, SDKParsedConcentratedInfo> = new Map();
+  private _hydratedClmmPools: HydratedConcentratedInfo[] = [];
+  private _hydratedClmmPoolsMap: Map<string, HydratedConcentratedInfo> = new Map();
   constructor(params: ModuleBaseProps) {
     super(params);
   }
 
   public async load(params?: LoadParams): Promise<void> {
     await this.scope.token.load(params);
-    await this.scope.fetchAmmV3Pools();
-    this._ammV3Pools = [...(this.scope.apiData.ammV3Pools?.data || [])];
-    this._ammV3Pools.forEach((pool) => {
-      this._ammV3PoolMap.set(pool.id, pool);
+    await this.scope.fetchClmmPools();
+    this._clmmPools = [...(this.scope.apiData.clmmPools?.data || [])];
+    this._clmmPools.forEach((pool) => {
+      this._clmmPoolMap.set(pool.id, pool);
     });
 
     const chainTimeOffset = await this.scope.chainTimeOffset();
 
     const sdkParsed = await PoolUtils.fetchMultiplePoolInfos({
-      poolKeys: this._ammV3Pools,
+      poolKeys: this._clmmPools,
       connection: this.scope.connection,
       ownerInfo: this.scope.owner
         ? { tokenAccounts: this.scope.account.tokenAccountRawInfos, wallet: this.scope.ownerPubKey }
         : undefined,
       chainTime: (Date.now() + chainTimeOffset) / 1000,
     });
-    this._ammV3SdkParsedPools = Object.values(sdkParsed);
-    this._ammV3SdkParsedPoolMap = new Map(Object.entries(sdkParsed));
+    this._clmmSdkParsedPools = Object.values(sdkParsed);
+    this._clmmSdkParsedPoolMap = new Map(Object.entries(sdkParsed));
     this.hydratePoolsInfo();
   }
 
   get pools(): {
-    data: ApiAmmV3PoolInfo[];
-    dataMap: Map<string, ApiAmmV3PoolInfo>;
+    data: ApiClmmPoolInfo[];
+    dataMap: Map<string, ApiClmmPoolInfo>;
     sdkParsedData: SDKParsedConcentratedInfo[];
     sdkParsedDataMap: Map<string, SDKParsedConcentratedInfo>;
     hydratedData: HydratedConcentratedInfo[];
     hydratedDataData: Map<string, HydratedConcentratedInfo>;
   } {
     return {
-      data: this._ammV3Pools,
-      dataMap: this._ammV3PoolMap,
-      sdkParsedData: this._ammV3SdkParsedPools,
-      sdkParsedDataMap: this._ammV3SdkParsedPoolMap,
-      hydratedData: this._hydratedAmmV3Pools,
-      hydratedDataData: this._hydratedAmmV3PoolsMap,
+      data: this._clmmPools,
+      dataMap: this._clmmPoolMap,
+      sdkParsedData: this._clmmSdkParsedPools,
+      sdkParsedDataMap: this._clmmSdkParsedPoolMap,
+      hydratedData: this._hydratedClmmPools,
+      hydratedDataData: this._hydratedClmmPoolsMap,
     };
   }
 
   public hydratePoolsInfo(): HydratedConcentratedInfo[] {
-    this._hydratedAmmV3Pools = this._ammV3SdkParsedPools.map((pool) => {
+    this._hydratedClmmPools = this._clmmSdkParsedPools.map((pool) => {
       const rewardLength = pool.state.rewardInfos.length;
       const [base, quote] = [
         this.scope.token.tokenMap.get(pool.state.mintA.mint.toBase58()) || toTokenInfo(pool.state.mintA),
@@ -268,8 +268,8 @@ export class AmmV3 extends ModuleBase {
         }),
       };
     });
-    this._hydratedAmmV3PoolsMap = new Map(this._hydratedAmmV3Pools.map((pool) => [pool.idString, pool]));
-    return this._hydratedAmmV3Pools;
+    this._hydratedClmmPoolsMap = new Map(this._hydratedClmmPools.map((pool) => [pool.idString, pool]));
+    return this._hydratedClmmPools;
   }
 
   public getAmountsFromLiquidity({
@@ -279,7 +279,7 @@ export class AmmV3 extends ModuleBase {
     slippage,
     add,
   }: GetAmountParams): ReturnTypeGetAmountsFromLiquidity {
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickUpper);
@@ -296,28 +296,28 @@ export class AmmV3 extends ModuleBase {
   }
 
   public async fetchPoolAccountPosition(updateOwnerRewardAndFee?: boolean): Promise<HydratedConcentratedInfo[]> {
-    this._ammV3SdkParsedPools = this._ammV3SdkParsedPools.map((pool) => {
+    this._clmmSdkParsedPools = this._clmmSdkParsedPools.map((pool) => {
       delete pool.positionAccount;
-      this._ammV3SdkParsedPoolMap.set(pool.state.id.toBase58(), pool);
+      this._clmmSdkParsedPoolMap.set(pool.state.id.toBase58(), pool);
       return pool;
     });
     if (!this.scope.owner) {
       this.hydratePoolsInfo();
-      return this._hydratedAmmV3Pools;
+      return this._hydratedClmmPools;
     }
     await this.scope.account.fetchWalletTokenAccounts();
-    this._ammV3SdkParsedPools = await PoolUtils.fetchPoolsAccountPosition({
-      pools: this._ammV3SdkParsedPools,
+    this._clmmSdkParsedPools = await PoolUtils.fetchPoolsAccountPosition({
+      pools: this._clmmSdkParsedPools,
       connection: this.scope.connection,
       ownerInfo: { tokenAccounts: this.scope.account.tokenAccountRawInfos, wallet: this.scope.ownerPubKey },
       updateOwnerRewardAndFee,
     });
-    this._ammV3SdkParsedPoolMap = new Map(this._ammV3SdkParsedPools.map((pool) => [pool.state.id.toBase58(), pool]));
+    this._clmmSdkParsedPoolMap = new Map(this._clmmSdkParsedPools.map((pool) => [pool.state.id.toBase58(), pool]));
     this.hydratePoolsInfo();
-    return this._hydratedAmmV3Pools;
+    return this._hydratedClmmPools;
   }
 
-  public async createPool(props: CreateConcentratedPool): Promise<MakeTransaction<{ mockPoolInfo: AmmV3PoolInfo }>> {
+  public async createPool(props: CreateConcentratedPool): Promise<MakeTransaction<{ mockPoolInfo: ClmmPoolInfo }>> {
     const {
       programId,
       owner = this.scope.owner?.publicKey || PublicKey.default,
@@ -336,7 +336,7 @@ export class AmmV3 extends ModuleBase {
 
     const initialPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(initPrice, mintA.decimals, mintB.decimals);
 
-    const insInfo = await AmmV3Instrument.createPoolInstructions({
+    const insInfo = await ClmmInstrument.createPoolInstructions({
       connection: this.scope.connection,
       programId,
       owner,
@@ -348,9 +348,9 @@ export class AmmV3 extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
 
-    return txBuilder.build<{ mockPoolInfo: AmmV3PoolInfo }>({
+    return txBuilder.build<{ mockPoolInfo: ClmmPoolInfo }>({
       mockPoolInfo: {
         creator: this.scope.ownerPubKey,
         id: insInfo.address.poolId,
@@ -403,7 +403,7 @@ export class AmmV3 extends ModuleBase {
     getEphemeralSigners,
   }: OpenPositionFromBase): Promise<MakeTransaction> {
     this.scope.checkOwner();
-    const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
+    const pool = this._hydratedClmmPoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found:", poolId.toBase58());
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
@@ -455,7 +455,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const insInfo = await AmmV3Instrument.openPositionFromBaseInstructions({
+    const insInfo = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo,
       ownerInfo: {
         ...ownerInfo,
@@ -473,7 +473,7 @@ export class AmmV3 extends ModuleBase {
       getEphemeralSigners,
     });
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build({ address: insInfo.address });
   }
 
@@ -541,7 +541,7 @@ export class AmmV3 extends ModuleBase {
     if (ownerTokenAccountA === undefined || ownerTokenAccountB === undefined)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const makeOpenPositionInstructions = await AmmV3Instrument.openPositionFromLiquidityInstructions({
+    const makeOpenPositionInstructions = await ClmmInstrument.openPositionFromLiquidityInstructions({
       poolInfo: poolInfo as any, // to do
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -558,7 +558,7 @@ export class AmmV3 extends ModuleBase {
     });
 
     txBuilder.addInstruction(makeOpenPositionInstructions);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build({ address: makeOpenPositionInstructions.address });
   }
 
@@ -573,7 +573,7 @@ export class AmmV3 extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
     } = props;
-    const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
+    const pool = this._hydratedClmmPoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
@@ -626,7 +626,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const ins = AmmV3Instrument.increasePositionFromLiquidityInstructions({
+    const ins = ClmmInstrument.increasePositionFromLiquidityInstructions({
       poolInfo,
       ownerPosition,
       ownerInfo: {
@@ -639,7 +639,7 @@ export class AmmV3 extends ModuleBase {
       amountMaxB,
     });
     txBuilder.addInstruction(ins);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build({ address: ins.address });
   }
 
@@ -654,7 +654,7 @@ export class AmmV3 extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
     } = props;
-    const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
+    const pool = this._hydratedClmmPoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
@@ -707,7 +707,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const ins = AmmV3Instrument.increasePositionFromBaseInstructions({
+    const ins = ClmmInstrument.increasePositionFromBaseInstructions({
       poolInfo,
       ownerPosition,
       ownerInfo: {
@@ -720,7 +720,7 @@ export class AmmV3 extends ModuleBase {
       otherAmountMax,
     });
     txBuilder.addInstruction(ins);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build({ address: ins.address });
   }
 
@@ -735,7 +735,7 @@ export class AmmV3 extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
     } = props;
-    const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
+    const pool = this._hydratedClmmPoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
     const poolInfo = pool!.state;
 
@@ -808,7 +808,7 @@ export class AmmV3 extends ModuleBase {
         this.scope.account.tokenAccountRawInfos,
       );
 
-    const decreaseInsInfo = await AmmV3Instrument.decreaseLiquidityInstructions({
+    const decreaseInsInfo = await ClmmInstrument.decreaseLiquidityInstructions({
       poolInfo,
       ownerPosition,
       ownerInfo: {
@@ -828,7 +828,7 @@ export class AmmV3 extends ModuleBase {
     });
 
     if (ownerInfo.closePosition) {
-      const closeInsInfo = await AmmV3Instrument.closePositionInstructions({
+      const closeInsInfo = await ClmmInstrument.closePositionInstructions({
         poolInfo,
         ownerInfo: { wallet: this.scope.ownerPubKey },
         ownerPosition,
@@ -838,7 +838,7 @@ export class AmmV3 extends ModuleBase {
         endInstructionTypes: closeInsInfo.instructionTypes,
       });
     }
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build({ address: decreaseInsInfo.address });
   }
 
@@ -847,13 +847,13 @@ export class AmmV3 extends ModuleBase {
     ownerPosition,
   }: {
     poolId: PublicKey;
-    ownerPosition: AmmV3PoolPersonalPosition;
+    ownerPosition: ClmmPoolPersonalPosition;
   }): MakeTransaction {
-    const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
+    const pool = this._hydratedClmmPoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
     const poolInfo = pool!.state;
     const txBuilder = this.createTxBuilder();
-    const ins = AmmV3Instrument.closePositionInstructions({
+    const ins = ClmmInstrument.closePositionInstructions({
       poolInfo,
       ownerInfo: { wallet: this.scope.ownerPubKey },
       ownerPosition,
@@ -873,7 +873,7 @@ export class AmmV3 extends ModuleBase {
     checkCreateATAOwner = false,
   }: SwapInParams): Promise<MakeTransaction> {
     this.scope.checkOwner();
-    const pool = this._hydratedAmmV3PoolsMap.get(poolId.toBase58());
+    const pool = this._hydratedClmmPoolsMap.get(poolId.toBase58());
     if (!pool) this.logAndCreateError("pool not found: ", poolId.toBase58());
     const poolInfo = pool!.state;
 
@@ -946,7 +946,7 @@ export class AmmV3 extends ModuleBase {
         this.scope.account.tokenAccountRawInfos,
       );
 
-    const insInfo = await AmmV3Instrument.makeSwapBaseInInstructions({
+    const insInfo = await ClmmInstrument.makeSwapBaseInInstructions({
       poolInfo,
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -963,7 +963,7 @@ export class AmmV3 extends ModuleBase {
       remainingAccounts,
     });
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build();
   }
 
@@ -993,7 +993,7 @@ export class AmmV3 extends ModuleBase {
     associatedOnly?: boolean;
     checkCreateATAOwner?: boolean;
   }): Promise<MakeTransaction> {
-    const poolInfo = this._ammV3SdkParsedPoolMap.get(poolId)?.state;
+    const poolInfo = this._clmmSdkParsedPoolMap.get(poolId)?.state;
     if (!poolInfo) throw new Error(`pool not found ${poolId}`);
 
     const txBuilder = this.createTxBuilder();
@@ -1064,7 +1064,7 @@ export class AmmV3 extends ModuleBase {
       );
     }
 
-    const insInfo = AmmV3Instrument.swapBaseOutInstructions({
+    const insInfo = ClmmInstrument.swapBaseOutInstructions({
       poolInfo,
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -1082,7 +1082,7 @@ export class AmmV3 extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build();
   }
 
@@ -1093,7 +1093,7 @@ export class AmmV3 extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
   }: InitRewardParams): Promise<MakeTransaction> {
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -1128,7 +1128,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerRewardAccount)
       this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
 
-    const insInfo = AmmV3Instrument.initRewardInstructions({
+    const insInfo = ClmmInstrument.initRewardInstructions({
       poolInfo: poolInfo!,
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -1153,7 +1153,7 @@ export class AmmV3 extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
   }: InitRewardsParams): Promise<MakeTransaction> {
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     for (const rewardInfo of rewardInfos) {
@@ -1192,7 +1192,7 @@ export class AmmV3 extends ModuleBase {
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
 
-      const insInfo = AmmV3Instrument.initRewardInstructions({
+      const insInfo = ClmmInstrument.initRewardInstructions({
         poolInfo: poolInfo!,
         ownerInfo: {
           wallet: this.scope.ownerPubKey,
@@ -1212,7 +1212,7 @@ export class AmmV3 extends ModuleBase {
       };
       txBuilder.addInstruction(insInfo);
     }
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
@@ -1223,7 +1223,7 @@ export class AmmV3 extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
   }: SetRewardParams): Promise<MakeTransaction> {
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -1260,7 +1260,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerRewardAccount)
       this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
 
-    const insInfo = AmmV3Instrument.setRewardInstructions({
+    const insInfo = ClmmInstrument.setRewardInstructions({
       poolInfo: poolInfo!,
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -1275,7 +1275,7 @@ export class AmmV3 extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
   }
 
@@ -1286,11 +1286,11 @@ export class AmmV3 extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
   }: SetRewardsParams): Promise<MakeTransaction> {
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: AmmV3Instrument.addComputations() });
+    txBuilder.addInstruction({ instructions: ClmmInstrument.addComputations() });
     let address: Record<string, PublicKey> = {};
     for (const rewardInfo of rewardInfos) {
       if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -1325,7 +1325,7 @@ export class AmmV3 extends ModuleBase {
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
 
-      const insInfo = AmmV3Instrument.setRewardInstructions({
+      const insInfo = ClmmInstrument.setRewardInstructions({
         poolInfo: poolInfo!,
         ownerInfo: {
           wallet: this.scope.ownerPubKey,
@@ -1344,7 +1344,7 @@ export class AmmV3 extends ModuleBase {
         ...insInfo.address,
       };
     }
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
@@ -1355,7 +1355,7 @@ export class AmmV3 extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
   }: CollectRewardParams): Promise<MakeTransaction> {
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
     const rewardInfo = poolInfo!.rewardInfos.find((i) => i.tokenMint.equals(rewardMint));
     if (!rewardInfo) this.logAndCreateError("reward mint error", "not found reward mint", rewardMint);
@@ -1381,7 +1381,7 @@ export class AmmV3 extends ModuleBase {
     if (!ownerRewardAccount)
       this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
 
-    const insInfo = AmmV3Instrument.collectRewardInstructions({
+    const insInfo = ClmmInstrument.collectRewardInstructions({
       poolInfo: poolInfo!,
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -1390,7 +1390,7 @@ export class AmmV3 extends ModuleBase {
       rewardMint,
     });
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
   }
 
@@ -1401,7 +1401,7 @@ export class AmmV3 extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
   }: CollectRewardsParams): Promise<MakeTransaction> {
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(typeof poolId === "string" ? poolId : poolId.toBase58())?.state;
     if (!poolInfo) this.logAndCreateError("pool not found: ", poolId);
 
     const txBuilder = this.createTxBuilder();
@@ -1433,7 +1433,7 @@ export class AmmV3 extends ModuleBase {
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
       ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
 
-      const insInfo = AmmV3Instrument.collectRewardInstructions({
+      const insInfo = ClmmInstrument.collectRewardInstructions({
         poolInfo: poolInfo!,
         ownerInfo: {
           wallet: this.scope.ownerPubKey,
@@ -1445,7 +1445,7 @@ export class AmmV3 extends ModuleBase {
       txBuilder.addInstruction(insInfo);
       address = { ...address, ...insInfo.address };
     }
-    await txBuilder.calComputeBudget(AmmV3Instrument.addComputations());
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
@@ -1466,7 +1466,7 @@ export class AmmV3 extends ModuleBase {
     }
     const txBuilder = this.createTxBuilder();
 
-    for (const itemInfo of this._hydratedAmmV3Pools) {
+    for (const itemInfo of this._hydratedClmmPools) {
       if (itemInfo.positionAccount === undefined) continue;
       if (
         !itemInfo.positionAccount.find(
@@ -1550,7 +1550,7 @@ export class AmmV3 extends ModuleBase {
 
       for (const itemPosition of itemInfo.positionAccount) {
         txBuilder.addInstruction({
-          instructions: AmmV3Instrument.decreaseLiquidityInstructions({
+          instructions: ClmmInstrument.decreaseLiquidityInstructions({
             poolInfo,
             ownerPosition: itemPosition,
             ownerInfo: {
@@ -1595,7 +1595,7 @@ export class AmmV3 extends ModuleBase {
     priceLimit?: Decimal;
   }): Promise<ReturnTypeComputeAmountOutBaseOut> {
     const epochInfo = await this.scope.fetchEpochInfo();
-    const poolInfo = this._hydratedAmmV3PoolsMap.get(poolId)?.state;
+    const poolInfo = this._hydratedClmmPoolsMap.get(poolId)?.state;
     if (!poolInfo) throw new Error(`pool not found ${poolId}`);
 
     let sqrtPriceLimitX64: BN;
