@@ -226,18 +226,17 @@ export class Raydium {
     return new Date().getTime() - time > this._apiCacheTime;
   }
 
-  public async fetchTokens(forceUpdate?: boolean): Promise<ApiTokens> {
-    if (this.apiData.tokens && !this.isCacheInvalidate(this.apiData.tokens.fetched) && !forceUpdate)
-      return this.apiData.tokens.data;
-    const dataObject = {
-      fetched: Date.now(),
-      data: await this.api.getTokens(),
-      xx: 1,
-    };
-    this.apiData.tokens = dataObject;
+  // public async fetchTokens(forceUpdate?: boolean): Promise<ApiTokens> {
+  //   if (this.apiData.tokens && !this.isCacheInvalidate(this.apiData.tokens.fetched) && !forceUpdate)
+  //     return this.apiData.tokens.data;
+  //   const dataObject = {
+  //     fetched: Date.now(),
+  //     data: await this.api.getTokens(),
+  //   };
+  //   this.apiData.tokens = dataObject;
 
-    return dataObject.data;
-  }
+  //   return dataObject.data;
+  // }
 
   public async fetchLiquidity(forceUpdate?: boolean): Promise<ApiLiquidityPools> {
     if (this.apiData.liquidityPools && !this.isCacheInvalidate(this.apiData.liquidityPools.fetched) && !forceUpdate)

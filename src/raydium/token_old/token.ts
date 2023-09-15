@@ -48,7 +48,7 @@ export default class TokenModule extends ModuleBase {
 
   public async load(params?: LoadParams): Promise<void> {
     this.checkDisabled();
-    await this.scope.fetchTokens(params?.forceUpdate);
+    // await this.scope.fetchTokens(params?.forceUpdate);
     // unofficial: solana token list
     // official: raydium token list
     this._mintList = { official: [], unOfficial: [], unNamed: [], otherLiquiditySupportedMints: [] };

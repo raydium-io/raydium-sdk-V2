@@ -123,9 +123,9 @@ export class Api {
     );
   }
 
-  async getTokens(): Promise<ApiTokens> {
-    return this.api.get(this.urlConfigs.TOKEN || API_URLS.TOKEN);
-  }
+  // async getTokens(): Promise<ApiTokens> {
+  //   return this.api.get(this.urlConfigs.TOKEN || API_URLS.TOKEN);
+  // }
 
   async getLiquidityPools(): Promise<ApiLiquidityPools> {
     return this.api.get(this.urlConfigs.LIQUIDITY || API_URLS.LIQUIDITY);

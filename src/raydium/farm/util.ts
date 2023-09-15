@@ -207,7 +207,7 @@ export async function fetchMultipleFarmInfoAndUpdate({
 
     if (owner) {
       publicKeys.push({
-        pubkey: await getAssociatedLedgerAccount({
+        pubkey: getAssociatedLedgerAccount({
           programId: pool.programId,
           poolId: pool.id,
           owner,

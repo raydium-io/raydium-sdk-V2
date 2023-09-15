@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import { MintLayout, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 
 import { Price, Token, TokenAmount, Fraction } from "../../module";
-import { PublicKeyish, validateAndParsePublicKey, SOLMint } from "../../common/pubKey";
+import { PublicKeyish, validateAndParsePublicKey, SOLMint, WSOLMint } from "../../common/pubKey";
 import { BigNumberish, parseNumberInfo, toBN } from "../../common/bignumber";
 import { JupTokenType } from "../../api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
@@ -144,6 +144,7 @@ export default class TokenModule extends ModuleBase {
         : acc;
     }, {});
     this._tokenPrice = new Map([...Object.entries(coingeckoPrices), ...Object.entries(raydiumPrices)]);
+    this._tokenPrice.set(PublicKey.default.toString(), this._tokenPrice.get(WSOLMint.toString())!);
     this._tokenPriceFetched = { prevCount: totalCount, fetched: Date.now() };
     return this._tokenPrice;
   }
