@@ -319,6 +319,16 @@ export interface ApiV3PoolInfoCountItem {
 
 type PoolTypeItem = "StablePool" | "OpenBookMarket";
 
+type FarmRewardInfoOld = {
+  mint: ApiV3Token;
+  perSecond: number;
+};
+
+export type PoolFarmRewardInfo = FarmRewardInfoOld & {
+  startTime?: number;
+  endTime?: number;
+};
+
 export interface PoolRewardInfoItem {
   mint: ApiV3Token;
   perSecond?: number;
@@ -331,7 +341,7 @@ export interface ApiV3PoolInfoBaseItem {
   id: string;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
-  rewardInfos: PoolRewardInfoItem[];
+  rewardDefaultInfos: PoolFarmRewardInfo[];
   price: number;
   mintAmountA: number;
   mintAmountB: number;
@@ -343,14 +353,18 @@ export interface ApiV3PoolInfoBaseItem {
   week: ApiV3PoolInfoCountItem;
   month: ApiV3PoolInfoCountItem;
   pooltype: PoolTypeItem[];
+
+  farmUpcomingCount: number;
+  farmOngoingCount: number;
+  farmFinishedCount: number;
 }
 export type ApiV3PoolInfoConcentratedItem = ApiV3PoolInfoBaseItem & {
-  type: "concentrated";
+  type: "Concentrated";
+  config: ApiClmmConfigV3;
 };
 export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
-  type: "standard";
+  type: "Standard";
   marketId: string;
-  farmIdInfo: { id: string; type: string }[];
   lpPrice: number;
   lpAmount: number;
   lpMint: ApiV3Token;
@@ -371,5 +385,152 @@ export interface FetchPoolParams {
     | "apr_7d"
     | "apr_30d";
   order?: "desc" | "asc";
+  pageSize?: number;
   page?: number;
 }
+
+// liquidity line
+export interface Point {
+  time: number;
+  liquidity: number;
+}
+export interface LiquidityLineApi {
+  count: number;
+  line: Point[];
+}
+
+// pool key
+interface Base {
+  programId: string;
+  id: string;
+  mintA: ApiV3Token;
+  mintB: ApiV3Token;
+  lookupTableAccount?: string;
+  openTime: number;
+  vault: { A: string; B: string };
+}
+interface AmmKeys {
+  authority: string;
+  openOrders: string;
+  targetOrders: string;
+  withdrawQueue: string;
+  mintLp: ApiV3Token;
+  vault: { Lp: string }; // stable Publickey default
+}
+interface MarketKeys {
+  marketProgramId: string;
+  marketId: string;
+  marketAuthority: string;
+  marketBaseVault: string;
+  marketQuoteVault: string;
+  marketBids: string;
+  marketAsks: string;
+  marketEventQueue: string;
+}
+export type AmmV4Keys = Base & AmmKeys & MarketKeys;
+export type AmmV5Keys = Base & AmmKeys & MarketKeys & { modelDataAccount: string };
+export type ClmmKeys = Base & { config: ApiClmmConfigV3; rewardInfos: ApiV3Token[] };
+export type PoolKeys = AmmV4Keys | AmmV5Keys | ClmmKeys;
+
+// clmm config
+export interface ApiClmmConfigV3 {
+  id: string;
+  index: number;
+  protocolFeeRate: number;
+  tradeFeeRate: number;
+  tickSpacing: number;
+  fundFeeRate: number;
+  description: string;
+  defaultRange: number;
+  defaultRangePoint: number[];
+}
+
+export interface RpcItemA {
+  url: string;
+  weight: number;
+  batch: boolean;
+  name: string;
+}
+export interface RpcItemB {
+  url: string;
+  batch: boolean;
+  name: string;
+}
+
+type RpcStrategy = "speed" | "first";
+type RpcTypeWeight = { strategy: "weight"; rpcs: RpcItemA[] };
+type RpcTypeOther = { strategy: RpcStrategy; rpcs: RpcItemB[] };
+export type RpcType = RpcTypeWeight | RpcTypeOther;
+
+export type FarmRewardTypeV6Key = "Standard SPL" | "Option tokens";
+
+interface RewardKeyInfoV345 {
+  mint: ApiV3Token;
+  vault: string;
+  type: FarmRewardTypeV6Key;
+  perSecond: number;
+  perBlock: number;
+}
+interface RewardKeyInfoV6 {
+  mint: ApiV3Token;
+  vault: string;
+  type: FarmRewardTypeV6Key;
+  perSecond: number;
+  openTime: number;
+  endTime: number;
+  sender: string;
+}
+interface FormatFarmKeyOutBase {
+  programId: string;
+  id: string;
+  symbolMints: ApiV3Token[];
+  lpMint: ApiV3Token;
+  authority: string;
+  lpVault: string;
+}
+type FormatFarmKeyOutV345 = FormatFarmKeyOutBase & {
+  rewardInfos: RewardKeyInfoV345[];
+};
+type FormatFarmKeyOutV6 = FormatFarmKeyOutBase & {
+  config: {
+    periodMax: number;
+    periodMin: number;
+    periodExtend: number;
+  };
+  rewardInfos: RewardKeyInfoV6[];
+};
+export type FormatFarmKeyOut = FormatFarmKeyOutV345 | FormatFarmKeyOutV6;
+// item page farm info
+// farm info
+interface RewardInfoV345 {
+  mint: ApiV3Token;
+  type: FarmRewardTypeV6Key;
+  apr: number;
+  perSecond: number;
+}
+interface RewardInfoV6 {
+  mint: ApiV3Token;
+  type: FarmRewardTypeV6Key;
+  apr: number;
+  perSecond: number;
+  openTime: number;
+  endTime: number;
+}
+export type FarmTagsItem = "Ecosystem" | "Farm" | "Fusion" | "Stake";
+export interface FormatFarmInfoOutBase {
+  programId: string;
+  id: string;
+  symbolMints: ApiV3Token[];
+  lpMint: ApiV3Token;
+  tvl: number;
+  lpPrice: number;
+  apr: number;
+  tags: FarmTagsItem[];
+}
+export type FormatFarmInfoOutV345 = FormatFarmInfoOutBase & {
+  rewardInfos: RewardInfoV345[];
+};
+export type FormatFarmInfoOutV6 = FormatFarmInfoOutBase & {
+  rewardInfos: RewardInfoV6[];
+};
+export type FormatFarmInfoOut = FormatFarmInfoOutV345 | FormatFarmInfoOutV6;

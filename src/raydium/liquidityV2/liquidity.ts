@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { ApiV3PoolInfoStandardItem } from "../../api/type";
+import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "../../api/type";
 import { Token, TokenAmount, Percent } from "../../module";
 import { SOLMint, WSOLMint, solToWSol } from "../../common/pubKey";
 import { BN_ZERO, BN_ONE, divCeil } from "../../common/bignumber";
@@ -113,7 +113,6 @@ export default class LiquidityModule extends ModuleBase {
       ...config,
     };
     const [tokenA, tokenB] = [amountInA.token, amountInB.token];
-
     const tokenAccountA = await account.getCreatedTokenAccount({
       mint: tokenA.mint,
       associatedOnly: false,
@@ -149,6 +148,9 @@ export default class LiquidityModule extends ModuleBase {
     const [baseToken, quoteToken] = tokens;
     const [baseTokenAccount, quoteTokenAccount] = _tokenAccounts;
     const [baseAmountRaw, quoteAmountRaw] = rawAmounts;
+
+    const poolKeys = await this.scope.api.fetchPoolKeysById({ id: poolInfo.id });
+
     const txBuilder = this.createTxBuilder();
 
     const { tokenAccount: _baseTokenAccount, ...baseInstruction } = await account.handleTokenAccount({
@@ -182,6 +184,7 @@ export default class LiquidityModule extends ModuleBase {
       instructions: [
         makeAddLiquidityInstruction({
           poolInfo,
+          poolKeys: poolKeys as AmmV4Keys | AmmV5Keys,
           userKeys: {
             baseTokenAccount: _baseTokenAccount!,
             quoteTokenAccount: _quoteTokenAccount!,
@@ -198,7 +201,7 @@ export default class LiquidityModule extends ModuleBase {
           ? InstructionType.AmmV5AddLiquidity
           : InstructionType.AmmV4AddLiquidity,
       ],
-      // lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress: poolKeys.lookupTableAccount ? [new PublicKey(poolKeys.lookupTableAccount)] : [],
     });
     return txBuilder.build();
   }

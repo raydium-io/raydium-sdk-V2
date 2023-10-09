@@ -93,3 +93,46 @@ export const mockCreatePoolInfo = {
   },
   tvl: 0,
 };
+
+export const mockV3CreatePoolInfo = {
+  tvl: 0,
+  volumeQuote: 0,
+  mintAmountA: 0,
+  mintAmountB: 0,
+  rewardDefaultInfos: [],
+  farmUpcomingCount: 0,
+  farmOngoingCount: 0,
+  farmFinishedCount: 0,
+
+  day: {
+    volume: 0,
+    volumeQuote: 0,
+    volumeFee: 0,
+    apr: 0,
+    feeApr: 0,
+    priceMin: 0,
+    priceMax: 0,
+    rewardApr: [0],
+  },
+  week: {
+    volume: 0,
+    volumeQuote: 0,
+    volumeFee: 0,
+    apr: 0,
+    feeApr: 0,
+    priceMin: 0,
+    priceMax: 0,
+    rewardApr: [0],
+  },
+  month: {
+    volume: 0,
+    volumeQuote: 0,
+    volumeFee: 0,
+    apr: 0,
+    feeApr: 0,
+    priceMin: 0,
+    priceMax: 0,
+    rewardApr: [0],
+  },
+  pooltype: [],
+};

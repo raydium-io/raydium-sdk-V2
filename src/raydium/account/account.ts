@@ -202,7 +202,7 @@ export default class Account extends ModuleBase {
         if (createInfo.amount) {
           newTxInstructions.instructions!.push(
             makeTransferInstruction({
-              source: txInstruction.signers![0].publicKey,
+              source: txInstruction.addresses.newAccount,
               destination: ata,
               owner: this.scope.ownerPubKey,
               amount: createInfo.amount,
@@ -241,7 +241,7 @@ export default class Account extends ModuleBase {
         newTxInstructions.instructionTypes!.push(...(txInstruction.instructionTypes || []));
         newTxInstructions.endInstructionTypes!.push(...(txInstruction.endInstructionTypes || []));
 
-        return { account: txInstruction.signers![0].publicKey, instructionParams: newTxInstructions };
+        return { account: txInstruction.addresses.newAccount, instructionParams: newTxInstructions };
       } else {
         const newTokenAccount = generatePubKey({ fromPublicKey: owner, programId: tokenProgram });
         const balanceNeeded = await this.scope.connection.getMinimumBalanceForRentExemption(AccountLayout.span);
@@ -346,7 +346,7 @@ export default class Account extends ModuleBase {
         amount,
         skipCloseAccount,
       });
-      return { tokenAccount: txInstruction.signers![0].publicKey, ...txInstruction };
+      return { tokenAccount: txInstruction.addresses.newAccount, ...txInstruction };
     } else if (!tokenAccount || (side === "out" && !ata.equals(tokenAccount) && !bypassAssociatedCheck)) {
       const instructions: TransactionInstruction[] = [];
       const _createATAIns = createAssociatedTokenAccountInstruction(

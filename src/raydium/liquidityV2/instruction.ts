@@ -1,7 +1,7 @@
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 
-import { parseBigNumberish } from "../../common/bignumber";
+import { parseBigNumberish, BN_ZERO, BN_ONE } from "../../common/bignumber";
 // import { createLogger } from "../../common/logger";
 import { accountMeta } from "../../common/pubKey";
 
@@ -11,7 +11,7 @@ import { LiquidityAddInstructionParams } from "./type";
 
 // const logger = createLogger("Raydium_liquidity_instruction");
 export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParams): TransactionInstruction {
-  const { poolInfo, userKeys, baseAmountIn, quoteAmountIn, fixedSide } = params;
+  const { poolInfo, poolKeys, userKeys, baseAmountIn, quoteAmountIn, fixedSide } = params;
 
   const data = Buffer.alloc(addLiquidityLayout.span);
   addLiquidityLayout.encode(
@@ -19,7 +19,7 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
       instruction: 3,
       baseAmountIn: parseBigNumberish(baseAmountIn),
       quoteAmountIn: parseBigNumberish(quoteAmountIn),
-      fixedSide: parseBigNumberish(fixedSide === "base" ? 0 : 1),
+      fixedSide: fixedSide === "base" ? BN_ZERO : BN_ONE,
     },
     data,
   );
@@ -28,12 +28,12 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
     accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
     // amm
     accountMeta({ pubkey: new PublicKey(poolInfo.id) }),
-    // accountMeta({ pubkey: poolInfo.authority, isWritable: false }),
-    // accountMeta({ pubkey: poolInfo.openOrders, isWritable: false }),
-    // accountMeta({ pubkey: poolInfo.targetOrders }),
-    accountMeta({ pubkey: new PublicKey(poolInfo.lpMint) }),
-    // accountMeta({ pubkey: poolInfo.baseVault }),
-    // accountMeta({ pubkey: poolInfo.quoteVault }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.openOrders), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.targetOrders) }),
+    accountMeta({ pubkey: new PublicKey(poolInfo.lpMint.address) }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.vault.A) }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.vault.B) }),
   ];
 
   if (poolInfo.pooltype.includes("StablePool")) {
@@ -48,7 +48,7 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
     accountMeta({ pubkey: userKeys.quoteTokenAccount }),
     accountMeta({ pubkey: userKeys.lpTokenAccount }),
     accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
-    // accountMeta({ pubkey: poolInfo.marketEventQueue, isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.marketEventQueue), isWritable: false }),
   );
 
   return new TransactionInstruction({

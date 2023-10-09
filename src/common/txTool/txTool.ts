@@ -40,6 +40,7 @@ interface TxBuilderInit {
 }
 
 export interface AddInstructionParam {
+  addresses?: Record<string, PublicKey>;
   instructions?: TransactionInstruction[];
   endInstructions?: TransactionInstruction[];
   lookupTableAddress?: PublicKey[];
@@ -56,12 +57,12 @@ export interface TxBuildData<T = Record<string, any>> {
   extInfo: T;
 }
 
-export interface TxV0BuildData<T = Record<string, any>> {
+export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData<T>, "transaction"> {
   transaction: VersionedTransaction;
-  instructionTypes: string[];
-  signers: Signer[];
-  execute: () => Promise<string>;
-  extInfo: T;
+  buildProps?: {
+    lookupTableCache?: CacheLTA;
+    lookupTableAddress?: string[];
+  };
 }
 
 export interface ExecuteParam {
@@ -76,12 +77,12 @@ export interface MultiTxBuildData {
   extInfo: Record<string, any>;
 }
 
-export interface MultiTxV0BuildData {
+export interface MultiTxV0BuildData extends Omit<MultiTxBuildData, "transactions"> {
   transactions: VersionedTransaction[];
-  instructionTypes: string[];
-  signers: Signer[][];
-  execute: (executeParams?: ExecuteParam) => Promise<string[]>;
-  extInfo: Record<string, any>;
+  buildProps?: {
+    lookupTableCache?: CacheLTA;
+    lookupTableAddress?: string[];
+  };
 }
 
 export class TxBuilder {
@@ -341,6 +342,7 @@ export class TxBuilder {
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: allInstructionTypes,
+      buildProps,
       execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
         const { sequentially, onTxUpdate } = executeParams || {};
         if (this.owner?.isKeyPair) {
@@ -634,6 +636,7 @@ export class TxBuilder {
 
     return {
       transactions: allTransactions,
+      buildProps: props,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
       execute: async (): Promise<string[]> => {

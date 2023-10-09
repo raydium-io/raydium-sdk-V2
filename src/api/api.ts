@@ -7,7 +7,6 @@ import {
   ApiFarmPools,
   ApiJsonPairInfo,
   ApiLiquidityPools,
-  ApiTokens,
   ApiClmmPoolInfo,
   ApiClmmConfigInfo,
   ApiIdoItem,
@@ -17,6 +16,7 @@ import {
   PoolsApiReturn,
   SearchPoolsApiReturn,
   JupTokenType,
+  PoolKeys,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
@@ -186,7 +186,7 @@ export class Api {
     return slotList.reduce((a, b) => a + b, 0) / slotList.length / 60;
   }
 
-  async getChainTimeOffset(): Promise<{ chainTime: number; offset: number }> {
+  async getChainTimeOffset(): Promise<{ offset: number }> {
     return this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME);
   }
 
@@ -224,22 +224,6 @@ export class Api {
     const { type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
     const res = await this.api.get<PoolsApiReturn>(
       (this.urlConfigs.POOL_LIST || DEV_API_URLS.POOL_LIST)
-        .replace("{type}", type)
-        .replace("{sort}", sort)
-        .replace("{order}", order)
-        .replace("{page}", String(page)),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
-    );
-    return res.data;
-  }
-
-  async searchPools(props: FetchPoolParams & { search: string }): Promise<SearchPoolsApiReturn> {
-    const { search, type = "all", sort = "liquidity", order = "desc", page = 0 } = props || { search: "" };
-    const res = await this.api.get(
-      (this.urlConfigs.POOL_SEARCH || DEV_API_URLS.POOL_SEARCH)
-        .replace("{search_text}", search)
         .replace("{type}", type)
         .replace("{sort}", sort)
         .replace("{order}", order)
@@ -292,6 +276,18 @@ export class Api {
         .replace("{sort}", sort)
         .replace("{order}", order)
         .replace("{page}", String(page)),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
+    return res.data;
+  }
+
+  async fetchPoolKeysById(props: { id: string }): Promise<PoolKeys> {
+    const { id } = props;
+
+    const res = await this.api.get<PoolKeys>(
+      (this.urlConfigs.POOL_KEY_BY_ID || DEV_API_URLS.POOL_KEY_BY_ID).replace("{id}", id),
       {
         baseURL: DEV_API_URLS.BASE_HOST,
       },

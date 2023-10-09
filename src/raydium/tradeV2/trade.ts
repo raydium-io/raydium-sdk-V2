@@ -860,7 +860,7 @@ export default class TradeV2 extends ModuleBase {
           ],
         });
         makeTransferInstruction({
-          destination: ins.signers![0].publicKey,
+          destination: ins.addresses.newAccount,
           source: tokenAccounts[i].publicKey!,
           amount: amountBN,
           owner: this.scope.ownerPubKey,
@@ -892,7 +892,7 @@ export default class TradeV2 extends ModuleBase {
           makeTransferInstruction({
             // destination: ins.signers![0].publicKey,
             destination: tokenAccounts[0].publicKey!,
-            source: ins.signers![0].publicKey,
+            source: ins.addresses.newAccount,
             amount,
             owner: this.scope.ownerPubKey,
             tokenProgram,
@@ -900,7 +900,7 @@ export default class TradeV2 extends ModuleBase {
         ],
         endInstructions: [
           closeAccountInstruction({
-            tokenAccount: ins.signers![0].publicKey,
+            tokenAccount: ins.addresses.newAccount,
             payer: this.scope.ownerPubKey,
             owner: this.scope.ownerPubKey,
             programId: tokenProgram,

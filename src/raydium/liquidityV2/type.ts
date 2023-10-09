@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import { TokenAmount } from "../../module/amount";
-import { ApiV3PoolInfoStandardItem } from "../../api/type";
+import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "../../api/type";
 import { BigNumberish } from "../../common/bignumber";
 
 export type LiquiditySide = "a" | "b";
@@ -27,6 +27,7 @@ export interface LiquidityUserKeys {
 
 export interface LiquidityAddInstructionParams {
   poolInfo: ApiV3PoolInfoStandardItem;
+  poolKeys: AmmV4Keys | AmmV5Keys;
   userKeys: LiquidityUserKeys;
   baseAmountIn: BigNumberish;
   quoteAmountIn: BigNumberish;

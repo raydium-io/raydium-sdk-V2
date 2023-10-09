@@ -365,7 +365,7 @@ export default class Farm extends ModuleBase {
         amount: calFarmRewardAmount(rewardInfo),
       });
       return {
-        rewardPubKey: txInstructions.signers![0].publicKey,
+        rewardPubKey: txInstructions.addresses.newAccount,
         newInstruction: txInstructions,
       };
     }
@@ -834,7 +834,7 @@ export default class Farm extends ModuleBase {
         payer: this.scope.ownerPubKey,
         amount: calFarmRewardAmount(rewardInfo!),
       });
-      userRewardToken = txInstruction.signers![0].publicKey;
+      userRewardToken = txInstruction.addresses.newAccount;
       txBuilder.addInstruction(txInstruction);
     } else {
       const selectUserRewardToken = await this.scope.account.getCreatedTokenAccount({

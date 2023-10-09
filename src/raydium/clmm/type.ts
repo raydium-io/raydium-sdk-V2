@@ -7,6 +7,7 @@ import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
 import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem } from "../../api/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
+import { ApiV3Token } from "../../api/type";
 
 export { ApiClmmPoolInfo, ApiClmmConfigInfo };
 
@@ -308,8 +309,8 @@ export interface ReturnTypeFetchMultiplePoolTickArrays {
 export interface CreateConcentratedPool {
   programId: PublicKey;
   owner?: PublicKey;
-  mint1: MintInfo;
-  mint2: MintInfo;
+  mint1: ApiV3Token;
+  mint2: ApiV3Token;
   ammConfig: ClmmConfigInfo;
   initialPrice: Decimal;
   startTime: BN;

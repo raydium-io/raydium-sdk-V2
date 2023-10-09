@@ -1231,13 +1231,13 @@ export class PoolUtils {
 
     const SECONDS_PER_YEAR = 3600 * 24 * 365;
 
-    const rewardsApr = poolInfo.rewardInfos.map((i) => {
+    const rewardsApr = poolInfo.rewardDefaultInfos.map((i) => {
       const iDecimal = rewardMintDecimals[i.mint.address];
       const iPrice = mintPrice[i.mint.address];
 
       if (
-        chainTime < (i.startTime ?? 0) ||
-        chainTime > (i.endTime ?? 0) ||
+        chainTime < ((i as any).startTime ?? 0) ||
+        chainTime > ((i as any).endTime ?? 0) ||
         !i.perSecond ||
         !iPrice ||
         iDecimal === undefined

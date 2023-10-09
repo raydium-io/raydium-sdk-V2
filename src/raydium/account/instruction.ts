@@ -46,7 +46,11 @@ interface CreateWSolTokenAccount {
 /**
  * WrappedNative account = wsol account
  */
-export async function createWSolAccountInstructions(params: CreateWSolTokenAccount): Promise<AddInstructionParam> {
+export async function createWSolAccountInstructions(params: CreateWSolTokenAccount): Promise<
+  AddInstructionParam & {
+    addresses: { newAccount: PublicKey };
+  }
+> {
   const { connection, amount, commitment, payer, owner, skipCloseAccount } = params;
 
   const balanceNeeded = await connection.getMinimumBalanceForRentExemption(splAccountLayout.span, commitment);
@@ -54,6 +58,7 @@ export async function createWSolAccountInstructions(params: CreateWSolTokenAccou
   const newAccount = generatePubKey({ fromPublicKey: payer, programId: TOKEN_PROGRAM_ID });
 
   return {
+    addresses: { newAccount: newAccount.publicKey },
     signers: [],
     instructions: [
       SystemProgram.createAccountWithSeed({

@@ -35,6 +35,7 @@ import {
 import { TickUtils } from "./utils/tick";
 import { PoolUtils } from "./utils/pool";
 import { generatePubKey } from "../account/util";
+import { ApiV3Token } from "../../api/type";
 
 const logger = createLogger("Raydium_Clmm");
 
@@ -55,8 +56,8 @@ interface CreatePoolInstruction {
   connection: Connection;
   programId: PublicKey;
   owner: PublicKey;
-  mintA: MintInfo;
-  mintB: MintInfo;
+  mintA: ApiV3Token;
+  mintB: ApiV3Token;
   ammConfigId: PublicKey;
   initialPriceX64: BN;
   startTime: BN;
@@ -117,6 +118,7 @@ export class ClmmInstrument {
   static async createPoolInstructions(props: CreatePoolInstruction): Promise<ReturnTypeMakeInstructions> {
     const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } = props;
     const observationId = generatePubKey({ fromPublicKey: owner, programId });
+    const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
     const ins = [
       SystemProgram.createAccountWithSeed({
         fromPubkey: owner,
@@ -129,9 +131,9 @@ export class ClmmInstrument {
       }),
     ];
 
-    const { publicKey: poolId } = getPdaPoolId(programId, ammConfigId, mintA.mint, mintB.mint);
-    const { publicKey: mintAVault } = getPdaPoolVaultId(programId, poolId, mintA.mint);
-    const { publicKey: mintBVault } = getPdaPoolVaultId(programId, poolId, mintB.mint);
+    const { publicKey: poolId } = getPdaPoolId(programId, ammConfigId, mintAAddress, mintBAddress);
+    const { publicKey: mintAVault } = getPdaPoolVaultId(programId, poolId, mintAAddress);
+    const { publicKey: mintBVault } = getPdaPoolVaultId(programId, poolId, mintBAddress);
 
     ins.push(
       this.createPoolInstruction(
@@ -140,12 +142,12 @@ export class ClmmInstrument {
         owner,
         ammConfigId,
         observationId.publicKey,
-        mintA.mint,
+        mintAAddress,
         mintAVault,
-        mintA.programId,
-        mintB.mint,
+        new PublicKey(mintA.programId),
+        mintBAddress,
         mintBVault,
-        mintB.programId,
+        new PublicKey(mintB.programId),
         getPdaExBitmapAccount(programId, poolId).publicKey,
         initialPriceX64,
         startTime,

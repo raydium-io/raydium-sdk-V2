@@ -1,28 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import { toTokenInfo } from "../token/utils";
-import {
-  toPercent,
-  toFraction,
-  decimalToFraction,
-  toUsdCurrency,
-  BigNumberish,
-  recursivelyDecimalToFraction,
-} from "../../common/bignumber";
-import { InstructionType, WSOLMint, getATAAddress, getTransferAmountFee } from "../../common";
-import { add, mul, div } from "../../common/fractionUtil";
+import { InstructionType, WSOLMint, getATAAddress, getTransferAmountFee, solToWSol } from "../../common";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { TokenAmount } from "../../module/amount";
 import { Percent } from "../../module/percent";
-import { mockCreatePoolInfo, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE, ZERO } from "./utils/constants";
+import { mockV3CreatePoolInfo, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE, ZERO } from "./utils/constants";
 import { LiquidityMath, SqrtPriceMath } from "./utils/math";
 import { PoolUtils } from "./utils/pool";
-import { PositionUtils } from "./utils/position";
 import {
   CreateConcentratedPool,
-  ClmmPoolInfo,
   ApiClmmPoolInfo,
-  UserPositionAccount,
   HydratedConcentratedInfo,
   SDKParsedConcentratedInfo,
   IncreasePositionFromLiquidity,
@@ -50,7 +36,7 @@ import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
 import { OperationLayout } from "./layout";
 import BN from "bn.js";
-import { EXTENSION_TICKARRAY_BITMAP_SIZE } from "./utils/tickarrayBitmap";
+import { ApiV3PoolInfoConcentratedItem } from "../../api/type";
 
 export class Clmm extends ModuleBase {
   private _clmmPools: ApiClmmPoolInfo[] = [];
@@ -65,25 +51,6 @@ export class Clmm extends ModuleBase {
 
   public async load(params?: LoadParams): Promise<void> {
     await this.scope.token.load(params);
-    await this.scope.fetchClmmPools();
-    this._clmmPools = [...(this.scope.apiData.clmmPools?.data || [])];
-    this._clmmPools.forEach((pool) => {
-      this._clmmPoolMap.set(pool.id, pool);
-    });
-
-    const chainTimeOffset = await this.scope.chainTimeOffset();
-
-    const sdkParsed = await PoolUtils.fetchMultiplePoolInfos({
-      poolKeys: this._clmmPools,
-      connection: this.scope.connection,
-      ownerInfo: this.scope.owner
-        ? { tokenAccounts: this.scope.account.tokenAccountRawInfos, wallet: this.scope.ownerPubKey }
-        : undefined,
-      chainTime: (Date.now() + chainTimeOffset) / 1000,
-    });
-    this._clmmSdkParsedPools = Object.values(sdkParsed);
-    this._clmmSdkParsedPoolMap = new Map(Object.entries(sdkParsed));
-    this.hydratePoolsInfo();
   }
 
   get pools(): {
@@ -102,174 +69,6 @@ export class Clmm extends ModuleBase {
       hydratedData: this._hydratedClmmPools,
       hydratedDataData: this._hydratedClmmPoolsMap,
     };
-  }
-
-  public hydratePoolsInfo(): HydratedConcentratedInfo[] {
-    this._hydratedClmmPools = this._clmmSdkParsedPools.map((pool) => {
-      const rewardLength = pool.state.rewardInfos.length;
-      const [base, quote] = [
-        this.scope.token.tokenMap.get(pool.state.mintA.mint.toBase58()) || toTokenInfo(pool.state.mintA),
-        this.scope.token.tokenMap.get(pool.state.mintB.mint.toBase58()) || toTokenInfo(pool.state.mintB),
-      ];
-      const currentPrice = decimalToFraction(pool.state.currentPrice)!;
-      const toMintATokenAmount = (amount: BigNumberish, decimalDone = true): TokenAmount | undefined =>
-        base ? this.scope.mintToTokenAmount({ mint: base.address, amount, decimalDone }) : undefined;
-      const toMintBTokenAmount = (amount: BigNumberish, decimalDone = true): TokenAmount | undefined =>
-        quote ? this.scope.mintToTokenAmount({ mint: quote.address, amount, decimalDone }) : undefined;
-
-      const parseReward = (time: "day" | "week" | "month"): Percent[] =>
-        [
-          toPercent(pool.state[time].rewardApr.A, { alreadyDecimaled: true }),
-          toPercent(pool.state[time].rewardApr.B, { alreadyDecimaled: true }),
-          toPercent(pool.state[time].rewardApr.C, { alreadyDecimaled: true }),
-        ].slice(0, rewardLength);
-
-      return {
-        ...pool,
-        id: pool.state.id,
-        base,
-        quote,
-        name: (base ? base.symbol : "unknown") + "-" + (quote ? quote?.symbol : "unknown"),
-        protocolFeeRate: toPercent(toFraction(pool.state.ammConfig.protocolFeeRate).div(toFraction(10 ** 4)), {
-          alreadyDecimaled: true,
-        }),
-        tradeFeeRate: toPercent(toFraction(pool.state.ammConfig.tradeFeeRate).div(toFraction(10 ** 4)), {
-          alreadyDecimaled: true,
-        }),
-        creator: pool.state.creator,
-        ammConfig: pool.state.ammConfig,
-        currentPrice,
-        decimals: Math.max(base?.decimals || 0, quote?.decimals || 0, 6),
-
-        idString: pool.state.id.toBase58(),
-        tvl: toUsdCurrency(pool.state.tvl),
-
-        totalApr24h: toPercent(pool.state.day.apr, { alreadyDecimaled: true }),
-        totalApr7d: toPercent(pool.state.week.apr, { alreadyDecimaled: true }),
-        totalApr30d: toPercent(pool.state.month.apr, { alreadyDecimaled: true }),
-        feeApr24h: toPercent(pool.state.day.feeApr, { alreadyDecimaled: true }),
-        feeApr7d: toPercent(pool.state.week.feeApr, { alreadyDecimaled: true }),
-        feeApr30d: toPercent(pool.state.month.feeApr, { alreadyDecimaled: true }),
-        rewardApr24h: parseReward("day"),
-        rewardApr7d: parseReward("week"),
-        rewardApr30d: parseReward("month"),
-
-        volume24h: toUsdCurrency(pool.state.day.volume),
-        volume7d: toUsdCurrency(pool.state.week.volume),
-        volume30d: toUsdCurrency(pool.state.month.volume),
-
-        volumeFee24h: toUsdCurrency(pool.state.day.volumeFee),
-        volumeFee7d: toUsdCurrency(pool.state.week.volumeFee),
-        volumeFee30d: toUsdCurrency(pool.state.month.volumeFee),
-
-        fee24hA: toMintATokenAmount(pool.state.day.feeA),
-        fee24hB: toMintBTokenAmount(pool.state.day.feeB),
-        fee7dA: toMintATokenAmount(pool.state.week.feeA),
-        fee7dB: toMintBTokenAmount(pool.state.week.feeB),
-        fee30dA: toMintATokenAmount(pool.state.month.feeA),
-        fee30dB: toMintBTokenAmount(pool.state.month.feeB),
-
-        userPositionAccount: pool.positionAccount?.map((a) => {
-          const amountA = toMintATokenAmount(a.amountA, false);
-          const amountB = toMintATokenAmount(a.amountB, false);
-          const tokenFeeAmountA = toMintATokenAmount(a.tokenFeeAmountA, false);
-          const tokenFeeAmountB = toMintBTokenAmount(a.tokenFeeAmountB, false);
-          const innerVolumeA = mul(currentPrice, amountA) || 0;
-          const innerVolumeB = mul(currentPrice, amountB) || 0;
-          const positionPercentA = toPercent(div(innerVolumeA, add(innerVolumeA, innerVolumeB))!);
-          const positionPercentB = toPercent(div(innerVolumeB, add(innerVolumeA, innerVolumeB))!);
-          const inRange = PositionUtils.checkIsInRange(pool, a);
-          const poolRewardInfos = pool.state.rewardInfos;
-          return {
-            sdkParsed: a,
-            ...recursivelyDecimalToFraction(a),
-            amountA,
-            amountB,
-            nftMint: a.nftMint, // need this or nftMint will be buggy, this is only quick fixed
-            liquidity: a.liquidity,
-            tokenA: base,
-            tokenB: quote,
-            positionPercentA,
-            positionPercentB,
-            tokenFeeAmountA,
-            tokenFeeAmountB,
-            inRange,
-            rewardInfos: a.rewardInfos
-              .map((info, idx) => {
-                const token = this.scope.token.tokenMap.get(poolRewardInfos[idx]?.tokenMint.toBase58());
-                const pendingReward = token
-                  ? this.scope.mintToTokenAmount({ mint: token.address, amount: info.pendingReward })
-                  : undefined;
-                if (!pendingReward) return;
-                const apr24h =
-                  idx === 0
-                    ? toPercent(pool.state.day.rewardApr.A, { alreadyDecimaled: true })
-                    : idx === 1
-                    ? toPercent(pool.state.day.rewardApr.B, { alreadyDecimaled: true })
-                    : toPercent(pool.state.day.rewardApr.C, { alreadyDecimaled: true });
-                const apr7d =
-                  idx === 0
-                    ? toPercent(pool.state.week.rewardApr.A, { alreadyDecimaled: true })
-                    : idx === 1
-                    ? toPercent(pool.state.week.rewardApr.B, { alreadyDecimaled: true })
-                    : toPercent(pool.state.week.rewardApr.C, { alreadyDecimaled: true });
-                const apr30d =
-                  idx === 0
-                    ? toPercent(pool.state.month.rewardApr.A, { alreadyDecimaled: true })
-                    : idx === 1
-                    ? toPercent(pool.state.month.rewardApr.B, { alreadyDecimaled: true })
-                    : toPercent(pool.state.month.rewardApr.C, { alreadyDecimaled: true });
-                return { pendingReward, apr24h, apr7d, apr30d };
-              })
-              .filter((info) => Boolean(info?.pendingReward)) as UserPositionAccount["rewardInfos"],
-            getLiquidityVolume: (): any => {
-              const aPrice = this.scope.token.tokenPriceMap.get(pool.state.mintA.mint.toBase58());
-              const bPrice = this.scope.token.tokenPriceMap.get(pool.state.mintB.mint.toBase58());
-              const wholeLiquidity = add(mul(amountA, aPrice), mul(amountB, bPrice));
-              return {
-                wholeLiquidity,
-                baseLiquidity: mul(wholeLiquidity, positionPercentA),
-                quoteLiquidity: mul(wholeLiquidity, positionPercentB),
-              };
-            },
-          };
-        }),
-
-        rewardInfos: pool.state.rewardInfos.map((r) => {
-          const rewardToken = this.scope.token.tokenMap.get(r.tokenMint.toBase58());
-          return {
-            ...r,
-            rewardToken,
-            openTime: r.openTime.toNumber() * 1000,
-            endTime: r.endTime.toNumber() * 1000,
-            lastUpdateTime: r.lastUpdateTime.toNumber() * 1000,
-            creator: r.creator,
-            rewardClaimed: rewardToken
-              ? this.scope.mintToTokenAmount({ mint: r.tokenMint, amount: r.rewardClaimed })
-              : undefined,
-            rewardTotalEmissioned: rewardToken
-              ? this.scope.mintToTokenAmount({ mint: r.tokenMint, amount: r.rewardTotalEmissioned })
-              : undefined,
-            rewardPerWeek:
-              rewardToken &&
-              this.scope.mintToTokenAmount({
-                mint: r.tokenMint,
-                amount: r.perSecond.mul(60 * 60 * 24 * 7).toString(),
-                decimalDone: true,
-              }),
-            rewardPerDay:
-              rewardToken &&
-              this.scope.mintToTokenAmount({
-                mint: r.tokenMint,
-                amount: r.perSecond.mul(60 * 60 * 24).toString(),
-                decimalDone: true,
-              }),
-          };
-        }),
-      };
-    });
-    this._hydratedClmmPoolsMap = new Map(this._hydratedClmmPools.map((pool) => [pool.idString, pool]));
-    return this._hydratedClmmPools;
   }
 
   public getAmountsFromLiquidity({
@@ -295,29 +94,9 @@ export class Clmm extends ModuleBase {
     );
   }
 
-  public async fetchPoolAccountPosition(updateOwnerRewardAndFee?: boolean): Promise<HydratedConcentratedInfo[]> {
-    this._clmmSdkParsedPools = this._clmmSdkParsedPools.map((pool) => {
-      delete pool.positionAccount;
-      this._clmmSdkParsedPoolMap.set(pool.state.id.toBase58(), pool);
-      return pool;
-    });
-    if (!this.scope.owner) {
-      this.hydratePoolsInfo();
-      return this._hydratedClmmPools;
-    }
-    await this.scope.account.fetchWalletTokenAccounts();
-    this._clmmSdkParsedPools = await PoolUtils.fetchPoolsAccountPosition({
-      pools: this._clmmSdkParsedPools,
-      connection: this.scope.connection,
-      ownerInfo: { tokenAccounts: this.scope.account.tokenAccountRawInfos, wallet: this.scope.ownerPubKey },
-      updateOwnerRewardAndFee,
-    });
-    this._clmmSdkParsedPoolMap = new Map(this._clmmSdkParsedPools.map((pool) => [pool.state.id.toBase58(), pool]));
-    this.hydratePoolsInfo();
-    return this._hydratedClmmPools;
-  }
-
-  public async createPool(props: CreateConcentratedPool): Promise<MakeTransaction<{ mockPoolInfo: ClmmPoolInfo }>> {
+  public async createPool(
+    props: CreateConcentratedPool,
+  ): Promise<MakeTransaction<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem }>> {
     const {
       programId,
       owner = this.scope.owner?.publicKey || PublicKey.default,
@@ -330,7 +109,7 @@ export class Clmm extends ModuleBase {
     const txBuilder = this.createTxBuilder();
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    const [mintA, mintB, initPrice] = mint1.mint._bn.gt(mint2.mint._bn)
+    const [mintA, mintB, initPrice] = solToWSol(mint1.address)._bn.gt(solToWSol(mint2.address)._bn)
       ? [mint2, mint1, new Decimal(1).div(initialPrice)]
       : [mint1, mint2, initialPrice];
 
@@ -350,41 +129,46 @@ export class Clmm extends ModuleBase {
     txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
 
-    return txBuilder.build<{ mockPoolInfo: ClmmPoolInfo }>({
+    return txBuilder.build<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem }>({
       mockPoolInfo: {
-        creator: this.scope.ownerPubKey,
-        id: insInfo.address.poolId,
-        mintA: {
-          programId: mintA.programId,
-          mint: mintA.mint,
-          vault: insInfo.address.mintAVault,
-          decimals: mintA.decimals,
+        type: "Concentrated",
+        id: insInfo.address.poolId.toString(),
+        mintA,
+        mintB,
+        feeRate: ammConfig.tradeFeeRate,
+        openTime: startTime.toNumber(),
+        programId: programId.toString(),
+        price: initPrice.toNumber(),
+        config: {
+          id: ammConfig.id.toString(),
+          index: ammConfig.index,
+          protocolFeeRate: ammConfig.protocolFeeRate,
+          tradeFeeRate: ammConfig.tradeFeeRate,
+          tickSpacing: ammConfig.tickSpacing,
+          fundFeeRate: ammConfig.fundFeeRate,
+          description: ammConfig.description,
+          defaultRange: 0,
+          defaultRangePoint: [],
         },
-        mintB: {
-          programId: mintB.programId,
-          mint: mintB.mint,
-          vault: insInfo.address.mintBVault,
-          decimals: mintB.decimals,
-        },
-        ammConfig,
-        observationId: insInfo.address.observationId,
-        programId,
-        tickSpacing: ammConfig.tickSpacing,
-        sqrtPriceX64: initialPriceX64,
-        currentPrice: initPrice,
-        ...mockCreatePoolInfo,
-        version: 6,
-        lookupTableAccount: PublicKey.default,
-        startTime: startTime.toNumber(),
-        exBitmapInfo: {
-          poolId: insInfo.address.poolId,
-          positiveTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
-            Array.from({ length: 8 }, (_) => new BN(0)),
-          ),
-          negativeTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
-            Array.from({ length: 8 }, (_) => new BN(0)),
-          ),
-        },
+        ...mockV3CreatePoolInfo,
+        // creator: this.scope.ownerPubKey,
+        // ammConfig,
+        // observationId: insInfo.address.observationId,
+
+        // tickSpacing: ammConfig.tickSpacing,
+        // sqrtPriceX64: initialPriceX64,
+
+        // lookupTableAccount: PublicKey.default,
+        // startTime: startTime.toNumber(),
+        // exBitmapInfo: {
+        //   poolId: insInfo.address.poolId,
+        //   positiveTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
+        //     Array.from({ length: 8 }, (_) => new BN(0)),
+        //   ),
+        //   negativeTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
+        //     Array.from({ length: 8 }, (_) => new BN(0)),
+        //   ),
+        // },
       },
     });
   }
