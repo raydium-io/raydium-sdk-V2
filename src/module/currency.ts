@@ -1,4 +1,4 @@
-import { TOKEN_SOL } from "../raydium/token_old/constant";
+import { SOL_INFO } from "../raydium/token/constant";
 
 import { Token } from "./token";
 
@@ -19,7 +19,7 @@ export class Currency {
   /**
    * The only instance of the base class `Currency`.
    */
-  public static readonly SOL: Currency = new Currency(TOKEN_SOL);
+  public static readonly SOL: Currency = new Currency(SOL_INFO);
 
   /**
    * Constructs an instance of the base class `Currency`. The only instance of the base class `Currency` is `Currency.SOL`.

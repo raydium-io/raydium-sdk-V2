@@ -6,7 +6,7 @@ import { Currency } from "../module/currency";
 import { TokenAmount, CurrencyAmount } from "../module/amount";
 import { Fraction } from "../module/fraction";
 import { Percent } from "../module/percent";
-import { SplToken, TokenJson } from "../raydium/token_old/type";
+import { SplToken, TokenJson } from "../raydium/token/type";
 import { ReplaceType } from "../raydium/type";
 import { createLogger } from "./logger";
 import { mul } from "./fractionUtil";

@@ -19,8 +19,8 @@ import {
   MEMO_PROGRAM_ID,
 } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
-import { MintInfo, ReturnTypeMakeInstructions, ClmmPoolInfo, ClmmPoolPersonalPosition } from "./type";
-import { ObservationInfoLayout } from "./layout";
+import { ReturnTypeMakeInstructions, ClmmPoolInfo, ClmmPoolPersonalPosition } from "./type";
+import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
 import {
   getPdaPoolId,
   getPdaPoolVaultId,
@@ -35,7 +35,7 @@ import {
 import { TickUtils } from "./utils/tick";
 import { PoolUtils } from "./utils/pool";
 import { generatePubKey } from "../account/util";
-import { ApiV3Token } from "../../api/type";
+import { ApiV3Token, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "../../api/type";
 
 const logger = createLogger("Raydium_Clmm");
 
@@ -267,18 +267,18 @@ export class ClmmInstrument {
 
   static async openPositionInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     tickLower,
     tickUpper,
     liquidity,
     amountMaxA,
     amountMaxB,
-    programId,
     withMetadata,
     getEphemeralSigners,
   }: {
-    poolInfo: ClmmPoolInfo;
-
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerInfo: {
       feePayer: PublicKey;
       wallet: PublicKey;
@@ -291,13 +291,12 @@ export class ClmmInstrument {
     liquidity: BN;
     amountMaxA: BN;
     amountMaxB: BN;
-    programId?: PublicKey;
     withMetadata: "create" | "no-create";
     getEphemeralSigners?: (k: number) => any;
   }): Promise<ReturnTypeMakeInstructions> {
     const signers: Signer[] = [];
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
 
-    const nftMintAKeypair = new Keypair();
     let nftMintAccount;
     if (getEphemeralSigners) {
       nftMintAccount = new PublicKey((await getEphemeralSigners(1))[0]);
@@ -307,39 +306,23 @@ export class ClmmInstrument {
       nftMintAccount = _k.publicKey;
     }
 
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
+    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.config.tickSpacing);
+    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.config.tickSpacing);
 
-    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayLowerStartIndex,
-    );
-    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayUpperStartIndex,
-    );
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
 
-    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, nftMintAKeypair.publicKey, programId);
-    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAKeypair.publicKey);
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(
-      poolInfo.programId,
-      nftMintAKeypair.publicKey,
-    );
-    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickLower,
-      tickUpper,
-    );
+    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, nftMintAccount, TOKEN_PROGRAM_ID);
+    const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAccount);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, nftMintAccount);
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(programId, id, tickLower, tickUpper);
 
     const ins = this.openPositionFromLiquidityInstruction(
-      poolInfo.programId,
+      programId,
       ownerInfo.feePayer,
-      poolInfo.id,
+      id,
       ownerInfo.wallet,
-      nftMintAKeypair.publicKey,
+      nftMintAccount,
       positionNftAccount,
       metadataAccount,
       protocolPosition,
@@ -348,10 +331,10 @@ export class ClmmInstrument {
       personalPosition,
       ownerInfo.tokenAccountA,
       ownerInfo.tokenAccountB,
-      poolInfo.mintA.vault,
-      poolInfo.mintB.vault,
-      poolInfo.mintA.mint,
-      poolInfo.mintB.mint,
+      new PublicKey(poolKeys.vault.A),
+      new PublicKey(poolKeys.vault.B),
+      new PublicKey(poolInfo.mintA.address),
+      new PublicKey(poolInfo.mintB.address),
 
       tickLower,
       tickUpper,
@@ -364,16 +347,28 @@ export class ClmmInstrument {
     );
 
     return {
-      signers: [nftMintAKeypair],
+      signers,
       instructions: [ins],
       instructionTypes: [InstructionType.ClmmOpenPosition],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
-      address: {},
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
+      address: {
+        nftMint: nftMintAccount,
+        tickArrayLower,
+        tickArrayUpper,
+        positionNftAccount,
+        metadataAccount,
+        personalPosition,
+        protocolPosition,
+      },
     };
   }
 
   static async openPositionFromBaseInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     tickLower,
     tickUpper,
@@ -383,8 +378,8 @@ export class ClmmInstrument {
     withMetadata,
     getEphemeralSigners,
   }: {
-    poolInfo: ClmmPoolInfo;
-
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerInfo: {
       feePayer: PublicKey;
       wallet: PublicKey;
@@ -403,6 +398,7 @@ export class ClmmInstrument {
     getEphemeralSigners?: (k: number) => any;
   }): Promise<ReturnTypeMakeInstructions> {
     const signers: Signer[] = [];
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
 
     let nftMintAccount: PublicKey;
     if (getEphemeralSigners) {
@@ -413,34 +409,21 @@ export class ClmmInstrument {
       nftMintAccount = _k.publicKey;
     }
 
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
+    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.config.tickSpacing);
+    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.config.tickSpacing);
 
-    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayLowerStartIndex,
-    );
-    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayUpperStartIndex,
-    );
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
 
     const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, nftMintAccount, TOKEN_PROGRAM_ID);
     const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAccount);
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, nftMintAccount);
-    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickLower,
-      tickUpper,
-    );
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, nftMintAccount);
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(programId, id, tickLower, tickUpper);
 
     const ins = this.openPositionFromBaseInstruction(
-      poolInfo.programId,
+      programId,
       ownerInfo.feePayer,
-      poolInfo.id,
+      id,
       ownerInfo.wallet,
       nftMintAccount,
       positionNftAccount,
@@ -451,10 +434,10 @@ export class ClmmInstrument {
       personalPosition,
       ownerInfo.tokenAccountA,
       ownerInfo.tokenAccountB,
-      poolInfo.mintA.vault,
-      poolInfo.mintB.vault,
-      poolInfo.mintA.mint,
-      poolInfo.mintB.mint,
+      new PublicKey(poolKeys.vault.A),
+      new PublicKey(poolKeys.vault.B),
+      new PublicKey(poolInfo.mintA.address),
+      new PublicKey(poolInfo.mintB.address),
 
       tickLower,
       tickUpper,
@@ -467,11 +450,11 @@ export class ClmmInstrument {
       baseAmount,
 
       otherAmountMax,
-      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
         tickArrayLowerStartIndex,
         tickArrayUpperStartIndex,
       ])
-        ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+        ? getPdaExBitmapAccount(programId, id).publicKey
         : undefined,
     );
 
@@ -488,7 +471,10 @@ export class ClmmInstrument {
       instructions: [ins],
       signers,
       instructionTypes: [InstructionType.ClmmOpenPosition],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
@@ -598,6 +584,7 @@ export class ClmmInstrument {
 
   static async openPositionFromLiquidityInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     tickLower,
     tickUpper,
@@ -607,7 +594,8 @@ export class ClmmInstrument {
     withMetadata,
     getEphemeralSigners,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccountA: PublicKey;
@@ -632,34 +620,23 @@ export class ClmmInstrument {
       nftMintAccount = _k.publicKey;
     }
 
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.ammConfig.tickSpacing);
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.ammConfig.tickSpacing);
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
 
-    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayLowerStartIndex,
-    );
-    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayUpperStartIndex,
-    );
+    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.config.tickSpacing);
+    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.config.tickSpacing);
+
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
 
     const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, nftMintAccount, TOKEN_PROGRAM_ID);
     const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAccount);
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, nftMintAccount);
-    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickLower,
-      tickUpper,
-    );
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, nftMintAccount);
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(programId, id, tickLower, tickUpper);
 
     const ins = this.openPositionFromLiquidityInstruction(
-      poolInfo.programId,
+      programId,
       ownerInfo.wallet,
-      poolInfo.id,
+      id,
       ownerInfo.wallet,
       nftMintAccount,
       positionNftAccount,
@@ -670,10 +647,10 @@ export class ClmmInstrument {
       personalPosition,
       ownerInfo.tokenAccountA,
       ownerInfo.tokenAccountB,
-      poolInfo.mintA.vault,
-      poolInfo.mintB.vault,
-      poolInfo.mintA.mint,
-      poolInfo.mintB.mint,
+      new PublicKey(poolKeys.vault.A),
+      new PublicKey(poolKeys.vault.B),
+      new PublicKey(poolKeys.mintA.address),
+      new PublicKey(poolKeys.mintB.address),
 
       tickLower,
       tickUpper,
@@ -683,11 +660,11 @@ export class ClmmInstrument {
       amountMaxA,
       amountMaxB,
       withMetadata,
-      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
         tickArrayLowerStartIndex,
         tickArrayUpperStartIndex,
       ])
-        ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+        ? getPdaExBitmapAccount(programId, id).publicKey
         : undefined,
     );
 
@@ -704,7 +681,9 @@ export class ClmmInstrument {
       instructions: [ins],
       signers,
       instructionTypes: [InstructionType.ClmmOpenPosition],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress: (poolKeys.lookupTableAccount ? [new PublicKey(poolKeys.lookupTableAccount)] : []).filter(
+        (i) => !i.equals(PublicKey.default),
+      ),
     };
   }
 
@@ -741,22 +720,25 @@ export class ClmmInstrument {
 
   static closePositionInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     ownerPosition,
   }: {
-    poolInfo: ClmmPoolInfo;
-    ownerPosition: ClmmPoolPersonalPosition;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
+    ownerPosition: ClmmPositionLayout;
     ownerInfo: {
       wallet: PublicKey;
     };
   }): ReturnTypeMakeInstructions {
+    const programId = new PublicKey(poolInfo.programId);
     const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, ownerPosition.nftMint);
 
     const ins: TransactionInstruction[] = [];
     ins.push(
       this.closePositionInstruction(
-        poolInfo.programId,
+        programId,
 
         ownerInfo.wallet,
         ownerPosition.nftMint,
@@ -773,7 +755,10 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmClosePosition],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
@@ -857,13 +842,15 @@ export class ClmmInstrument {
 
   static increasePositionFromLiquidityInstructions({
     poolInfo,
+    poolKeys,
     ownerPosition,
     ownerInfo,
     liquidity,
     amountMaxA,
     amountMaxB,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerPosition: ClmmPoolPersonalPosition;
 
     ownerInfo: {
@@ -876,60 +863,53 @@ export class ClmmInstrument {
     amountMaxA: BN;
     amountMaxB: BN;
   }): ReturnTypeMakeInstructions {
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
-      poolInfo.ammConfig.tickSpacing,
+      poolInfo.config.tickSpacing,
     );
     const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickUpper,
-      poolInfo.ammConfig.tickSpacing,
+      poolInfo.config.tickSpacing,
     );
 
-    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayLowerStartIndex,
-    );
-    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayUpperStartIndex,
-    );
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
 
     const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
 
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, ownerPosition.nftMint);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
-      poolInfo.programId,
-      poolInfo.id,
+      programId,
+      id,
       ownerPosition.tickLower,
       ownerPosition.tickUpper,
     );
 
     const ins = this.increasePositionFromLiquidityInstruction(
-      poolInfo.programId,
+      programId,
       ownerInfo.wallet,
       positionNftAccount,
       personalPosition,
-      poolInfo.id,
+      id,
       protocolPosition,
       tickArrayLower,
       tickArrayUpper,
       ownerInfo.tokenAccountA,
       ownerInfo.tokenAccountB,
-      poolInfo.mintA.vault,
-      poolInfo.mintB.vault,
-      poolInfo.mintA.mint,
-      poolInfo.mintB.mint,
+      new PublicKey(poolKeys.vault.A),
+      new PublicKey(poolKeys.vault.B),
+      new PublicKey(poolInfo.mintA.address),
+      new PublicKey(poolInfo.mintB.address),
 
       liquidity,
       amountMaxA,
       amountMaxB,
-      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
         tickArrayLowerStartIndex,
         tickArrayUpperStartIndex,
       ])
-        ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+        ? getPdaExBitmapAccount(programId, id).publicKey
         : undefined,
     );
 
@@ -944,19 +924,24 @@ export class ClmmInstrument {
       signers: [],
       instructions: [ins],
       instructionTypes: [InstructionType.ClmmIncreasePosition],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
   static increasePositionFromBaseInstructions({
     poolInfo,
+    poolKeys,
     ownerPosition,
     ownerInfo,
     base,
     baseAmount,
     otherAmountMax,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerPosition: ClmmPoolPersonalPosition;
 
     ownerInfo: {
@@ -970,32 +955,25 @@ export class ClmmInstrument {
 
     otherAmountMax: BN;
   }): ReturnTypeMakeInstructions {
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
-      poolInfo.ammConfig.tickSpacing,
+      poolInfo.config.tickSpacing,
     );
     const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickUpper,
-      poolInfo.ammConfig.tickSpacing,
+      poolInfo.config.tickSpacing,
     );
 
-    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayLowerStartIndex,
-    );
-    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayUpperStartIndex,
-    );
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
 
     const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
 
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, ownerPosition.nftMint);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
-      poolInfo.programId,
-      poolInfo.id,
+      programId,
+      id,
       ownerPosition.tickLower,
       ownerPosition.tickUpper,
     );
@@ -1010,36 +988,39 @@ export class ClmmInstrument {
       },
       instructions: [
         this.increasePositionFromBaseInstruction(
-          poolInfo.programId,
+          programId,
           ownerInfo.wallet,
           positionNftAccount,
           personalPosition,
-          poolInfo.id,
+          id,
           protocolPosition,
           tickArrayLower,
           tickArrayUpper,
           ownerInfo.tokenAccountA,
           ownerInfo.tokenAccountB,
-          poolInfo.mintA.vault,
-          poolInfo.mintB.vault,
-          poolInfo.mintA.mint,
-          poolInfo.mintB.mint,
+          new PublicKey(poolKeys.vault.A),
+          new PublicKey(poolKeys.vault.B),
+          new PublicKey(poolInfo.mintA.address),
+          new PublicKey(poolInfo.mintB.address),
 
           base,
           baseAmount,
 
           otherAmountMax,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
             tickArrayLowerStartIndex,
             tickArrayUpperStartIndex,
           ])
-            ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+            ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
         ),
       ],
       signers: [],
       instructionTypes: [InstructionType.ClmmIncreasePosition],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
@@ -1208,6 +1189,7 @@ export class ClmmInstrument {
 
   static decreaseLiquidityInstructions({
     poolInfo,
+    poolKeys,
     ownerPosition,
     ownerInfo,
     liquidity,
@@ -1215,8 +1197,9 @@ export class ClmmInstrument {
     amountMinB,
     programId,
   }: {
-    poolInfo: ClmmPoolInfo;
-    ownerPosition: ClmmPoolPersonalPosition;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
+    ownerPosition: ClmmPositionLayout;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -1230,31 +1213,24 @@ export class ClmmInstrument {
     amountMinB: BN;
     programId?: PublicKey;
   }): ReturnTypeMakeInstructions {
+    const [poolProgramId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
-      poolInfo.ammConfig.tickSpacing,
+      poolInfo.config.tickSpacing,
     );
     const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickUpper,
-      poolInfo.ammConfig.tickSpacing,
+      poolInfo.config.tickSpacing,
     );
 
-    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayLowerStartIndex,
-    );
-    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(
-      poolInfo.programId,
-      poolInfo.id,
-      tickArrayUpperStartIndex,
-    );
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(poolProgramId, id, tickArrayLowerStartIndex);
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(poolProgramId, id, tickArrayUpperStartIndex);
     const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, programId);
 
-    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolInfo.programId, ownerPosition.nftMint);
+    const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolProgramId, ownerPosition.nftMint);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
-      poolInfo.programId,
-      poolInfo.id,
+      poolProgramId,
+      id,
       ownerPosition.tickLower,
       ownerPosition.tickUpper,
     );
@@ -1264,41 +1240,41 @@ export class ClmmInstrument {
       ownerRewardVault: PublicKey;
       rewardMint: PublicKey;
     }[] = [];
-    for (let i = 0; i < poolInfo.rewardInfos.length; i++) {
+    for (let i = 0; i < poolInfo.rewardDefaultInfos.length; i++) {
       rewardAccounts.push({
-        poolRewardVault: poolInfo.rewardInfos[0].tokenVault,
+        poolRewardVault: new PublicKey(poolKeys.rewardInfos[0].vault),
         ownerRewardVault: ownerInfo.rewardAccounts[0],
-        rewardMint: poolInfo.rewardInfos[i].tokenMint,
+        rewardMint: new PublicKey(poolInfo.rewardDefaultInfos[i].mint.address),
       });
     }
 
     const ins: TransactionInstruction[] = [];
     ins.push(
       this.decreaseLiquidityInstruction(
-        poolInfo.programId,
+        poolProgramId,
         ownerInfo.wallet,
         positionNftAccount,
         personalPosition,
-        poolInfo.id,
+        id,
         protocolPosition,
         tickArrayLower,
         tickArrayUpper,
         ownerInfo.tokenAccountA,
         ownerInfo.tokenAccountB,
-        poolInfo.mintA.vault,
-        poolInfo.mintB.vault,
-        poolInfo.mintA.mint,
-        poolInfo.mintB.mint,
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        new PublicKey(poolInfo.mintA.address),
+        new PublicKey(poolInfo.mintB.address),
         rewardAccounts,
 
         liquidity,
         amountMinA,
         amountMinB,
-        PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.tickSpacing, [
+        PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
         ])
-          ? getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey
+          ? getPdaExBitmapAccount(poolProgramId, id).publicKey
           : undefined,
       ),
     );
@@ -1314,7 +1290,10 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmDecreasePosition],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
@@ -1395,6 +1374,7 @@ export class ClmmInstrument {
 
   static makeSwapBaseInInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     inputMint,
     amountIn,
@@ -1402,7 +1382,8 @@ export class ClmmInstrument {
     sqrtPriceLimitX64,
     remainingAccounts,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -1418,38 +1399,46 @@ export class ClmmInstrument {
 
     remainingAccounts: PublicKey[];
   }): ReturnTypeMakeInstructions {
-    const isInputMintA = poolInfo.mintA.mint.equals(inputMint);
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
+    const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
+    const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
+
+    const isInputMintA = poolInfo.mintA.address === inputMint.toString();
     const ins = [
       this.swapInstruction(
-        poolInfo.programId,
+        programId,
         ownerInfo.wallet,
 
-        poolInfo.id,
-        poolInfo.ammConfig.id,
+        id,
+        new PublicKey(poolInfo.config.id),
 
         isInputMintA ? ownerInfo.tokenAccountA : ownerInfo.tokenAccountB,
         isInputMintA ? ownerInfo.tokenAccountB : ownerInfo.tokenAccountA,
 
-        isInputMintA ? poolInfo.mintA.vault : poolInfo.mintB.vault,
-        isInputMintA ? poolInfo.mintB.vault : poolInfo.mintA.vault,
+        isInputMintA ? mintAVault : mintBVault,
+        isInputMintA ? mintBVault : mintAVault,
 
-        isInputMintA ? poolInfo.mintA.mint : poolInfo.mintB.mint,
-        isInputMintA ? poolInfo.mintB.mint : poolInfo.mintA.mint,
+        isInputMintA ? mintA : mintB,
+        isInputMintA ? mintB : mintA,
 
         remainingAccounts,
-        poolInfo.observationId,
+        // poolInfo.observationId, // to do get from api
+        mintAVault,
         amountIn,
         amountOutMin,
         sqrtPriceLimitX64,
         true,
-        getPdaExBitmapAccount(poolInfo.programId, poolInfo.id).publicKey,
+        getPdaExBitmapAccount(programId, id).publicKey,
       ),
     ];
     return {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSwapBaseIn],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
       address: {},
     };
   }
@@ -1507,10 +1496,12 @@ export class ClmmInstrument {
 
   static initRewardInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     rewardInfo,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccount: PublicKey;
@@ -1523,15 +1514,16 @@ export class ClmmInstrument {
       emissionsPerSecondX64: BN;
     };
   }): ReturnTypeMakeInstructions {
-    const poolRewardVault = getPdaPoolRewardVaulId(poolInfo.programId, poolInfo.id, rewardInfo.mint).publicKey;
-    const operationId = getPdaOperationAccount(poolInfo.programId).publicKey;
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
+    const poolRewardVault = getPdaPoolRewardVaulId(programId, id, rewardInfo.mint).publicKey;
+    const operationId = getPdaOperationAccount(programId).publicKey;
     const ins = [
       this.initRewardInstruction(
-        poolInfo.programId,
+        programId,
         ownerInfo.wallet,
-        poolInfo.id,
+        id,
         operationId,
-        poolInfo.ammConfig.id,
+        new PublicKey(poolInfo.config.id),
 
         ownerInfo.tokenAccount,
         rewardInfo.mint,
@@ -1547,7 +1539,10 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmInitReward],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
@@ -1605,10 +1600,12 @@ export class ClmmInstrument {
 
   static setRewardInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     rewardInfo,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccount: PublicKey;
@@ -1620,45 +1617,50 @@ export class ClmmInstrument {
       emissionsPerSecondX64: BN;
     };
   }): ReturnTypeMakeInstructions {
-    let rewardIndex;
-    let rewardVault;
-    let rewardMint;
-    for (let index = 0; index < poolInfo.rewardInfos.length; index++)
-      if (poolInfo.rewardInfos[index].tokenMint.equals(rewardInfo.mint)) {
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
+
+    let rewardIndex: number | undefined;
+    let rewardVault: PublicKey | undefined;
+    let rewardMint: PublicKey | undefined;
+    for (let index = 0; index < poolInfo.rewardDefaultInfos.length; index++)
+      if (poolInfo.rewardDefaultInfos[index].mint.address === rewardInfo.mint.toString()) {
         rewardIndex = index;
-        rewardVault = poolInfo.rewardInfos[index].tokenVault;
-        rewardMint = poolInfo.rewardInfos[index].tokenMint;
+        rewardVault = new PublicKey(poolKeys.rewardInfos[index].vault);
+        rewardMint = new PublicKey(poolKeys.rewardInfos[index].mint.address);
       }
 
     if (rewardIndex === undefined || rewardVault === undefined)
-      logger.logWithError("reward mint check error", "no reward mint", poolInfo.rewardInfos);
+      logger.logWithError("reward mint check error", "no reward mint", poolInfo.rewardDefaultInfos);
 
-    const operationId = getPdaOperationAccount(poolInfo.programId).publicKey;
+    const operationId = getPdaOperationAccount(programId).publicKey;
 
     const ins = [
       this.setRewardInstruction(
-        poolInfo.programId,
+        programId,
         ownerInfo.wallet,
-        poolInfo.id,
+        id,
         operationId,
-        poolInfo.ammConfig.id,
+        new PublicKey(poolInfo.config.id),
 
         ownerInfo.tokenAccount,
-        rewardVault,
-        rewardMint,
+        rewardVault!,
+        rewardMint!,
 
-        rewardIndex,
+        rewardIndex!,
         rewardInfo.openTime,
         rewardInfo.endTime,
         rewardInfo.emissionsPerSecondX64,
       ),
     ];
     return {
-      address: { rewardVault, operationId },
+      address: { rewardVault: rewardVault!, operationId },
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSetReward],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
@@ -1705,46 +1707,52 @@ export class ClmmInstrument {
 
   static collectRewardInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     rewardMint,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccount: PublicKey;
     };
     rewardMint: PublicKey;
   }): ReturnTypeMakeInstructions {
-    let rewardIndex;
-    let rewardVault;
-    for (let index = 0; index < poolInfo.rewardInfos.length; index++)
-      if (poolInfo.rewardInfos[index].tokenMint.equals(rewardMint)) {
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
+    let rewardIndex: number | undefined;
+    let rewardVault: PublicKey | undefined;
+    for (let index = 0; index < poolInfo.rewardDefaultInfos.length; index++)
+      if (poolInfo.rewardDefaultInfos[index].mint.address === rewardMint.toString()) {
         rewardIndex = index;
-        rewardVault = poolInfo.rewardInfos[index].tokenVault;
+        rewardVault = new PublicKey(poolKeys.rewardInfos[index].vault);
       }
 
     if (rewardIndex === undefined || rewardVault === undefined)
-      logger.logWithError("reward mint check error", "no reward mint", poolInfo.rewardInfos);
+      logger.logWithError("reward mint check error", "no reward mint", poolInfo.rewardDefaultInfos);
 
     const ins = [
       this.collectRewardInstruction(
-        poolInfo.programId,
+        programId,
         ownerInfo.wallet,
-        poolInfo.id,
+        id,
 
         ownerInfo.tokenAccount,
-        rewardVault,
+        rewardVault!,
         rewardMint,
 
-        rewardIndex,
+        rewardIndex!,
       ),
     ];
     return {
-      address: { rewardVault },
+      address: { rewardVault: rewardVault! },
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmCollectReward],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
     };
   }
 
@@ -1761,6 +1769,7 @@ export class ClmmInstrument {
 
   static swapBaseOutInstructions({
     poolInfo,
+    poolKeys,
     ownerInfo,
     outputMint,
     amountOut,
@@ -1768,7 +1777,8 @@ export class ClmmInstrument {
     sqrtPriceLimitX64,
     remainingAccounts,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys: ClmmKeys;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -1784,26 +1794,30 @@ export class ClmmInstrument {
 
     remainingAccounts: PublicKey[];
   }): ReturnTypeMakeInstructions {
-    const isInputMintA = poolInfo.mintA.mint.equals(outputMint);
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
+    const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
+    const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
+    const isInputMintA = poolInfo.mintA.address === outputMint.toString();
     const ins = [
       this.swapInstruction(
-        poolInfo.programId,
+        programId,
         ownerInfo.wallet,
 
-        poolInfo.id,
-        poolInfo.ammConfig.id,
+        id,
+        new PublicKey(poolInfo.config.id),
 
         isInputMintA ? ownerInfo.tokenAccountB : ownerInfo.tokenAccountA,
         isInputMintA ? ownerInfo.tokenAccountA : ownerInfo.tokenAccountB,
 
-        isInputMintA ? poolInfo.mintB.vault : poolInfo.mintA.vault,
-        isInputMintA ? poolInfo.mintA.vault : poolInfo.mintB.vault,
+        isInputMintA ? mintBVault : mintAVault,
+        isInputMintA ? mintAVault : mintBVault,
 
-        isInputMintA ? poolInfo.mintA.mint : poolInfo.mintB.mint,
-        isInputMintA ? poolInfo.mintB.mint : poolInfo.mintA.mint,
+        isInputMintA ? mintA : mintB,
+        isInputMintA ? mintB : mintA,
 
         remainingAccounts,
-        poolInfo.observationId,
+        // poolInfo.observationId, // to do
+        mintAVault,
         amountOut,
         amountInMax,
         sqrtPriceLimitX64,
@@ -1814,7 +1828,10 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSwapBaseOut],
-      lookupTableAddress: [poolInfo.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
       address: {},
     };
   }

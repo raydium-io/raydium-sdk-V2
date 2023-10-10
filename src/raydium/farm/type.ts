@@ -3,7 +3,7 @@ import BN from "bn.js";
 
 import { PublicKeyish } from "../../common";
 import { BigNumberish } from "../../common/bignumber";
-import { SplToken } from "../token_old/type";
+import { SplToken } from "../token/type";
 import { Token, Price, Percent, TokenAmount, CurrencyAmount } from "../../module";
 import { SplAccount } from "../account/types";
 import { UnionCover } from "../type";

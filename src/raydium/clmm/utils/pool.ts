@@ -1268,7 +1268,6 @@ export class PoolUtils {
     amount,
     slippage,
     add,
-    epochInfo,
     amountHasFee,
   }: {
     connection: Connection;
@@ -1280,9 +1279,8 @@ export class PoolUtils {
     slippage: number;
     add: boolean;
     amountHasFee: boolean;
-
-    epochInfo: EpochInfo;
   }): Promise<ReturnTypeGetLiquidityAmountOut> {
+    const epochInfo = await connection.getEpochInfo();
     const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
       new Decimal(poolInfo.price),
       poolInfo.mintA.decimals,

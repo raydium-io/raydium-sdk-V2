@@ -32,7 +32,7 @@ import {
   makeCreatePoolV4InstructionV2,
 } from "./instruction";
 import { getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice, StableLayout } from "./stable";
-import { LpToken, SplToken } from "../token_old/type";
+import { LpToken, SplToken } from "../token/type";
 import {
   AmountSide,
   CreatePoolParam,
@@ -977,174 +977,174 @@ export default class Liquidity extends ModuleBase {
     return isSideA ? "a" : "b";
   }
 
-  public async removeAllLpAndCreateClmmPosition({
-    poolId,
-    removeLpAmount,
-    clmmPoolId,
-    createPositionInfo,
-    farmInfo,
-    computeBudgetConfig,
-    payer,
-    tokenProgram,
-    getEphemeralSigners,
-  }: {
-    poolId: PublicKeyish;
-    removeLpAmount: BN;
-    clmmPoolId: PublicKeyish;
-    createPositionInfo: {
-      tickLower: number;
-      tickUpper: number;
-      liquidity: BN;
-      amountMaxA: BN;
-      amountMaxB: BN;
-    };
-    farmInfo?: {
-      farmId: PublicKeyish;
-      amount: BN;
-    };
-    payer?: PublicKey;
-    computeBudgetConfig?: ComputeBudgetConfig;
-    tokenProgram?: PublicKey;
-    getEphemeralSigners?: (k: number) => any;
-  }): Promise<MakeTransaction> {
-    const poolInfo = this._poolInfoMap.get(poolId.toString());
-    if (!poolInfo) throw new Error("pool not found");
-    const poolKeys = jsonInfo2PoolKeys(poolInfo);
+  // public async removeAllLpAndCreateClmmPosition({
+  //   poolId,
+  //   removeLpAmount,
+  //   clmmPoolId,
+  //   createPositionInfo,
+  //   farmInfo,
+  //   computeBudgetConfig,
+  //   payer,
+  //   tokenProgram,
+  //   getEphemeralSigners,
+  // }: {
+  //   poolId: PublicKeyish;
+  //   removeLpAmount: BN;
+  //   clmmPoolId: PublicKeyish;
+  //   createPositionInfo: {
+  //     tickLower: number;
+  //     tickUpper: number;
+  //     liquidity: BN;
+  //     amountMaxA: BN;
+  //     amountMaxB: BN;
+  //   };
+  //   farmInfo?: {
+  //     farmId: PublicKeyish;
+  //     amount: BN;
+  //   };
+  //   payer?: PublicKey;
+  //   computeBudgetConfig?: ComputeBudgetConfig;
+  //   tokenProgram?: PublicKey;
+  //   getEphemeralSigners?: (k: number) => any;
+  // }): Promise<MakeTransaction> {
+  //   const poolInfo = this._poolInfoMap.get(poolId.toString());
+  //   if (!poolInfo) throw new Error("pool not found");
+  //   const poolKeys = jsonInfo2PoolKeys(poolInfo);
 
-    const clmmPoolKeys = this.scope.clmm.pools.sdkParsedDataMap.get(clmmPoolId.toString())?.state;
-    if (!clmmPoolKeys) throw new Error("clmm pool not found");
+  //   const clmmPoolKeys = this.scope.clmm.pools.sdkParsedDataMap.get(clmmPoolId.toString())?.state;
+  //   if (!clmmPoolKeys) throw new Error("clmm pool not found");
 
-    const { instructions, instructionTypes } = computeBudgetConfig
-      ? addComputeBudget(computeBudgetConfig)
-      : { instructions: [], instructionTypes: [] };
-    clmmPoolKeys;
-    if (!(poolKeys.baseMint.equals(clmmPoolKeys.mintA.mint) || poolKeys.baseMint.equals(clmmPoolKeys.mintB.mint)))
-      throw Error("mint check error");
-    if (!(poolKeys.quoteMint.equals(clmmPoolKeys.mintA.mint) || poolKeys.quoteMint.equals(clmmPoolKeys.mintB.mint)))
-      throw Error("mint check error");
+  //   const { instructions, instructionTypes } = computeBudgetConfig
+  //     ? addComputeBudget(computeBudgetConfig)
+  //     : { instructions: [], instructionTypes: [] };
+  //   clmmPoolKeys;
+  //   if (!(poolKeys.baseMint.equals(clmmPoolKeys.mintA.mint) || poolKeys.baseMint.equals(clmmPoolKeys.mintB.mint)))
+  //     throw Error("mint check error");
+  //   if (!(poolKeys.quoteMint.equals(clmmPoolKeys.mintA.mint) || poolKeys.quoteMint.equals(clmmPoolKeys.mintB.mint)))
+  //     throw Error("mint check error");
 
-    const txBuilder = this.createTxBuilder();
-    const mintToAccount: { [mint: string]: PublicKey } = {};
-    for (const item of this.scope.account.tokenAccountRawInfos) {
-      if (
-        mintToAccount[item.accountInfo.mint.toString()] === undefined ||
-        getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint, tokenProgram).publicKey.equals(item.pubkey)
-      ) {
-        mintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
-      }
-    }
+  //   const txBuilder = this.createTxBuilder();
+  //   const mintToAccount: { [mint: string]: PublicKey } = {};
+  //   for (const item of this.scope.account.tokenAccountRawInfos) {
+  //     if (
+  //       mintToAccount[item.accountInfo.mint.toString()] === undefined ||
+  //       getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint, tokenProgram).publicKey.equals(item.pubkey)
+  //     ) {
+  //       mintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
+  //     }
+  //   }
 
-    const lpTokenAccount = mintToAccount[poolKeys.lpMint.toString()];
-    if (lpTokenAccount === undefined) throw Error("find lp account error in trade accounts");
+  //   const lpTokenAccount = mintToAccount[poolKeys.lpMint.toString()];
+  //   if (lpTokenAccount === undefined) throw Error("find lp account error in trade accounts");
 
-    const amountIn = removeLpAmount.add(farmInfo?.amount ?? new BN(0));
+  //   const amountIn = removeLpAmount.add(farmInfo?.amount ?? new BN(0));
 
-    const mintBaseUseSOLBalance = poolKeys.baseMint.equals(Token.WSOL.mint);
-    const mintQuoteUseSOLBalance = poolKeys.quoteMint.equals(Token.WSOL.mint);
+  //   const mintBaseUseSOLBalance = poolKeys.baseMint.equals(Token.WSOL.mint);
+  //   const mintQuoteUseSOLBalance = poolKeys.quoteMint.equals(Token.WSOL.mint);
 
-    const { account: baseTokenAccount, instructionParams: ownerTokenAccountBaseInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: poolKeys.baseMint,
-        owner: this.scope.ownerPubKey,
-        skipCloseAccount: !mintBaseUseSOLBalance,
-        createInfo: {
-          payer: payer || this.scope.ownerPubKey,
-        },
-        associatedOnly: true,
-      });
-    txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
-    if (baseTokenAccount === undefined) throw new Error("base token account not found");
+  //   const { account: baseTokenAccount, instructionParams: ownerTokenAccountBaseInstruction } =
+  //     await this.scope.account.getOrCreateTokenAccount({
+  //       mint: poolKeys.baseMint,
+  //       owner: this.scope.ownerPubKey,
+  //       skipCloseAccount: !mintBaseUseSOLBalance,
+  //       createInfo: {
+  //         payer: payer || this.scope.ownerPubKey,
+  //       },
+  //       associatedOnly: true,
+  //     });
+  //   txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
+  //   if (baseTokenAccount === undefined) throw new Error("base token account not found");
 
-    const { account: quoteTokenAccount, instructionParams: ownerTokenAccountQuoteInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: poolKeys.quoteMint,
-        owner: this.scope.ownerPubKey,
-        skipCloseAccount: !mintQuoteUseSOLBalance,
-        createInfo: {
-          payer: payer || this.scope.ownerPubKey,
-          amount: 0,
-        },
-        associatedOnly: true,
-      });
-    txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
-    if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
+  //   const { account: quoteTokenAccount, instructionParams: ownerTokenAccountQuoteInstruction } =
+  //     await this.scope.account.getOrCreateTokenAccount({
+  //       mint: poolKeys.quoteMint,
+  //       owner: this.scope.ownerPubKey,
+  //       skipCloseAccount: !mintQuoteUseSOLBalance,
+  //       createInfo: {
+  //         payer: payer || this.scope.ownerPubKey,
+  //         amount: 0,
+  //       },
+  //       associatedOnly: true,
+  //     });
+  //   txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
+  //   if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
 
-    mintToAccount[poolKeys.baseMint.toString()] = baseTokenAccount;
-    mintToAccount[poolKeys.quoteMint.toString()] = quoteTokenAccount;
+  //   mintToAccount[poolKeys.baseMint.toString()] = baseTokenAccount;
+  //   mintToAccount[poolKeys.quoteMint.toString()] = quoteTokenAccount;
 
-    const removeIns = makeRemoveLiquidityInstruction({
-      poolKeys,
-      userKeys: {
-        lpTokenAccount,
-        baseTokenAccount,
-        quoteTokenAccount,
-        owner: this.scope.ownerPubKey,
-      },
-      amountIn,
-    });
+  //   const removeIns = makeRemoveLiquidityInstruction({
+  //     poolKeys,
+  //     userKeys: {
+  //       lpTokenAccount,
+  //       baseTokenAccount,
+  //       quoteTokenAccount,
+  //       owner: this.scope.ownerPubKey,
+  //     },
+  //     amountIn,
+  //   });
 
-    const [tokenAccountA, tokenAccountB] = poolKeys.baseMint.equals(clmmPoolKeys.mintA.mint)
-      ? [baseTokenAccount, quoteTokenAccount]
-      : [quoteTokenAccount, baseTokenAccount];
-    const createPositionIns = await ClmmInstrument.openPositionInstructions({
-      poolInfo: clmmPoolKeys,
-      ownerInfo: {
-        feePayer: payer ?? this.scope.ownerPubKey,
-        wallet: this.scope.ownerPubKey,
-        tokenAccountA,
-        tokenAccountB,
-      },
-      withMetadata: "create",
-      ...createPositionInfo,
-      getEphemeralSigners,
-    });
+  //   const [tokenAccountA, tokenAccountB] = poolKeys.baseMint.equals(clmmPoolKeys.mintA.mint)
+  //     ? [baseTokenAccount, quoteTokenAccount]
+  //     : [quoteTokenAccount, baseTokenAccount];
+  //   const createPositionIns = await ClmmInstrument.openPositionInstructions({
+  //     poolInfo: clmmPoolKeys,
+  //     ownerInfo: {
+  //       feePayer: payer ?? this.scope.ownerPubKey,
+  //       wallet: this.scope.ownerPubKey,
+  //       tokenAccountA,
+  //       tokenAccountB,
+  //     },
+  //     withMetadata: "create",
+  //     ...createPositionInfo,
+  //     getEphemeralSigners,
+  //   });
 
-    const farmKeys = this.scope.farm.allParsedFarmMap.get(farmInfo?.farmId.toString() || "");
+  //   const farmKeys = this.scope.farm.allParsedFarmMap.get(farmInfo?.farmId.toString() || "");
 
-    let farmWithdrawData: MakeTransaction<Record<string, any>> | undefined = undefined;
+  //   let farmWithdrawData: MakeTransaction<Record<string, any>> | undefined = undefined;
 
-    if (farmInfo !== undefined && farmKeys !== undefined) {
-      const rewardTokenAccounts: PublicKey[] = [];
-      for (const item of farmKeys.rewardInfos) {
-        const rewardIsWsol = item.rewardMint.equals(Token.WSOL.mint);
+  //   if (farmInfo !== undefined && farmKeys !== undefined) {
+  //     const rewardTokenAccounts: PublicKey[] = [];
+  //     for (const item of farmKeys.rewardInfos) {
+  //       const rewardIsWsol = item.rewardMint.equals(Token.WSOL.mint);
 
-        const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-          mint: item.rewardMint,
-          owner: this.scope.ownerPubKey,
-          skipCloseAccount: !rewardIsWsol,
-          createInfo: {
-            payer: payer || this.scope.ownerPubKey,
-          },
-          associatedOnly: true,
-        });
-        txBuilder.addInstruction(instructionParams || {});
-        if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
-        rewardTokenAccounts.push(mintToAccount[item.rewardMint.toString()] ?? account);
-      }
+  //       const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+  //         mint: item.rewardMint,
+  //         owner: this.scope.ownerPubKey,
+  //         skipCloseAccount: !rewardIsWsol,
+  //         createInfo: {
+  //           payer: payer || this.scope.ownerPubKey,
+  //         },
+  //         associatedOnly: true,
+  //       });
+  //       txBuilder.addInstruction(instructionParams || {});
+  //       if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
+  //       rewardTokenAccounts.push(mintToAccount[item.rewardMint.toString()] ?? account);
+  //     }
 
-      farmWithdrawData = await this.scope.farm.withdraw({
-        farmId: new PublicKey(farmInfo.farmId),
-        amount: farmInfo.amount,
-      });
-    }
+  //     farmWithdrawData = await this.scope.farm.withdraw({
+  //       farmId: new PublicKey(farmInfo.farmId),
+  //       amount: farmInfo.amount,
+  //     });
+  //   }
 
-    txBuilder.addInstruction({
-      instructions: [...(farmWithdrawData?.transaction.instructions ?? []), removeIns],
-      signers: farmWithdrawData?.signers ?? [],
-      instructionTypes: [
-        ...(farmWithdrawData?.instructionTypes ?? []),
-        poolKeys.version === 4 ? InstructionType.AmmV4RemoveLiquidity : InstructionType.AmmV5RemoveLiquidity,
-      ],
-      lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
-    });
+  //   txBuilder.addInstruction({
+  //     instructions: [...(farmWithdrawData?.transaction.instructions ?? []), removeIns],
+  //     signers: farmWithdrawData?.signers ?? [],
+  //     instructionTypes: [
+  //       ...(farmWithdrawData?.instructionTypes ?? []),
+  //       poolKeys.version === 4 ? InstructionType.AmmV4RemoveLiquidity : InstructionType.AmmV5RemoveLiquidity,
+  //     ],
+  //     lookupTableAddress: [poolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+  //   });
 
-    txBuilder.addInstruction({
-      instructions: [...instructions, ...createPositionIns.instructions],
-      signers: createPositionIns.signers,
-      instructionTypes: [...instructionTypes, ...createPositionIns.instructionTypes],
-      lookupTableAddress: [clmmPoolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
-    });
+  //   txBuilder.addInstruction({
+  //     instructions: [...instructions, ...createPositionIns.instructions],
+  //     signers: createPositionIns.signers,
+  //     instructionTypes: [...instructionTypes, ...createPositionIns.instructionTypes],
+  //     lookupTableAddress: [clmmPoolKeys.lookupTableAccount].filter((i) => !i.equals(PublicKey.default)),
+  //   });
 
-    return txBuilder.build();
-  }
+  //   return txBuilder.build();
+  // }
 }

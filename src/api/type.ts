@@ -429,7 +429,11 @@ interface MarketKeys {
 }
 export type AmmV4Keys = Base & AmmKeys & MarketKeys;
 export type AmmV5Keys = Base & AmmKeys & MarketKeys & { modelDataAccount: string };
-export type ClmmKeys = Base & { config: ApiClmmConfigV3; rewardInfos: ApiV3Token[] };
+interface ClmmRewardType {
+  mint: ApiV3Token;
+  vault: string;
+}
+export type ClmmKeys = Base & { config: ApiClmmConfigV3; rewardInfos: ClmmRewardType[] };
 export type PoolKeys = AmmV4Keys | AmmV5Keys | ClmmKeys;
 
 // clmm config

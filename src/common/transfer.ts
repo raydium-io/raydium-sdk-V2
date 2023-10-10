@@ -1,9 +1,8 @@
-import { EpochInfo, Connection, PublicKey } from "@solana/web3.js";
-import { TransferFeeConfig, TransferFee, getTransferFeeConfig, unpackMint } from "@solana/spl-token";
+import { EpochInfo } from "@solana/web3.js";
+import { TransferFeeConfig, TransferFee } from "@solana/spl-token";
 import BN from "bn.js";
-import { getMultipleAccountsInfoWithCustomFlags } from "./accountInfo";
 
-import { GetTransferAmountFee, ReturnTypeFetchMultipleMintInfos } from "../raydium/type";
+import { GetTransferAmountFee } from "../raydium/type";
 import { TransferFeeDataBaseType } from "../api/type";
 
 const POINT = 10_000;

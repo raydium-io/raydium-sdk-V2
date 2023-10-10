@@ -109,6 +109,8 @@ export const PositionInfoLayout = struct([
   seq(u64(), 8, ""),
 ]);
 
+export type ClmmPositionLayout = ReturnType<typeof PositionInfoLayout.decode>;
+
 export const ProtocolPositionLayout = struct([
   blob(8),
   u8("bump"),

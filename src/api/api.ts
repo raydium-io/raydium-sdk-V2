@@ -23,6 +23,7 @@ import { updateReqHistory } from "./utils";
 import { PublicKey } from "@solana/web3.js";
 
 const logger = createLogger("Raydium_Api");
+const poolKeysCache: Map<string, PoolKeys> = new Map();
 
 export async function endlessRetry<T>(name: string, call: () => Promise<T>, interval = 1000): Promise<T> {
   let result: T | undefined;
@@ -286,12 +287,17 @@ export class Api {
   async fetchPoolKeysById(props: { id: string }): Promise<PoolKeys> {
     const { id } = props;
 
+    if (poolKeysCache.has(id)) {
+      return poolKeysCache.get(id)!;
+    }
+
     const res = await this.api.get<PoolKeys>(
       (this.urlConfigs.POOL_KEY_BY_ID || DEV_API_URLS.POOL_KEY_BY_ID).replace("{id}", id),
       {
         baseURL: DEV_API_URLS.BASE_HOST,
       },
     );
+    poolKeysCache.set(id, res.data);
     return res.data;
   }
 }

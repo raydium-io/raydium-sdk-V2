@@ -10,7 +10,7 @@ import { generatePubKey } from "./util";
 import { BigNumberish, parseBigNumberish } from "../../common";
 import { AddInstructionParam } from "../../common/txTool/txTool";
 import { InstructionType } from "../../common/txTool/txType";
-import { TOKEN_WSOL } from "../token_old/constant";
+import { TOKEN_WSOL } from "../token/constant";
 
 import { splAccountLayout } from "./layout";
 

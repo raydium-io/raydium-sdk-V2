@@ -405,7 +405,8 @@ export async function makeSwapInstruction({
         : MAX_SQRT_PRICE_X64.sub(ONE);
 
       return await ClmmInstrument.makeSwapBaseInInstructions({
-        poolInfo: _poolKey,
+        poolInfo: _poolKey as any,
+        poolKeys: _poolKey as any,
         ownerInfo: {
           wallet: ownerInfo.wallet,
           tokenAccountA: _poolKey.mintA.mint.equals(inputMint) ? ownerInfo.sourceToken : ownerInfo.destinationToken,

@@ -1,4 +1,4 @@
-import { Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { EpochInfo, Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { Fraction } from "../../module/fraction";
@@ -8,6 +8,7 @@ import { TickArray } from "./utils/tick";
 import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem } from "../../api/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 import { ApiV3Token } from "../../api/type";
+import { ClmmPositionLayout } from "./layout";
 
 export { ApiClmmPoolInfo, ApiClmmConfigInfo };
 
@@ -349,7 +350,7 @@ export interface UserPositionAccount {
 }
 
 export interface IncreasePositionFromLiquidity {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerPosition: ClmmPoolPersonalPosition;
   ownerInfo: {
     useSOLBalance?: boolean;
@@ -364,7 +365,7 @@ export interface IncreasePositionFromLiquidity {
 }
 
 export interface IncreasePositionFromBase {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerPosition: ClmmPoolPersonalPosition;
   ownerInfo: {
     useSOLBalance?: boolean;
@@ -377,8 +378,8 @@ export interface IncreasePositionFromBase {
 }
 
 export interface DecreaseLiquidity {
-  poolId: PublicKey;
-  ownerPosition: ClmmPoolPersonalPosition;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
+  ownerPosition: ClmmPositionLayout;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint
     closePosition?: boolean;
@@ -407,7 +408,7 @@ export interface ClmmPoolRewardLayoutInfo {
 }
 
 export interface OpenPositionFromBase {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
   };
@@ -434,32 +435,14 @@ export interface OpenPositionFromLiquidity {
   tickLower: number;
   tickUpper: number;
   liquidity: BN;
-  slippage: number;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   withMetadata?: "create" | "no-create";
   getEphemeralSigners?: (k: number) => any;
 }
 
-export interface InitRewardParams {
-  programId: PublicKey;
-  payer: PublicKey;
-  poolId: PublicKey;
-  operationId: PublicKey;
-  ammConfigId: PublicKey;
-
-  ownerTokenAccount: PublicKey;
-  rewardMint: PublicKey;
-  rewardVault: PublicKey;
-
-  rewardIndex: number;
-  openTime: number;
-  endTime: number;
-  emissionsPerSecondX64: BN;
-}
-
 export interface SwapInParams {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer: PublicKey;
     useSOLBalance?: boolean;
@@ -474,15 +457,16 @@ export interface SwapInParams {
 }
 
 export interface GetAmountParams {
-  poolId: string | PublicKey;
-  ownerPosition: ClmmPoolPersonalPosition;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
+  ownerPosition: ClmmPositionLayout;
   liquidity: BN;
   slippage: number;
   add: boolean;
+  epochInfo: EpochInfo;
 }
 
 export interface InitRewardParams {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean; // if has WSOL mint
@@ -496,10 +480,24 @@ export interface InitRewardParams {
   };
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+
+  programId: PublicKey;
+  payer: PublicKey;
+  operationId: PublicKey;
+  ammConfigId: PublicKey;
+
+  ownerTokenAccount: PublicKey;
+  rewardMint: PublicKey;
+  rewardVault: PublicKey;
+
+  rewardIndex: number;
+  openTime: number;
+  endTime: number;
+  emissionsPerSecondX64: BN;
 }
 
 export interface InitRewardsParams {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean; // if has WSOL mint
@@ -516,7 +514,7 @@ export interface InitRewardsParams {
 }
 
 export interface SetRewardParams {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean; // if has WSOL mint
@@ -544,7 +542,7 @@ export interface SetRewardsParams extends Omit<SetRewardParams, "rewardInfo"> {
 }
 
 export interface CollectRewardParams {
-  poolId: PublicKey;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean; // if has WSOL mint

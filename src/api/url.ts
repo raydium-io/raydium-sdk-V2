@@ -25,7 +25,7 @@ export const API_URLS = {
   RPCS: "/v3/main/rpcs",
   INFO: "/v3/main/info",
   STAKE_POOLS: "/v3/main/stake-pools",
-  CHAIN_TIME: "/v3/main/chain/time",
+  CHAIN_TIME: "/v3/main/chain-time",
   TOKEN_LIST: "/v3/mint/list",
   TOKEN_INFO: "/v3/mint/item/{mint}",
   JUP_TOKEN_LIST: "https://token.jup.ag/{type}",

@@ -50,6 +50,7 @@ export default class TradeV2 extends ModuleBase {
     this._stableLayout = new StableLayout({ connection: this.scope.connection });
   }
 
+  // to do, remove
   public getAllRoute({
     inputMint,
     outputMint,
@@ -68,7 +69,7 @@ export default class TradeV2 extends ModuleBase {
 
     const routePathDict: RoutePathType = {}; // {[route mint: string]: {in: [] , out: []}}
 
-    for (const pool of this.scope.clmm.pools.sdkParsedData) {
+    for (const pool of [] as any) {
       const itemAmmPool = pool.state;
       if (
         (itemAmmPool.mintA.mint.equals(input) && itemAmmPool.mintB.mint.equals(output)) ||

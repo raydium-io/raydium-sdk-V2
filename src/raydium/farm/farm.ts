@@ -23,7 +23,7 @@ import { Token as RToken } from "../../module/token";
 import { TokenAmount } from "../../module/amount";
 import { createWSolAccountInstructions } from "../account/instruction";
 import ModuleBase from "../moduleBase";
-import { TOKEN_WSOL } from "../token_old/constant";
+import { TOKEN_WSOL } from "../token/constant";
 import { LoadParams, MakeTransaction } from "../type";
 
 import {

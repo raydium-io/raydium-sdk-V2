@@ -1,15 +1,26 @@
 import { PublicKey } from "@solana/web3.js";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "../../api/type";
+import {
+  ApiV3PoolInfoConcentratedItem,
+  ApiV3PoolInfoStandardItem,
+  AmmV4Keys,
+  AmmV5Keys,
+  ClmmKeys,
+} from "../../api/type";
 import { Token, TokenAmount, Percent } from "../../module";
-import { SOLMint, WSOLMint, solToWSol } from "../../common/pubKey";
+import { SOLMint, WSOLMint, solToWSol, PublicKeyish } from "../../common/pubKey";
 import { BN_ZERO, BN_ONE, divCeil } from "../../common/bignumber";
+import { getATAAddress } from "../../common/pda";
+import { addComputeBudget } from "../../common/txTool/txUtils";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { AmountSide, AddLiquidityParams } from "./type";
 import { MakeTransaction } from "../../raydium/type";
 import { makeAddLiquidityInstruction } from "./instruction";
 import { InstructionType } from "../../common/txTool/txType";
+import { ComputeBudgetConfig } from "../type";
+import { removeLiquidityInstruction } from "./instruction";
+import { ClmmInstrument } from "../clmm/instrument";
 
 export default class LiquidityModule extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -203,6 +214,189 @@ export default class LiquidityModule extends ModuleBase {
       ],
       lookupTableAddress: poolKeys.lookupTableAccount ? [new PublicKey(poolKeys.lookupTableAccount)] : [],
     });
+    return txBuilder.build();
+  }
+
+  public async removeAllLpAndCreateClmmPosition({
+    poolInfo,
+    clmmPoolInfo,
+    removeLpAmount,
+    createPositionInfo,
+    farmInfo,
+    computeBudgetConfig,
+    payer,
+    tokenProgram,
+    getEphemeralSigners,
+  }: {
+    poolInfo: ApiV3PoolInfoStandardItem;
+    clmmPoolInfo: ApiV3PoolInfoConcentratedItem;
+    removeLpAmount: BN;
+    createPositionInfo: {
+      tickLower: number;
+      tickUpper: number;
+      liquidity: BN;
+      amountMaxA: BN;
+      amountMaxB: BN;
+    };
+    farmInfo?: {
+      farmId: PublicKeyish;
+      amount: BN;
+    };
+    payer?: PublicKey;
+    computeBudgetConfig?: ComputeBudgetConfig;
+    tokenProgram?: PublicKey;
+    getEphemeralSigners?: (k: number) => any;
+  }): Promise<MakeTransaction> {
+    const { instructions, instructionTypes } = computeBudgetConfig
+      ? addComputeBudget(computeBudgetConfig)
+      : { instructions: [], instructionTypes: [] };
+
+    if (
+      !(poolInfo.mintA.address === clmmPoolInfo.mintA.address || poolInfo.mintA.address === clmmPoolInfo.mintB.address)
+    )
+      throw Error("mint check error");
+    if (
+      !(poolInfo.mintB.address === clmmPoolInfo.mintA.address || poolInfo.mintB.address === clmmPoolInfo.mintB.address)
+    )
+      throw Error("mint check error");
+
+    const txBuilder = this.createTxBuilder();
+    const mintToAccount: { [mint: string]: PublicKey } = {};
+    for (const item of this.scope.account.tokenAccountRawInfos) {
+      if (
+        mintToAccount[item.accountInfo.mint.toString()] === undefined ||
+        getATAAddress(this.scope.ownerPubKey, item.accountInfo.mint, tokenProgram).publicKey.equals(item.pubkey)
+      ) {
+        mintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
+      }
+    }
+
+    const lpTokenAccount = mintToAccount[poolInfo.lpMint.address];
+    if (lpTokenAccount === undefined) throw Error("find lp account error in trade accounts");
+
+    const amountIn = removeLpAmount.add(farmInfo?.amount ?? new BN(0));
+
+    const mintBaseUseSOLBalance = poolInfo.mintA.address === Token.WSOL.mint.toString();
+    const mintQuoteUseSOLBalance = poolInfo.mintB.address === Token.WSOL.mint.toString();
+
+    const { account: baseTokenAccount, instructionParams: ownerTokenAccountBaseInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: new PublicKey(poolInfo.mintA.address),
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !mintBaseUseSOLBalance,
+        createInfo: {
+          payer: payer || this.scope.ownerPubKey,
+        },
+        associatedOnly: true,
+      });
+    txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
+    if (baseTokenAccount === undefined) throw new Error("base token account not found");
+
+    const { account: quoteTokenAccount, instructionParams: ownerTokenAccountQuoteInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: new PublicKey(poolInfo.mintB.address),
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !mintQuoteUseSOLBalance,
+        createInfo: {
+          payer: payer || this.scope.ownerPubKey,
+          amount: 0,
+        },
+        associatedOnly: true,
+      });
+    txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
+    if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
+
+    mintToAccount[poolInfo.mintA.address] = baseTokenAccount;
+    mintToAccount[poolInfo.mintB.address] = quoteTokenAccount;
+
+    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
+
+    const removeIns = removeLiquidityInstruction({
+      poolInfo,
+      poolKeys,
+      userKeys: {
+        lpTokenAccount,
+        baseTokenAccount,
+        quoteTokenAccount,
+        owner: this.scope.ownerPubKey,
+      },
+      amountIn,
+    });
+
+    const [tokenAccountA, tokenAccountB] =
+      poolInfo.mintA.address === clmmPoolInfo.mintA.address
+        ? [baseTokenAccount, quoteTokenAccount]
+        : [quoteTokenAccount, baseTokenAccount];
+
+    const clmmPoolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const createPositionIns = await ClmmInstrument.openPositionInstructions({
+      poolInfo: clmmPoolInfo,
+      poolKeys: clmmPoolKeys,
+      ownerInfo: {
+        feePayer: payer ?? this.scope.ownerPubKey,
+        wallet: this.scope.ownerPubKey,
+        tokenAccountA,
+        tokenAccountB,
+      },
+      withMetadata: "create",
+      ...createPositionInfo,
+      getEphemeralSigners,
+    });
+
+    const farmKeys = this.scope.farm.allParsedFarmMap.get(farmInfo?.farmId.toString() || "");
+
+    let farmWithdrawData: MakeTransaction<Record<string, any>> | undefined = undefined;
+
+    if (farmInfo !== undefined && farmKeys !== undefined) {
+      const rewardTokenAccounts: PublicKey[] = [];
+      for (const item of farmKeys.rewardInfos) {
+        const rewardIsWsol = item.rewardMint.equals(Token.WSOL.mint);
+
+        const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          mint: item.rewardMint,
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: !rewardIsWsol,
+          createInfo: {
+            payer: payer || this.scope.ownerPubKey,
+          },
+          associatedOnly: true,
+        });
+        txBuilder.addInstruction(instructionParams || {});
+        if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
+        rewardTokenAccounts.push(mintToAccount[item.rewardMint.toString()] ?? account);
+      }
+
+      farmWithdrawData = await this.scope.farm.withdraw({
+        farmId: new PublicKey(farmInfo.farmId),
+        amount: farmInfo.amount,
+      });
+    }
+
+    txBuilder.addInstruction({
+      instructions: [...(farmWithdrawData?.transaction.instructions ?? []), removeIns],
+      signers: farmWithdrawData?.signers ?? [],
+      instructionTypes: [
+        ...(farmWithdrawData?.instructionTypes ?? []),
+        !poolInfo.pooltype.includes("StablePool")
+          ? InstructionType.AmmV4RemoveLiquidity
+          : InstructionType.AmmV5RemoveLiquidity,
+      ],
+      lookupTableAddress:
+        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
+          ? [new PublicKey(poolKeys.lookupTableAccount)]
+          : [],
+    });
+
+    txBuilder.addInstruction({
+      instructions: [...instructions, ...createPositionIns.instructions],
+      signers: createPositionIns.signers,
+      instructionTypes: [...instructionTypes, ...createPositionIns.instructionTypes],
+      lookupTableAddress:
+        clmmPoolKeys.lookupTableAccount && clmmPoolKeys.lookupTableAccount !== PublicKey.default.toString()
+          ? [new PublicKey(clmmPoolKeys.lookupTableAccount)]
+          : [],
+    });
+
     return txBuilder.build();
   }
 }

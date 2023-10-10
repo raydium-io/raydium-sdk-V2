@@ -33,3 +33,10 @@ export interface LiquidityAddInstructionParams {
   quoteAmountIn: BigNumberish;
   fixedSide: AmountSide;
 }
+
+export interface RemoveLiquidityInstruction {
+  poolInfo: ApiV3PoolInfoStandardItem;
+  poolKeys: AmmV4Keys | AmmV5Keys;
+  userKeys: LiquidityUserKeys;
+  amountIn: BigNumberish;
+}
