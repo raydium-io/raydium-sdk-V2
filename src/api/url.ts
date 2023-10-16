@@ -1,25 +1,16 @@
 export const API_URLS = {
   BASE_HOST: "https://api.raydium.io",
 
-  TOKEN: "/v2/sdk/token/raydium.mainnet.json",
   COINGECKO: "https://api.coingecko.com/api/v3/simple/price",
-  LIQUIDITY: "/v2/sdk/liquidity/mainnet.json",
 
-  FARMS: "/v2/sdk/farm-v2/mainnet.json",
   FARM_ARP: "/main/farm/info",
   FARM_ARP_LINE: "/main/farm-apr-tv",
 
-  AMM_V3: "/v2/ammV3/ammPools",
   AMM_V3_CONFIG: "/v2/ammV3/ammConfigs",
-  AMM_V3_LINES: "/v2/ammV3/positionLine",
 
   VERSION: "/v2/main/version",
 
-  PAIRS: "/v2/main/pairs",
   PRICE: "/v2/main/price",
-
-  IDO_INFO: "/v2/main/ido/pools",
-  IDO_PROJECT_INFO: "/v2/main/ido/project/",
 
   // api v3
   RPCS: "/v3/main/rpcs",

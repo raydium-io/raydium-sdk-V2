@@ -83,38 +83,6 @@ export default class Farm extends ModuleBase {
     }
   > = {};
 
-  public async load(params?: LoadParams): Promise<void> {
-    await this.scope.liquidity.load(params);
-    await this.scope.liquidity.loadPairs(params);
-    await this.scope.fetchFarms(params?.forceUpdate);
-
-    const data = this.scope.apiData.farmPools?.data || {};
-
-    this._farmPools = Object.keys(data || {}).reduce(
-      (acc, cur) =>
-        acc.concat(
-          data[cur].map?.((data: FarmPoolJsonInfo) => {
-            const baseToken = this.scope.token.tokenMap.get(data.baseMint);
-            const quoteToken = this.scope.token.tokenMap.get(data.quoteMint);
-            if (baseToken && quoteToken) {
-              this._lpTokenInfoMap.set(
-                data.lpMint,
-                new RToken({
-                  mint: data.lpMint,
-                  decimals: baseToken.decimals,
-                  symbol: `${baseToken.symbol} - ${quoteToken.name}`,
-                  name: `${baseToken.symbol} - ${quoteToken.name} LP`,
-                }),
-              );
-            }
-
-            return { ...data, name: data.symbol, category: cur };
-          }) || [],
-        ),
-      [],
-    );
-  }
-
   get allFarms(): FarmPoolJsonInfo[] {
     return this._farmPools;
   }
@@ -143,181 +111,6 @@ export default class Farm extends ModuleBase {
     if (!farmInfo) this.logAndCreateError("invalid farm id");
     return farmInfo!;
   }
-  public getLpTokenInfo(lpMint: PublicKeyish): RToken {
-    const pubKey = validateAndParsePublicKey({ publicKey: lpMint });
-    const lpToken = this._lpTokenInfoMap.get(pubKey.toBase58());
-    if (!lpToken) this.logAndCreateError("LP Token not found", pubKey.toBase58());
-    return lpToken!;
-  }
-  public lpDecimalAmount({ mint, amount }: { mint: PublicKeyish; amount: BigNumberish }): BN {
-    const numberDetails = parseNumberInfo(amount);
-    const token = this.getLpTokenInfo(mint);
-    return toBN(
-      new Fraction(numberDetails.numerator, numberDetails.denominator).mul(new BN(10).pow(new BN(token.decimals))),
-    );
-  }
-
-  public hydrateFarmInfo(params: {
-    farmInfo: SdkParsedFarmInfo;
-    blockSlotCountForSecond: number;
-    currentBlockChainDate: Date;
-    chainTimeOffset: number;
-  }): HydratedFarmInfo {
-    const { farmInfo, blockSlotCountForSecond, currentBlockChainDate, chainTimeOffset = 0 } = params;
-    const farmPoolType = judgeFarmType(farmInfo, currentBlockChainDate);
-    const isStakePool = whetherIsStakeFarmPool(farmInfo);
-    const isDualFusionPool = farmPoolType === "dual fusion pool";
-    const isNormalFusionPool = farmPoolType === "normal fusion pool";
-    const isClosedPool = farmPoolType === "closed pool" && !farmInfo.upcoming; // NOTE: I don't know why, but Amanda says there is a bug.
-    const isUpcomingPool = farmInfo.version !== 6 ? farmInfo.upcoming && isClosedPool : farmInfo.upcoming;
-    const isNewPool = farmInfo.version !== 6 && farmInfo.upcoming && !isClosedPool; // NOTE: Rudy says!!!
-    const isStablePool =
-      this.scope.liquidity.allPools.find((i) => i.lpMint === farmInfo.lpMint.toBase58())?.version === 5;
-    const lpToken = isStakePool ? this.scope.mintToToken(farmInfo.lpMint) : this.getLpTokenInfo(farmInfo.lpMint);
-    const baseToken = this.scope.mintToToken(isStakePool ? farmInfo.lpMint : farmInfo.baseMint);
-    const quoteToken = this.scope.mintToToken(isStakePool ? farmInfo.lpMint : farmInfo.quoteMint);
-
-    const name = isStakePool
-      ? `${baseToken?.symbol ?? "unknown"}`
-      : `${baseToken?.symbol ?? "unknown"}-${quoteToken?.symbol ?? "unknown"}`;
-
-    const rewardTokens = farmInfo.jsonInfo.rewardInfos.map(({ rewardMint: mint }) => this.scope.mintToToken(mint));
-    const pendingRewards = farmInfo.wrapped?.pendingRewards.map((reward, idx) =>
-      rewardTokens[idx] ? new TokenAmount(rewardTokens[idx]!, toBN(getMax(reward, 0))) : undefined,
-    );
-
-    const lpPrice = isStakePool
-      ? this.scope.token.tokenPriceMap.get(farmInfo.lpMint.toBase58())!
-      : this.scope.liquidity.lpPriceMap.get(farmInfo.lpMint.toBase58())!;
-
-    const stakedLpAmount = lpToken && new TokenAmount(lpToken, farmInfo.lpVault.amount);
-    const tvl =
-      lpPrice && lpToken ? toTotalPrice(new TokenAmount(lpToken, farmInfo.lpVault.amount), lpPrice) : undefined;
-
-    const aprs = calculateFarmPoolAprList(farmInfo, {
-      tvl,
-      currentBlockChainDate,
-      rewardTokens,
-      rewardTokenPrices:
-        farmInfo.rewardInfos.map(({ rewardMint }) => this.scope.token.tokenPriceMap.get(rewardMint.toBase58())) ?? [],
-      blockSlotCountForSecond,
-    });
-
-    const ammId = this.scope.liquidity.allPools.find((pool) => pool.lpMint === farmInfo.lpMint.toBase58())?.id;
-    const raydiumFeeApr7d = ammId ? toPercent(this.farmAPRs[ammId]?.apr7d, { alreadyDecimaled: true }) : undefined;
-    const raydiumFeeApr30d = ammId ? toPercent(this.farmAPRs[ammId]?.apr30d, { alreadyDecimaled: true }) : undefined;
-    const raydiumFeeApr24h = ammId ? toPercent(this.farmAPRs[ammId]?.apr24h, { alreadyDecimaled: true }) : undefined;
-    const totalApr7d = aprs.reduce((acc, cur) => (acc ? (cur ? acc.add(cur) : acc) : cur), raydiumFeeApr7d);
-    const totalApr30d = aprs.reduce((acc, cur) => (acc ? (cur ? acc.add(cur) : acc) : cur), raydiumFeeApr30d);
-    const totalApr24h = aprs.reduce((acc, cur) => (acc ? (cur ? acc.add(cur) : acc) : cur), raydiumFeeApr24h);
-
-    const rewards =
-      farmInfo.version === 6
-        ? (farmInfo.state.rewardInfos
-            .map((rewardInfo, idx) => {
-              const { rewardOpenTime: openTime, rewardEndTime: endTime, rewardPerSecond } = rewardInfo;
-              const rewardOpenTime = openTime.toNumber()
-                ? new Date(openTime.toNumber() * 1000 + chainTimeOffset)
-                : undefined; // chain time
-              const rewardEndTime = endTime.toNumber()
-                ? new Date(endTime.toNumber() * 1000 + chainTimeOffset)
-                : undefined; // chain time
-              const onlineCurrentDate = Date.now() + chainTimeOffset;
-              if (!rewardOpenTime && !rewardEndTime) return undefined; // if reward is not any state, return undefined to delete it
-              const token = this.scope.mintToToken(
-                (rewardInfo.rewardMint ?? farmInfo.rewardInfos[idx]?.rewardMint)?.toBase58(),
-              );
-              const isRewardBeforeStart = Boolean(rewardOpenTime && isDateBefore(onlineCurrentDate, rewardOpenTime));
-              const isRewardEnded = Boolean(rewardEndTime && isDateAfter(onlineCurrentDate, rewardEndTime));
-              const isRewarding = (!rewardOpenTime && !rewardEndTime) || (!isRewardEnded && !isRewardBeforeStart);
-              const isRwardingBeforeEnd72h =
-                isRewarding &&
-                isDateAfter(
-                  onlineCurrentDate,
-                  offsetDateTime(rewardEndTime, { seconds: -(farmInfo.jsonInfo.rewardPeriodExtend ?? 72 * 60 * 60) }),
-                );
-              const claimableRewards =
-                token &&
-                this.scope.mintToTokenAmount({
-                  mint: token.mint,
-                  amount: sub(rewardInfo.totalReward, rewardInfo.totalRewardEmissioned)!.toFixed(token.decimals),
-                });
-
-              const pendingReward = pendingRewards?.[idx];
-              const apr = aprs[idx];
-              const usedTohaveReward = Boolean(rewardEndTime);
-              const jsonRewardInfo = farmInfo.rewardInfos[idx];
-
-              return {
-                ...jsonRewardInfo,
-                ...rewardInfo,
-                owner: jsonRewardInfo?.rewardSender,
-                apr,
-                token,
-                userPendingReward: pendingReward,
-                userHavedReward: usedTohaveReward,
-                perSecond:
-                  token && this.scope.mintToTokenAmount({ mint: token.mint, amount: rewardPerSecond }).toSignificant(),
-                openTime: rewardOpenTime,
-                endTime: rewardEndTime,
-                isOptionToken: rewardInfo.rewardType === "Option tokens",
-                isRewardBeforeStart,
-                isRewardEnded,
-                isRewarding,
-                isRwardingBeforeEnd72h,
-                claimableRewards,
-                version: 6,
-              };
-            })
-            .filter((data) => !!data) as HydratedFarmInfo["rewards"])
-        : farmInfo.state.rewardInfos.map((rewardInfo, idx) => {
-            const pendingReward = pendingRewards?.[idx];
-            const apr = aprs[idx];
-            const token = rewardTokens[idx];
-            const { perSlotReward } = rewardInfo;
-
-            const usedTohaveReward = isMeaningfulNumber(pendingReward) || isMeaningfulNumber(perSlotReward);
-            return {
-              ...rewardInfo,
-              apr,
-              token,
-              userPendingReward: pendingReward,
-              userHavedReward: usedTohaveReward,
-              version: farmInfo.version,
-            };
-          });
-    const userStakedLpAmount =
-      lpToken && farmInfo.ledger?.deposited ? new TokenAmount(lpToken, farmInfo.ledger?.deposited) : undefined;
-
-    return {
-      ...farmInfo,
-      lp: lpToken,
-      lpPrice,
-      base: baseToken,
-      quote: quoteToken,
-      name,
-      isStakePool,
-      isDualFusionPool,
-      isNormalFusionPool,
-      isClosedPool,
-      isUpcomingPool,
-      isStablePool,
-      isNewPool,
-      totalApr7d,
-      raydiumFeeApr7d,
-      totalApr24h,
-      raydiumFeeApr24h,
-      totalApr30d,
-      raydiumFeeApr30d,
-      ammId,
-      tvl,
-      userHasStaked: isMeaningfulNumber(userStakedLpAmount),
-      rewards,
-      userStakedLpAmount,
-      stakedLpAmount,
-    };
-  }
-
   // token account needed
   private async _getUserRewardInfo({ payer, rewardInfo }: { payer: PublicKey; rewardInfo: FarmRewardInfo }): Promise<{
     rewardPubKey?: PublicKey;
@@ -344,21 +137,17 @@ export default class Farm extends ModuleBase {
   }
 
   // token account needed
-  public async create({ poolId, rewardInfos, payer }: CreateFarm): Promise<MakeTransaction> {
+  public async create({ poolInfo: propPoolInfo, rewardInfos, payer }: CreateFarm): Promise<MakeTransaction> {
     this.checkDisabled();
     this.scope.checkOwner();
 
-    const poolPubkey = validateAndParsePublicKey({ publicKey: poolId });
-    const poolJsonInfo = this.scope.liquidity.allPools.find((j) => j.id === poolPubkey.toBase58());
-    if (!poolJsonInfo) this.logAndCreateError("invalid pool id");
-
-    const lpMint = new PublicKey(poolJsonInfo!.lpMint);
+    const lpMint = new PublicKey(propPoolInfo.lpMint.address);
     const poolInfo = {
       lpMint,
       lockInfo: { lockMint: FARM_LOCK_MINT, lockVault: FARM_LOCK_VAULT },
       version: 6,
       rewardInfos,
-      programId: new PublicKey(poolJsonInfo!.programId),
+      programId: new PublicKey(propPoolInfo.programId),
     };
 
     const txBuilder = this.createTxBuilder();

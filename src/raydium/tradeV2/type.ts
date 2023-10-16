@@ -2,10 +2,8 @@ import { PublicKey, Keypair, Signer, TransactionInstruction, Transaction } from 
 import BN from "bn.js";
 import { TokenAmount, Price, Percent, Token } from "../../module";
 import { ClmmPoolInfo } from "../clmm";
-import { LiquidityPoolJsonInfo } from "../liquidity";
 import { TransferAmountFee } from "../type";
-
-export type PoolType = ClmmPoolInfo | LiquidityPoolJsonInfo;
+import { PoolKeys, ApiV3PoolInfoItem } from "../../api/type";
 
 export interface ComputeAmountOutAmmLayout {
   amountIn: TransferAmountFee;
@@ -16,7 +14,8 @@ export interface ComputeAmountOutAmmLayout {
   priceImpact: Percent;
   fee: TokenAmount[];
   routeType: "amm";
-  poolKey: PoolType[];
+  poolInfo: ApiV3PoolInfoItem[];
+  poolKey: PoolKeys[];
   remainingAccounts: PublicKey[][];
   poolReady: boolean;
   poolType: "CLMM" | "STABLE" | undefined;
@@ -37,7 +36,8 @@ export interface ComputeAmountOutRouteLayout {
   priceImpact: Percent;
   fee: TokenAmount[];
   routeType: "route";
-  poolKey: PoolType[];
+  poolInfo: ApiV3PoolInfoItem[];
+  poolKey: PoolKeys[];
   remainingAccounts: (PublicKey[] | undefined)[];
   minMiddleAmountFee: TokenAmount | undefined;
   middleToken: Token;
@@ -87,7 +87,7 @@ export interface PoolAccountInfoV4 {
 export interface ReturnTypeFetchMultipleInfo {
   [ammId: string]: PoolAccountInfoV4;
 }
-export type ReturnTypeGetAddLiquidityDefaultPool = LiquidityPoolJsonInfo | undefined;
+export type ReturnTypeGetAddLiquidityDefaultPool = ApiV3PoolInfoItem | undefined;
 export interface ReturnTypeMakeSwapInstruction {
   signers: (Keypair | Signer)[];
   instructions: TransactionInstruction[];
@@ -106,17 +106,17 @@ export interface ReturnTypeMakeSwapTransaction {
 export type RoutePathType = {
   [routeMint: string]: {
     mintProgram: PublicKey;
-    in: PoolType[];
-    out: PoolType[];
+    in: PoolKeys[];
+    out: PoolKeys[];
     mDecimals: number;
   };
 };
 
 export interface ReturnTypeGetAllRoute {
-  directPath: PoolType[];
-  addLiquidityPools: LiquidityPoolJsonInfo[];
+  directPath: PoolKeys[];
+  addLiquidityPools: ApiV3PoolInfoItem[];
   routePathDict: RoutePathType;
-  needSimulate: LiquidityPoolJsonInfo[];
+  needSimulate: ApiV3PoolInfoItem[];
   needTickArray: ClmmPoolInfo[];
   needCheckToken: string[];
 }

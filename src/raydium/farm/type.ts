@@ -11,7 +11,7 @@ import { UnionCover } from "../type";
 import { poolTypeV6 } from "./config";
 import { FarmStateV3, FarmStateV5, FarmStateV6 } from "./layout";
 
-import { FormatFarmInfoOut } from "../../api/type";
+import { FormatFarmInfoOut, ApiV3PoolInfoStandardItem } from "../../api/type";
 
 export type RewardType = keyof typeof poolTypeV6;
 export interface APIRewardInfo {
@@ -95,7 +95,7 @@ export interface FarmPoolInfoV6 {
 }
 
 export interface CreateFarm {
-  poolId: PublicKeyish;
+  poolInfo: ApiV3PoolInfoStandardItem;
   rewardInfos: FarmRewardInfo[];
   payer?: PublicKey;
 }

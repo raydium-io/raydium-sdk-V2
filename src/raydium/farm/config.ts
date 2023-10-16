@@ -14,7 +14,6 @@ import {
   farmStateV5Layout,
   farmStateV6Layout,
 } from "./layout";
-import { RewardInfoWithKey } from "./type";
 
 const logger = createLogger("Raydium_farm_config");
 

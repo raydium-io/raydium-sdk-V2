@@ -4,13 +4,7 @@ import { createLogger, sleep } from "../common";
 import { Cluster } from "../solana";
 
 import {
-  ApiFarmPools,
-  ApiJsonPairInfo,
-  ApiLiquidityPools,
-  ApiClmmPoolInfo,
   ApiClmmConfigInfo,
-  ApiIdoItem,
-  ApiIdoInfo,
   ApiV3Token,
   FetchPoolParams,
   PoolsApiReturn,
@@ -130,30 +124,15 @@ export class Api {
   //   return this.api.get(this.urlConfigs.TOKEN || API_URLS.TOKEN);
   // }
 
-  async getLiquidityPools(): Promise<ApiLiquidityPools> {
-    return this.api.get(this.urlConfigs.LIQUIDITY || API_URLS.LIQUIDITY);
-  }
-
-  async getPairsInfo(): Promise<ApiJsonPairInfo[]> {
-    return this.api.get(this.urlConfigs.PAIRS || API_URLS.PAIRS);
-  }
-
-  async getFarmPools(): Promise<ApiFarmPools> {
-    return this.api.get(this.urlConfigs.FARMS || API_URLS.FARMS);
-  }
-
-  async getConcentratedPools(): Promise<ApiClmmPoolInfo[]> {
-    const res = await this.api.get(this.urlConfigs.AMM_V3 || API_URLS.AMM_V3);
-    return res.data;
-  }
-
   async getClmmConfigs(): Promise<Record<string, ApiClmmConfigInfo>> {
     const res = await this.api.get(this.urlConfigs.AMM_V3_CONFIG || API_URLS.AMM_V3_CONFIG);
     return res.data;
   }
 
   async getClmmPoolLines(poolId: string): Promise<{ price: string; liquidity: string }[]> {
-    const res = await this.api.get(`${this.urlConfigs.AMM_V3_LINES || API_URLS.AMM_V3_LINES}?pool_id=${poolId}`);
+    const res = await this.api.get(
+      `${this.urlConfigs.POOL_LIQUIDITY_LINE || API_URLS.POOL_LIQUIDITY_LINE}?pool_id=${poolId}`,
+    );
     return res.data;
   }
 
@@ -163,14 +142,6 @@ export class Api {
 
   async getRaydiumTokenPrice(): Promise<Record<string, number>> {
     return this.api.get(this.urlConfigs.PRICE || API_URLS.PRICE);
-  }
-
-  async getIdoList(): Promise<{ data: ApiIdoItem[]; success: boolean }> {
-    return this.api.get(this.urlConfigs.IDO_INFO || API_URLS.IDO_INFO);
-  }
-
-  async getIdoInfo(id: string): Promise<ApiIdoInfo> {
-    return this.api.get((this.urlConfigs.IDO_PROJECT_INFO || API_URLS.IDO_PROJECT_INFO) + id);
   }
 
   async getBlockSlotCountForSecond(endpointUrl?: string): Promise<number> {

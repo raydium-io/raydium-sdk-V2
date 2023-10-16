@@ -2,19 +2,7 @@ import { Connection, Keypair, PublicKey, EpochInfo } from "@solana/web3.js";
 import BN from "bn.js";
 import { merge } from "lodash";
 
-import {
-  Api,
-  API_URL_CONFIG,
-  ApiFarmPools,
-  ApiJsonPairInfo,
-  ApiLiquidityPools,
-  ApiTokens,
-  ApiClmmPoolInfo,
-  ApiIdoItem,
-  ApiV3TokenRes,
-  ApiV3Token,
-  JupTokenType,
-} from "../api";
+import { Api, API_URL_CONFIG, ApiV3TokenRes, ApiV3Token, JupTokenType } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
 import { Owner } from "../common/owner";
@@ -26,12 +14,10 @@ import { Cluster } from "../solana";
 import Account, { TokenAccountDataProp } from "./account/account";
 import Farm from "./farm/farm";
 import Liquidity from "./liquidity/liquidity";
-import LiquidityV2 from "./liquidityV2/liquidity";
 import { Clmm } from "./clmm";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
-// import Ido from "./ido/ido";
 
 import TokenModule, { MintToTokenAmount } from "./token/token";
 import { SignAllTransactions, TransferAmountFee } from "./type";
@@ -73,12 +59,7 @@ interface DataBase<T> {
   extInfo?: Record<string, any>;
 }
 interface ApiData {
-  tokens?: DataBase<ApiTokens>;
-  liquidityPools?: DataBase<ApiLiquidityPools>;
-  liquidityPairsInfo?: DataBase<ApiJsonPairInfo[]>;
-  farmPools?: DataBase<ApiFarmPools>;
-  clmmPools?: DataBase<ApiClmmPoolInfo[]>;
-  idoList?: DataBase<ApiIdoItem[]>;
+  tokens?: DataBase<ApiV3Token[]>;
 
   // v3 data
   tokenList?: DataBase<ApiV3TokenRes>;
@@ -93,7 +74,6 @@ export class Raydium {
   public farm: Farm;
   public account: Account;
   public liquidity: Liquidity;
-  public liquidityV2: LiquidityV2;
   public clmm: Clmm;
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
@@ -139,8 +119,7 @@ export class Raydium {
       tokenAccounts: config.tokenAccounts,
       tokenAccountRawInfos: config.tokenAccountRawInfos,
     });
-    this.liquidity = new Liquidity({ scope: this, moduleName: "Raydium_Liquidity" });
-    this.liquidityV2 = new LiquidityV2({ scope: this, moduleName: "Raydium_LiquidityV2" });
+    this.liquidity = new Liquidity({ scope: this, moduleName: "Raydium_LiquidityV2" });
     this.token = new TokenModule({ scope: this, moduleName: "Raydium_tokenV2" });
     this.tradeV2 = new TradeV2({ scope: this, moduleName: "Raydium_tradeV2" });
     this.clmm = new Clmm({ scope: this, moduleName: "Raydium_clmm" });
@@ -226,70 +205,6 @@ export class Raydium {
     return new Date().getTime() - time > this._apiCacheTime;
   }
 
-  // public async fetchTokens(forceUpdate?: boolean): Promise<ApiTokens> {
-  //   if (this.apiData.tokens && !this.isCacheInvalidate(this.apiData.tokens.fetched) && !forceUpdate)
-  //     return this.apiData.tokens.data;
-  //   const dataObject = {
-  //     fetched: Date.now(),
-  //     data: await this.api.getTokens(),
-  //   };
-  //   this.apiData.tokens = dataObject;
-
-  //   return dataObject.data;
-  // }
-
-  public async fetchLiquidity(forceUpdate?: boolean): Promise<ApiLiquidityPools> {
-    if (this.apiData.liquidityPools && !this.isCacheInvalidate(this.apiData.liquidityPools.fetched) && !forceUpdate)
-      return this.apiData.liquidityPools.data;
-    const dataObject = {
-      fetched: Date.now(),
-      data: await this.api.getLiquidityPools(),
-    };
-    this.apiData.liquidityPools = dataObject;
-    return dataObject.data;
-  }
-
-  public async fetchPairs(forceUpdate?: boolean): Promise<ApiJsonPairInfo[]> {
-    if (
-      this.apiData.liquidityPairsInfo &&
-      !this.isCacheInvalidate(this.apiData.liquidityPairsInfo.fetched) &&
-      !forceUpdate
-    )
-      return this.apiData.liquidityPairsInfo?.data || [];
-    const dataObject = {
-      fetched: Date.now(),
-      data: await this.api.getPairsInfo(),
-    };
-    this.apiData.liquidityPairsInfo = dataObject;
-    return dataObject.data;
-  }
-
-  public async fetchFarms(forceUpdate?: boolean): Promise<ApiFarmPools> {
-    if (this.apiData.farmPools && !this.isCacheInvalidate(this.apiData.farmPools.fetched) && !forceUpdate)
-      return this.apiData.farmPools.data;
-
-    const dataObject = {
-      fetched: Date.now(),
-      data: await this.api.getFarmPools(),
-    };
-    this.apiData.farmPools = dataObject;
-
-    return dataObject.data;
-  }
-
-  public async fetchClmmPools(forceUpdate?: boolean): Promise<ApiClmmPoolInfo[]> {
-    if (this.apiData.clmmPools && !this.isCacheInvalidate(this.apiData.clmmPools.fetched) && !forceUpdate)
-      return this.apiData.clmmPools.data;
-
-    const dataObject = {
-      fetched: Date.now(),
-      data: await this.api.getConcentratedPools(),
-    };
-    this.apiData.clmmPools = dataObject;
-
-    return dataObject.data;
-  }
-
   public async fetchChainTime(): Promise<void> {
     try {
       const data = await this.api.getChainTimeOffset();
@@ -303,18 +218,6 @@ export class Raydium {
     } catch {
       this._chainTime = undefined;
     }
-  }
-
-  public async fetchIdoList(forceUpdate?: boolean): Promise<ApiIdoItem[]> {
-    if (this.apiData.idoList && !this.isCacheInvalidate(this.apiData.idoList.fetched) && !forceUpdate)
-      return this.apiData.idoList.data;
-
-    const dataObject = {
-      fetched: Date.now(),
-      data: (await this.api.getIdoList()).data,
-    };
-    this.apiData.idoList = dataObject;
-    return dataObject.data;
   }
 
   public async fetchV3TokenList(forceUpdate?: boolean): Promise<ApiV3TokenRes> {
