@@ -19,7 +19,7 @@ import {
   MEMO_PROGRAM_ID,
 } from "../../common";
 import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
-import { ReturnTypeMakeInstructions, ClmmPoolInfo, ClmmPoolPersonalPosition } from "./type";
+import { ReturnTypeMakeInstructions, ClmmPoolPersonalPosition, OpenPositionFromLiquidityExtInfo } from "./type";
 import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
 import {
   getPdaPoolId,
@@ -609,7 +609,7 @@ export class ClmmInstrument {
     amountMaxB: BN;
     withMetadata: "create" | "no-create";
     getEphemeralSigners?: (k: number) => any;
-  }): Promise<ReturnTypeMakeInstructions> {
+  }): Promise<ReturnTypeMakeInstructions<OpenPositionFromLiquidityExtInfo["address"]>> {
     let nftMintAccount: PublicKey;
     const signers: Keypair[] = [];
     if (getEphemeralSigners) {
@@ -851,7 +851,7 @@ export class ClmmInstrument {
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
-    ownerPosition: ClmmPoolPersonalPosition;
+    ownerPosition: ClmmPositionLayout;
 
     ownerInfo: {
       wallet: PublicKey;

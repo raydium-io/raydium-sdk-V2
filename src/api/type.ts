@@ -249,17 +249,17 @@ export type ApiIdoInfo = {
 };
 
 /** ====== v3 api types ======= */
+export interface ApiV3PageIns<T> {
+  count: number;
+  hasNextPage: boolean;
+  data: T[];
+}
 
 export enum JupTokenType {
   ALL = "all",
   Strict = "strict",
 }
-export interface PoolsApiReturn {
-  count: number;
-  hasNextPage: boolean;
-  data: ApiV3PoolInfoItem[];
-}
-
+export type PoolsApiReturn = ApiV3PageIns<ApiV3PoolInfoItem>;
 export interface SearchPoolsApiReturn {
   hasNextPage: boolean;
   data: ApiV3PoolInfoItem[];
@@ -468,14 +468,14 @@ export type RpcType = RpcTypeWeight | RpcTypeOther;
 
 export type FarmRewardTypeV6Key = "Standard SPL" | "Option tokens";
 
-interface RewardKeyInfoV345 {
+export interface RewardKeyInfoV345 {
   mint: ApiV3Token;
   vault: string;
   type: FarmRewardTypeV6Key;
   perSecond: number;
   perBlock: number;
 }
-interface RewardKeyInfoV6 {
+export interface RewardKeyInfoV6 {
   mint: ApiV3Token;
   vault: string;
   type: FarmRewardTypeV6Key;
@@ -506,13 +506,13 @@ type FormatFarmKeyOutV6 = FormatFarmKeyOutBase & {
 export type FormatFarmKeyOut = FormatFarmKeyOutV345 | FormatFarmKeyOutV6;
 // item page farm info
 // farm info
-interface RewardInfoV345 {
+export interface RewardInfoV345 {
   mint: ApiV3Token;
   type: FarmRewardTypeV6Key;
   apr: number;
   perSecond: number;
 }
-interface RewardInfoV6 {
+export interface RewardInfoV6 {
   mint: ApiV3Token;
   type: FarmRewardTypeV6Key;
   apr: number;

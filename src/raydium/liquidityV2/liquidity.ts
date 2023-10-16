@@ -6,9 +6,10 @@ import {
   AmmV4Keys,
   AmmV5Keys,
   ClmmKeys,
+  FormatFarmInfoOut,
 } from "../../api/type";
 import { Token, TokenAmount, Percent } from "../../module";
-import { SOLMint, WSOLMint, solToWSol, PublicKeyish } from "../../common/pubKey";
+import { SOLMint, WSOLMint, solToWSol } from "../../common/pubKey";
 import { BN_ZERO, BN_ONE, divCeil } from "../../common/bignumber";
 import { getATAAddress } from "../../common/pda";
 import { addComputeBudget } from "../../common/txTool/txUtils";
@@ -223,6 +224,7 @@ export default class LiquidityModule extends ModuleBase {
     removeLpAmount,
     createPositionInfo,
     farmInfo,
+    userFarmLpAmount,
     computeBudgetConfig,
     payer,
     tokenProgram,
@@ -238,10 +240,8 @@ export default class LiquidityModule extends ModuleBase {
       amountMaxA: BN;
       amountMaxB: BN;
     };
-    farmInfo?: {
-      farmId: PublicKeyish;
-      amount: BN;
-    };
+    farmInfo?: FormatFarmInfoOut;
+    userFarmLpAmount?: BN;
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
     tokenProgram?: PublicKey;
@@ -274,7 +274,7 @@ export default class LiquidityModule extends ModuleBase {
     const lpTokenAccount = mintToAccount[poolInfo.lpMint.address];
     if (lpTokenAccount === undefined) throw Error("find lp account error in trade accounts");
 
-    const amountIn = removeLpAmount.add(farmInfo?.amount ?? new BN(0));
+    const amountIn = removeLpAmount.add(userFarmLpAmount ?? new BN(0));
 
     const mintBaseUseSOLBalance = poolInfo.mintA.address === Token.WSOL.mint.toString();
     const mintQuoteUseSOLBalance = poolInfo.mintB.address === Token.WSOL.mint.toString();
@@ -343,17 +343,17 @@ export default class LiquidityModule extends ModuleBase {
       getEphemeralSigners,
     });
 
-    const farmKeys = this.scope.farm.allParsedFarmMap.get(farmInfo?.farmId.toString() || "");
-
     let farmWithdrawData: MakeTransaction<Record<string, any>> | undefined = undefined;
 
-    if (farmInfo !== undefined && farmKeys !== undefined) {
+    if (farmInfo) {
+      const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
+
       const rewardTokenAccounts: PublicKey[] = [];
       for (const item of farmKeys.rewardInfos) {
-        const rewardIsWsol = item.rewardMint.equals(Token.WSOL.mint);
+        const rewardIsWsol = item.mint.address === Token.WSOL.mint.toString();
 
         const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-          mint: item.rewardMint,
+          mint: new PublicKey(item.mint),
           owner: this.scope.ownerPubKey,
           skipCloseAccount: !rewardIsWsol,
           createInfo: {
@@ -363,12 +363,12 @@ export default class LiquidityModule extends ModuleBase {
         });
         txBuilder.addInstruction(instructionParams || {});
         if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
-        rewardTokenAccounts.push(mintToAccount[item.rewardMint.toString()] ?? account);
+        rewardTokenAccounts.push(mintToAccount[item.mint.address] ?? account);
       }
 
       farmWithdrawData = await this.scope.farm.withdraw({
-        farmId: new PublicKey(farmInfo.farmId),
-        amount: farmInfo.amount,
+        farmInfo,
+        amount: userFarmLpAmount || new BN(0),
       });
     }
 

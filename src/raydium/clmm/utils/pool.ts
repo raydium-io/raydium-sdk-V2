@@ -1259,7 +1259,7 @@ export class PoolUtils {
     };
   }
 
-  static async getLiquidityAmountOutFromAmountIn({
+  static getLiquidityAmountOutFromAmountIn({
     connection,
     poolInfo,
     inputA,
@@ -1268,6 +1268,7 @@ export class PoolUtils {
     amount,
     slippage,
     add,
+    epochInfo,
     amountHasFee,
   }: {
     connection: Connection;
@@ -1278,9 +1279,9 @@ export class PoolUtils {
     amount: BN;
     slippage: number;
     add: boolean;
+    epochInfo: EpochInfo;
     amountHasFee: boolean;
   }): Promise<ReturnTypeGetLiquidityAmountOut> {
-    const epochInfo = await connection.getEpochInfo();
     const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
       new Decimal(poolInfo.price),
       poolInfo.mintA.decimals,

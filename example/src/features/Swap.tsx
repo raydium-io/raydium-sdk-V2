@@ -15,24 +15,35 @@ import {
   TickUtils,
   solToWSol,
   JupTokenType,
+  getATAAddress,
 } from '@raydium-io/raydium-sdk'
 import debounce from 'lodash/debounce'
 import { useEffect, useState } from 'react'
 import { PublicKey } from '@solana/web3.js'
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
 
 import { useAppStore } from '../store/appStore'
 import Decimal from 'decimal.js'
 import BN from 'bn.js'
 
+import { farm } from './data'
+
 export default function Swap() {
   const raydium = useAppStore((state) => state.raydium)
   const connected = useAppStore((state) => state.connected)
+  const tokenAccounts = useAppStore((state) => state.tokenAccounts)
   const [inAmount, setInAmount] = useState<string>('')
   const [outAmount, setOutAmount] = useState<TokenAmount>()
   const [minOutAmount, setMinOutAmount] = useState<TokenAmount>()
   // const [routes, setRoutes] = useState<RouteInfo[]>([])
   // const [routeType, setRouteType] = useState<RouteType>('amm')
   const [loading, setLoading] = useState<boolean>(false)
+
+  //   {
+  //     "liquidity": "924328012",
+  //     "amountMaxA": "0.13598858172588832487",
+  //     "amountMaxB": "15.939417258883248731"
+  // }
 
   // ray mint: 4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R
   // PublicKey.default => sdk will auto recognize it as sol token
@@ -48,98 +59,19 @@ export default function Swap() {
 
   useEffect(() => {
     async function calculateAmount() {
-      if (!raydium) return
-      console.log(123123, raydium)
-      const r = raydium.liquidityV2.computePairAmount({
-        poolInfo: {
-          type: 'standard',
-          programId: '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8',
-          id: 'G2b9TTsZAkE1DP5JJdz7jufvB1XUrhwDKjCtSHLcpGhV',
-          lpMint: {
-            chainId: 101,
-            address: 'AvYDLwEyk66Ric9im8vNWDfRU5hGoErQTeQAVLvgA1Q2',
-            programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-            logoURI: '',
-            symbol: 'WBTC-USDC',
-            name: 'WBTC-USDC',
-            decimals: 8,
-            tags: [],
-            extensions: {},
-          },
-          marketId: '3BAKsQd3RuhZKES2DGysMhjBdwjZYKYmxRqnSMtZ4KSN',
-          mintA: {
-            chainId: 101,
-            address: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh',
-            programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-            logoURI: 'https://img.raydium.io/icon/3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh.png',
-            symbol: 'WBTC',
-            name: 'Wrapped BTC (Wormhole)',
-            decimals: 8,
-            tags: [],
-            extensions: {
-              coingeckoId: 'wrapped-btc-wormhole',
-            },
-          },
-          mintB: {
-            chainId: 101,
-            address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-            programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-            logoURI: 'https://img.raydium.io/icon/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v.png',
-            symbol: 'USDC',
-            name: 'USD Coin',
-            decimals: 6,
-            tags: ['hasFreeze'],
-            extensions: {
-              coingeckoId: 'usd-coin',
-            },
-          },
-          mintAmountA: 51870 / 10 ** 8,
-          mintAmountB: 13404921 / 10 ** 6,
-          farmIds: [],
-          price: 27966.50885674738,
-          lpPrice: 3360.246673142419,
-          lpAmount: 0.00829762,
-          tvl: 27.88205,
-          feeRate: 0.0025,
-          openTime: 1676323035,
-          rewardInfos: [],
-          day: {
-            volume: 0.344198,
-            volumeQuote: 0.344198,
-            volumeFee: 0.0008604950000000001,
-            apr: 23358314.3162,
-            feeApr: 23358314.3162,
-            priceMin: 28564.14937759336,
-            priceMax: 28564.14937759336,
-            rewardApr: [],
-          },
-          week: {
-            volume: 0.344491,
-            volumeQuote: 0.344491,
-            volumeFee: 0.0008612275,
-            apr: 45457.6076,
-            feeApr: 45457.6076,
-            priceMin: 28564.14937759336,
-            priceMax: 29300,
-            rewardApr: [],
-          },
-          month: {
-            volume: 1.2714150000000002,
-            volumeQuote: 1.2714150000000002,
-            volumeFee: 0.0031785375000000005,
-            apr: 719017.1354,
-            feeApr: 719017.1354,
-            priceMin: 28564.14937759336,
-            priceMax: 30200,
-            rewardApr: [],
-          },
-          pooltype: ['OpenBookMarket'],
-        },
-        amount: new TokenAmount(raydium.mintToToken('3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh'), 1, false),
-        anotherToken: raydium.mintToToken('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
-        slippage: new Percent(1, 100),
+      if (!raydium || !tokenAccounts.length) return
+      console.log(123123, raydium, raydium.account.tokenAccounts)
+
+      // const ownerMintToAccount: { [mint: string]: PublicKey } = {}
+      // for (const item of tokenAccounts) {
+      //   const ata = getATAAddress(raydium.ownerPubKey!, item.mint!, item.programId ?? TOKEN_PROGRAM_ID).publicKey
+      //   if (item.publicKey && ata.equals(item.publicKey)) ownerMintToAccount[item.mint!.toString()] = item.publicKey!
+      // }
+      const r = await raydium.farm.deposit({
+        farmInfo: farm as any,
+        amount: new BN('270531'),
       })
-      console.log(123123111, r.anotherAmount.toExact())
+      console.log(1231234444, r)
       // await raydium.token.load({ type: JupTokenType.ALL })
       // await raydium.ammV3.load()
       // await raydium.ammV3.fetchPoolAccountPosition()
@@ -235,7 +167,7 @@ export default function Swap() {
       debounceCalculate()
     }
     return () => debounceCalculate.cancel()
-  }, [connected, inToken, outToken, inAmount, raydium])
+  }, [connected, inToken, outToken, inAmount, raydium, tokenAccounts])
 
   const handleClick = async () => {
     // const { signers, execute, extInfo } = await raydium!.trade.swap({

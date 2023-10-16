@@ -11,6 +11,8 @@ import { UnionCover } from "../type";
 import { poolTypeV6 } from "./config";
 import { FarmStateV3, FarmStateV5, FarmStateV6 } from "./layout";
 
+import { FormatFarmInfoOut } from "../../api/type";
+
 export type RewardType = keyof typeof poolTypeV6;
 export interface APIRewardInfo {
   rewardMint: string;
@@ -104,12 +106,13 @@ export interface UpdateFarmReward {
   payer?: PublicKey;
 }
 export interface FarmDWParam {
-  farmId: PublicKey;
+  farmInfo: FormatFarmInfoOut;
   amount: BigNumberish;
   feePayer?: PublicKey;
   useSOLBalance?: boolean;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  deposited?: BN;
 }
 /* ================= pool keys ================= */
 export type FarmPoolKeys = {

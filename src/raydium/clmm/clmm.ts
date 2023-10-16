@@ -31,6 +31,7 @@ import {
   CollectRewardsParams,
   HarvestAllRewardsParams,
   ReturnTypeComputeAmountOutBaseOut,
+  OpenPositionFromLiquidityExtInfo,
 } from "./type";
 import { ClmmInstrument } from "./instrument";
 import { LoadParams, MakeTransaction, ReturnTypeFetchMultipleMintInfos } from "../type";
@@ -277,7 +278,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     withMetadata = "create",
     getEphemeralSigners,
-  }: OpenPositionFromLiquidity): Promise<MakeTransaction> {
+  }: OpenPositionFromLiquidity): Promise<MakeTransaction<OpenPositionFromLiquidityExtInfo>> {
     const txBuilder = this.createTxBuilder();
 
     let ownerTokenAccountA: PublicKey | null = null;
@@ -347,10 +348,11 @@ export class Clmm extends ModuleBase {
       withMetadata,
       getEphemeralSigners,
     });
-
     txBuilder.addInstruction(makeOpenPositionInstructions);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build({ address: makeOpenPositionInstructions.address });
+    return txBuilder.build<OpenPositionFromLiquidityExtInfo>({
+      address: makeOpenPositionInstructions.address,
+    });
   }
 
   public async increasePositionFromLiquidity(props: IncreasePositionFromLiquidity): Promise<MakeTransaction> {
@@ -447,7 +449,6 @@ export class Clmm extends ModuleBase {
 
     let ownerTokenAccountA: PublicKey | undefined = undefined;
     let ownerTokenAccountB: PublicKey | undefined = undefined;
-
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toString();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toString();
 
@@ -489,10 +490,13 @@ export class Clmm extends ModuleBase {
       });
     if (_ownerTokenAccountB) ownerTokenAccountB = _ownerTokenAccountB;
     txBuilder.addInstruction(_tokenAccountBInstruction || {});
-
+    console.log(12312333333);
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
+
+    console.log(1231234444);
     const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    console.log(1231235555);
     const ins = ClmmInstrument.increasePositionFromBaseInstructions({
       poolInfo,
       poolKeys,
@@ -507,7 +511,9 @@ export class Clmm extends ModuleBase {
       otherAmountMax,
     });
     txBuilder.addInstruction(ins);
+    console.log(1231236666);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    console.log(1231237777);
     return txBuilder.build({ address: ins.address });
   }
 

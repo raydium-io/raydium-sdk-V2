@@ -1,4 +1,11 @@
-import { Raydium, RaydiumLoadParams, setLoggerLevel, LogLevel, JupTokenType } from '@raydium-io/raydium-sdk'
+import {
+  Raydium,
+  RaydiumLoadParams,
+  setLoggerLevel,
+  LogLevel,
+  JupTokenType,
+  TokenAccount,
+} from '@raydium-io/raydium-sdk'
 import create from 'zustand'
 
 interface AppState {
@@ -7,6 +14,7 @@ interface AppState {
   initRaydium: (payload: RaydiumLoadParams) => Promise<void>
   farmLoaded: boolean
   connected: boolean
+  tokenAccounts: TokenAccount[]
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -14,6 +22,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   initialing: false,
   farmLoaded: false,
   connected: false,
+  tokenAccounts: [],
   initRaydium: async (payload) => {
     if (get().initialing) return
 

@@ -255,11 +255,11 @@ export interface ReturnTypeMakeCreatePoolTransaction {
   transaction: Transaction;
   mockPoolInfo: ClmmPoolInfo;
 }
-export interface ReturnTypeMakeInstructions {
+export interface ReturnTypeMakeInstructions<T = Record<string, PublicKey>> {
   signers: (Signer | Keypair)[];
   instructions: TransactionInstruction[];
   instructionTypes: string[];
-  address: { [name: string]: PublicKey };
+  address: T;
   lookupTableAddress: PublicKey[];
 }
 
@@ -351,7 +351,7 @@ export interface UserPositionAccount {
 
 export interface IncreasePositionFromLiquidity {
   poolInfo: ApiV3PoolInfoConcentratedItem;
-  ownerPosition: ClmmPoolPersonalPosition;
+  ownerPosition: ClmmPositionLayout;
   ownerInfo: {
     useSOLBalance?: boolean;
   };
@@ -439,6 +439,18 @@ export interface OpenPositionFromLiquidity {
   checkCreateATAOwner?: boolean;
   withMetadata?: "create" | "no-create";
   getEphemeralSigners?: (k: number) => any;
+}
+
+export interface OpenPositionFromLiquidityExtInfo {
+  address: {
+    nftMint: PublicKey;
+    tickArrayLower: PublicKey;
+    tickArrayUpper: PublicKey;
+    positionNftAccount: PublicKey;
+    metadataAccount: PublicKey;
+    personalPosition: PublicKey;
+    protocolPosition: PublicKey;
+  };
 }
 
 export interface SwapInParams {

@@ -413,8 +413,7 @@ export class TickUtils {
 
     const tick = TickMath.getTickWithPriceAndTickspacing(
       _price,
-      // poolInfo.ammConfig.tickSpacing,
-      6,
+      poolInfo.config.tickSpacing,
       poolInfo.mintA.decimals,
       poolInfo.mintB.decimals,
     );

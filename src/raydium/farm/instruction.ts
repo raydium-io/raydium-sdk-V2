@@ -26,7 +26,7 @@ import {
 import { InstructionType } from "../../common/txTool/txType";
 import { InstructionReturn } from "../type";
 import { associatedLedgerAccountLayout, farmRewardLayout, withdrawRewardLayout, farmLedgerLayoutV3_2 } from "./layout";
-import { FarmRewardInfoConfig, RewardInfoKey, SdkParsedFarmInfo } from "./type";
+import { FarmRewardInfoConfig, RewardInfoKey } from "./type";
 import {
   getRegistrarAddress,
   getVotingTokenMint,
@@ -38,6 +38,8 @@ import {
 import { dwLayout } from "./layout";
 import { getAssociatedLedgerAccount, getDepositEntryIndex } from "./util";
 import { struct, u8, u64, u32, bool } from "../../marshmallow";
+
+import { FormatFarmInfoOut, FormatFarmKeyOut } from "../../api/type";
 
 const logger = createLogger("Raydium_farm_instruction");
 
@@ -652,20 +654,23 @@ export async function makeWithdrawTokenInstruction({
 export function makeDepositWithdrawInstruction(params: {
   instruction: number;
   amount: BN;
-  farmInfo: SdkParsedFarmInfo;
+  farmInfo: FormatFarmInfoOut;
+  farmKeys: FormatFarmKeyOut;
   lpAccount: PublicKey;
   owner: PublicKey;
   rewardAccounts: PublicKey[];
   deposit?: boolean;
+  version: 3 | 5 | 6;
 }): TransactionInstruction {
-  const { lpAccount, rewardAccounts, owner, instruction, amount, farmInfo, deposit } = params;
-  const { version, rewardInfos, jsonInfo } = farmInfo;
+  const { farmInfo, farmKeys, version, lpAccount, rewardAccounts, owner, instruction, amount, deposit } = params;
+
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
 
   const ledgerAddress = getAssociatedLedgerAccount({
-    programId: new PublicKey(farmInfo.programId),
-    poolId: new PublicKey(farmInfo.id),
+    programId,
+    poolId: id,
     owner,
-    version: farmInfo.version,
+    version,
   });
 
   const data = Buffer.alloc(dwLayout.span);
@@ -682,40 +687,40 @@ export function makeDepositWithdrawInstruction(params: {
       ? [
           accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
           ...(deposit ? [accountMeta({ pubkey: SystemProgram.programId, isWritable: false })] : []),
-          accountMeta({ pubkey: farmInfo.id }),
-          accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
-          accountMeta({ pubkey: farmInfo.lpVault.mint }),
+          accountMeta({ pubkey: id }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
           accountMeta({ pubkey: ledgerAddress }),
           accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
           accountMeta({ pubkey: lpAccount }),
         ]
       : [
-          accountMeta({ pubkey: farmInfo.id }),
-          accountMeta({ pubkey: farmInfo.authority, isWritable: false }),
+          accountMeta({ pubkey: id }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
           accountMeta({ pubkey: ledgerAddress }),
           accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
           accountMeta({ pubkey: lpAccount }),
-          accountMeta({ pubkey: new PublicKey(jsonInfo.lpVault) }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
           accountMeta({ pubkey: rewardAccounts[0] }),
-          accountMeta({ pubkey: farmInfo.rewardInfos[0].rewardVault }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
           // system
           accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
           accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
         ];
 
   if (version === 5) {
-    for (let index = 1; index < rewardInfos.length; index++) {
+    for (let index = 1; index < farmKeys.rewardInfos.length; index++) {
       keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
-      keys.push(accountMeta({ pubkey: rewardInfos[index].rewardVault }));
+      keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
     }
   }
 
   if (version === 6) {
-    for (let index = 0; index < rewardInfos.length; index++) {
-      keys.push(accountMeta({ pubkey: rewardInfos[index].rewardVault }));
+    for (let index = 0; index < farmKeys.rewardInfos.length; index++) {
+      keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
       keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
     }
   }
 
-  return new TransactionInstruction({ programId: farmInfo.programId, keys, data });
+  return new TransactionInstruction({ programId, keys, data });
 }

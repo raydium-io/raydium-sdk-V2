@@ -40,10 +40,10 @@ export const API_URLS = {
   POOLS_KEY_BY_MINT_2: "/v3/pools/key/mint/{mint1}/{mint2}/{type}/{page_size}/{page}",
   POOL_LIQUIDITY_LINE: "/v3/pools/line/liquidity/{id}",
   POOL_POSITION_LINE: "/v3/pools/line/position/{id}",
-  FARM_INFO: "/v3/farms/info/id/{pool_id}",
+  FARM_INFO: "/v3/farms/info/id/{id}",
   FARM_LP_INFO: "/v3/farms/info/lp/{pool_lp}/{page_size}/{page}",
   FARM_LIST: "/v3/farms/info/list/all/{page_size}/{page}",
-  FARM_KEYS: "/v3/farms/key/id/{pool_id}",
+  FARM_KEYS: "/v3/farms/key/id/{id}",
 };
 
 export const DEV_API_URLS = {

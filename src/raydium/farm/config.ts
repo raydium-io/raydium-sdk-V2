@@ -1,6 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 
 import { createLogger } from "../../common/logger";
+import { FARM_PROGRAM_ID_V3, FARM_PROGRAM_ID_V5, FARM_PROGRAM_ID_V6 } from "../../common/programId";
+import { RewardInfoV345, RewardInfoV6 } from "../../api/type";
 
 import {
   FarmLedgerLayout,
@@ -65,7 +67,7 @@ export const farmWithdrawVersionToInstruction = (version: number): number => {
 
 export const validateFarmRewards = (params: {
   version: number;
-  rewardInfos: RewardInfoWithKey[];
+  rewardInfos: RewardInfoV345[] | RewardInfoV6[];
   rewardTokenAccountsPublicKeys: PublicKey[];
 }): (() => string | undefined) => {
   const { version, rewardInfos, rewardTokenAccountsPublicKeys } = params;
@@ -96,3 +98,9 @@ export const validateFarmRewards = (params: {
 };
 
 export const poolTypeV6 = { "Standard SPL": 0, "Option tokens": 1 };
+
+export const FARM_PROGRAM_TO_VERSION: Record<string, 3 | 5 | 6> = {
+  [FARM_PROGRAM_ID_V3.toString()]: 3,
+  [FARM_PROGRAM_ID_V5.toString()]: 5,
+  [FARM_PROGRAM_ID_V6.toString()]: 6,
+};

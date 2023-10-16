@@ -11,24 +11,19 @@ export default function Farm() {
   useEffect(() => {
     async function addFarm() {
       if (!raydium) return
-      await raydium.account.fetchWalletTokenAccounts()
-      await raydium.farm.loadHydratedFarmInfo()
+      // await raydium.farm.loadHydratedFarmInfo()
 
       // USDT - USDC farm
       // const farmId = '5oCZkR2k955Mvmgq3A4sFd76D5k4qZn45VpaCkp8H3uS'
 
       // const targetFarm = raydium.farm.getParsedFarm(farmId)
-      // console.log(
-      //   12312322222222,
-      //   raydium.farm.allFarms.find((f) => f.id === 'CHYrUBX2RKX8iBg7gYTkccoGNBzP44LdaazMHCLcdEgS')
-      // )
-      const { execute, transaction } = await raydium.farm.withdraw({
-        farmId: new PublicKey('CHYrUBX2RKX8iBg7gYTkccoGNBzP44LdaazMHCLcdEgS'),
-        amount: raydium.farm.lpDecimalAmount({
-          mint: new PublicKey('FbC6K13MzHvN42bXrtGaWsvZY9fxrackRSZcBGfjPc7m'),
-          amount: '0.028397',
-        }),
-      })
+      // const { execute, transaction } = await raydium.farm.withdraw({
+      //   farmId: new PublicKey('CHYrUBX2RKX8iBg7gYTkccoGNBzP44LdaazMHCLcdEgS'),
+      //   amount: raydium.farm.lpDecimalAmount({
+      //     mint: new PublicKey('FbC6K13MzHvN42bXrtGaWsvZY9fxrackRSZcBGfjPc7m'),
+      //     amount: '0.028397',
+      //   }),
+      // })
       // execute()
 
       // const { execute, transaction } = await raydium.farm.withdraw({

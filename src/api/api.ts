@@ -17,6 +17,7 @@ import {
   SearchPoolsApiReturn,
   JupTokenType,
   PoolKeys,
+  FormatFarmKeyOut,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
@@ -24,6 +25,7 @@ import { PublicKey } from "@solana/web3.js";
 
 const logger = createLogger("Raydium_Api");
 const poolKeysCache: Map<string, PoolKeys> = new Map();
+const farmKeysCache: Map<string, FormatFarmKeyOut> = new Map();
 
 export async function endlessRetry<T>(name: string, call: () => Promise<T>, interval = 1000): Promise<T> {
   let result: T | undefined;
@@ -298,6 +300,23 @@ export class Api {
       },
     );
     poolKeysCache.set(id, res.data);
+    return res.data;
+  }
+
+  async fetchFarmKeysById(props: { id: string }): Promise<FormatFarmKeyOut> {
+    const { id } = props;
+
+    if (farmKeysCache.has(id)) {
+      return farmKeysCache.get(id)!;
+    }
+
+    const res = await this.api.get<FormatFarmKeyOut>(
+      (this.urlConfigs.FARM_KEYS || DEV_API_URLS.FARM_KEYS).replace("{id}", id),
+      {
+        baseURL: DEV_API_URLS.BASE_HOST,
+      },
+    );
+    farmKeysCache.set(id, res.data);
     return res.data;
   }
 }
