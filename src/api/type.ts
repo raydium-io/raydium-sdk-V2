@@ -228,8 +228,13 @@ export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
 };
 export type ApiV3PoolInfoItem = ApiV3PoolInfoConcentratedItem | ApiV3PoolInfoStandardItem;
 
+export enum PoolFetchType {
+  All = "all",
+  Standard = "standard",
+  Concentrated = "concentrated",
+}
 export interface FetchPoolParams {
-  type?: "all" | "concentrated" | "standard";
+  type?: PoolFetchType;
   sort?:
     | "liquidity"
     | "volume_24h"

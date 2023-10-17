@@ -228,9 +228,7 @@ export default class LiquidityModule extends ModuleBase {
       new PublicKey(poolInfo.lpMint.address),
     ];
     this.logDebug("amountIn:", amountIn);
-    if (amountIn.isZero()) this.logAndCreateError("amount must greater than zero", "amountIn", amountIn.toFixed());
-    if (!amountIn.token.mint.equals(lpMint))
-      this.logAndCreateError("amountIn's token not match lpMint", "amountIn", amountIn);
+    if (amountIn.isZero()) this.logAndCreateError("amount must greater than zero", "amountIn", amountIn.toString());
 
     const { account } = this.scope;
     const lpTokenAccount = await account.getCreatedTokenAccount({
@@ -275,8 +273,9 @@ export default class LiquidityModule extends ModuleBase {
 
     txBuilder.addInstruction({
       instructions: [
-        ComputeBudgetProgram.setComputeUnitLimit({
+        ComputeBudgetProgram.requestUnits({
           units: 400000,
+          additionalFee: 0,
         }),
         removeLiquidityInstruction({
           poolInfo,
@@ -287,7 +286,7 @@ export default class LiquidityModule extends ModuleBase {
             quoteTokenAccount: _quoteTokenAccount!,
             owner: this.scope.ownerPubKey,
           },
-          amountIn: amountIn.raw,
+          amountIn,
         }),
       ],
       lookupTableAddress:

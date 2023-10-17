@@ -98,11 +98,11 @@ export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): 
       // system
       accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
       // amm
-      accountMeta({ pubkey: new PublicKey(poolInfo.id) }),
+      accountMeta({ pubkey: poolKeys.id }),
       accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
       accountMeta({ pubkey: poolKeys.openOrders }),
       accountMeta({ pubkey: poolKeys.targetOrders }),
-      accountMeta({ pubkey: new PublicKey(poolInfo.lpMint.address) }),
+      accountMeta({ pubkey: poolKeys.mintLp.address }),
       accountMeta({ pubkey: poolKeys.vault.A }),
       accountMeta({ pubkey: poolKeys.vault.B }),
     ];
@@ -110,7 +110,8 @@ export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): 
     if (version === 5) {
       keys.push(accountMeta({ pubkey: MODEL_DATA_PUBKEY }));
     } else {
-      keys.push(accountMeta({ pubkey: poolKeys.withdrawQueue }), accountMeta({ pubkey: poolKeys.vault.Lp }));
+      keys.push(accountMeta({ pubkey: poolKeys.withdrawQueue }));
+      keys.push(accountMeta({ pubkey: poolKeys.vault.Lp }));
     }
 
     keys.push(

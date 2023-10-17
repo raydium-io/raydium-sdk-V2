@@ -22,7 +22,7 @@ export interface AddLiquidityParams {
 export interface RemoveParams {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
-  amountIn: TokenAmount;
+  amountIn: BN;
   config?: {
     bypassAssociatedCheck?: boolean;
     checkCreateATAOwner?: boolean;
