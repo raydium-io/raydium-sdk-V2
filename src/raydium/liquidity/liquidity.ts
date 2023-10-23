@@ -103,13 +103,16 @@ export default class LiquidityModule extends ModuleBase {
   public async addLiquidity(params: AddLiquidityParams): Promise<MakeTransaction> {
     const { poolInfo, amountInA: _amountInA, amountInB: _amountInB, fixedSide, config } = params;
 
+    if (this.scope.availability.addStandardPosition === false)
+      this.logAndCreateError("add liquidity feature disabled in your region");
+
     const amountInA = this.scope.mintToTokenAmount({
-      mint: solToWSol(_amountInA.token.mint),
-      amount: _amountInA.toExact(),
+      mint: solToWSol(poolInfo.mintA.address),
+      amount: _amountInA.toString(),
     });
     const amountInB = this.scope.mintToTokenAmount({
-      mint: solToWSol(_amountInB.token.mint),
-      amount: _amountInB.toExact(),
+      mint: solToWSol(poolInfo.mintB.address),
+      amount: _amountInB.toString(),
     });
 
     this.logDebug("amountInA:", amountInA, "amountInB:", amountInB);
@@ -220,6 +223,8 @@ export default class LiquidityModule extends ModuleBase {
   }
 
   public async removeLiquidity(params: RemoveParams): Promise<MakeTransaction> {
+    if (this.scope.availability.removeStandardPosition === false)
+      this.logAndCreateError("remove liquidity feature disabled in your region");
     const { poolInfo, amountIn, config } = params;
     const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
     const [baseMint, quoteMint, lpMint] = [
@@ -331,6 +336,11 @@ export default class LiquidityModule extends ModuleBase {
     tokenProgram?: PublicKey;
     getEphemeralSigners?: (k: number) => any;
   }): Promise<MakeTransaction> {
+    if (
+      this.scope.availability.removeStandardPosition === false ||
+      this.scope.availability.createConcentratedPosition === false
+    )
+      this.logAndCreateError("remove liquidity or create position feature disabled in your region");
     const { instructions, instructionTypes } = computeBudgetConfig
       ? addComputeBudget(computeBudgetConfig)
       : { instructions: [], instructionTypes: [] };

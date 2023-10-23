@@ -3,29 +3,17 @@ import { Keypair, PublicKey, SystemProgram, TransactionInstruction } from "@sola
 import BN from "bn.js";
 
 import { accountMeta, AddInstructionParam, commonSystemAccountMeta } from "../../common";
-import { isDateAfter, isDateBefore, offsetDateTime } from "../../common/date";
-import { getMax, sub, isMeaningfulNumber } from "../../common/fractionUtil";
-import {
-  BigNumberish,
-  toTotalPrice,
-  toPercent,
-  toBN,
-  parseNumberInfo,
-  parseBigNumberish,
-  BN_ZERO,
-} from "../../common/bignumber";
+import { parseBigNumberish, BN_ZERO } from "../../common/bignumber";
 import { PublicKeyish, SOLMint, WSOLMint, validateAndParsePublicKey } from "../../common/pubKey";
 import { InstructionType } from "../../common/txTool/txType";
 import { getATAAddress } from "../../common/pda";
 import { FARM_PROGRAM_ID_V6 } from "../../common/programId";
 
-import { Fraction } from "../../module/fraction";
 import { Token as RToken } from "../../module/token";
-import { TokenAmount } from "../../module/amount";
 import { createWSolAccountInstructions } from "../account/instruction";
 import ModuleBase from "../moduleBase";
 import { TOKEN_WSOL } from "../token/constant";
-import { LoadParams, MakeTransaction } from "../type";
+import { MakeTransaction } from "../type";
 
 import {
   FARM_LOCK_MINT,
@@ -60,9 +48,6 @@ import {
   getAssociatedAuthority,
   getAssociatedLedgerAccount,
   getAssociatedLedgerPoolAccount,
-  judgeFarmType,
-  whetherIsStakeFarmPool,
-  calculateFarmPoolAprList,
   getFarmLedgerLayout,
 } from "./util";
 import { FormatFarmInfoOut } from "../../api/type";
@@ -368,6 +353,9 @@ export default class Farm extends ModuleBase {
   public async deposit(params: FarmDWParam): Promise<MakeTransaction> {
     const { farmInfo, amount, feePayer, useSOLBalance, associatedOnly = true, checkCreateATAOwner = false } = params;
 
+    if (this.scope.availability.addFarm === false)
+      this.logAndCreateError("farm deposit feature disabled in your region");
+
     const { rewardInfos, programId } = farmInfo;
     const version = FARM_PROGRAM_TO_VERSION[programId];
     const [farmProgramId, farmId] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
@@ -477,6 +465,9 @@ export default class Farm extends ModuleBase {
       checkCreateATAOwner = false,
     } = params;
     const { rewardInfos } = farmInfo;
+
+    if (this.scope.availability.removeFarm === false)
+      this.logAndCreateError("farm withdraw feature disabled in your region");
 
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });

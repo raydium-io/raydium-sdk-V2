@@ -115,7 +115,16 @@ export class ClmmInstrument {
     });
   }
 
-  static async createPoolInstructions(props: CreatePoolInstruction): Promise<ReturnTypeMakeInstructions> {
+  static async createPoolInstructions(
+    props: CreatePoolInstruction,
+  ): Promise<
+    ReturnTypeMakeInstructions<{
+      poolId: PublicKey;
+      observationId: PublicKey;
+      mintAVault: PublicKey;
+      mintBVault: PublicKey;
+    }>
+  > {
     const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } = props;
     const observationId = generatePubKey({ fromPublicKey: owner, programId });
     const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];

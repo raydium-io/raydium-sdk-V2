@@ -3,6 +3,7 @@ import { TokenAmount } from "../../module/amount";
 import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "../../api/type";
 import { BigNumberish } from "../../common/bignumber";
 import BN from "bn.js";
+import Decimal from "decimal.js-light";
 
 export type LiquiditySide = "a" | "b";
 export type AmountSide = "base" | "quote";
@@ -10,8 +11,8 @@ export type AmountSide = "base" | "quote";
 export interface AddLiquidityParams {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
-  amountInA: TokenAmount;
-  amountInB: TokenAmount;
+  amountInA: string | Decimal | BN;
+  amountInB: string | Decimal | BN;
   fixedSide: LiquiditySide;
   config?: {
     bypassAssociatedCheck?: boolean;

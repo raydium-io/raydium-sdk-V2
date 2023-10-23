@@ -2,7 +2,7 @@ import { Connection, Keypair, PublicKey, EpochInfo } from "@solana/web3.js";
 import BN from "bn.js";
 import { merge } from "lodash";
 
-import { Api, API_URL_CONFIG, ApiV3TokenRes, ApiV3Token, JupTokenType } from "../api";
+import { Api, API_URL_CONFIG, ApiV3TokenRes, ApiV3Token, JupTokenType, AvailabilityCheckAPI3 } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
 import { Owner } from "../common/owner";
@@ -43,6 +43,7 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   logCount?: number;
   jupTokenType?: JupTokenType;
   preloadTokenPrice?: boolean;
+  disableFeatureCheck?: boolean;
 }
 
 export interface RaydiumApiBatchRequestParams {
@@ -82,6 +83,7 @@ export class Raydium {
   public token: TokenModule;
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
+  public availability: Partial<AvailabilityCheckAPI3>;
 
   private _connection: Connection;
   private _owner: Owner | undefined;
@@ -127,6 +129,7 @@ export class Raydium {
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
     // this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
 
+    this.availability = {};
     const now = new Date().getTime();
     this.apiData = {};
 
@@ -159,6 +162,7 @@ export class Raydium {
       api,
     });
 
+    await raydium.fetchAvailabilityStatus(config.disableFeatureCheck);
     await raydium.token.load({
       type: config.jupTokenType,
       fetchTokenPrice: config.preloadTokenPrice,
@@ -276,6 +280,24 @@ export class Raydium {
 
   public async getChainTokenInfo(mint: PublicKeyish): Promise<{ token: Token; tokenInfo: TokenInfo }> {
     return this.token.getChainTokenInfo(mint);
+  }
+
+  public async fetchAvailabilityStatus(skipCheck?: boolean): Promise<Partial<AvailabilityCheckAPI3>> {
+    if (skipCheck) return {};
+    const data = await this.api.fetchAvailabilityStatus();
+    const isAllDisabled = data.all === false;
+    this.availability = {
+      all: data.all,
+      swap: isAllDisabled ? false : data.swap,
+      createConcentratedPosition: isAllDisabled ? false : data.createConcentratedPosition,
+      addConcentratedPosition: isAllDisabled ? false : data.addConcentratedPosition,
+      addStandardPosition: isAllDisabled ? false : data.addStandardPosition,
+      removeConcentratedPosition: isAllDisabled ? false : data.removeConcentratedPosition,
+      removeStandardPosition: isAllDisabled ? false : data.removeStandardPosition,
+      addFarm: isAllDisabled ? false : data.addFarm,
+      removeFarm: isAllDisabled ? false : data.removeFarm,
+    };
+    return data;
   }
 
   public mintToToken(mint: PublicKeyish): Token {

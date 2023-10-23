@@ -10,12 +10,22 @@ import { MakeMultiTransaction } from "../type";
 
 interface ExtInfo {
   extInfo: {
-    address: { id: PublicKey };
+    address: {
+      marketId: PublicKey;
+      requestQueue: PublicKey;
+      eventQueue: PublicKey;
+      bids: PublicKey;
+      asks: PublicKey;
+      baseVault: PublicKey;
+      quoteVault: PublicKey;
+      baseMint: PublicKey;
+      quoteMin: PublicKey;
+    };
   };
 }
 
 export default class MarketV2 extends ModuleBase {
-  public async makeCreateMarketTransaction({
+  public async create({
     baseInfo,
     quoteInfo,
     lotSize, // 1
@@ -114,7 +124,15 @@ export default class MarketV2 extends ModuleBase {
       extraPreBuildData: extraTxBuildData,
       extInfo: {
         address: {
-          id: market.publicKey,
+          marketId: market,
+          requestQueue,
+          eventQueue,
+          bids,
+          asks,
+          baseVault,
+          quoteVault,
+          baseMint: new PublicKey(baseInfo.mint),
+          quoteMin: new PublicKey(quoteInfo.mint),
         },
       },
     }) as MakeMultiTransaction & ExtInfo;

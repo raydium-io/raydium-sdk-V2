@@ -13,6 +13,7 @@ export const API_URLS = {
   PRICE: "/v2/main/price",
 
   // api v3
+  CHECK_AVAILABILITY: "/v3/main/AvailabilityCheckAPI3",
   RPCS: "/v3/main/rpcs",
   INFO: "/v3/main/info",
   STAKE_POOLS: "/v3/main/stake-pools",

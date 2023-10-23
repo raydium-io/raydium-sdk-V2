@@ -293,7 +293,7 @@ function makeInnerInsKey(
       { pubkey: poolKey.id, isSigner: false, isWritable: true },
       { pubkey: baseIn ? poolKey.vault.A : poolKey.vault.B, isSigner: false, isWritable: true },
       { pubkey: baseIn ? poolKey.vault.B : poolKey.vault.A, isSigner: false, isWritable: true },
-      // { pubkey: itemPool.observationId, isSigner: false, isWritable: true }, // todo
+      // { pubkey: itemPool.observationId, isSigner: false, isWritable: true }, // to do
       { pubkey: poolKey.id, isSigner: false, isWritable: true },
       ...(poolKey.mintA.programId.equals(TOKEN_2022_PROGRAM_ID) || poolKey.mintB.programId.equals(TOKEN_2022_PROGRAM_ID)
         ? [

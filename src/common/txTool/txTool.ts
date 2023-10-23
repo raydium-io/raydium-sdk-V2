@@ -255,8 +255,8 @@ export class TxBuilder {
               );
               this.connection.getSignatureStatus(txId);
             };
-            checkSendTx();
-            return [];
+            await checkSendTx();
+            return processedTxs.map((d) => d.txId);
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {

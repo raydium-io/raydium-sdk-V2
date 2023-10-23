@@ -5,7 +5,7 @@ import { Fraction } from "../../module/fraction";
 import { TokenInfo } from "../token/type";
 import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
-import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem } from "../../api/type";
+import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "../../api/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 import { ApiV3Token } from "../../api/type";
 import { ClmmPositionLayout } from "./layout";
@@ -427,6 +427,7 @@ export interface OpenPositionFromBase {
 
 export interface OpenPositionFromLiquidity {
   poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolKeys?: ClmmKeys;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
   };

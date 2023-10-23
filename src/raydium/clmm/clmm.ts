@@ -102,7 +102,7 @@ export class Clmm extends ModuleBase {
 
   public async createPool(
     props: CreateConcentratedPool,
-  ): Promise<MakeTransaction<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem }>> {
+  ): Promise<MakeTransaction<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {
     const {
       programId,
       owner = this.scope.owner?.publicKey || PublicKey.default,
@@ -135,7 +135,28 @@ export class Clmm extends ModuleBase {
     txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
 
-    return txBuilder.build<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem }>({
+    return txBuilder.build<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>({
+      address: {
+        ...insInfo.address,
+        programId: programId.toString(),
+        id: insInfo.address.poolId.toString(),
+        mintA,
+        mintB,
+        openTime: startTime.toNumber(),
+        vault: { A: insInfo.address.mintAVault.toString(), B: insInfo.address.mintBVault.toString() },
+        rewardInfos: [],
+        config: {
+          id: ammConfig.id.toString(),
+          index: ammConfig.index,
+          protocolFeeRate: ammConfig.protocolFeeRate,
+          tradeFeeRate: ammConfig.tradeFeeRate,
+          tickSpacing: ammConfig.tickSpacing,
+          fundFeeRate: ammConfig.fundFeeRate,
+          description: ammConfig.description,
+          defaultRange: 0,
+          defaultRangePoint: [],
+        },
+      },
       mockPoolInfo: {
         type: "Concentrated",
         id: insInfo.address.poolId.toString(),
@@ -192,6 +213,9 @@ export class Clmm extends ModuleBase {
     withMetadata = "create",
     getEphemeralSigners,
   }: OpenPositionFromBase): Promise<MakeTransaction> {
+    if (this.scope.availability.addConcentratedPosition === false)
+      this.logAndCreateError("add position feature disabled in your region");
+
     this.scope.checkOwner();
     const txBuilder = this.createTxBuilder();
 
@@ -268,6 +292,7 @@ export class Clmm extends ModuleBase {
 
   public async openPositionFromLiquidity({
     poolInfo,
+    poolKeys: propPoolKeys,
     ownerInfo,
     amountMaxA,
     amountMaxB,
@@ -279,6 +304,8 @@ export class Clmm extends ModuleBase {
     withMetadata = "create",
     getEphemeralSigners,
   }: OpenPositionFromLiquidity): Promise<MakeTransaction<OpenPositionFromLiquidityExtInfo>> {
+    if (this.scope.availability.createConcentratedPosition === false)
+      this.logAndCreateError("open position feature disabled in your region");
     const txBuilder = this.createTxBuilder();
 
     let ownerTokenAccountA: PublicKey | null = null;
@@ -330,7 +357,7 @@ export class Clmm extends ModuleBase {
     if (ownerTokenAccountA === undefined || ownerTokenAccountB === undefined)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = propPoolKeys || ((await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys);
 
     const makeOpenPositionInstructions = await ClmmInstrument.openPositionFromLiquidityInstructions({
       poolInfo,
@@ -528,7 +555,8 @@ export class Clmm extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
     } = props;
-
+    if (this.scope.availability.removeConcentratedPosition === false)
+      this.logAndCreateError("remove position feature disabled in your region");
     const txBuilder = this.createTxBuilder();
 
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toString();
@@ -643,6 +671,8 @@ export class Clmm extends ModuleBase {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     ownerPosition: ClmmPositionLayout;
   }): Promise<MakeTransaction> {
+    if (this.scope.availability.removeConcentratedPosition === false)
+      this.logAndCreateError("remove position feature disabled in your region");
     const txBuilder = this.createTxBuilder();
     const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
     const ins = ClmmInstrument.closePositionInstructions({

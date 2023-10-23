@@ -12,6 +12,7 @@ import {
   JupTokenType,
   PoolKeys,
   FormatFarmKeyOut,
+  AvailabilityCheckAPI3,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
@@ -172,24 +173,22 @@ export class Api {
   }
 
   async getTokenList(): Promise<{ mintList: ApiV3Token[]; blacklist: ApiV3Token[] }> {
-    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {
-      baseURL: DEV_API_URLS.BASE_HOST,
-    });
+    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {});
     return res.data;
   }
 
   async getJupTokenList(type?: JupTokenType): Promise<ApiV3Token[]> {
     return this.api.get("/", {
-      baseURL: DEV_API_URLS.JUP_TOKEN_LIST.replace("{type}", type || JupTokenType.ALL),
+      baseURL: (this.urlConfigs.JUP_TOKEN_LIST || DEV_API_URLS.JUP_TOKEN_LIST).replace(
+        "{type}",
+        type || JupTokenType.ALL,
+      ),
     });
   }
 
   async getTokenInfo(mint: string | PublicKey): Promise<ApiV3Token | undefined> {
     const res = await this.api.get(
       (this.urlConfigs.TOKEN_INFO || DEV_API_URLS.TOKEN_INFO).replace("{mint}", mint.toString()),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
     );
     return res.data;
   }
@@ -202,9 +201,6 @@ export class Api {
         .replace("{sort}", sort)
         .replace("{order}", order)
         .replace("{page}", String(page)),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
     );
     return res.data;
   }
@@ -213,9 +209,6 @@ export class Api {
     const { id } = props;
     const res = await this.api.get(
       (this.urlConfigs.POOL_SEARCH_BY_ID || DEV_API_URLS.POOL_SEARCH_BY_ID).replace("{id}", id),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
     );
     return res.data;
   }
@@ -230,9 +223,6 @@ export class Api {
         .replace("{sort}", sort)
         .replace("{order}", order)
         .replace("{page}", String(page)),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
     );
     return res.data;
   }
@@ -250,9 +240,6 @@ export class Api {
         .replace("{sort}", sort)
         .replace("{order}", order)
         .replace("{page}", String(page)),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
     );
     return res.data;
   }
@@ -266,9 +253,6 @@ export class Api {
 
     const res = await this.api.get<PoolKeys>(
       (this.urlConfigs.POOL_KEY_BY_ID || DEV_API_URLS.POOL_KEY_BY_ID).replace("{id}", id),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
     );
     poolKeysCache.set(id, res.data);
     return res.data;
@@ -283,11 +267,15 @@ export class Api {
 
     const res = await this.api.get<FormatFarmKeyOut>(
       (this.urlConfigs.FARM_KEYS || DEV_API_URLS.FARM_KEYS).replace("{id}", id),
-      {
-        baseURL: DEV_API_URLS.BASE_HOST,
-      },
     );
     farmKeysCache.set(id, res.data);
+    return res.data;
+  }
+
+  async fetchAvailabilityStatus(): Promise<AvailabilityCheckAPI3> {
+    const res = await this.api.get<AvailabilityCheckAPI3>(
+      this.urlConfigs.CHECK_AVAILABILITY || DEV_API_URLS.CHECK_AVAILABILITY,
+    );
     return res.data;
   }
 }

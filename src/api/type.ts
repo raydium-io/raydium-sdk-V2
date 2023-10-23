@@ -400,3 +400,15 @@ export type FormatFarmInfoOutV6 = FormatFarmInfoOutBase & {
   rewardInfos: RewardInfoV6[];
 };
 export type FormatFarmInfoOut = FormatFarmInfoOutV345 | FormatFarmInfoOutV6;
+
+export interface AvailabilityCheckAPI3 {
+  all: boolean;
+  swap: boolean;
+  createConcentratedPosition: boolean;
+  addConcentratedPosition: boolean;
+  addStandardPosition: boolean;
+  removeConcentratedPosition: boolean;
+  removeStandardPosition: boolean;
+  addFarm: boolean;
+  removeFarm: boolean;
+}

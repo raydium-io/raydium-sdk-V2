@@ -328,10 +328,6 @@ export function judgeFarmType(
   }
 }
 
-export function whetherIsStakeFarmPool(info: SdkParsedFarmInfo): boolean {
-  return info.state.rewardInfos.length === 1 && String(info.lpMint) === RAYMint.toBase58();
-}
-
 export function calculateFarmPoolAprList(
   info: SdkParsedFarmInfo,
   payload: {
