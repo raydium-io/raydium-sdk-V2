@@ -62,6 +62,7 @@ export function tryParsePublicKey(v: string): PublicKey | string {
 
 export const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 export const RENT_PROGRAM_ID = new PublicKey("SysvarRent111111111111111111111111111111111");
+export const CLOCK_PROGRAM_ID = new PublicKey("SysvarC1ock11111111111111111111111111111111");
 export const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 export const INSTRUCTION_PROGRAM_ID = new PublicKey("Sysvar1nstructions1111111111111111111111111");
 

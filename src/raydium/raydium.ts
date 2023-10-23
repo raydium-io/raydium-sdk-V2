@@ -18,6 +18,7 @@ import { Clmm } from "./clmm";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
+import Ido from "./ido";
 
 import TokenModule, { MintToTokenAmount } from "./token/token";
 import { SignAllTransactions, TransferAmountFee } from "./type";
@@ -79,7 +80,7 @@ export class Raydium {
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
   public marketV2: MarketV2;
-  // public ido: Ido;
+  public ido: Ido;
   public token: TokenModule;
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
@@ -127,7 +128,7 @@ export class Raydium {
     this.clmm = new Clmm({ scope: this, moduleName: "Raydium_clmm" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
-    // this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
+    this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
 
     this.availability = {};
     const now = new Date().getTime();

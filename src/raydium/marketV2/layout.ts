@@ -1,4 +1,4 @@
-import { blob, publicKey, struct, u16, u32, u64, u8, WideBits } from "../../marshmallow";
+import { blob, publicKey, struct, u64, WideBits } from "../../marshmallow";
 
 function accountFlagsLayout(property = "accountFlags"): WideBits<string> {
   const ACCOUNT_FLAGS_LAYOUT = new WideBits(property);
