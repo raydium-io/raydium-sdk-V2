@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { SERUM_PROGRAM_ID_V3 } from "../../common/programId";
+import { SERUM_PROGRAM_ID_V3 } from "@/common/programId";
 import { SerumVersion } from "./type";
 
 // serum program id string => serum version

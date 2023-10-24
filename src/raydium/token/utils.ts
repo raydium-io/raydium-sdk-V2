@@ -1,7 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { MintLayout, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Price, Token, TokenAmount } from "../../module";
-import { parseNumberInfo, Numberish, BigNumberish } from "../../common/bignumber";
+import { Price, Token, TokenAmount } from "@/module";
+import { parseNumberInfo, Numberish, BigNumberish } from "@/common/bignumber";
 import { TokenInfo } from "./type";
 
 import BN from "bn.js";

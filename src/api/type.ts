@@ -354,10 +354,10 @@ interface FormatFarmKeyOutBase {
   authority: string;
   lpVault: string;
 }
-type FormatFarmKeyOutV345 = FormatFarmKeyOutBase & {
+export type FormatFarmKeyOutV345 = FormatFarmKeyOutBase & {
   rewardInfos: RewardKeyInfoV345[];
 };
-type FormatFarmKeyOutV6 = FormatFarmKeyOutBase & {
+export type FormatFarmKeyOutV6 = FormatFarmKeyOutBase & {
   config: {
     periodMax: number;
     periodMin: number;

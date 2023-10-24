@@ -285,20 +285,24 @@ export class Raydium {
 
   public async fetchAvailabilityStatus(skipCheck?: boolean): Promise<Partial<AvailabilityCheckAPI3>> {
     if (skipCheck) return {};
-    const data = await this.api.fetchAvailabilityStatus();
-    const isAllDisabled = data.all === false;
-    this.availability = {
-      all: data.all,
-      swap: isAllDisabled ? false : data.swap,
-      createConcentratedPosition: isAllDisabled ? false : data.createConcentratedPosition,
-      addConcentratedPosition: isAllDisabled ? false : data.addConcentratedPosition,
-      addStandardPosition: isAllDisabled ? false : data.addStandardPosition,
-      removeConcentratedPosition: isAllDisabled ? false : data.removeConcentratedPosition,
-      removeStandardPosition: isAllDisabled ? false : data.removeStandardPosition,
-      addFarm: isAllDisabled ? false : data.addFarm,
-      removeFarm: isAllDisabled ? false : data.removeFarm,
-    };
-    return data;
+    try {
+      const data = await this.api.fetchAvailabilityStatus();
+      const isAllDisabled = data.all === false;
+      this.availability = {
+        all: data.all,
+        swap: isAllDisabled ? false : data.swap,
+        createConcentratedPosition: isAllDisabled ? false : data.createConcentratedPosition,
+        addConcentratedPosition: isAllDisabled ? false : data.addConcentratedPosition,
+        addStandardPosition: isAllDisabled ? false : data.addStandardPosition,
+        removeConcentratedPosition: isAllDisabled ? false : data.removeConcentratedPosition,
+        removeStandardPosition: isAllDisabled ? false : data.removeStandardPosition,
+        addFarm: isAllDisabled ? false : data.addFarm,
+        removeFarm: isAllDisabled ? false : data.removeFarm,
+      };
+      return data;
+    } catch {
+      return {};
+    }
   }
 
   public mintToToken(mint: PublicKeyish): Token {

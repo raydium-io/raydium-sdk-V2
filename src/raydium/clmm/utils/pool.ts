@@ -16,9 +16,9 @@ import {
   ReturnTypeComputeAmountOutFormat,
 } from "../type";
 
-import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
+import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
 
-import { ReturnTypeFetchMultipleMintInfos } from "../../type";
+import { ReturnTypeFetchMultipleMintInfos } from "@/raydium/type";
 import { NEGATIVE_ONE, Q64, ZERO, MAX_TICK, MIN_TICK, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "./constants";
 import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
 import { getPdaTickArrayAddress, getPdaExBitmapAccount, getPdaPersonalPositionAddress } from "./pda";
@@ -1387,7 +1387,7 @@ export function getLiquidityFromAmounts({
   token2022Infos,
   epochInfo,
 }: {
-  poolInfo: ClmmPoolInfo;
+  poolInfo: ApiV3PoolInfoConcentratedItem;
   tickLower: number;
   tickUpper: number;
   amountA: BN;
@@ -1399,7 +1399,11 @@ export function getLiquidityFromAmounts({
 }): ReturnTypeGetLiquidityAmountOut {
   const [_tickLower, _tickUpper, _amountA, _amountB] =
     tickLower < tickUpper ? [tickLower, tickUpper, amountA, amountB] : [tickUpper, tickLower, amountB, amountA];
-  const sqrtPriceX64 = poolInfo.sqrtPriceX64;
+  const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
+    new Decimal(poolInfo.price),
+    poolInfo.mintA.decimals,
+    poolInfo.mintB.decimals,
+  );
   const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(_tickLower);
   const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(_tickUpper);
 

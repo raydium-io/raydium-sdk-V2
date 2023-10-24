@@ -3,18 +3,11 @@ import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@
 import BN from "bn.js";
 
 import { ClmmInstrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../clmm";
-import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "../../common";
-import { struct, u64, u8 } from "../../marshmallow";
+import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "@/common";
+import { struct, u64, u8 } from "@/marshmallow";
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
 
-import {
-  ApiV3PoolInfoItem,
-  ApiV3PoolInfoConcentratedItem,
-  PoolKeys,
-  ClmmKeys,
-  AmmV4Keys,
-  AmmV5Keys,
-} from "../../api/type";
+import { ApiV3PoolInfoItem, ApiV3PoolInfoConcentratedItem, PoolKeys, ClmmKeys, AmmV4Keys, AmmV5Keys } from "@/api/type";
 import { ComputeAmountOutLayout, ReturnTypeMakeSwapInstruction } from "./type";
 
 export function route1Instruction(

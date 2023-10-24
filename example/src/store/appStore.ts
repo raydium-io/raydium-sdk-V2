@@ -37,7 +37,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadFarm: async () => {
     const raydium = get().raydium
     if (!raydium) return
-    await raydium.farm.load()
+    // await raydium.farm.load()
     set(() => ({ farmLoaded: true }))
   },
 }))

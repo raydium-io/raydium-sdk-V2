@@ -4,7 +4,7 @@ import { createInitializeAccountInstruction } from "@solana/spl-token";
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import BN from "bn.js";
 import { MARKET_STATE_LAYOUT_V2 } from "./layout";
-import { struct, u16, u32, u64, u8 } from "../../marshmallow";
+import { struct, u16, u32, u64, u8 } from "@/marshmallow";
 
 type Transactions = {
   transaction: Transaction;

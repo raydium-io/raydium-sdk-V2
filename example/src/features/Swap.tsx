@@ -16,6 +16,7 @@ import {
   solToWSol,
   JupTokenType,
   getATAAddress,
+  farmRewardLayout,
 } from '@raydium-io/raydium-sdk'
 import debounce from 'lodash/debounce'
 import { useEffect, useState } from 'react'
@@ -26,7 +27,7 @@ import { useAppStore } from '../store/appStore'
 import Decimal from 'decimal.js'
 import BN from 'bn.js'
 
-import { farm } from './data'
+import { pool, rewards } from './data'
 
 export default function Swap() {
   const raydium = useAppStore((state) => state.raydium)
@@ -60,18 +61,23 @@ export default function Swap() {
   useEffect(() => {
     async function calculateAmount() {
       if (!raydium || !tokenAccounts.length) return
-      console.log(123123, raydium, raydium.account.tokenAccounts)
 
       // const ownerMintToAccount: { [mint: string]: PublicKey } = {}
       // for (const item of tokenAccounts) {
       //   const ata = getATAAddress(raydium.ownerPubKey!, item.mint!, item.programId ?? TOKEN_PROGRAM_ID).publicKey
       //   if (item.publicKey && ata.equals(item.publicKey)) ownerMintToAccount[item.mint!.toString()] = item.publicKey!
       // }
-      const r = await raydium.farm.deposit({
-        farmInfo: farm as any,
-        amount: new BN('270531'),
+      const { transaction, execute } = await raydium.farm.create({
+        poolInfo: pool as any,
+        rewardInfos: rewards.map((r) => ({
+          ...r,
+          rewardMint: new PublicKey(r.rewardMint),
+          rewardType: 'Standard SPL',
+        })),
       })
-      console.log(1231234444, r)
+
+      execute()
+      // r.execute()
       // await raydium.token.load({ type: JupTokenType.ALL })
       // await raydium.ammV3.load()
       // await raydium.ammV3.fetchPoolAccountPosition()

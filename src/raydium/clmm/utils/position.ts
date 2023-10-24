@@ -1,8 +1,8 @@
 import BN from "bn.js";
 
 import { ClmmPoolInfo, ClmmPoolPersonalPosition, ClmmPoolRewardInfo, SDKParsedConcentratedInfo } from "../type";
-import { decimalToFraction } from "../../../common/bignumber";
-import { gt, lt } from "../../../common/fractionUtil";
+import { decimalToFraction } from "@/common/bignumber";
+import { gt, lt } from "@/common/fractionUtil";
 import { Q64 } from "./constants";
 import { MathUtil } from "./math";
 import { Tick } from "./tick";

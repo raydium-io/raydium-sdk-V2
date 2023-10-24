@@ -1,11 +1,9 @@
 import { createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, AccountLayout } from "@solana/spl-token";
-import { Commitment, PublicKey, Keypair, SystemProgram, TransactionInstruction } from "@solana/web3.js";
-import { getATAAddress } from "../../common/pda";
-import { BigNumberish, InstructionType, WSOLMint } from "../../common";
+import { Commitment, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import { getATAAddress, BigNumberish, InstructionType, WSOLMint } from "@/common";
+import { AddInstructionParam } from "@/common/txTool/txTool";
 
-import { AddInstructionParam } from "../../common/txTool/txTool";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-
 import {
   closeAccountInstruction,
   createWSolAccountInstructions,

@@ -7,9 +7,10 @@ import {
   getTransferAmountFee,
   getTransferAmountFeeV2,
   solToWSol,
-} from "../../common";
+} from "@/common";
+import { Percent } from "@/module/percent";
+import { ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { Percent } from "../../module/percent";
 import { mockV3CreatePoolInfo, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE } from "./utils/constants";
 import { LiquidityMath, SqrtPriceMath } from "./utils/math";
 import { PoolUtils } from "./utils/pool";
@@ -40,7 +41,6 @@ import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
 import { ClmmPositionLayout, OperationLayout } from "./layout";
 import BN from "bn.js";
-import { ApiV3PoolInfoConcentratedItem, ClmmKeys } from "../../api/type";
 
 export class Clmm extends ModuleBase {
   constructor(params: ModuleBaseProps) {

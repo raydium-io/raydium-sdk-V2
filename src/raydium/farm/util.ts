@@ -1,20 +1,21 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { GetMultipleAccountsInfoConfig, getMultipleAccountsInfoWithCustomFlags } from "../../common/accountInfo";
-import { parseBigNumberish, BN_ONE, BN_TEN, toTotalPrice, toFraction } from "../../common/bignumber";
-import { createLogger } from "../../common/logger";
-import { RAYMint } from "../../common/pubKey";
-import { findProgramAddress, ProgramAddress } from "../../common/txTool/txUtils";
-import { DateParam, isDateAfter, isDateBefore } from "../../common/date";
+import { GetMultipleAccountsInfoConfig, getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
+import { parseBigNumberish, BN_ONE, BN_TEN, toTotalPrice, toFraction } from "@/common/bignumber";
+import { createLogger } from "@/common/logger";
+import { findProgramAddress, ProgramAddress } from "@/common/txTool/txUtils";
+import { DateParam, isDateAfter, isDateBefore } from "@/common/date";
+import { CurrencyAmount, Fraction, Price, Token } from "@/module";
+import { jsonInfo2PoolKeys } from "@/common/utility";
+import { RewardInfoV6 } from "@/api/type";
+
 import { splAccountLayout } from "../account/layout";
 import { SplAccount } from "../account/types";
-
 import { FARM_VERSION_TO_LEDGER_LAYOUT, FARM_VERSION_TO_STATE_LAYOUT, poolTypeV6 } from "./config";
-import { CurrencyAmount, Fraction, Price, Token } from "../../module";
 import { FarmLedger, FarmLedgerLayout, FarmState, FarmStateLayout } from "./layout";
-import { FarmPoolJsonInfo, FarmRewardInfo, FarmRewardInfoConfig, SdkParsedFarmInfo } from "./type";
-import { jsonInfo2PoolKeys } from "../../common";
+import { FarmRewardInfo, FarmRewardInfoConfig } from "./type";
+
 import { VoterRegistrar, Voter } from "./layout";
 
 const logger = createLogger("Raydium.farm.util");
@@ -67,28 +68,26 @@ export function getAssociatedLedgerAccount({
   return publicKey;
 }
 
-export const getAssociatedAuthority = async ({
+export const getAssociatedAuthority = ({
   programId,
   poolId,
 }: {
   programId: PublicKey;
   poolId: PublicKey;
-}): Promise<ProgramAddress> => await findProgramAddress([poolId.toBuffer()], programId);
+}): ProgramAddress => findProgramAddress([poolId.toBuffer()], programId);
 
 export function farmRewardInfoToConfig(data: FarmRewardInfo): FarmRewardInfoConfig {
   return {
     isSet: new BN(1),
-    rewardPerSecond: parseBigNumberish(data.rewardPerSecond),
-    rewardOpenTime: parseBigNumberish(data.rewardOpenTime),
-    rewardEndTime: parseBigNumberish(data.rewardEndTime),
+    rewardPerSecond: parseBigNumberish(data.perSecond),
+    rewardOpenTime: parseBigNumberish(data.openTime),
+    rewardEndTime: parseBigNumberish(data.endTime),
     rewardType: parseBigNumberish(poolTypeV6[data.rewardType]),
   };
 }
 
-export function calFarmRewardAmount(data: FarmRewardInfo): BN {
-  return parseBigNumberish(data.rewardEndTime)
-    .sub(parseBigNumberish(data.rewardOpenTime))
-    .mul(parseBigNumberish(data.rewardPerSecond));
+export function calFarmRewardAmount(data: Pick<RewardInfoV6, "openTime" | "endTime"> & { perSecond: string }): BN {
+  return parseBigNumberish(data.endTime).sub(parseBigNumberish(data.openTime)).mul(parseBigNumberish(data.perSecond));
 }
 
 export function getFarmLedgerLayout(version: number): FarmLedgerLayout | undefined {
@@ -161,7 +160,7 @@ interface FarmPoolsInfo {
 
 export interface FarmFetchMultipleInfoParams {
   connection: Connection;
-  farmPools: FarmPoolJsonInfo[];
+  farmPools: any[];
   owner?: PublicKey;
   config?: GetMultipleAccountsInfoConfig;
   chainTime: number;
@@ -279,25 +278,9 @@ export async function fetchMultipleFarmInfoAndUpdate({
 
   return poolsInfo;
 }
-
-/** and state info  */
-export async function mergeSdkFarmInfo(options: FarmFetchMultipleInfoParams): Promise<SdkParsedFarmInfo[]> {
-  const { farmPools } = options;
-  const rawInfos = await fetchMultipleFarmInfoAndUpdate(options);
-  const result = farmPools.map(
-    (pool, idx) =>
-      ({
-        ...farmPools[idx],
-        ...jsonInfo2PoolKeys(pool),
-        ...rawInfos[pool.id],
-        jsonInfo: farmPools[idx],
-      } as unknown as SdkParsedFarmInfo),
-  );
-  return result;
-}
-
+/** deprecated */
 export function judgeFarmType(
-  info: SdkParsedFarmInfo,
+  info: any,
   currentTime: DateParam = Date.now(),
 ): "closed pool" | "normal fusion pool" | "dual fusion pool" | undefined | "upcoming pool" {
   if (info.version === 6) {
@@ -328,8 +311,9 @@ export function judgeFarmType(
   }
 }
 
+/** deprecated */
 export function calculateFarmPoolAprList(
-  info: SdkParsedFarmInfo,
+  info: any,
   payload: {
     currentBlockChainDate: Date;
     blockSlotCountForSecond: number;

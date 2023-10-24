@@ -1,5 +1,4 @@
 import {
-  Keypair,
   PublicKey,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
@@ -14,16 +13,18 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 
-import { getATAAddress } from "../../common/pda";
-import { createLogger } from "../../common/logger";
+import { struct, u8, u64, u32, bool } from "@/marshmallow";
+import { FormatFarmInfoOut, FormatFarmKeyOut } from "@/api/type";
+import { getATAAddress } from "@/common/pda";
+import { createLogger } from "@/common/logger";
 import {
   accountMeta,
   commonSystemAccountMeta,
   SOLMint,
   RENT_PROGRAM_ID,
   INSTRUCTION_PROGRAM_ID,
-} from "../../common/pubKey";
-import { InstructionType } from "../../common/txTool/txType";
+} from "@/common/pubKey";
+import { InstructionType } from "@/common/txTool/txType";
 import { InstructionReturn } from "../type";
 import { associatedLedgerAccountLayout, farmRewardLayout, withdrawRewardLayout, farmLedgerLayoutV3_2 } from "./layout";
 import { FarmRewardInfoConfig, RewardInfoKey } from "./type";
@@ -37,9 +38,6 @@ import {
 } from "./pda";
 import { dwLayout } from "./layout";
 import { getAssociatedLedgerAccount, getDepositEntryIndex } from "./util";
-import { struct, u8, u64, u32, bool } from "../../marshmallow";
-
-import { FormatFarmInfoOut, FormatFarmKeyOut } from "../../api/type";
 
 const logger = createLogger("Raydium_farm_instruction");
 
@@ -89,7 +87,7 @@ export function createAssociatedLedgerAccountInstruction(params: {
 }
 
 interface CreateFarmInstruction {
-  farmKeyPair: Keypair;
+  farmId: PublicKey;
   farmAuthority: PublicKey;
   lpVault: PublicKey;
   lpMint: PublicKey;
@@ -115,7 +113,7 @@ export function makeCreateFarmInstruction(params: CreateFarmInstruction): Instru
 
   const keys = [
     ...commonSystemAccountMeta,
-    accountMeta({ pubkey: params.farmKeyPair.publicKey }),
+    accountMeta({ pubkey: params.farmId }),
     accountMeta({ pubkey: params.farmAuthority, isWritable: false }),
     accountMeta({ pubkey: params.lpVault }),
     accountMeta({ pubkey: params.lpMint, isWritable: false }),

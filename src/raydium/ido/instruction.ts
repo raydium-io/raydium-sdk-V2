@@ -1,6 +1,6 @@
 import { PublicKey, TransactionInstruction, SYSVAR_CLOCK_PUBKEY } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { RENT_PROGRAM_ID, CLOCK_PROGRAM_ID } from "../../common/pubKey";
+import { RENT_PROGRAM_ID, CLOCK_PROGRAM_ID } from "@/common/pubKey";
 import {
   PurchaseInstructionKeys,
   ClaimInstructionKeysV3,

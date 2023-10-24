@@ -1,7 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
-import { TokenAmount } from "../../module/amount";
 import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "../../api/type";
-import { BigNumberish } from "../../common/bignumber";
+import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
 import Decimal from "decimal.js-light";
 

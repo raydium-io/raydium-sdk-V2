@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
-import { createLogger } from "../../common/logger";
+import { createLogger } from "@/common/logger";
 
 import { SERUM_PROGRAMID_TO_VERSION, SERUM_VERSION_TO_PROGRAMID } from "./id";
 import { MARKET_VERSION_TO_STATE_LAYOUT, MarketStateLayout } from "./layout";

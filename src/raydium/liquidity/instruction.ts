@@ -1,12 +1,12 @@
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction, SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
 
-import { parseBigNumberish, BN_ZERO, BN_ONE } from "../../common/bignumber";
-import { InstructionType } from "../../common/txTool/txType";
-import { createLogger } from "../../common/logger";
-import { accountMeta, RENT_PROGRAM_ID } from "../../common/pubKey";
-import { AmmV4Keys, AmmV5Keys } from "../../api/type";
-import { struct, u8, u64 } from "../../marshmallow";
+import { parseBigNumberish, BN_ZERO, BN_ONE } from "@/common/bignumber";
+import { InstructionType } from "@/common/txTool/txType";
+import { createLogger } from "@/common/logger";
+import { accountMeta, RENT_PROGRAM_ID } from "@/common/pubKey";
+import { AmmV4Keys, AmmV5Keys } from "@/api/type";
+import { struct, u8, u64 } from "@/marshmallow";
 
 import {
   addLiquidityLayout,
@@ -24,7 +24,7 @@ import {
   SwapInstructionParams,
   InitPoolInstructionParamsV4,
 } from "./type";
-import { jsonInfo2PoolKeys } from "../../common/utility";
+import { jsonInfo2PoolKeys } from "@/common/utility";
 import { InstructionReturn } from "../type";
 import BN from "bn.js";
 

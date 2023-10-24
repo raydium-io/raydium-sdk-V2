@@ -1,5 +1,4 @@
 import { PublicKey, ComputeBudgetProgram } from "@solana/web3.js";
-import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
   ApiV3PoolInfoConcentratedItem,
   ApiV3PoolInfoStandardItem,
@@ -7,22 +6,25 @@ import {
   AmmV5Keys,
   ClmmKeys,
   FormatFarmInfoOut,
-} from "../../api/type";
-import { Token, TokenAmount, Percent } from "../../module";
-import { SOLMint, WSOLMint, solToWSol } from "../../common/pubKey";
-import { BN_ZERO, BN_ONE, divCeil } from "../../common/bignumber";
-import { getATAAddress } from "../../common/pda";
-import { addComputeBudget } from "../../common/txTool/txUtils";
-import BN from "bn.js";
-import Decimal from "decimal.js";
+} from "@/api/type";
+import { Token, TokenAmount, Percent } from "@/module";
+import { SOLMint, WSOLMint, solToWSol } from "@/common/pubKey";
+import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
+import { getATAAddress } from "@/common/pda";
+import { addComputeBudget } from "@/common/txTool/txUtils";
+import { InstructionType } from "@/common/txTool/txType";
+
+import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
 import { MakeTransaction } from "../type";
 import { makeAddLiquidityInstruction } from "./instruction";
-import { InstructionType } from "../../common/txTool/txType";
 import { ComputeBudgetConfig } from "../type";
 import { removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
 import { ClmmInstrument } from "../clmm/instrument";
 import { getAssociatedPoolKeys } from "./utils";
+
+import BN from "bn.js";
+import Decimal from "decimal.js";
 
 export default class LiquidityModule extends ModuleBase {
   constructor(params: ModuleBaseProps) {

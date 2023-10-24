@@ -12,7 +12,11 @@
     "noImplicitAny": false,
     "esModuleInterop": true,
     "sourceMap": true,
-    "jsx": "react"
+    "jsx": "react",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["./src/**/*"],
   "exclude": ["node_modules"],

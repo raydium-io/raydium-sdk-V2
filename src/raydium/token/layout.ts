@@ -1,4 +1,4 @@
-import { publicKey, struct, u32, u64, u8 } from "../../marshmallow";
+import { publicKey, struct, u32, u64, u8 } from "@/marshmallow";
 
 export const SPL_MINT_LAYOUT = struct([
   u32("mintAuthorityOption"),

@@ -16,8 +16,8 @@ import {
   WSOLMint,
   addComputeBudget,
   minExpirationTime,
-} from "../../common";
-import { Fraction, Percent, Price, Token, TokenAmount } from "../../module";
+} from "@/common";
+import { Fraction, Percent, Price, Token, TokenAmount } from "@/module";
 import { StableLayout } from "../liquidity/stable";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
@@ -31,8 +31,8 @@ import {
 } from "./type";
 import { makeSwapInstruction } from "./instrument";
 import { MakeMultiTransaction, MakeTransaction, ReturnTypeFetchMultipleMintInfos, TransferAmountFee } from "../type";
-import { InstructionType } from "../../common/txTool/txType";
-import { BigNumberish, parseBigNumberish } from "../../common/bignumber";
+import { InstructionType } from "@/common/txTool/txType";
+import { BigNumberish, parseBigNumberish } from "@/common/bignumber";
 import {
   createWSolAccountInstructions,
   closeAccountInstruction,

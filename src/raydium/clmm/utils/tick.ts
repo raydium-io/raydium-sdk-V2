@@ -8,7 +8,7 @@ import { TickQuery } from "./tickQuery";
 import { MIN_TICK, MAX_TICK } from "./constants";
 import { SqrtPriceMath, TickMath } from "./math";
 import { ClmmPoolInfo } from "../type";
-import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
+import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
 
 export const TICK_ARRAY_SIZE = 60;
 export const TICK_ARRAY_BITMAP_SIZE = 512;

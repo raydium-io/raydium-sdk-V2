@@ -1,4 +1,4 @@
-import { blob, GetStructureSchema, publicKey, struct, u64 } from "../../marshmallow";
+import { blob, GetStructureSchema, publicKey, struct, u64 } from "@/marshmallow";
 
 /* ================= state layouts ================= */
 export const MARKET_STATE_LAYOUT_V3 = struct([

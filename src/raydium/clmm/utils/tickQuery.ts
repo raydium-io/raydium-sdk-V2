@@ -1,7 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { getMultipleAccountsInfo } from "../../../common";
+import { getMultipleAccountsInfo } from "@/common";
 import { TickArrayLayout } from "../layout";
 
 import { MAX_TICK, MIN_TICK } from "./constants";

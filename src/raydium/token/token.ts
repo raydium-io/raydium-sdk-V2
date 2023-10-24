@@ -1,10 +1,10 @@
 import { PublicKey } from "@solana/web3.js";
 import { MintLayout, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 
-import { Price, Token, TokenAmount, Fraction } from "../../module";
-import { PublicKeyish, validateAndParsePublicKey, SOLMint, WSOLMint } from "../../common/pubKey";
-import { BigNumberish, parseNumberInfo, toBN } from "../../common/bignumber";
-import { JupTokenType } from "../../api/type";
+import { Price, Token, TokenAmount, Fraction } from "@/module";
+import { PublicKeyish, validateAndParsePublicKey, SOLMint, WSOLMint } from "@/common/pubKey";
+import { BigNumberish, parseNumberInfo, toBN } from "@/common/bignumber";
+import { JupTokenType } from "@/api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { LoadParams } from "../type";
 

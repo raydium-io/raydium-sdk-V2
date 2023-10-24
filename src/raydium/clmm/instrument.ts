@@ -17,8 +17,8 @@ import {
   InstructionType,
   getATAAddress,
   MEMO_PROGRAM_ID,
-} from "../../common";
-import { bool, s32, struct, u128, u64, u8 } from "../../marshmallow";
+} from "@/common";
+import { bool, s32, struct, u128, u64, u8 } from "@/marshmallow";
 import { ReturnTypeMakeInstructions, ClmmPoolPersonalPosition, OpenPositionFromLiquidityExtInfo } from "./type";
 import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
 import {
@@ -35,7 +35,7 @@ import {
 import { TickUtils } from "./utils/tick";
 import { PoolUtils } from "./utils/pool";
 import { generatePubKey } from "../account/util";
-import { ApiV3Token, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "../../api/type";
+import { ApiV3Token, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
 
 const logger = createLogger("Raydium_Clmm");
 
@@ -115,9 +115,7 @@ export class ClmmInstrument {
     });
   }
 
-  static async createPoolInstructions(
-    props: CreatePoolInstruction,
-  ): Promise<
+  static async createPoolInstructions(props: CreatePoolInstruction): Promise<
     ReturnTypeMakeInstructions<{
       poolId: PublicKey;
       observationId: PublicKey;

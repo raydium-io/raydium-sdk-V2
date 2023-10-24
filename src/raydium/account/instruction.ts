@@ -7,9 +7,9 @@ import {
 import { Commitment, Connection, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import { generatePubKey } from "./util";
-import { BigNumberish, parseBigNumberish } from "../../common";
-import { AddInstructionParam } from "../../common/txTool/txTool";
-import { InstructionType } from "../../common/txTool/txType";
+import { BigNumberish, parseBigNumberish } from "@/common";
+import { AddInstructionParam } from "@/common/txTool/txTool";
+import { InstructionType } from "@/common/txTool/txType";
 import { TOKEN_WSOL } from "../token/constant";
 
 import { splAccountLayout } from "./layout";

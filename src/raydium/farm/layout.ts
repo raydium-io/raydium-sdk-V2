@@ -15,7 +15,7 @@ import {
   i8,
   i64,
   bool,
-} from "../../marshmallow";
+} from "@/marshmallow";
 
 import { poolTypeV6 } from "./config";
 import { RewardType } from "./type";

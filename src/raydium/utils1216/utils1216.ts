@@ -2,9 +2,9 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import ModuleBase from "../moduleBase";
-import { findProgramAddress, forecastTransactionSize, getMultipleAccountsInfo } from "../../common";
-import { Token } from "../../module";
-import { blob, publicKey, seq, struct, u64, u8 } from "../../marshmallow";
+import { findProgramAddress, forecastTransactionSize, getMultipleAccountsInfo } from "@/common";
+import { Token } from "@/module";
+import { blob, publicKey, seq, struct, u64, u8 } from "@/marshmallow";
 
 export interface SHOW_INFO {
   programId: PublicKey;

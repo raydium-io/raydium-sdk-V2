@@ -1,15 +1,15 @@
 import { TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction } from "@solana/spl-token";
-import { Keypair, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { accountMeta, AddInstructionParam, commonSystemAccountMeta } from "../../common";
-import { parseBigNumberish, BN_ZERO } from "../../common/bignumber";
-import { PublicKeyish, SOLMint, WSOLMint, validateAndParsePublicKey } from "../../common/pubKey";
-import { InstructionType } from "../../common/txTool/txType";
-import { getATAAddress } from "../../common/pda";
-import { FARM_PROGRAM_ID_V6 } from "../../common/programId";
+import { accountMeta, AddInstructionParam, commonSystemAccountMeta, jsonInfo2PoolKeys } from "@/common";
+import { parseBigNumberish, BN_ZERO } from "@/common/bignumber";
+import { SOLMint, WSOLMint } from "@/common/pubKey";
+import { InstructionType } from "@/common/txTool/txType";
+import { getATAAddress } from "@/common/pda";
+import { FARM_PROGRAM_ID_V6 } from "@/common/programId";
+import { generatePubKey } from "../account/util";
 
-import { Token as RToken } from "../../module/token";
 import { createWSolAccountInstructions } from "../account/instruction";
 import ModuleBase from "../moduleBase";
 import { TOKEN_WSOL } from "../token/constant";
@@ -31,17 +31,7 @@ import {
   makeDepositWithdrawInstruction,
 } from "./instruction";
 import { farmAddRewardLayout, farmRewardRestartLayout, farmStateV6Layout } from "./layout";
-import {
-  CreateFarm,
-  FarmDWParam,
-  FarmPoolJsonInfo,
-  FarmRewardInfo,
-  FarmRewardInfoConfig,
-  RewardInfoKey,
-  SdkParsedFarmInfo,
-  UpdateFarmReward,
-  HydratedFarmInfo,
-} from "./type";
+import { CreateFarm, FarmDWParam, FarmRewardInfo, FarmRewardInfoConfig, RewardInfoKey, UpdateFarmReward } from "./type";
 import {
   calFarmRewardAmount,
   farmRewardInfoToConfig,
@@ -50,58 +40,16 @@ import {
   getAssociatedLedgerPoolAccount,
   getFarmLedgerLayout,
 } from "./util";
-import { FormatFarmInfoOut } from "../../api/type";
+import { FormatFarmInfoOut, FormatFarmKeyOutV6 } from "@/api/type";
+import Decimal from "decimal.js-light";
 
 export default class Farm extends ModuleBase {
-  private _farmPools: FarmPoolJsonInfo[] = [];
-  private _hydratedFarmPools: HydratedFarmInfo[] = [];
-  private _hydratedFarmMap: Map<string, HydratedFarmInfo> = new Map();
-  private _sdkParsedFarmPools: SdkParsedFarmInfo[] = [];
-  private _sdkParsedFarmMap: Map<string, SdkParsedFarmInfo> = new Map();
-  private _lpTokenInfoMap: Map<string, RToken> = new Map();
-  public farmAPRs: Record<
-    string,
-    {
-      apr30d: number;
-      apr7d: number;
-      apr24h: number;
-    }
-  > = {};
-
-  get allFarms(): FarmPoolJsonInfo[] {
-    return this._farmPools;
-  }
-  get allParsedFarms(): SdkParsedFarmInfo[] {
-    return this._sdkParsedFarmPools;
-  }
-  get allParsedFarmMap(): Map<string, SdkParsedFarmInfo> {
-    return this._sdkParsedFarmMap;
-  }
-  get allHydratedFarms(): HydratedFarmInfo[] {
-    return this._hydratedFarmPools;
-  }
-  get allHydratedFarmMap(): Map<string, HydratedFarmInfo> {
-    return this._hydratedFarmMap;
-  }
-
-  public getFarm(farmId: PublicKeyish): FarmPoolJsonInfo {
-    const _farmId = validateAndParsePublicKey({ publicKey: farmId });
-    const farmInfo = this.allFarms.find((farm) => farm.id === _farmId.toBase58());
-    if (!farmInfo) this.logAndCreateError("invalid farm id");
-    return farmInfo!;
-  }
-  public getParsedFarm(farmId: PublicKeyish): SdkParsedFarmInfo {
-    const _farmId = validateAndParsePublicKey({ publicKey: farmId });
-    const farmInfo = this.allParsedFarms.find((farm) => _farmId.equals(farm.id));
-    if (!farmInfo) this.logAndCreateError("invalid farm id");
-    return farmInfo!;
-  }
   // token account needed
   private async _getUserRewardInfo({ payer, rewardInfo }: { payer: PublicKey; rewardInfo: FarmRewardInfo }): Promise<{
     rewardPubKey?: PublicKey;
     newInstruction?: AddInstructionParam;
   }> {
-    if (rewardInfo.rewardMint.equals(SOLMint)) {
+    if (rewardInfo.mint.equals(SOLMint)) {
       const txInstructions = await createWSolAccountInstructions({
         connection: this.scope.connection,
         owner: this.scope.ownerPubKey,
@@ -116,13 +64,18 @@ export default class Farm extends ModuleBase {
 
     return {
       rewardPubKey: await this.scope.account.getCreatedTokenAccount({
-        mint: rewardInfo.rewardMint,
+        mint: rewardInfo.mint,
       })!,
     };
   }
 
   // token account needed
-  public async create({ poolInfo: propPoolInfo, rewardInfos, payer }: CreateFarm): Promise<MakeTransaction> {
+  public async create({
+    poolInfo: propPoolInfo,
+    rewardInfos,
+    payer,
+    programId = FARM_PROGRAM_ID_V6,
+  }: CreateFarm): Promise<MakeTransaction> {
     this.checkDisabled();
     this.scope.checkOwner();
 
@@ -132,33 +85,34 @@ export default class Farm extends ModuleBase {
       lockInfo: { lockMint: FARM_LOCK_MINT, lockVault: FARM_LOCK_VAULT },
       version: 6,
       rewardInfos,
-      programId: new PublicKey(propPoolInfo.programId),
+      programId,
     };
 
     const txBuilder = this.createTxBuilder();
     const payerPubKey = payer ?? this.scope.ownerPubKey;
-    const farmKeyPair = Keypair.generate();
+    const farmKeyPair = generatePubKey({ fromPublicKey: payerPubKey, programId: poolInfo.programId });
     const lamports = await this.scope.connection.getMinimumBalanceForRentExemption(farmStateV6Layout.span);
 
     txBuilder.addInstruction({
       instructions: [
-        SystemProgram.createAccount({
+        SystemProgram.createAccountWithSeed({
           fromPubkey: payerPubKey,
+          basePubkey: payerPubKey,
+          seed: farmKeyPair.seed,
           newAccountPubkey: farmKeyPair.publicKey,
           lamports,
           space: farmStateV6Layout.span,
           programId: poolInfo.programId,
         }),
       ],
-      signers: [farmKeyPair],
     });
 
-    const { publicKey: authority, nonce } = await getAssociatedAuthority({
+    const { publicKey: authority, nonce } = getAssociatedAuthority({
       programId: new PublicKey(poolInfo.programId),
       poolId: farmKeyPair.publicKey,
     });
 
-    const lpVault = await getAssociatedLedgerPoolAccount({
+    const lpVault = getAssociatedLedgerPoolAccount({
       programId: poolInfo.programId,
       poolId: farmKeyPair.publicKey,
       mint: poolInfo.lpMint,
@@ -169,11 +123,10 @@ export default class Farm extends ModuleBase {
     const rewardInfoKey: RewardInfoKey[] = [];
 
     for (const rewardInfo of poolInfo.rewardInfos) {
-      if (rewardInfo.rewardOpenTime >= rewardInfo.rewardEndTime)
-        this.logAndCreateError("start time error", "rewardInfo.rewardOpenTime", rewardInfo.rewardOpenTime.toString());
+      if (rewardInfo.openTime >= rewardInfo.endTime)
+        this.logAndCreateError("start time error", "rewardInfo.rewardOpenTime", rewardInfo.openTime.toString());
       if (isNaN(poolTypeV6[rewardInfo.rewardType])) this.logAndCreateError("rewardType error", rewardInfo.rewardType);
-      if (Number(rewardInfo.rewardPerSecond.toString()) <= 0)
-        this.logAndCreateError("rewardPerSecond error", rewardInfo.rewardPerSecond.toString());
+      if (Number(rewardInfo.perSecond) <= 0) this.logAndCreateError("rewardPerSecond error", rewardInfo.perSecond);
 
       rewardInfoConfig.push(farmRewardInfoToConfig(rewardInfo));
 
@@ -185,11 +138,10 @@ export default class Farm extends ModuleBase {
 
       if (!rewardPubKey) this.logAndCreateError("cannot found target token accounts", this.scope.account.tokenAccounts);
 
-      const rewardMint = rewardInfo.rewardMint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : rewardInfo.rewardMint;
-      // newRewardInfo.rewardMint.equals(PublicKey.default) ? Token.WSOL.mint : newRewardInfo.rewardMint
+      const rewardMint = rewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : rewardInfo.mint;
       rewardInfoKey.push({
         rewardMint,
-        rewardVault: await getAssociatedLedgerPoolAccount({
+        rewardVault: getAssociatedLedgerPoolAccount({
           programId: poolInfo.programId,
           poolId: farmKeyPair.publicKey,
           mint: rewardMint,
@@ -207,7 +159,7 @@ export default class Farm extends ModuleBase {
       this.logAndCreateError("cannot found lock vault", "tokenAccounts", this.scope.account.tokenAccounts);
 
     const { instruction, instructionType } = makeCreateFarmInstruction({
-      farmKeyPair,
+      farmId: farmKeyPair.publicKey,
       owner: this.scope.ownerPubKey,
       farmAuthority: authority,
       lpVault,
@@ -230,30 +182,33 @@ export default class Farm extends ModuleBase {
   }
 
   // token account needed
-  public async restartReward({ farmId, payer, newRewardInfo }: UpdateFarmReward): Promise<MakeTransaction> {
-    const farmInfo = this.getFarm(farmId)!;
-    if (farmInfo!.version !== 6) this.logAndCreateError("invalid farm version", farmInfo!.version);
+  public async restartReward({ farmInfo, payer, newRewardInfo }: UpdateFarmReward): Promise<MakeTransaction> {
+    const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
+    if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
-    const poolKeys = {
-      id: new PublicKey(farmInfo.id),
+    const farmInfoKeys = jsonInfo2PoolKeys(await this.scope.api.fetchFarmKeysById({ id: farmInfo.id }));
+
+    const farmKeys = {
+      id: farmInfoKeys.id,
       rewardInfos: farmInfo.rewardInfos,
-      lpVault: new PublicKey(farmInfo.lpVault),
-      programId: new PublicKey(farmInfo.programId),
+      lpVault: farmInfoKeys.lpVault,
+      programId: farmInfoKeys.programId,
     };
 
-    if (newRewardInfo.rewardOpenTime >= newRewardInfo.rewardEndTime)
+    if (newRewardInfo.openTime >= newRewardInfo.endTime)
       this.logAndCreateError("start time error", "newRewardInfo", newRewardInfo);
 
     const payerPubKey = payer || this.scope.ownerPubKey;
 
-    const rewardMint = newRewardInfo.rewardMint.equals(SOLMint)
-      ? new PublicKey(TOKEN_WSOL.mint)
-      : newRewardInfo.rewardMint;
-    const rewardInfo = poolKeys.rewardInfos.find((item) => new PublicKey(item.rewardMint).equals(rewardMint));
+    const rewardMint = newRewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : newRewardInfo.mint;
+    const rewardInfoIndex = farmKeys.rewardInfos.findIndex((item) =>
+      new PublicKey(item.mint.address).equals(rewardMint),
+    );
+    const rewardInfo = farmInfoKeys.rewardInfos[rewardInfoIndex];
 
     if (!rewardInfo) this.logAndCreateError("configuration does not exist", "rewardMint", rewardMint);
 
-    const rewardVault = rewardInfo!.rewardVault ? new PublicKey(rewardInfo!.rewardVault) : SOLMint;
+    const rewardVault = rewardInfo!.vault ?? SOLMint;
     const txBuilder = this.createTxBuilder();
 
     const { rewardPubKey: userRewardTokenPub, newInstruction } = await this._getUserRewardInfo({
@@ -269,17 +224,17 @@ export default class Farm extends ModuleBase {
     farmRewardRestartLayout.encode(
       {
         instruction: 3,
-        rewardReopenTime: parseBigNumberish(newRewardInfo.rewardOpenTime),
-        rewardEndTime: parseBigNumberish(newRewardInfo.rewardEndTime),
-        rewardPerSecond: parseBigNumberish(newRewardInfo.rewardPerSecond),
+        rewardReopenTime: parseBigNumberish(newRewardInfo.openTime),
+        rewardEndTime: parseBigNumberish(newRewardInfo.endTime),
+        rewardPerSecond: parseBigNumberish(newRewardInfo.perSecond),
       },
       data,
     );
 
     const keys = [
       accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-      accountMeta({ pubkey: poolKeys.id }),
-      accountMeta({ pubkey: poolKeys.lpVault, isWritable: false }),
+      accountMeta({ pubkey: farmKeys.id }),
+      accountMeta({ pubkey: farmKeys.lpVault, isWritable: false }),
       accountMeta({ pubkey: rewardVault }),
       accountMeta({ pubkey: userRewardTokenPub! }),
       accountMeta({ pubkey: this.scope.ownerPubKey, isWritable: false, isSigner: true }),
@@ -287,7 +242,7 @@ export default class Farm extends ModuleBase {
 
     return txBuilder
       .addInstruction({
-        instructions: [new TransactionInstruction({ programId: poolKeys.programId, keys, data })],
+        instructions: [new TransactionInstruction({ programId: farmKeys.programId, keys, data })],
         instructionTypes: [InstructionType.FarmV6Restart],
       })
       .build();
@@ -295,16 +250,18 @@ export default class Farm extends ModuleBase {
 
   // token account needed
   public async addNewRewardToken(params: UpdateFarmReward): Promise<MakeTransaction> {
-    const { farmId, newRewardInfo, payer } = params;
-    const farmInfo = this.getFarm(farmId)!;
-    if (farmInfo!.version !== 6) this.logAndCreateError("invalid farm version", farmInfo!.version);
+    const { farmInfo, newRewardInfo, payer } = params;
+    const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
+    if (version !== 6) this.logAndCreateError("invalid farm version ", version);
+
+    const farmKeys = jsonInfo2PoolKeys(await this.scope.api.fetchFarmKeysById({ id: farmInfo.id }));
     const payerPubKey = payer ?? this.scope.ownerPubKey;
     const txBuilder = this.createTxBuilder();
 
     const rewardVault = getAssociatedLedgerPoolAccount({
       programId: new PublicKey(farmInfo.programId),
       poolId: new PublicKey(farmInfo.id),
-      mint: newRewardInfo.rewardMint.equals(PublicKey.default) ? WSOLMint : newRewardInfo.rewardMint,
+      mint: newRewardInfo.mint.equals(PublicKey.default) ? WSOLMint : newRewardInfo.mint,
       type: "rewardVault",
     });
 
@@ -317,25 +274,23 @@ export default class Farm extends ModuleBase {
     if (!userRewardTokenPub)
       this.logAndCreateError("annot found target token accounts", this.scope.account.tokenAccounts);
 
-    const rewardMint = newRewardInfo.rewardMint.equals(SOLMint)
-      ? new PublicKey(TOKEN_WSOL.mint)
-      : newRewardInfo.rewardMint;
+    const rewardMint = newRewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : newRewardInfo.mint;
     const data = Buffer.alloc(farmAddRewardLayout.span);
     farmAddRewardLayout.encode(
       {
         instruction: 4,
         isSet: new BN(1),
-        rewardPerSecond: parseBigNumberish(newRewardInfo.rewardPerSecond),
-        rewardOpenTime: parseBigNumberish(newRewardInfo.rewardOpenTime),
-        rewardEndTime: parseBigNumberish(newRewardInfo.rewardEndTime),
+        rewardPerSecond: parseBigNumberish(newRewardInfo.perSecond),
+        rewardOpenTime: parseBigNumberish(newRewardInfo.openTime),
+        rewardEndTime: parseBigNumberish(newRewardInfo.endTime),
       },
       data,
     );
 
     const keys = [
       ...commonSystemAccountMeta,
-      accountMeta({ pubkey: new PublicKey(farmInfo.id) }),
-      accountMeta({ pubkey: new PublicKey(farmInfo.authority), isWritable: false }),
+      accountMeta({ pubkey: farmKeys.id }),
+      accountMeta({ pubkey: farmKeys.authority, isWritable: false }),
       accountMeta({ pubkey: rewardMint, isWritable: false }),
       accountMeta({ pubkey: rewardVault }),
       accountMeta({ pubkey: userRewardTokenPub! }),
@@ -581,24 +536,27 @@ export default class Farm extends ModuleBase {
 
   // token account needed
   public async withdrawFarmReward({
-    farmId,
+    farmInfo,
     withdrawMint,
   }: {
-    farmId: PublicKey;
+    farmInfo: FormatFarmInfoOut;
     withdrawMint: PublicKey;
     payer?: PublicKey;
   }): Promise<MakeTransaction> {
     this.scope.checkOwner();
-    const farmInfo = this.getParsedFarm(farmId);
-    const { version } = farmInfo;
-    if (version !== 6) this.logAndCreateError("invalid farm version", farmInfo!.version);
-
-    const rewardInfo = farmInfo.rewardInfos.find((item) =>
-      item.rewardMint.equals(withdrawMint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : withdrawMint),
+    const farmKeys = jsonInfo2PoolKeys(
+      (await this.scope.api.fetchFarmKeysById({ id: farmInfo.id })) as FormatFarmKeyOutV6,
     );
+    const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
+    if (version !== 6) this.logAndCreateError("invalid farm version", version);
+
+    const rewardInfoIdx = farmInfo.rewardInfos.findIndex((item) =>
+      item.mint.address === SOLMint.toString() ? new PublicKey(TOKEN_WSOL.mint) : withdrawMint,
+    );
+    const rewardInfo = farmKeys.rewardInfos[rewardInfoIdx];
     if (!rewardInfo) this.logAndCreateError("withdraw mint error", "rewardInfos", farmInfo);
 
-    const rewardVault = rewardInfo?.rewardVault ?? SOLMint;
+    const rewardVault = rewardInfo?.vault ?? SOLMint;
     const txBuilder = this.createTxBuilder();
 
     let userRewardToken: PublicKey;
@@ -608,7 +566,10 @@ export default class Farm extends ModuleBase {
         connection: this.scope.connection,
         owner: this.scope.ownerPubKey,
         payer: this.scope.ownerPubKey,
-        amount: calFarmRewardAmount(rewardInfo!),
+        amount: calFarmRewardAmount({
+          ...rewardInfo,
+          perSecond: new Decimal(rewardInfo.perSecond).mul(10 ** rewardInfo.mint.decimals).toString(),
+        }),
       });
       userRewardToken = txInstruction.addresses.newAccount;
       txBuilder.addInstruction(txInstruction);
@@ -636,10 +597,10 @@ export default class Farm extends ModuleBase {
     }
 
     const { instruction, instructionType } = makeCreatorWithdrawFarmRewardInstruction({
-      programId: farmInfo.programId,
-      id: farmInfo.id,
-      authority: farmInfo.authority,
-      lpVault: farmInfo.lpVault.mint,
+      programId: farmKeys.programId,
+      id: farmKeys.id,
+      authority: farmKeys.authority,
+      lpVault: farmKeys.lpVault,
       rewardVault,
       userRewardToken,
       owner: this.scope.ownerPubKey,

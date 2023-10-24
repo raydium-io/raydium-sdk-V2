@@ -1,13 +1,13 @@
 import { EpochInfo, Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { Fraction } from "../../module/fraction";
+import { TokenAmount, Percent, Price, Fraction } from "@/module";
+import { ApiV3Token } from "@/api/type";
 import { TokenInfo } from "../token/type";
-import { TokenAmount, CurrencyAmount, Percent, Price } from "../../module";
 import { TickArray } from "./utils/tick";
-import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "../../api/type";
+import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
-import { ApiV3Token } from "../../api/type";
+
 import { ClmmPositionLayout } from "./layout";
 
 export { ApiClmmPoolInfo, ApiClmmConfigInfo };
@@ -180,75 +180,6 @@ export type SDKParsedConcentratedInfo = {
   state: ClmmPoolInfo;
   positionAccount?: ClmmPoolPersonalPosition[];
 };
-
-export interface HydratedConcentratedInfo extends SDKParsedConcentratedInfo {
-  protocolFeeRate: Percent;
-  tradeFeeRate: Percent;
-  base: TokenInfo | undefined;
-  quote: TokenInfo | undefined;
-  id: PublicKey;
-  userPositionAccount?: UserPositionAccount[];
-  name: string;
-  idString: string;
-  decimals: number;
-
-  ammConfig: ClmmPoolInfo["ammConfig"];
-  currentPrice: Fraction;
-  rewardInfos: {
-    rewardToken: TokenInfo | undefined;
-    rewardState: number;
-    openTime: number;
-    endTime: number;
-    lastUpdateTime: number;
-    rewardTotalEmissioned: TokenAmount | undefined;
-    rewardClaimed: TokenAmount | undefined;
-    tokenMint: PublicKey;
-    tokenVault: PublicKey;
-    creator: PublicKey;
-    rewardPerWeek: TokenAmount | undefined;
-    rewardPerDay: TokenAmount | undefined;
-    perSecond: Decimal;
-    remainingRewards?: BN;
-  }[];
-  tvl: CurrencyAmount;
-  feeApr24h: Percent;
-  feeApr7d: Percent;
-  feeApr30d: Percent;
-  totalApr24h: Percent;
-  totalApr7d: Percent;
-  totalApr30d: Percent;
-
-  volume24h: CurrencyAmount;
-  volume7d: CurrencyAmount;
-  volume30d: CurrencyAmount;
-
-  fee24hA?: TokenAmount;
-  fee24hB?: TokenAmount;
-  fee7dA?: TokenAmount;
-  fee7dB?: TokenAmount;
-  fee30dA?: TokenAmount;
-  fee30dB?: TokenAmount;
-
-  volumeFee24h: CurrencyAmount;
-  volumeFee7d: CurrencyAmount;
-  volumeFee30d: CurrencyAmount;
-
-  rewardApr24h: Percent[];
-  rewardApr7d: Percent[];
-  rewardApr30d: Percent[];
-}
-
-export interface MintInfo {
-  programId: PublicKey;
-  mint: PublicKey;
-  decimals: number;
-}
-
-export interface ReturnTypeMakeTransaction {
-  signers: (Signer | Keypair)[];
-  transaction: Transaction;
-  address: { [name: string]: PublicKey };
-}
 
 export interface ReturnTypeMakeCreatePoolTransaction {
   signers: (Signer | Keypair)[];
@@ -587,12 +518,6 @@ export interface ReturnTypeComputeAmountOutBaseOut {
   priceImpact: Percent;
   fee: BN;
   remainingAccounts: PublicKey[];
-}
-
-export interface ReturnTypeMakeTransaction {
-  signers: (Signer | Keypair)[];
-  transaction: Transaction;
-  address: { [name: string]: PublicKey };
 }
 
 export interface TickArrayBitmapExtension {
