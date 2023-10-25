@@ -5,11 +5,9 @@ import {
   ClmmPoolInfo,
   ClmmPoolRewardInfo,
   ClmmPoolRewardLayoutInfo,
-  ApiClmmPoolInfo,
   ReturnTypeGetLiquidityAmountOut,
   TickArrayBitmapExtension,
   ReturnTypeFetchExBitmaps,
-  ReturnTypeFetchMultiplePoolInfos,
   ReturnTypeFetchMultiplePoolTickArrays,
   SDKParsedConcentratedInfo,
   ReturnTypeComputeAmountOut,
@@ -306,7 +304,7 @@ export class PoolUtils {
     rewardInfos,
   }: {
     connection: Connection;
-    apiPoolInfo: ApiClmmPoolInfo;
+    apiPoolInfo: ApiV3PoolInfoConcentratedItem;
     chainTime: number;
     poolLiquidity: BN;
     rewardInfos: ClmmPoolRewardLayoutInfo[];
@@ -315,7 +313,8 @@ export class PoolUtils {
     for (let i = 0; i < rewardInfos.length; i++) {
       const _itemReward = rewardInfos[i];
       const apiRewardProgram =
-        apiPoolInfo.rewardInfos[i]?.programId ?? (await connection.getAccountInfo(_itemReward.tokenMint))?.owner;
+        apiPoolInfo.rewardDefaultInfos[i]?.mint.programId ??
+        (await connection.getAccountInfo(_itemReward.tokenMint))?.owner;
       if (apiRewardProgram === undefined) throw Error("get new reward mint info error");
 
       const itemReward: ClmmPoolRewardInfo = {
@@ -410,285 +409,286 @@ export class PoolUtils {
   }
 
   // deprecated, new api doesn't need
-  static async fetchMultiplePoolInfos({
-    connection,
-    poolKeys,
-    ownerInfo,
-    chainTime,
-    batchRequest = false,
-    updateOwnerRewardAndFee = true,
-  }: {
-    connection: Connection;
-    poolKeys: ApiClmmPoolInfo[];
-    ownerInfo?: { wallet: PublicKey; tokenAccounts: TokenAccountRaw[] };
-    chainTime: number;
-    batchRequest?: boolean;
-    updateOwnerRewardAndFee?: boolean;
-  }): Promise<ReturnTypeFetchMultiplePoolInfos> {
-    const poolAccountInfos = await getMultipleAccountsInfo(
-      connection,
-      poolKeys.map((i) => new PublicKey(i.id)),
-      { batchRequest },
-    );
-    const exBitmapAddress: { [poolId: string]: PublicKey } = {};
-    for (let index = 0; index < poolKeys.length; index++) {
-      const apiPoolInfo = poolKeys[index];
-      const accountInfo = poolAccountInfos[index];
+  // static async fetchMultiplePoolInfos({
+  //   connection,
+  //   poolKeys,
+  //   ownerInfo,
+  //   chainTime,
+  //   batchRequest = false,
+  //   updateOwnerRewardAndFee = true,
+  // }: {
+  //   connection: Connection;
+  //   poolKeys: ApiV3PoolInfoConcentratedItem[];
+  //   ownerInfo?: { wallet: PublicKey; tokenAccounts: TokenAccountRaw[] };
+  //   chainTime: number;
+  //   batchRequest?: boolean;
+  //   updateOwnerRewardAndFee?: boolean;
+  // }): Promise<ReturnTypeFetchMultiplePoolInfos> {
+  //   const poolAccountInfos = await getMultipleAccountsInfo(
+  //     connection,
+  //     poolKeys.map((i) => new PublicKey(i.id)),
+  //     { batchRequest },
+  //   );
+  //   const exBitmapAddress: { [poolId: string]: PublicKey } = {};
+  //   for (let index = 0; index < poolKeys.length; index++) {
+  //     const apiPoolInfo = poolKeys[index];
+  //     const accountInfo = poolAccountInfos[index];
 
-      if (accountInfo === null) continue;
-      exBitmapAddress[apiPoolInfo.id] = getPdaExBitmapAccount(
-        accountInfo.owner,
-        new PublicKey(apiPoolInfo.id),
-      ).publicKey;
-    }
+  //     if (accountInfo === null) continue;
+  //     exBitmapAddress[apiPoolInfo.id] = getPdaExBitmapAccount(
+  //       accountInfo.owner,
+  //       new PublicKey(apiPoolInfo.id),
+  //     ).publicKey;
+  //   }
 
-    const exBitmapAccountInfos = await this.fetchExBitmaps({
-      connection,
-      exBitmapAddress: Object.values(exBitmapAddress),
-      batchRequest,
-    });
+  //   const exBitmapAccountInfos = await this.fetchExBitmaps({
+  //     connection,
+  //     exBitmapAddress: Object.values(exBitmapAddress),
+  //     batchRequest,
+  //   });
 
-    const programIds: PublicKey[] = [];
+  //   const programIds: PublicKey[] = [];
 
-    const poolsInfo: ReturnTypeFetchMultiplePoolInfos = {};
+  //   const poolsInfo: ReturnTypeFetchMultiplePoolInfos = {};
 
-    const updateRewardInfos: ClmmPoolRewardInfo[] = [];
+  //   const updateRewardInfos: ClmmPoolRewardInfo[] = [];
 
-    for (let index = 0; index < poolKeys.length; index++) {
-      const apiPoolInfo = poolKeys[index];
-      const accountInfo = poolAccountInfos[index];
-      const exBitmapInfo = exBitmapAccountInfos[exBitmapAddress[apiPoolInfo.id].toString()];
+  //   for (let index = 0; index < poolKeys.length; index++) {
+  //     const apiPoolInfo = poolKeys[index];
+  //     const accountInfo = poolAccountInfos[index];
+  //     const exBitmapInfo = exBitmapAccountInfos[exBitmapAddress[apiPoolInfo.id].toString()];
 
-      if (accountInfo === null) continue;
+  //     if (accountInfo === null) continue;
 
-      const layoutAccountInfo = PoolInfoLayout.decode(accountInfo.data);
-      poolsInfo[apiPoolInfo.id] = {
-        state: {
-          id: new PublicKey(apiPoolInfo.id),
-          mintA: {
-            programId: new PublicKey(apiPoolInfo.mintProgramIdA),
-            mint: layoutAccountInfo.mintA,
-            vault: layoutAccountInfo.vaultA,
-            decimals: layoutAccountInfo.mintDecimalsA,
-          },
-          mintB: {
-            programId: new PublicKey(apiPoolInfo.mintProgramIdB),
-            mint: layoutAccountInfo.mintB,
-            vault: layoutAccountInfo.vaultB,
-            decimals: layoutAccountInfo.mintDecimalsB,
-          },
-          observationId: layoutAccountInfo.observationId,
-          ammConfig: {
-            ...apiPoolInfo.ammConfig,
-            id: new PublicKey(apiPoolInfo.ammConfig.id),
-          },
+  //     const layoutAccountInfo = PoolInfoLayout.decode(accountInfo.data);
+  //     poolsInfo[apiPoolInfo.id] = {
+  //       state: {
+  //         id: new PublicKey(apiPoolInfo.id),
+  //         mintA: {
+  //           programId: new PublicKey(apiPoolInfo.mintA.programId),
+  //           mint: layoutAccountInfo.mintA,
+  //           vault: layoutAccountInfo.vaultA,
+  //           decimals: layoutAccountInfo.mintDecimalsA,
+  //         },
+  //         mintB: {
+  //           programId: new PublicKey(apiPoolInfo.mintB.programId),
+  //           mint: layoutAccountInfo.mintB,
+  //           vault: layoutAccountInfo.vaultB,
+  //           decimals: layoutAccountInfo.mintDecimalsB,
+  //         },
+  //         observationId: layoutAccountInfo.observationId,
+  //         ammConfig: {
+  //           ...apiPoolInfo.config,
+  //           fundOwner: apiPoolInfo.config.id,
+  //           id: new PublicKey(apiPoolInfo.config.id),
+  //         },
 
-          creator: layoutAccountInfo.creator,
-          programId: accountInfo.owner,
-          version: 6,
+  //         creator: layoutAccountInfo.creator,
+  //         programId: accountInfo.owner,
+  //         version: 6,
 
-          tickSpacing: layoutAccountInfo.tickSpacing,
-          liquidity: layoutAccountInfo.liquidity,
-          sqrtPriceX64: layoutAccountInfo.sqrtPriceX64,
-          currentPrice: SqrtPriceMath.sqrtPriceX64ToPrice(
-            layoutAccountInfo.sqrtPriceX64,
-            layoutAccountInfo.mintDecimalsA,
-            layoutAccountInfo.mintDecimalsB,
-          ),
-          tickCurrent: layoutAccountInfo.tickCurrent,
-          observationIndex: layoutAccountInfo.observationIndex,
-          observationUpdateDuration: layoutAccountInfo.observationUpdateDuration,
-          feeGrowthGlobalX64A: layoutAccountInfo.feeGrowthGlobalX64A,
-          feeGrowthGlobalX64B: layoutAccountInfo.feeGrowthGlobalX64B,
-          protocolFeesTokenA: layoutAccountInfo.protocolFeesTokenA,
-          protocolFeesTokenB: layoutAccountInfo.protocolFeesTokenB,
-          swapInAmountTokenA: layoutAccountInfo.swapInAmountTokenA,
-          swapOutAmountTokenB: layoutAccountInfo.swapOutAmountTokenB,
-          swapInAmountTokenB: layoutAccountInfo.swapInAmountTokenB,
-          swapOutAmountTokenA: layoutAccountInfo.swapOutAmountTokenA,
-          tickArrayBitmap: layoutAccountInfo.tickArrayBitmap,
+  //         tickSpacing: layoutAccountInfo.tickSpacing,
+  //         liquidity: layoutAccountInfo.liquidity,
+  //         sqrtPriceX64: layoutAccountInfo.sqrtPriceX64,
+  //         currentPrice: SqrtPriceMath.sqrtPriceX64ToPrice(
+  //           layoutAccountInfo.sqrtPriceX64,
+  //           layoutAccountInfo.mintDecimalsA,
+  //           layoutAccountInfo.mintDecimalsB,
+  //         ),
+  //         tickCurrent: layoutAccountInfo.tickCurrent,
+  //         observationIndex: layoutAccountInfo.observationIndex,
+  //         observationUpdateDuration: layoutAccountInfo.observationUpdateDuration,
+  //         feeGrowthGlobalX64A: layoutAccountInfo.feeGrowthGlobalX64A,
+  //         feeGrowthGlobalX64B: layoutAccountInfo.feeGrowthGlobalX64B,
+  //         protocolFeesTokenA: layoutAccountInfo.protocolFeesTokenA,
+  //         protocolFeesTokenB: layoutAccountInfo.protocolFeesTokenB,
+  //         swapInAmountTokenA: layoutAccountInfo.swapInAmountTokenA,
+  //         swapOutAmountTokenB: layoutAccountInfo.swapOutAmountTokenB,
+  //         swapInAmountTokenB: layoutAccountInfo.swapInAmountTokenB,
+  //         swapOutAmountTokenA: layoutAccountInfo.swapOutAmountTokenA,
+  //         tickArrayBitmap: layoutAccountInfo.tickArrayBitmap,
 
-          rewardInfos: await PoolUtils.updatePoolRewardInfos({
-            connection,
-            apiPoolInfo,
-            chainTime,
-            poolLiquidity: layoutAccountInfo.liquidity,
-            rewardInfos: layoutAccountInfo.rewardInfos.filter((i) => !i.tokenMint.equals(PublicKey.default)),
-          }),
+  //         rewardInfos: await PoolUtils.updatePoolRewardInfos({
+  //           connection,
+  //           apiPoolInfo,
+  //           chainTime,
+  //           poolLiquidity: layoutAccountInfo.liquidity,
+  //           rewardInfos: layoutAccountInfo.rewardInfos.filter((i) => !i.tokenMint.equals(PublicKey.default)),
+  //         }),
 
-          day: apiPoolInfo.day,
-          week: apiPoolInfo.week,
-          month: apiPoolInfo.month,
-          tvl: apiPoolInfo.tvl,
-          lookupTableAccount: new PublicKey(apiPoolInfo.lookupTableAccount),
+  //         day: apiPoolInfo.day,
+  //         week: apiPoolInfo.week,
+  //         month: apiPoolInfo.month,
+  //         tvl: apiPoolInfo.tvl,
+  //         lookupTableAccount: new PublicKey(apiPoolInfo.lookupTableAccount),
 
-          startTime: layoutAccountInfo.startTime.toNumber(),
+  //         startTime: layoutAccountInfo.startTime.toNumber(),
 
-          exBitmapInfo,
-        },
-      };
+  //         exBitmapInfo,
+  //       },
+  //     };
 
-      if (ownerInfo) {
-        updateRewardInfos.push(
-          ...poolsInfo[apiPoolInfo.id].state.rewardInfos.filter((i) => i.creator.equals(ownerInfo.wallet)),
-        );
-      }
+  //     if (ownerInfo) {
+  //       updateRewardInfos.push(
+  //         ...poolsInfo[apiPoolInfo.id].state.rewardInfos.filter((i) => i.creator.equals(ownerInfo.wallet)),
+  //       );
+  //     }
 
-      if (!programIds.find((i) => i.equals(accountInfo.owner))) programIds.push(accountInfo.owner);
-    }
+  //     if (!programIds.find((i) => i.equals(accountInfo.owner))) programIds.push(accountInfo.owner);
+  //   }
 
-    if (ownerInfo) {
-      const allMint = ownerInfo.tokenAccounts
-        .filter((i) => i.accountInfo.amount.eq(new BN(1)))
-        .map((i) => i.accountInfo.mint);
-      const allPositionKey: PublicKey[] = [];
-      for (const itemMint of allMint) {
-        for (const itemProgramId of programIds) {
-          allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
-        }
-      }
-      const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });
+  //   if (ownerInfo) {
+  //     const allMint = ownerInfo.tokenAccounts
+  //       .filter((i) => i.accountInfo.amount.eq(new BN(1)))
+  //       .map((i) => i.accountInfo.mint);
+  //     const allPositionKey: PublicKey[] = [];
+  //     for (const itemMint of allMint) {
+  //       for (const itemProgramId of programIds) {
+  //         allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
+  //       }
+  //     }
+  //     const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });
 
-      const keyToTickArrayAddress: { [key: string]: PublicKey } = {};
-      for (const itemAccountInfo of positionAccountInfos) {
-        if (itemAccountInfo === null) continue;
-        const position = PositionInfoLayout.decode(itemAccountInfo.data);
-        const itemPoolId = position.poolId.toString();
-        const poolInfoA = poolsInfo[itemPoolId];
-        if (poolInfoA === undefined) continue;
+  //     const keyToTickArrayAddress: { [key: string]: PublicKey } = {};
+  //     for (const itemAccountInfo of positionAccountInfos) {
+  //       if (itemAccountInfo === null) continue;
+  //       const position = PositionInfoLayout.decode(itemAccountInfo.data);
+  //       const itemPoolId = position.poolId.toString();
+  //       const poolInfoA = poolsInfo[itemPoolId];
+  //       if (poolInfoA === undefined) continue;
 
-        const poolInfo = poolInfoA.state;
+  //       const poolInfo = poolInfoA.state;
 
-        const priceLower = TickUtils._getTickPriceLegacy({
-          poolInfo,
-          tick: position.tickLower,
-          baseIn: true,
-        });
-        const priceUpper = TickUtils._getTickPriceLegacy({
-          poolInfo,
-          tick: position.tickUpper,
-          baseIn: true,
-        });
-        const { amountA, amountB } = LiquidityMath.getAmountsFromLiquidity(
-          poolInfo.sqrtPriceX64,
-          priceLower.tickSqrtPriceX64,
-          priceUpper.tickSqrtPriceX64,
-          position.liquidity,
-          false,
-        );
+  //       const priceLower = TickUtils._getTickPriceLegacy({
+  //         poolInfo,
+  //         tick: position.tickLower,
+  //         baseIn: true,
+  //       });
+  //       const priceUpper = TickUtils._getTickPriceLegacy({
+  //         poolInfo,
+  //         tick: position.tickUpper,
+  //         baseIn: true,
+  //       });
+  //       const { amountA, amountB } = LiquidityMath.getAmountsFromLiquidity(
+  //         poolInfo.sqrtPriceX64,
+  //         priceLower.tickSqrtPriceX64,
+  //         priceUpper.tickSqrtPriceX64,
+  //         position.liquidity,
+  //         false,
+  //       );
 
-        const leverage = 1 / (1 - Math.sqrt(Math.sqrt(priceLower.price.div(priceUpper.price).toNumber())));
+  //       const leverage = 1 / (1 - Math.sqrt(Math.sqrt(priceLower.price.div(priceUpper.price).toNumber())));
 
-        poolsInfo[itemPoolId].positionAccount = [
-          ...(poolsInfo[itemPoolId].positionAccount ?? []),
-          {
-            poolId: position.poolId,
-            nftMint: position.nftMint,
+  //       poolsInfo[itemPoolId].positionAccount = [
+  //         ...(poolsInfo[itemPoolId].positionAccount ?? []),
+  //         {
+  //           poolId: position.poolId,
+  //           nftMint: position.nftMint,
 
-            priceLower: priceLower.price,
-            priceUpper: priceUpper.price,
-            amountA,
-            amountB,
-            tickLower: position.tickLower,
-            tickUpper: position.tickUpper,
-            liquidity: position.liquidity,
-            feeGrowthInsideLastX64A: position.feeGrowthInsideLastX64A,
-            feeGrowthInsideLastX64B: position.feeGrowthInsideLastX64B,
-            tokenFeesOwedA: position.tokenFeesOwedA,
-            tokenFeesOwedB: position.tokenFeesOwedB,
-            rewardInfos: position.rewardInfos.map((i) => ({
-              ...i,
-              pendingReward: new BN(0),
-            })),
+  //           priceLower: priceLower.price,
+  //           priceUpper: priceUpper.price,
+  //           amountA,
+  //           amountB,
+  //           tickLower: position.tickLower,
+  //           tickUpper: position.tickUpper,
+  //           liquidity: position.liquidity,
+  //           feeGrowthInsideLastX64A: position.feeGrowthInsideLastX64A,
+  //           feeGrowthInsideLastX64B: position.feeGrowthInsideLastX64B,
+  //           tokenFeesOwedA: position.tokenFeesOwedA,
+  //           tokenFeesOwedB: position.tokenFeesOwedB,
+  //           rewardInfos: position.rewardInfos.map((i) => ({
+  //             ...i,
+  //             pendingReward: new BN(0),
+  //           })),
 
-            leverage,
-            tokenFeeAmountA: new BN(0),
-            tokenFeeAmountB: new BN(0),
-          },
-        ];
+  //           leverage,
+  //           tokenFeeAmountA: new BN(0),
+  //           tokenFeeAmountB: new BN(0),
+  //         },
+  //       ];
 
-        const tickArrayLowerAddress = TickUtils.getTickArrayAddressByTick(
-          poolsInfo[itemPoolId].state.programId,
-          position.poolId,
-          position.tickLower,
-          poolsInfo[itemPoolId].state.tickSpacing,
-        );
-        const tickArrayUpperAddress = TickUtils.getTickArrayAddressByTick(
-          poolsInfo[itemPoolId].state.programId,
-          position.poolId,
-          position.tickUpper,
-          poolsInfo[itemPoolId].state.tickSpacing,
-        );
-        keyToTickArrayAddress[
-          `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickLower}`
-        ] = tickArrayLowerAddress;
-        keyToTickArrayAddress[
-          `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickUpper}`
-        ] = tickArrayUpperAddress;
-      }
+  //       const tickArrayLowerAddress = TickUtils.getTickArrayAddressByTick(
+  //         poolsInfo[itemPoolId].state.programId,
+  //         position.poolId,
+  //         position.tickLower,
+  //         poolsInfo[itemPoolId].state.tickSpacing,
+  //       );
+  //       const tickArrayUpperAddress = TickUtils.getTickArrayAddressByTick(
+  //         poolsInfo[itemPoolId].state.programId,
+  //         position.poolId,
+  //         position.tickUpper,
+  //         poolsInfo[itemPoolId].state.tickSpacing,
+  //       );
+  //       keyToTickArrayAddress[
+  //         `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickLower}`
+  //       ] = tickArrayLowerAddress;
+  //       keyToTickArrayAddress[
+  //         `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickUpper}`
+  //       ] = tickArrayUpperAddress;
+  //     }
 
-      if (updateOwnerRewardAndFee) {
-        const tickArrayKeys = Object.values(keyToTickArrayAddress);
-        const tickArrayDatas = await getMultipleAccountsInfo(connection, tickArrayKeys, { batchRequest });
-        const tickArrayLayout: { [key: string]: TickArray } = {};
-        for (let index = 0; index < tickArrayKeys.length; index++) {
-          const tickArrayData = tickArrayDatas[index];
-          if (tickArrayData === null) continue;
-          const key = tickArrayKeys[index];
-          tickArrayLayout[key.toString()] = {
-            address: key,
-            ...TickArrayLayout.decode(tickArrayData.data),
-          };
-        }
+  //     if (updateOwnerRewardAndFee) {
+  //       const tickArrayKeys = Object.values(keyToTickArrayAddress);
+  //       const tickArrayDatas = await getMultipleAccountsInfo(connection, tickArrayKeys, { batchRequest });
+  //       const tickArrayLayout: { [key: string]: TickArray } = {};
+  //       for (let index = 0; index < tickArrayKeys.length; index++) {
+  //         const tickArrayData = tickArrayDatas[index];
+  //         if (tickArrayData === null) continue;
+  //         const key = tickArrayKeys[index];
+  //         tickArrayLayout[key.toString()] = {
+  //           address: key,
+  //           ...TickArrayLayout.decode(tickArrayData.data),
+  //         };
+  //       }
 
-        for (const { state, positionAccount } of Object.values(poolsInfo)) {
-          if (!positionAccount) continue;
-          for (const itemPA of positionAccount) {
-            const keyLower = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickLower}`;
-            const keyUpper = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickUpper}`;
-            const tickArrayLower = tickArrayLayout[keyToTickArrayAddress[keyLower].toString()];
-            const tickArrayUpper = tickArrayLayout[keyToTickArrayAddress[keyUpper].toString()];
-            const tickLowerState: Tick =
-              tickArrayLower.ticks[TickUtils.getTickOffsetInArray(itemPA.tickLower, state.tickSpacing)];
-            const tickUpperState: Tick =
-              tickArrayUpper.ticks[TickUtils.getTickOffsetInArray(itemPA.tickUpper, state.tickSpacing)];
-            const { tokenFeeAmountA, tokenFeeAmountB } = PositionUtils.GetPositionFees(
-              state,
-              itemPA,
-              tickLowerState,
-              tickUpperState,
-            );
-            const rewardInfos = PositionUtils.GetPositionRewards(state, itemPA, tickLowerState, tickUpperState);
-            itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(ZERO) ? tokenFeeAmountA : ZERO;
-            itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(ZERO) ? tokenFeeAmountB : ZERO;
-            for (let i = 0; i < rewardInfos.length; i++) {
-              itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(ZERO) ? rewardInfos[i] : ZERO;
-            }
-          }
-        }
-      }
-    }
+  //       for (const { state, positionAccount } of Object.values(poolsInfo)) {
+  //         if (!positionAccount) continue;
+  //         for (const itemPA of positionAccount) {
+  //           const keyLower = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickLower}`;
+  //           const keyUpper = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickUpper}`;
+  //           const tickArrayLower = tickArrayLayout[keyToTickArrayAddress[keyLower].toString()];
+  //           const tickArrayUpper = tickArrayLayout[keyToTickArrayAddress[keyUpper].toString()];
+  //           const tickLowerState: Tick =
+  //             tickArrayLower.ticks[TickUtils.getTickOffsetInArray(itemPA.tickLower, state.tickSpacing)];
+  //           const tickUpperState: Tick =
+  //             tickArrayUpper.ticks[TickUtils.getTickOffsetInArray(itemPA.tickUpper, state.tickSpacing)];
+  //           const { tokenFeeAmountA, tokenFeeAmountB } = PositionUtils.GetPositionFees(
+  //             state,
+  //             itemPA,
+  //             tickLowerState,
+  //             tickUpperState,
+  //           );
+  //           const rewardInfos = PositionUtils.GetPositionRewards(state, itemPA, tickLowerState, tickUpperState);
+  //           itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(ZERO) ? tokenFeeAmountA : ZERO;
+  //           itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(ZERO) ? tokenFeeAmountB : ZERO;
+  //           for (let i = 0; i < rewardInfos.length; i++) {
+  //             itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(ZERO) ? rewardInfos[i] : ZERO;
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
 
-    if (updateRewardInfos.length > 0) {
-      const vaults = updateRewardInfos.map((i) => i.tokenVault);
-      const rewardVaultInfos = await getMultipleAccountsInfo(connection, vaults, { batchRequest });
-      const rewardVaultAmount: { [mint: string]: BN } = {};
-      for (let index = 0; index < vaults.length; index++) {
-        const valutKey = vaults[index].toString();
-        const itemRewardVaultInfo = rewardVaultInfos[index];
-        if (itemRewardVaultInfo === null) continue;
-        const info = splAccountLayout.decode(itemRewardVaultInfo.data);
-        rewardVaultAmount[valutKey] = info.amount;
-      }
-      for (const item of updateRewardInfos) {
-        const vaultAmount = rewardVaultAmount[item.tokenVault.toString()];
-        item.remainingRewards =
-          vaultAmount !== undefined ? vaultAmount.sub(item.rewardTotalEmissioned.sub(item.rewardClaimed)) : ZERO;
-      }
-    }
+  //   if (updateRewardInfos.length > 0) {
+  //     const vaults = updateRewardInfos.map((i) => i.tokenVault);
+  //     const rewardVaultInfos = await getMultipleAccountsInfo(connection, vaults, { batchRequest });
+  //     const rewardVaultAmount: { [mint: string]: BN } = {};
+  //     for (let index = 0; index < vaults.length; index++) {
+  //       const valutKey = vaults[index].toString();
+  //       const itemRewardVaultInfo = rewardVaultInfos[index];
+  //       if (itemRewardVaultInfo === null) continue;
+  //       const info = splAccountLayout.decode(itemRewardVaultInfo.data);
+  //       rewardVaultAmount[valutKey] = info.amount;
+  //     }
+  //     for (const item of updateRewardInfos) {
+  //       const vaultAmount = rewardVaultAmount[item.tokenVault.toString()];
+  //       item.remainingRewards =
+  //         vaultAmount !== undefined ? vaultAmount.sub(item.rewardTotalEmissioned.sub(item.rewardClaimed)) : ZERO;
+  //     }
+  //   }
 
-    return poolsInfo;
-  }
+  //   return poolsInfo;
+  // }
 
   static async fetchMultiplePoolTickArrays({
     connection,

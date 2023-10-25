@@ -5,12 +5,12 @@ import { TokenAmount, Percent, Price, Fraction } from "@/module";
 import { ApiV3Token } from "@/api/type";
 import { TokenInfo } from "../token/type";
 import { TickArray } from "./utils/tick";
-import { ApiClmmPoolInfo, ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
+import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 
 import { ClmmPositionLayout } from "./layout";
 
-export { ApiClmmPoolInfo, ApiClmmConfigInfo };
+export { ApiClmmConfigInfo };
 
 export interface ApiClmmPoint {
   price: string;
@@ -228,12 +228,7 @@ export interface ReturnTypeComputeAmountOut {
   fee: BN;
   remainingAccounts: PublicKey[];
 }
-export interface ReturnTypeFetchMultiplePoolInfos {
-  [id: string]: {
-    state: ClmmPoolInfo;
-    positionAccount?: ClmmPoolPersonalPosition[] | undefined;
-  };
-}
+
 export interface ReturnTypeFetchMultiplePoolTickArrays {
   [poolId: string]: { [key: string]: TickArray };
 }

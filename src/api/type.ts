@@ -85,25 +85,25 @@ export interface ApiClmmPoolsItemStatistics {
   priceMax: number;
 }
 
-export interface ApiClmmPoolInfo {
-  id: string;
-  mintProgramIdA: string;
-  mintProgramIdB: string;
-  mintA: string;
-  mintB: string;
-  mintDecimalsA: number;
-  mintDecimalsB: number;
-  ammConfig: ApiClmmConfigInfo;
-  rewardInfos: {
-    mint: string;
-    programId: string;
-  }[];
-  day: ApiClmmPoolsItemStatistics;
-  week: ApiClmmPoolsItemStatistics;
-  month: ApiClmmPoolsItemStatistics;
-  tvl: number;
-  lookupTableAccount: string;
-}
+// export interface ApiClmmPoolInfo {
+//   id: string;
+//   mintProgramIdA: string;
+//   mintProgramIdB: string;
+//   mintA: string;
+//   mintB: string;
+//   mintDecimalsA: number;
+//   mintDecimalsB: number;
+//   ammConfig: ApiClmmConfigInfo;
+//   rewardInfos: {
+//     mint: string;
+//     programId: string;
+//   }[];
+//   day: ApiClmmPoolsItemStatistics;
+//   week: ApiClmmPoolsItemStatistics;
+//   month: ApiClmmPoolsItemStatistics;
+//   tvl: number;
+//   lookupTableAccount: string;
+// }
 
 /** ====== v3 api types ======= */
 export interface ApiV3PageIns<T> {
