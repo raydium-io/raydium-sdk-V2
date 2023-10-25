@@ -58,7 +58,7 @@ export function makeClaimInstruction<Version extends "" | "3" = "">(
   return new TransactionInstruction({ keys, programId, data });
 }
 
-export function makeClaimInstruction2(params: IdoClaimInstructionParams): TransactionInstruction {
+export function makeClaimInstructionV4(params: IdoClaimInstructionParams): TransactionInstruction {
   const { poolConfig, userKeys, side } = params;
 
   const tokenAccount = side === "base" ? userKeys.baseTokenAccount : userKeys.quoteTokenAccount;

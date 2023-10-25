@@ -30,9 +30,9 @@ export interface ClaimInstructionKeysV3 {
   // ido
   idoId: PublicKey;
   authority: PublicKey;
-  poolTokenAccount: PublicKey; // NEED_CHECK: is it Quote or Base?
+  poolTokenAccount: PublicKey; // projectInfo.vault?
   // user
-  userTokenAccount: PublicKey; // NEED_CHECK: is it Quote or Base? // differernt account in user wallet
+  userTokenAccount: PublicKey; // user token account.mint === projectInfo.mint?
   userIdoInfo: PublicKey;
   userOwner: PublicKey;
 }
@@ -44,14 +44,14 @@ export type SnapshotVersion = 1;
 export interface IdoPoolConfig {
   id: PublicKey;
 
-  version: IdoVersion;
+  // version: IdoVersion;
   programId: PublicKey;
 
-  snapshotVersion: SnapshotVersion;
-  snapshotProgramId: PublicKey;
+  // snapshotVersion: SnapshotVersion;
+  // snapshotProgramId: PublicKey;
 
   authority: PublicKey;
-  seedId: PublicKey;
+  // seedId: PublicKey;
   baseVault: PublicKey;
   quoteVault: PublicKey;
   baseToken: ApiV3Token;
@@ -62,7 +62,7 @@ export interface IdoUserKeys {
   baseTokenAccount: PublicKey;
   quoteTokenAccount: PublicKey;
   ledgerAccount: PublicKey;
-  snapshotAccount: PublicKey;
+  // snapshotAccount: PublicKey;
   owner: PublicKey;
 }
 

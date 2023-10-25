@@ -36,6 +36,9 @@ export const API_URLS = {
   FARM_LP_INFO: "/v3/farms/info/lp/{pool_lp}/{page_size}/{page}",
   FARM_LIST: "/v3/farms/info/list/all/{page_size}/{page}",
   FARM_KEYS: "/v3/farms/key/id/{id}",
+  OWNER_CREATED_FARM: "/v3/owner/create-pool/{owner}",
+  OWNER_IDO: "/v3/owner/main/ido/{owner}",
+  IDO_KEYS: "/v3/ido/key/id/{id}",
 };
 
 export const DEV_API_URLS = {
