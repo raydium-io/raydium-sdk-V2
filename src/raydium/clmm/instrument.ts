@@ -1458,6 +1458,7 @@ export class ClmmInstrument {
     ammConfigId: PublicKey,
 
     ownerTokenAccount: PublicKey,
+    rewardProgramId: PublicKey,
     rewardMint: PublicKey,
     rewardVault: PublicKey,
 
@@ -1477,7 +1478,7 @@ export class ClmmInstrument {
       { pubkey: rewardMint, isSigner: false, isWritable: false },
       { pubkey: rewardVault, isSigner: false, isWritable: true },
 
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: rewardProgramId, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
     ];
@@ -1533,6 +1534,7 @@ export class ClmmInstrument {
         new PublicKey(poolInfo.config.id),
 
         ownerInfo.tokenAccount,
+        rewardInfo.programId,
         rewardInfo.mint,
         poolRewardVault,
 

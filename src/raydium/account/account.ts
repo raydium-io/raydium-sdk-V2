@@ -183,13 +183,12 @@ export default class Account extends ModuleBase {
         newTxInstructions.instructions!.push(_createATAIns);
         newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
       }
-
-      if (mint.equals(WSOLMint)) {
+      if (mint.equals(WSOLMint) && createInfo.amount) {
         const txInstruction = await createWSolAccountInstructions({
           connection: this.scope.connection,
           owner: this.scope.ownerPubKey,
           payer: createInfo.payer || this.scope.ownerPubKey,
-          amount: createInfo.amount || 0,
+          amount: createInfo.amount ?? 0,
           skipCloseAccount,
         });
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
@@ -204,7 +203,7 @@ export default class Account extends ModuleBase {
               destination: ata,
               owner: this.scope.ownerPubKey,
               amount: createInfo.amount,
-              tokenProgram,
+              tokenProgram: TOKEN_PROGRAM_ID,
             }),
           );
           newTxInstructions.instructionTypes!.push(InstructionType.TransferAmount);
@@ -225,12 +224,13 @@ export default class Account extends ModuleBase {
 
       return { account: ata, instructionParams: newTxInstructions };
     } else {
-      if (mint.equals(WSOLMint) && createInfo.amount) {
+      console.log(123123555);
+      if (mint.equals(WSOLMint)) {
         const txInstruction = await createWSolAccountInstructions({
           connection: this.scope.connection,
           owner: this.scope.ownerPubKey,
           payer: createInfo.payer || this.scope.ownerPubKey,
-          amount: createInfo.amount || 0,
+          amount: createInfo.amount ?? 0,
           skipCloseAccount,
         });
         newTxInstructions.instructions!.push(...(txInstruction.instructions || []));

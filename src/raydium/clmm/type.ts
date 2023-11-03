@@ -2,10 +2,9 @@ import { EpochInfo, Keypair, PublicKey, Signer, Transaction, TransactionInstruct
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { TokenAmount, Percent, Price, Fraction } from "@/module";
-import { ApiV3Token } from "@/api/type";
 import { TokenInfo } from "../token/type";
 import { TickArray } from "./utils/tick";
-import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
+import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys, ApiV3Token } from "@/api/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 
 import { ClmmPositionLayout } from "./layout";
@@ -411,8 +410,7 @@ export interface InitRewardParams {
     useSOLBalance?: boolean; // if has WSOL mint
   };
   rewardInfo: {
-    programId: PublicKey;
-    mint: PublicKey;
+    mint: ApiV3Token;
     openTime: number;
     endTime: number;
     perSecond: Decimal;
@@ -442,8 +440,7 @@ export interface InitRewardsParams {
     useSOLBalance?: boolean; // if has WSOL mint
   };
   rewardInfos: {
-    programId: PublicKey;
-    mint: PublicKey;
+    mint: ApiV3Token;
     openTime: number;
     endTime: number;
     perSecond: Decimal;
@@ -472,8 +469,7 @@ export interface SetRewardParams {
 
 export interface SetRewardsParams extends Omit<SetRewardParams, "rewardInfo"> {
   rewardInfos: {
-    programId: PublicKey;
-    mint: PublicKey;
+    mint: ApiV3Token;
     openTime: number; // If the reward is being distributed, please give 0
     endTime: number; // If no modification is required, enter 0
     perSecond: Decimal;

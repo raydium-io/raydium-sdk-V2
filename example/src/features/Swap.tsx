@@ -17,17 +17,20 @@ import {
   JupTokenType,
   getATAAddress,
   farmRewardLayout,
+  struct,
+  u64,
+  u128,
 } from '@raydium-io/raydium-sdk'
 import debounce from 'lodash/debounce'
 import { useEffect, useState } from 'react'
 import { PublicKey } from '@solana/web3.js'
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
+import { TOKEN_PROGRAM_ID, initializeAccountInstructionData } from '@solana/spl-token'
 
 import { useAppStore } from '../store/appStore'
 import Decimal from 'decimal.js'
 import BN from 'bn.js'
 
-import { pool, rewards } from './data'
+import { pool, rewards, printSimulate } from './data'
 
 export default function Swap() {
   const raydium = useAppStore((state) => state.raydium)
@@ -67,16 +70,32 @@ export default function Swap() {
       //   const ata = getATAAddress(raydium.ownerPubKey!, item.mint!, item.programId ?? TOKEN_PROGRAM_ID).publicKey
       //   if (item.publicKey && ata.equals(item.publicKey)) ownerMintToAccount[item.mint!.toString()] = item.publicKey!
       // }
-      const { transaction, execute } = await raydium.farm.create({
+      const { transaction, instructionTypes, execute } = await raydium.clmm.initRewards({
         poolInfo: pool as any,
-        rewardInfos: rewards.map((r) => ({
-          ...r,
-          rewardMint: new PublicKey(r.rewardMint),
-          rewardType: 'Standard SPL',
-        })),
+        checkCreateATAOwner: true,
+        ownerInfo: { useSOLBalance: true },
+        rewardInfos: rewards.map((r) => ({ ...r, perSecond: new Decimal(r.perSecond) })),
       })
 
-      execute()
+      // transaction.instructions.forEach((i) => {
+      //   // console.log(123123111, i.data, i.programId.toString())
+      //   const dataLayout = struct([u64('openTime'), u64('endTime'), u128('emissionsPerSecondX64')])
+      //   const d = dataLayout.decode(i.data)
+      //   if (i.programId.equals(TOKEN_PROGRAM_ID)) {
+      //     console.log(1231236666, i, initializeAccountInstructionData.decode(i.data))
+      //   } else {
+      //     console.log(123123111, i.programId.toString(), i.data.length, dataLayout.span, {
+      //       emission: d.emissionsPerSecondX64.toString(),
+      //       openTime: d.openTime.toString(),
+      //       endtime: d.endTime.toString(),
+      //     })
+      //   }
+      //   // i.keys.forEach((k) => {
+      //   //   console.log(123123222222, k.pubkey.toString(), k)
+      //   // })
+      // })
+
+      // execute()
       // r.execute()
       // await raydium.token.load({ type: JupTokenType.ALL })
       // await raydium.ammV3.load()

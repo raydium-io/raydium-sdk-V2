@@ -131,8 +131,8 @@ export class TxBuilder {
     const { avg } = json?.[15] ?? {};
     if (!avg) return undefined;
     return {
-      units: 400000,
-      microLamports: Math.min(Math.ceil((avg * 1000000) / 400000), 25000),
+      units: 600000,
+      microLamports: Math.min(Math.ceil((avg * 1000000) / 600000), 25000),
     };
   }
 

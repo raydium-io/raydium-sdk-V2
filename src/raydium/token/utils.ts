@@ -3,8 +3,10 @@ import { MintLayout, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Price, Token, TokenAmount } from "@/module";
 import { parseNumberInfo, Numberish, BigNumberish } from "@/common/bignumber";
 import { TokenInfo } from "./type";
+import { SOL_INFO, TOKEN_WSOL } from "./constant";
 
 import BN from "bn.js";
+import { ApiV3Token } from "@/api";
 
 export function parseTokenPrice(params: { token: TokenInfo; numberPrice: Numberish; decimalDone?: boolean }): Price {
   const { token, numberPrice, decimalDone } = params;
@@ -91,3 +93,13 @@ export const toTokenAmount = ({
     isRaw,
     name,
   );
+
+export function solToWSolToken<T extends ApiV3Token | TokenInfo>(token: T): T {
+  if (token.address === SOL_INFO.address) return TOKEN_WSOL as T;
+  return token;
+}
+
+export function wSolToSolToken<T extends ApiV3Token | TokenInfo>(token: T): T {
+  if (token.address === TOKEN_WSOL.address) return SOL_INFO as T;
+  return token;
+}

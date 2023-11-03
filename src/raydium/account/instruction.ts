@@ -71,7 +71,7 @@ export async function createWSolAccountInstructions(params: CreateWSolTokenAccou
         programId: TOKEN_PROGRAM_ID,
       }),
       initTokenAccountInstruction({
-        mint: new PublicKey(TOKEN_WSOL.mint),
+        mint: new PublicKey(TOKEN_WSOL.address),
         tokenAccount: newAccount.publicKey,
         owner,
         programId: TOKEN_PROGRAM_ID,
@@ -106,12 +106,6 @@ export function makeTransferInstruction({
   multiSigners?: Signer[];
   tokenProgram?: PublicKey;
 }): TransactionInstruction {
-  return createTransferInstruction(
-    source,
-    destination,
-    owner,
-    parseBigNumberish(amount).toNumber(),
-    multiSigners,
-    tokenProgram,
-  );
+  console.log(123123555, source.toString(), destination.toString(), owner.toString(), String(amount));
+  return createTransferInstruction(source, destination, owner, BigInt(String(amount)), multiSigners, tokenProgram);
 }

@@ -22,7 +22,10 @@ export class Token {
   public readonly isToken2022: boolean;
 
   public readonly mint: PublicKey;
-  public static readonly WSOL: Token = new Token(TOKEN_WSOL);
+  public static readonly WSOL: Token = new Token({
+    ...TOKEN_WSOL,
+    mint: TOKEN_WSOL.address,
+  });
 
   /**
    *
@@ -33,7 +36,7 @@ export class Token {
       this.decimals = TOKEN_WSOL.decimals;
       this.symbol = TOKEN_WSOL.symbol;
       this.name = TOKEN_WSOL.name;
-      this.mint = new PublicKey(TOKEN_WSOL.mint);
+      this.mint = new PublicKey(TOKEN_WSOL.address);
       this.isToken2022 = false;
       return;
     }

@@ -138,7 +138,7 @@ export default class Farm extends ModuleBase {
 
       if (!rewardPubKey) this.logAndCreateError("cannot found target token accounts", this.scope.account.tokenAccounts);
 
-      const rewardMint = rewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : rewardInfo.mint;
+      const rewardMint = rewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.address) : rewardInfo.mint;
       rewardInfoKey.push({
         rewardMint,
         rewardVault: getAssociatedLedgerPoolAccount({
@@ -200,7 +200,7 @@ export default class Farm extends ModuleBase {
 
     const payerPubKey = payer || this.scope.ownerPubKey;
 
-    const rewardMint = newRewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : newRewardInfo.mint;
+    const rewardMint = newRewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.address) : newRewardInfo.mint;
     const rewardInfoIndex = farmKeys.rewardInfos.findIndex((item) =>
       new PublicKey(item.mint.address).equals(rewardMint),
     );
@@ -274,7 +274,7 @@ export default class Farm extends ModuleBase {
     if (!userRewardTokenPub)
       this.logAndCreateError("annot found target token accounts", this.scope.account.tokenAccounts);
 
-    const rewardMint = newRewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.mint) : newRewardInfo.mint;
+    const rewardMint = newRewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.address) : newRewardInfo.mint;
     const data = Buffer.alloc(farmAddRewardLayout.span);
     farmAddRewardLayout.encode(
       {
@@ -551,7 +551,7 @@ export default class Farm extends ModuleBase {
     if (version !== 6) this.logAndCreateError("invalid farm version", version);
 
     const rewardInfoIdx = farmInfo.rewardInfos.findIndex((item) =>
-      item.mint.address === SOLMint.toString() ? new PublicKey(TOKEN_WSOL.mint) : withdrawMint,
+      item.mint.address === SOLMint.toString() ? new PublicKey(TOKEN_WSOL.address) : withdrawMint,
     );
     const rewardInfo = farmKeys.rewardInfos[rewardInfoIdx];
     if (!rewardInfo) this.logAndCreateError("withdraw mint error", "rewardInfos", farmInfo);

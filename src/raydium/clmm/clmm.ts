@@ -517,13 +517,10 @@ export class Clmm extends ModuleBase {
       });
     if (_ownerTokenAccountB) ownerTokenAccountB = _ownerTokenAccountB;
     txBuilder.addInstruction(_tokenAccountBInstruction || {});
-    console.log(12312333333);
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    console.log(1231234444);
     const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
-    console.log(1231235555);
     const ins = ClmmInstrument.increasePositionFromBaseInstructions({
       poolInfo,
       poolKeys,
@@ -915,12 +912,14 @@ export class Clmm extends ModuleBase {
 
     const txBuilder = this.createTxBuilder();
 
-    const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
+    const rewardMintUseSOLBalance =
+      ownerInfo.useSOLBalance && rewardInfo.mint.address.toString() === WSOLMint.toString();
     const _baseRewardAmount = rewardInfo.perSecond.mul(rewardInfo.endTime - rewardInfo.openTime);
+
     const { account: ownerRewardAccount, instructionParams: ownerRewardAccountIns } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: rewardInfo.programId,
-        mint: rewardInfo.mint,
+        tokenProgram: new PublicKey(rewardInfo.mint.address),
+        mint: new PublicKey(rewardInfo.mint.address),
         notUseTokenAccount: !!rewardMintUseSOLBalance,
         skipCloseAccount: !rewardMintUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -950,8 +949,8 @@ export class Clmm extends ModuleBase {
         tokenAccount: ownerRewardAccount!,
       },
       rewardInfo: {
-        programId: rewardInfo.programId,
-        mint: rewardInfo.mint,
+        programId: new PublicKey(rewardInfo.mint.programId),
+        mint: new PublicKey(rewardInfo.mint.address),
         openTime: rewardInfo.openTime,
         endTime: rewardInfo.endTime,
         emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
@@ -977,12 +976,13 @@ export class Clmm extends ModuleBase {
     let address: Record<string, PublicKey> = {};
 
     for (const rewardInfo of rewardInfos) {
-      const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
+      const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.address === WSOLMint.toString();
       const _baseRewardAmount = rewardInfo.perSecond.mul(rewardInfo.endTime - rewardInfo.openTime);
+
       const { account: ownerRewardAccount, instructionParams: ownerRewardAccountIns } =
         await this.scope.account.getOrCreateTokenAccount({
-          tokenProgram: rewardInfo.programId,
-          mint: rewardInfo.mint,
+          tokenProgram: new PublicKey(rewardInfo.mint.programId),
+          mint: new PublicKey(rewardInfo.mint.address),
           notUseTokenAccount: !!rewardMintUseSOLBalance,
           skipCloseAccount: !rewardMintUseSOLBalance,
           owner: this.scope.ownerPubKey,
@@ -1013,8 +1013,8 @@ export class Clmm extends ModuleBase {
           tokenAccount: ownerRewardAccount!,
         },
         rewardInfo: {
-          programId: rewardInfo.programId,
-          mint: rewardInfo.mint,
+          programId: new PublicKey(rewardInfo.mint.programId),
+          mint: new PublicKey(rewardInfo.mint.address),
           openTime: rewardInfo.openTime,
           endTime: rewardInfo.endTime,
           emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
@@ -1105,11 +1105,11 @@ export class Clmm extends ModuleBase {
       if (rewardInfo.endTime <= rewardInfo.openTime)
         this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
-      const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
+      const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.address === WSOLMint.toString();
       const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
         await this.scope.account.getOrCreateTokenAccount({
-          tokenProgram: rewardInfo.programId,
-          mint: rewardInfo.mint,
+          tokenProgram: new PublicKey(rewardInfo.mint.programId),
+          mint: new PublicKey(rewardInfo.mint.address),
           notUseTokenAccount: rewardMintUseSOLBalance,
           owner: this.scope.ownerPubKey,
           createInfo: rewardMintUseSOLBalance
@@ -1142,7 +1142,7 @@ export class Clmm extends ModuleBase {
           tokenAccount: ownerRewardAccount!,
         },
         rewardInfo: {
-          mint: rewardInfo.mint,
+          mint: new PublicKey(rewardInfo.mint.address),
           openTime: rewardInfo.openTime,
           endTime: rewardInfo.endTime,
           emissionsPerSecondX64: MathUtil.decimalToX64(rewardInfo.perSecond),
