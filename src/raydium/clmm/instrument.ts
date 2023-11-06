@@ -42,13 +42,12 @@ const logger = createLogger("Raydium_Clmm");
 const anchorDataBuf = {
   createPool: [233, 146, 209, 142, 207, 104, 64, 188],
   initReward: [95, 135, 192, 196, 242, 129, 230, 68],
-  setRewardEmissions: [13, 197, 86, 168, 109, 176, 27, 244],
-  collectProtocolFee: [136, 136, 252, 221, 194, 66, 126, 89],
+  setRewardEmissions: [112, 52, 167, 75, 32, 201, 211, 137],
   openPosition: [77, 184, 74, 214, 112, 86, 241, 199],
   closePosition: [123, 134, 81, 0, 49, 68, 98, 98],
   increaseLiquidity: [133, 29, 89, 223, 69, 238, 176, 10],
   decreaseLiquidity: [58, 127, 188, 62, 79, 82, 196, 96],
-  swap: [248, 198, 158, 145, 225, 117, 135, 200],
+  swap: [43, 4, 237, 11, 26, 201, 30, 98], // [248, 198, 158, 145, 225, 117, 135, 200],
   collectReward: [18, 237, 166, 197, 34, 16, 213, 144],
 };
 
@@ -357,10 +356,7 @@ export class ClmmInstrument {
       signers,
       instructions: [ins],
       instructionTypes: [InstructionType.ClmmOpenPosition],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
       address: {
         nftMint: nftMintAccount,
         tickArrayLower,
@@ -478,10 +474,7 @@ export class ClmmInstrument {
       instructions: [ins],
       signers,
       instructionTypes: [InstructionType.ClmmOpenPosition],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -688,9 +681,7 @@ export class ClmmInstrument {
       instructions: [ins],
       signers,
       instructionTypes: [InstructionType.ClmmOpenPosition],
-      lookupTableAddress: (poolKeys.lookupTableAccount ? [new PublicKey(poolKeys.lookupTableAccount)] : []).filter(
-        (i) => !i.equals(PublicKey.default),
-      ),
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -762,10 +753,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmClosePosition],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -931,10 +919,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: [ins],
       instructionTypes: [InstructionType.ClmmIncreasePosition],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -1024,10 +1009,7 @@ export class ClmmInstrument {
       ],
       signers: [],
       instructionTypes: [InstructionType.ClmmIncreasePosition],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -1297,10 +1279,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmDecreasePosition],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -1442,10 +1421,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSwapBaseIn],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
       address: {},
     };
   }
@@ -1548,10 +1524,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmInitReward],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -1666,10 +1639,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSetReward],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -1758,10 +1728,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmCollectReward],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
   }
 
@@ -1837,10 +1804,7 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSwapBaseOut],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toBase58()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
       address: {},
     };
   }

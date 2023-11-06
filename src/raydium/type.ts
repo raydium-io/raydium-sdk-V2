@@ -1,6 +1,6 @@
 import { PublicKey, Signer, Transaction, TransactionInstruction, VersionedTransaction } from "@solana/web3.js";
 import { Mint, TransferFeeConfig } from "@solana/spl-token";
-import { ExecuteParam } from "../common/txTool/txTool";
+import { ExecuteParam, TxBuilder } from "../common/txTool/txTool";
 import { TokenAmount } from "../module/amount";
 import BN from "bn.js";
 
@@ -9,6 +9,7 @@ export type SignAllTransactions =
   | undefined;
 
 export interface MakeTransaction<T = Record<string, any>> {
+  builder: TxBuilder;
   signers: Signer[];
   transaction: Transaction;
   instructionTypes: string[];
@@ -16,7 +17,17 @@ export interface MakeTransaction<T = Record<string, any>> {
   extInfo: T;
 }
 
+export interface MakeV0Transaction<T = Record<string, any>> {
+  builder: TxBuilder;
+  signers: Signer[];
+  transaction: VersionedTransaction;
+  instructionTypes: string[];
+  execute: () => Promise<string>;
+  extInfo: T;
+}
+
 export interface MakeMultiTransaction {
+  builder: TxBuilder;
   signers: Signer[][];
   transactions: Transaction[];
   instructionTypes: string[];

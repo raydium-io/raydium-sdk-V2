@@ -190,7 +190,7 @@ export interface ReturnTypeMakeInstructions<T = Record<string, PublicKey>> {
   instructions: TransactionInstruction[];
   instructionTypes: string[];
   address: T;
-  lookupTableAddress: PublicKey[];
+  lookupTableAddress: string[];
 }
 
 export interface ReturnTypeGetLiquidityAmountOut {

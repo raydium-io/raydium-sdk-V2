@@ -8,13 +8,15 @@ import {
   TransactionMessage,
   Keypair,
   EpochInfo,
+  VersionedTransaction,
 } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import { createLogger } from "../logger";
 import { InstructionType } from "./txType";
-import { CacheLTA } from "../lookupTable";
+import { CacheLTA } from "./lookupTable";
 
-import { ComputeBudgetConfig } from "../../raydium/type";
+import { ComputeBudgetConfig } from "@/raydium/type";
 
 const logger = createLogger("Raydium_txUtil");
 
@@ -277,4 +279,31 @@ export async function getEpochInfo(connection: Connection): Promise<EpochInfo> {
   } else {
     return epochInfoCache.data;
   }
+}
+
+export const toBuffer = (arr: Buffer | Uint8Array | Array<number>): Buffer => {
+  if (Buffer.isBuffer(arr)) {
+    return arr;
+  } else if (arr instanceof Uint8Array) {
+    return Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength);
+  } else {
+    return Buffer.from(arr);
+  }
+};
+
+export function printSimulate(transactions: Transaction[] | VersionedTransaction[]): string[] {
+  const allBase64: string[] = [];
+  transactions.forEach((transaction) => {
+    if (transaction instanceof Transaction) {
+      if (!transaction.recentBlockhash) transaction.recentBlockhash = TOKEN_PROGRAM_ID.toBase58();
+      if (!transaction.feePayer) transaction.feePayer = Keypair.generate().publicKey;
+    }
+    let serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+    if (transaction instanceof VersionedTransaction) serialized = toBuffer(serialized);
+    const base64 = serialized.toString("base64");
+    allBase64.push(base64);
+  });
+  console.log("simulate tx string:", allBase64);
+
+  return allBase64;
 }

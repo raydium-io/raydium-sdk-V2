@@ -429,7 +429,6 @@ export async function makeSwapInstruction({
       });
     } else {
       const _poolKey = swapInfo.poolKey[0] as AmmV4Keys | AmmV5Keys;
-      const poolKeys = jsonInfo2PoolKeys(_poolKey);
 
       return {
         signers: [],
@@ -447,9 +446,7 @@ export async function makeSwapInstruction({
             fixedSide: "in",
           }),
         ],
-        lookupTableAddress: (poolKeys.lookupTableAccount ? [new PublicKey(poolKeys.lookupTableAccount)] : []).filter(
-          (i) => !i.equals(PublicKey.default),
-        ),
+        lookupTableAddress: _poolKey.lookupTableAccount ? [_poolKey.lookupTableAccount] : [],
         instructionTypes: [
           swapInfo.poolInfo[0].pooltype.includes("StablePool")
             ? InstructionType.AmmV5SwapBaseIn
@@ -491,9 +488,9 @@ export async function makeSwapInstruction({
         ),
       ],
       instructionTypes: [InstructionType.RouteSwap],
-      lookupTableAddress: [poolKey1.lookupTableAccount, poolKey2.lookupTableAccount]
-        .filter((a) => a !== undefined)
-        .map((v) => new PublicKey(v!)),
+      lookupTableAddress: [poolKey1.lookupTableAccount, poolKey2.lookupTableAccount].filter(
+        (a) => a !== undefined,
+      ) as string[],
       address: {},
     };
   } else {

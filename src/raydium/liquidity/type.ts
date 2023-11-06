@@ -1,5 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "../../api/type";
+import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "@/api/type";
+import { TxVersion } from "@/common/txTool/txType";
 import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
 import Decimal from "decimal.js-light";
@@ -7,7 +8,7 @@ import Decimal from "decimal.js-light";
 export type LiquiditySide = "a" | "b";
 export type AmountSide = "base" | "quote";
 
-export interface AddLiquidityParams {
+export interface AddLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
   amountInA: string | Decimal | BN;
@@ -17,9 +18,10 @@ export interface AddLiquidityParams {
     bypassAssociatedCheck?: boolean;
     checkCreateATAOwner?: boolean;
   };
+  txVersion?: T;
 }
 
-export interface RemoveParams {
+export interface RemoveParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
   amountIn: BN;
@@ -27,6 +29,7 @@ export interface RemoveParams {
     bypassAssociatedCheck?: boolean;
     checkCreateATAOwner?: boolean;
   };
+  txVersion?: T;
 }
 
 export interface LiquidityUserKeys {
@@ -82,7 +85,7 @@ export interface LiquidityPoolKeys {
   lookupTableAccount: PublicKey;
 }
 
-export interface CreatePoolParam {
+export interface CreatePoolParam<T> {
   programId: PublicKey;
   marketInfo: {
     marketId: PublicKey;
@@ -108,6 +111,7 @@ export interface CreatePoolParam {
   associatedOnly: boolean;
   checkCreateATAOwner?: boolean;
   tokenProgram?: PublicKey;
+  txVersion?: T;
 }
 
 export interface CreatePoolAddress {

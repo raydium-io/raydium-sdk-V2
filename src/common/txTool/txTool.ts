@@ -10,11 +10,11 @@ import {
 } from "@solana/web3.js";
 import axios from "axios";
 
-import { SignAllTransactions, ComputeBudgetConfig } from "../../raydium/type";
-
+import { SignAllTransactions, ComputeBudgetConfig } from "@/raydium/type";
+import { TxVersion } from "./txType";
 import { Owner } from "../owner";
-import { getRecentBlockHash, addComputeBudget, checkLegacyTxSize, checkV0TxSize } from "./txUtils";
-import { CacheLTA, getMultipleLookupTableInfo } from "../lookupTable";
+import { getRecentBlockHash, addComputeBudget, checkLegacyTxSize, checkV0TxSize, printSimulate } from "./txUtils";
+import { CacheLTA, getMultipleLookupTableInfo, LOOKUP_TABLE_CACHE } from "./lookupTable";
 
 interface SolanaFeeInfo {
   min: number;
@@ -43,13 +43,14 @@ export interface AddInstructionParam {
   addresses?: Record<string, PublicKey>;
   instructions?: TransactionInstruction[];
   endInstructions?: TransactionInstruction[];
-  lookupTableAddress?: PublicKey[];
+  lookupTableAddress?: string[];
   signers?: Signer[];
   instructionTypes?: string[];
   endInstructionTypes?: string[];
 }
 
 export interface TxBuildData<T = Record<string, any>> {
+  builder: TxBuilder;
   transaction: Transaction;
   instructionTypes: string[];
   signers: Signer[];
@@ -58,6 +59,7 @@ export interface TxBuildData<T = Record<string, any>> {
 }
 
 export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData<T>, "transaction"> {
+  builder: TxBuilder;
   transaction: VersionedTransaction;
   buildProps?: {
     lookupTableCache?: CacheLTA;
@@ -70,6 +72,7 @@ export interface ExecuteParam {
   onTxUpdate?: (completeTxs: { txId: string; status: "success" | "error" | "sent" }[]) => void;
 }
 export interface MultiTxBuildData {
+  builder: TxBuilder;
   transactions: Transaction[];
   instructionTypes: string[];
   signers: Signer[][];
@@ -78,6 +81,7 @@ export interface MultiTxBuildData {
 }
 
 export interface MultiTxV0BuildData extends Omit<MultiTxBuildData, "transactions"> {
+  builder: TxBuilder;
   transactions: VersionedTransaction[];
   buildProps?: {
     lookupTableCache?: CacheLTA;
@@ -85,12 +89,16 @@ export interface MultiTxV0BuildData extends Omit<MultiTxBuildData, "transactions
   };
 }
 
+export type MakeTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extends TxVersion.LEGACY
+  ? TxBuildData<O>
+  : TxV0BuildData<O>;
+
 export class TxBuilder {
   private connection: Connection;
   private owner?: Owner;
   private instructions: TransactionInstruction[] = [];
   private endInstructions: TransactionInstruction[] = [];
-  private lookupTableAddress: PublicKey[] = [];
+  private lookupTableAddress: string[] = [];
   private signers: Signer[] = [];
   private instructionTypes: string[] = [];
   private endInstructionTypes: string[] = [];
@@ -164,22 +172,24 @@ export class TxBuilder {
     this.signers.push(...signers);
     this.instructionTypes.push(...instructionTypes);
     this.endInstructionTypes.push(...endInstructionTypes);
-    this.lookupTableAddress.push(...lookupTableAddress);
+    this.lookupTableAddress.push(...lookupTableAddress.filter((address) => address !== PublicKey.default.toString()));
     return this;
   }
 
-  public build<T = Record<string, any>>(extInfo?: T): TxBuildData<T> {
+  public build<O = Record<string, any>>(extInfo?: O): MakeTxData<TxVersion.LEGACY, O> {
     const transaction = new Transaction();
     if (this.allInstructions.length) transaction.add(...this.allInstructions);
     transaction.feePayer = this.feePayer;
 
     return {
+      builder: this,
       transaction,
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (): Promise<string> => {
         const recentBlockHash = await getRecentBlockHash(this.connection);
         transaction.recentBlockhash = recentBlockHash;
+        printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           return sendAndConfirmTransaction(this.connection, transaction, this.signers);
         }
@@ -190,7 +200,7 @@ export class TxBuilder {
         }
         throw new Error("please connect wallet first");
       },
-      extInfo: extInfo || ({} as T),
+      extInfo: extInfo || ({} as O),
     };
   }
 
@@ -211,6 +221,7 @@ export class TxBuilder {
     ];
 
     return {
+      builder: this,
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: allInstructionTypes,
@@ -233,7 +244,7 @@ export class TxBuilder {
             return tx;
           });
           const signedTxs = await this.signAllTransactions(partialSignedTxs);
-
+          printSimulate(partialSignedTxs);
           if (sequentially) {
             let i = 0;
             const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
@@ -278,15 +289,27 @@ export class TxBuilder {
       lookupTableAddress?: string[];
     },
   ): Promise<TxV0BuildData<T>> {
-    const { lookupTableCache, lookupTableAddress, ...extInfo } = props || {};
-    const lookupTableAddressAccount = lookupTableCache ?? {};
-    const allLTA = [...new Set<string>(lookupTableAddress)];
+    const { lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
+    const lookupTableAddressAccount = {
+      ...LOOKUP_TABLE_CACHE,
+      ...lookupTableCache,
+    };
+    const allLTA = Array.from(new Set<string>([...lookupTableAddress, ...this.lookupTableAddress]));
     const needCacheLTA: PublicKey[] = [];
     for (const item of allLTA) {
       if (lookupTableAddressAccount[item] === undefined) needCacheLTA.push(new PublicKey(item));
     }
     const newCacheLTA = await getMultipleLookupTableInfo({ connection: this.connection, address: needCacheLTA });
     for (const [key, value] of Object.entries(newCacheLTA)) lookupTableAddressAccount[key] = value;
+    console.log(
+      123123,
+      "new fetched lookup",
+      newCacheLTA,
+      "all Fetched",
+      lookupTableAddressAccount,
+      "currentCache",
+      LOOKUP_TABLE_CACHE,
+    );
 
     const messageV0 = new TransactionMessage({
       payerKey: this.feePayer,
@@ -296,10 +319,12 @@ export class TxBuilder {
     const transaction = new VersionedTransaction(messageV0);
 
     return {
+      builder: this,
       transaction,
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (): Promise<string> => {
+        printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           transaction.sign([this.owner.signer as Signer]);
           return await this.connection.sendTransaction(transaction, { skipPreflight: true });
@@ -339,11 +364,13 @@ export class TxBuilder {
     ];
 
     return {
+      builder: this,
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: allInstructionTypes,
       buildProps,
       execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+        printSimulate(allTransactions);
         const { sequentially, onTxUpdate } = executeParams || {};
         if (this.owner?.isKeyPair) {
           return await Promise.all(
@@ -480,11 +507,13 @@ export class TxBuilder {
     allTransactions.forEach((tx) => (tx.feePayer = this.feePayer));
 
     return {
+      builder: this,
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
       execute: async (): Promise<string[]> => {
         const recentBlockHash = await getRecentBlockHash(this.connection);
+        printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
           return await Promise.all(
             allTransactions.map(async (tx, idx) => {
@@ -521,9 +550,12 @@ export class TxBuilder {
       lookupTableAddress?: string[];
     },
   ): Promise<MultiTxV0BuildData> {
-    const { autoComputeBudget = false, lookupTableCache, lookupTableAddress = [], ...extInfo } = props || {};
-    const lookupTableAddressAccount = lookupTableCache ?? {};
-    const allLTA = [...new Set<string>(lookupTableAddress)];
+    const { autoComputeBudget = false, lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
+    const lookupTableAddressAccount = {
+      ...LOOKUP_TABLE_CACHE,
+      ...lookupTableCache,
+    };
+    const allLTA = Array.from(new Set<string>([...this.lookupTableAddress, ...lookupTableAddress]));
     const needCacheLTA: PublicKey[] = [];
     for (const item of allLTA) {
       if (lookupTableAddressAccount[item] === undefined) needCacheLTA.push(new PublicKey(item));
@@ -635,11 +667,13 @@ export class TxBuilder {
     }
 
     return {
+      builder: this,
       transactions: allTransactions,
       buildProps: props,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
       execute: async (): Promise<string[]> => {
+        printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
           return await Promise.all(
             allTransactions.map(async (tx) => {

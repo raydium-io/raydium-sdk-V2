@@ -224,7 +224,6 @@ export default class Account extends ModuleBase {
 
       return { account: ata, instructionParams: newTxInstructions };
     } else {
-      console.log(123123555);
       if (mint.equals(WSOLMint)) {
         const txInstruction = await createWSolAccountInstructions({
           connection: this.scope.connection,

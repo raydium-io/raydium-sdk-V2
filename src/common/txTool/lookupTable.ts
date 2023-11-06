@@ -1,5 +1,5 @@
 import { Connection, PublicKey, AddressLookupTableAccount } from "@solana/web3.js";
-import { getMultipleAccountsInfo } from "./accountInfo";
+import { getMultipleAccountsInfo } from "../accountInfo";
 
 export interface CacheLTA {
   [key: string]: AddressLookupTableAccount;
@@ -22,10 +22,12 @@ export async function getMultipleLookupTableInfo({
     const info = dataInfos[i];
     const key = address[i];
     if (!info) continue;
-    outDict[key.toString()] = new AddressLookupTableAccount({
+    const lookupAccount = new AddressLookupTableAccount({
       key,
       state: AddressLookupTableAccount.deserialize(info.data),
     });
+    outDict[key.toString()] = lookupAccount;
+    LOOKUP_TABLE_CACHE[key.toString()] = lookupAccount;
   }
 
   return outDict;

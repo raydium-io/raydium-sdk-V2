@@ -1099,7 +1099,6 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
   }: SetRewardsParams): Promise<MakeTransaction> {
     const txBuilder = this.createTxBuilder();
-    txBuilder.addInstruction({ instructions: ClmmInstrument.addComputations() });
     let address: Record<string, PublicKey> = {};
     for (const rewardInfo of rewardInfos) {
       if (rewardInfo.endTime <= rewardInfo.openTime)

@@ -93,7 +93,7 @@ export interface ReturnTypeMakeSwapInstruction {
   instructions: TransactionInstruction[];
   instructionTypes: string[];
   address: { [key: string]: PublicKey };
-  lookupTableAddress: PublicKey[];
+  lookupTableAddress: string[];
 }
 export interface ReturnTypeMakeSwapTransaction {
   transactions: {

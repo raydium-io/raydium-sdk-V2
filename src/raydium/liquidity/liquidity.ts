@@ -12,7 +12,8 @@ import { SOLMint, WSOLMint, solToWSol } from "@/common/pubKey";
 import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { addComputeBudget } from "@/common/txTool/txUtils";
-import { InstructionType } from "@/common/txTool/txType";
+import { InstructionType, TxVersion } from "@/common/txTool/txType";
+import { MakeTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
@@ -102,8 +103,8 @@ export default class LiquidityModule extends ModuleBase {
     };
   }
 
-  public async addLiquidity(params: AddLiquidityParams): Promise<MakeTransaction> {
-    const { poolInfo, amountInA: _amountInA, amountInB: _amountInB, fixedSide, config } = params;
+  public async addLiquidity<T extends TxVersion>(params: AddLiquidityParams<T>): Promise<MakeTxData<T>> {
+    const { poolInfo, amountInA: _amountInA, amountInB: _amountInB, fixedSide, config, txVersion } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
@@ -219,15 +220,16 @@ export default class LiquidityModule extends ModuleBase {
           ? InstructionType.AmmV5AddLiquidity
           : InstructionType.AmmV4AddLiquidity,
       ],
-      lookupTableAddress: poolKeys.lookupTableAccount ? [new PublicKey(poolKeys.lookupTableAccount)] : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
-    return txBuilder.build();
+    if (txVersion === TxVersion.V0) (await txBuilder.buildV0()) as MakeTxData<T>;
+    return txBuilder.build() as MakeTxData<T>;
   }
 
-  public async removeLiquidity(params: RemoveParams): Promise<MakeTransaction> {
+  public async removeLiquidity<T extends TxVersion>(params: RemoveParams<T>): Promise<Promise<MakeTxData<T>>> {
     if (this.scope.availability.removeStandardPosition === false)
       this.logAndCreateError("remove liquidity feature disabled in your region");
-    const { poolInfo, amountIn, config } = params;
+    const { poolInfo, amountIn, config, txVersion } = params;
     const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
     const [baseMint, quoteMint, lpMint] = [
       new PublicKey(poolInfo.mintA.address),
@@ -296,17 +298,15 @@ export default class LiquidityModule extends ModuleBase {
           amountIn,
         }),
       ],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
       instructionTypes: [
         poolInfo.pooltype.includes("StablePool")
           ? InstructionType.AmmV5RemoveLiquidity
           : InstructionType.AmmV4RemoveLiquidity,
       ],
     });
-    return txBuilder.build();
+    if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
+    return txBuilder.build() as MakeTxData<T>;
   }
 
   public async removeAllLpAndCreateClmmPosition({
@@ -477,26 +477,20 @@ export default class LiquidityModule extends ModuleBase {
           ? InstructionType.AmmV4RemoveLiquidity
           : InstructionType.AmmV5RemoveLiquidity,
       ],
-      lookupTableAddress:
-        poolKeys.lookupTableAccount && poolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(poolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
 
     txBuilder.addInstruction({
       instructions: [...instructions, ...createPositionIns.instructions],
       signers: createPositionIns.signers,
       instructionTypes: [...instructionTypes, ...createPositionIns.instructionTypes],
-      lookupTableAddress:
-        clmmPoolKeys.lookupTableAccount && clmmPoolKeys.lookupTableAccount !== PublicKey.default.toString()
-          ? [new PublicKey(clmmPoolKeys.lookupTableAccount)]
-          : [],
+      lookupTableAddress: clmmPoolKeys.lookupTableAccount ? [clmmPoolKeys.lookupTableAccount] : [],
     });
 
     return txBuilder.build();
   }
 
-  public async createPoolV4({
+  public async createPoolV4<T extends TxVersion>({
     programId,
     marketInfo,
     baseMintInfo,
@@ -508,7 +502,8 @@ export default class LiquidityModule extends ModuleBase {
     associatedOnly = false,
     checkCreateATAOwner = false,
     tokenProgram,
-  }: CreatePoolParam): Promise<MakeTransaction & { extInfo: { address: CreatePoolAddress } }> {
+    txVersion,
+  }: CreatePoolParam<T>): Promise<MakeTxData<T, { address: CreatePoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(Token.WSOL.mint);
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && quoteMintInfo.mint.equals(Token.WSOL.mint);
@@ -603,8 +598,12 @@ export default class LiquidityModule extends ModuleBase {
 
     await txBuilder.calComputeBudget();
 
-    return txBuilder.build<{ address: CreatePoolAddress }>({
+    if (txVersion === TxVersion.V0)
+      return (await txBuilder.buildV0({
+        address: createPoolKeys,
+      })) as MakeTxData<T, { address: CreatePoolAddress }>;
+    return txBuilder.build({
       address: createPoolKeys,
-    });
+    }) as MakeTxData<T, { address: CreatePoolAddress }>;
   }
 }
