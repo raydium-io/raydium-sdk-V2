@@ -417,36 +417,16 @@ export interface InitRewardParams {
   };
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
-
-  programId: PublicKey;
-  payer: PublicKey;
-  operationId: PublicKey;
-  ammConfigId: PublicKey;
-
-  ownerTokenAccount: PublicKey;
-  rewardMint: PublicKey;
-  rewardVault: PublicKey;
-
-  rewardIndex: number;
-  openTime: number;
-  endTime: number;
-  emissionsPerSecondX64: BN;
+  notAddComputeBudget?: boolean;
 }
 
-export interface InitRewardsParams {
-  poolInfo: ApiV3PoolInfoConcentratedItem;
-  ownerInfo: {
-    feePayer?: PublicKey;
-    useSOLBalance?: boolean; // if has WSOL mint
-  };
+export interface InitRewardsParams extends Omit<InitRewardParams, "rewardInfo"> {
   rewardInfos: {
     mint: ApiV3Token;
     openTime: number;
     endTime: number;
     perSecond: Decimal;
   }[];
-  associatedOnly?: boolean;
-  checkCreateATAOwner?: boolean;
 }
 
 export interface SetRewardParams {
@@ -465,6 +445,7 @@ export interface SetRewardParams {
   };
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  notAddComputeBudget?: boolean;
 }
 
 export interface SetRewardsParams extends Omit<SetRewardParams, "rewardInfo"> {

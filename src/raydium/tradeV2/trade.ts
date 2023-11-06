@@ -687,7 +687,6 @@ export default class TradeV2 extends ModuleBase {
         : [];
     const transferInsType = swapInfo.feeConfig !== undefined ? [InstructionType.TransferAmount] : [];
 
-    // await txBuilder.calComputeBudget();
     const instructions: TransactionInstruction[] = [];
     const instructionsTypes: string[] = [];
     const config = await txBuilder.getComputeBudgetConfig();

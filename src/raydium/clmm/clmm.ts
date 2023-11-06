@@ -906,6 +906,7 @@ export class Clmm extends ModuleBase {
     rewardInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    notAddComputeBudget = false,
   }: InitRewardParams): Promise<MakeTransaction> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
@@ -957,6 +958,7 @@ export class Clmm extends ModuleBase {
       },
     });
     txBuilder.addInstruction(insInfo);
+    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
   }
 
@@ -966,6 +968,7 @@ export class Clmm extends ModuleBase {
     rewardInfos,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    notAddComputeBudget = false,
   }: InitRewardsParams): Promise<MakeTransaction> {
     for (const rewardInfo of rewardInfos) {
       if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -1026,7 +1029,7 @@ export class Clmm extends ModuleBase {
       };
       txBuilder.addInstruction(insInfo);
     }
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
@@ -1036,6 +1039,7 @@ export class Clmm extends ModuleBase {
     rewardInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    notAddComputeBudget = false,
   }: SetRewardParams): Promise<MakeTransaction> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
@@ -1087,7 +1091,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
   }
 
@@ -1097,6 +1101,7 @@ export class Clmm extends ModuleBase {
     rewardInfos,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    notAddComputeBudget = false,
   }: SetRewardsParams): Promise<MakeTransaction> {
     const txBuilder = this.createTxBuilder();
     let address: Record<string, PublicKey> = {};
@@ -1153,7 +1158,7 @@ export class Clmm extends ModuleBase {
         ...insInfo.address,
       };
     }
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 

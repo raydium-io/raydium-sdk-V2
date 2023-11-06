@@ -596,7 +596,7 @@ export default class LiquidityModule extends ModuleBase {
       instructionTypes: [instructionType],
     });
 
-    await txBuilder.calComputeBudget();
+    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
 
     if (txVersion === TxVersion.V0)
       return (await txBuilder.buildV0({

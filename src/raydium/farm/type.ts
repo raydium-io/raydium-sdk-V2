@@ -73,6 +73,18 @@ export interface UpdateFarmReward {
   newRewardInfo: FarmRewardInfo;
   payer?: PublicKey;
 }
+
+export interface UpdateFarmRewards {
+  farmInfo: FormatFarmInfoOut;
+  newRewardInfos: FarmRewardInfo[];
+  payer?: PublicKey;
+}
+
+export interface UpdateFarmRewards {
+  farmInfo: FormatFarmInfoOut;
+  newRewardInfos: FarmRewardInfo[];
+  payer?: PublicKey;
+}
 export interface FarmDWParam {
   farmInfo: FormatFarmInfoOut;
   amount: BigNumberish;

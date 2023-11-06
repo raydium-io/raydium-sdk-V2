@@ -118,6 +118,7 @@ export class TxBuilder {
     signers: Signer[];
     instructionTypes: string[];
     endInstructionTypes: string[];
+    lookupTableAddress: string[];
   } {
     return {
       instructions: this.instructions,
@@ -125,6 +126,7 @@ export class TxBuilder {
       signers: this.signers,
       instructionTypes: this.instructionTypes,
       endInstructionTypes: this.endInstructionTypes,
+      lookupTableAddress: this.lookupTableAddress,
     };
   }
 

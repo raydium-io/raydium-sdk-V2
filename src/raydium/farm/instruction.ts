@@ -17,6 +17,7 @@ import { struct, u8, u64, u32, bool } from "@/marshmallow";
 import { FormatFarmInfoOut, FormatFarmKeyOut } from "@/api/type";
 import { getATAAddress } from "@/common/pda";
 import { createLogger } from "@/common/logger";
+import { parseBigNumberish } from "@/common/bignumber";
 import {
   accountMeta,
   commonSystemAccountMeta,
@@ -26,7 +27,13 @@ import {
 } from "@/common/pubKey";
 import { InstructionType } from "@/common/txTool/txType";
 import { InstructionReturn } from "../type";
-import { associatedLedgerAccountLayout, farmRewardLayout, withdrawRewardLayout, farmLedgerLayoutV3_2 } from "./layout";
+import {
+  associatedLedgerAccountLayout,
+  farmRewardLayout,
+  withdrawRewardLayout,
+  farmLedgerLayoutV3_2,
+  farmAddRewardLayout,
+} from "./layout";
 import { FarmRewardInfoConfig, RewardInfoKey } from "./type";
 import {
   getRegistrarAddress,
@@ -36,7 +43,7 @@ import {
   getVoterWeightRecordAddress,
   getTokenOwnerRecordAddress,
 } from "./pda";
-import { dwLayout } from "./layout";
+import { dwLayout, farmRewardRestartLayout } from "./layout";
 import { getAssociatedLedgerAccount, getDepositEntryIndex } from "./util";
 
 const logger = createLogger("Raydium_farm_instruction");
@@ -721,4 +728,95 @@ export function makeDepositWithdrawInstruction(params: {
   }
 
   return new TransactionInstruction({ programId, keys, data });
+}
+
+export function makeRestartRewardInstruction({
+  payer,
+  rewardVault,
+  userRewardTokenPub,
+  farmKeys,
+  rewardInfo,
+}: {
+  payer: PublicKey;
+  rewardVault: PublicKey;
+  userRewardTokenPub: PublicKey;
+  farmKeys: {
+    id: PublicKey;
+    programId: PublicKey;
+    lpVault: PublicKey;
+  };
+  rewardInfo: {
+    openTime: number;
+    endTime: number;
+    perSecond: string;
+  };
+}): TransactionInstruction {
+  const data = Buffer.alloc(farmRewardRestartLayout.span);
+  farmRewardRestartLayout.encode(
+    {
+      instruction: 3,
+      rewardReopenTime: parseBigNumberish(rewardInfo.openTime),
+      rewardEndTime: parseBigNumberish(rewardInfo.endTime),
+      rewardPerSecond: parseBigNumberish(rewardInfo.perSecond),
+    },
+    data,
+  );
+
+  const keys = [
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: farmKeys.id }),
+    accountMeta({ pubkey: farmKeys.lpVault, isWritable: false }),
+    accountMeta({ pubkey: rewardVault }),
+    accountMeta({ pubkey: userRewardTokenPub! }),
+    accountMeta({ pubkey: payer, isWritable: false, isSigner: true }),
+  ];
+
+  return new TransactionInstruction({ programId: farmKeys.programId, keys, data });
+}
+
+export function makeAddNewRewardInstruction({
+  payer,
+  userRewardTokenPub,
+  farmKeys,
+  rewardVault,
+  rewardInfo,
+}: {
+  payer: PublicKey;
+  userRewardTokenPub: PublicKey;
+  rewardVault: PublicKey;
+  farmKeys: {
+    id: PublicKey;
+    programId: PublicKey;
+    authority: PublicKey;
+  };
+  rewardInfo: {
+    mint: PublicKey;
+    openTime: number;
+    endTime: number;
+    perSecond: string;
+  };
+}): TransactionInstruction {
+  const data = Buffer.alloc(farmAddRewardLayout.span);
+  farmAddRewardLayout.encode(
+    {
+      instruction: 4,
+      isSet: new BN(1),
+      rewardPerSecond: parseBigNumberish(rewardInfo.perSecond),
+      rewardOpenTime: parseBigNumberish(rewardInfo.openTime),
+      rewardEndTime: parseBigNumberish(rewardInfo.endTime),
+    },
+    data,
+  );
+
+  const keys = [
+    ...commonSystemAccountMeta,
+    accountMeta({ pubkey: farmKeys.id }),
+    accountMeta({ pubkey: farmKeys.authority, isWritable: false }),
+    accountMeta({ pubkey: rewardInfo.mint, isWritable: false }),
+    accountMeta({ pubkey: rewardVault }),
+    accountMeta({ pubkey: userRewardTokenPub! }),
+    accountMeta({ pubkey: payer, isWritable: false, isSigner: true }),
+  ];
+
+  return new TransactionInstruction({ programId: farmKeys.programId, keys, data });
 }
