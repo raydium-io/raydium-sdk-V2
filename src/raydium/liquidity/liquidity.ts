@@ -13,7 +13,7 @@ import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { addComputeBudget } from "@/common/txTool/txUtils";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
-import { MakeTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txTool";
+import { MakeTxData } from "@/common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";

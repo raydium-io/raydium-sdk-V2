@@ -10,6 +10,8 @@ import {
 } from "@/common";
 import { Percent } from "@/module/percent";
 import { ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
+import { MakeTxData } from "@/common/txTool/txTool";
+import { TxVersion } from "@/common/txTool/txType";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { mockV3CreatePoolInfo, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, ONE } from "./utils/constants";
 import { LiquidityMath, SqrtPriceMath } from "./utils/math";
@@ -30,9 +32,11 @@ import {
   SetRewardsParams,
   CollectRewardParams,
   CollectRewardsParams,
-  HarvestAllRewardsParams,
+  ManipulateLiquidityExtInfo,
   ReturnTypeComputeAmountOutBaseOut,
   OpenPositionFromLiquidityExtInfo,
+  ClosePositionExtInfo,
+  InitRewardExtInfo,
 } from "./type";
 import { ClmmInstrument } from "./instrument";
 import { LoadParams, MakeTransaction, ReturnTypeFetchMultipleMintInfos } from "../type";
@@ -100,9 +104,9 @@ export class Clmm extends ModuleBase {
     };
   }
 
-  public async createPool(
-    props: CreateConcentratedPool,
-  ): Promise<MakeTransaction<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {
+  public async createPool<T extends TxVersion>(
+    props: CreateConcentratedPool<T>,
+  ): Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {
     const {
       programId,
       owner = this.scope.owner?.publicKey || PublicKey.default,
@@ -111,6 +115,7 @@ export class Clmm extends ModuleBase {
       ammConfig,
       initialPrice,
       startTime,
+      txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -135,69 +140,54 @@ export class Clmm extends ModuleBase {
     txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
 
-    return txBuilder.build<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>({
-      address: {
-        ...insInfo.address,
-        programId: programId.toString(),
-        id: insInfo.address.poolId.toString(),
-        mintA,
-        mintB,
-        openTime: startTime.toNumber(),
-        vault: { A: insInfo.address.mintAVault.toString(), B: insInfo.address.mintBVault.toString() },
-        rewardInfos: [],
-        config: {
-          id: ammConfig.id.toString(),
-          index: ammConfig.index,
-          protocolFeeRate: ammConfig.protocolFeeRate,
-          tradeFeeRate: ammConfig.tradeFeeRate,
-          tickSpacing: ammConfig.tickSpacing,
-          fundFeeRate: ammConfig.fundFeeRate,
-          description: ammConfig.description,
-          defaultRange: 0,
-          defaultRangePoint: [],
+    return txBuilder.versionBuild<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>({
+      txVersion,
+      extInfo: {
+        address: {
+          ...insInfo.address,
+          programId: programId.toString(),
+          id: insInfo.address.poolId.toString(),
+          mintA,
+          mintB,
+          openTime: startTime.toNumber(),
+          vault: { A: insInfo.address.mintAVault.toString(), B: insInfo.address.mintBVault.toString() },
+          rewardInfos: [],
+          config: {
+            id: ammConfig.id.toString(),
+            index: ammConfig.index,
+            protocolFeeRate: ammConfig.protocolFeeRate,
+            tradeFeeRate: ammConfig.tradeFeeRate,
+            tickSpacing: ammConfig.tickSpacing,
+            fundFeeRate: ammConfig.fundFeeRate,
+            description: ammConfig.description,
+            defaultRange: 0,
+            defaultRangePoint: [],
+          },
+        },
+        mockPoolInfo: {
+          type: "Concentrated",
+          id: insInfo.address.poolId.toString(),
+          mintA,
+          mintB,
+          feeRate: ammConfig.tradeFeeRate,
+          openTime: startTime.toNumber(),
+          programId: programId.toString(),
+          price: initPrice.toNumber(),
+          config: {
+            id: ammConfig.id.toString(),
+            index: ammConfig.index,
+            protocolFeeRate: ammConfig.protocolFeeRate,
+            tradeFeeRate: ammConfig.tradeFeeRate,
+            tickSpacing: ammConfig.tickSpacing,
+            fundFeeRate: ammConfig.fundFeeRate,
+            description: ammConfig.description,
+            defaultRange: 0,
+            defaultRangePoint: [],
+          },
+          ...mockV3CreatePoolInfo,
         },
       },
-      mockPoolInfo: {
-        type: "Concentrated",
-        id: insInfo.address.poolId.toString(),
-        mintA,
-        mintB,
-        feeRate: ammConfig.tradeFeeRate,
-        openTime: startTime.toNumber(),
-        programId: programId.toString(),
-        price: initPrice.toNumber(),
-        config: {
-          id: ammConfig.id.toString(),
-          index: ammConfig.index,
-          protocolFeeRate: ammConfig.protocolFeeRate,
-          tradeFeeRate: ammConfig.tradeFeeRate,
-          tickSpacing: ammConfig.tickSpacing,
-          fundFeeRate: ammConfig.fundFeeRate,
-          description: ammConfig.description,
-          defaultRange: 0,
-          defaultRangePoint: [],
-        },
-        ...mockV3CreatePoolInfo,
-        // creator: this.scope.ownerPubKey,
-        // ammConfig,
-        // observationId: insInfo.address.observationId,
-
-        // tickSpacing: ammConfig.tickSpacing,
-        // sqrtPriceX64: initialPriceX64,
-
-        // lookupTableAccount: PublicKey.default,
-        // startTime: startTime.toNumber(),
-        // exBitmapInfo: {
-        //   poolId: insInfo.address.poolId,
-        //   positiveTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
-        //     Array.from({ length: 8 }, (_) => new BN(0)),
-        //   ),
-        //   negativeTickArrayBitmap: Array.from({ length: EXTENSION_TICKARRAY_BITMAP_SIZE }, (_) =>
-        //     Array.from({ length: 8 }, (_) => new BN(0)),
-        //   ),
-        // },
-      },
-    });
+    }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
 
   public async openPositionFromBase({
@@ -290,7 +280,7 @@ export class Clmm extends ModuleBase {
     return txBuilder.build({ address: insInfo.address });
   }
 
-  public async openPositionFromLiquidity({
+  public async openPositionFromLiquidity<T extends TxVersion>({
     poolInfo,
     poolKeys: propPoolKeys,
     ownerInfo,
@@ -302,8 +292,9 @@ export class Clmm extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
     withMetadata = "create",
+    txVersion,
     getEphemeralSigners,
-  }: OpenPositionFromLiquidity): Promise<MakeTransaction<OpenPositionFromLiquidityExtInfo>> {
+  }: OpenPositionFromLiquidity<T>): Promise<MakeTxData<T, OpenPositionFromLiquidityExtInfo>> {
     if (this.scope.availability.createConcentratedPosition === false)
       this.logAndCreateError("open position feature disabled in your region");
     const txBuilder = this.createTxBuilder();
@@ -377,12 +368,16 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(makeOpenPositionInstructions);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build<OpenPositionFromLiquidityExtInfo>({
-      address: makeOpenPositionInstructions.address,
-    });
+
+    return txBuilder.versionBuild<OpenPositionFromLiquidityExtInfo>({
+      txVersion,
+      extInfo: { address: makeOpenPositionInstructions.address },
+    }) as Promise<MakeTxData<T, OpenPositionFromLiquidityExtInfo>>;
   }
 
-  public async increasePositionFromLiquidity(props: IncreasePositionFromLiquidity): Promise<MakeTransaction> {
+  public async increasePositionFromLiquidity<T extends TxVersion>(
+    props: IncreasePositionFromLiquidity<T>,
+  ): Promise<MakeTxData<T, ManipulateLiquidityExtInfo>> {
     const {
       poolInfo,
       ownerPosition,
@@ -392,6 +387,7 @@ export class Clmm extends ModuleBase {
       ownerInfo,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
 
@@ -458,10 +454,16 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(ins);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build({ address: ins.address });
+
+    return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
+      txVersion,
+      extInfo: { address: ins.address },
+    }) as Promise<MakeTxData<T, ManipulateLiquidityExtInfo>>;
   }
 
-  public async increasePositionFromBase(props: IncreasePositionFromBase): Promise<MakeTransaction> {
+  public async increasePositionFromBase<T extends TxVersion>(
+    props: IncreasePositionFromBase<T>,
+  ): Promise<MakeTxData<T, ManipulateLiquidityExtInfo>> {
     const {
       poolInfo,
       ownerPosition,
@@ -471,6 +473,7 @@ export class Clmm extends ModuleBase {
       ownerInfo,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
 
@@ -535,13 +538,17 @@ export class Clmm extends ModuleBase {
       otherAmountMax,
     });
     txBuilder.addInstruction(ins);
-    console.log(1231236666);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    console.log(1231237777);
-    return txBuilder.build({ address: ins.address });
+
+    return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
+      txVersion,
+      extInfo: { address: ins.address },
+    }) as Promise<MakeTxData<T, ManipulateLiquidityExtInfo>>;
   }
 
-  public async decreaseLiquidity(props: DecreaseLiquidity): Promise<MakeTransaction> {
+  public async decreaseLiquidity<T extends TxVersion>(
+    props: DecreaseLiquidity<T>,
+  ): Promise<MakeTxData<T, ManipulateLiquidityExtInfo & Partial<ClosePositionExtInfo>>> {
     const {
       poolInfo,
       ownerPosition,
@@ -551,6 +558,7 @@ export class Clmm extends ModuleBase {
       liquidity,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      txVersion,
     } = props;
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");
@@ -645,6 +653,7 @@ export class Clmm extends ModuleBase {
       instructionTypes: [InstructionType.ClmmDecreasePosition],
     });
 
+    let extInfo = { ...decreaseInsInfo.address };
     if (ownerInfo.closePosition) {
       const closeInsInfo = await ClmmInstrument.closePositionInstructions({
         poolInfo,
@@ -656,18 +665,25 @@ export class Clmm extends ModuleBase {
         endInstructions: closeInsInfo.instructions,
         endInstructionTypes: closeInsInfo.instructionTypes,
       });
+      extInfo = { ...extInfo, ...closeInsInfo.address };
     }
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build({ address: decreaseInsInfo.address });
+
+    return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
+      txVersion,
+      extInfo: { address: extInfo },
+    }) as Promise<MakeTxData<T, ManipulateLiquidityExtInfo>>;
   }
 
-  public async closePosition({
+  public async closePosition<T extends TxVersion>({
     poolInfo,
     ownerPosition,
+    txVersion,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     ownerPosition: ClmmPositionLayout;
-  }): Promise<MakeTransaction> {
+    txVersion: T;
+  }): Promise<MakeTxData<T, ClosePositionExtInfo>> {
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");
     const txBuilder = this.createTxBuilder();
@@ -678,7 +694,11 @@ export class Clmm extends ModuleBase {
       ownerInfo: { wallet: this.scope.ownerPubKey },
       ownerPosition,
     });
-    return txBuilder.addInstruction(ins).build({ address: ins.address });
+
+    return txBuilder.versionBuild<ClosePositionExtInfo>({
+      txVersion,
+      extInfo: { address: ins.address },
+    }) as Promise<MakeTxData<T, ClosePositionExtInfo>>;
   }
 
   public async swapBaseIn({
@@ -900,14 +920,15 @@ export class Clmm extends ModuleBase {
     return txBuilder.build();
   }
 
-  public async initReward({
+  public async initReward<T extends TxVersion>({
     poolInfo,
     ownerInfo,
     rewardInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
     notAddComputeBudget = false,
-  }: InitRewardParams): Promise<MakeTransaction> {
+    txVersion,
+  }: InitRewardParams<T>): Promise<MakeTxData<T, InitRewardExtInfo>> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
@@ -959,17 +980,22 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(insInfo);
     if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
+
+    return txBuilder.versionBuild<InitRewardExtInfo>({
+      txVersion,
+      extInfo: { address: insInfo.address },
+    }) as Promise<MakeTxData<T, InitRewardExtInfo>>;
   }
 
-  public async initRewards({
+  public async initRewards<T extends TxVersion>({
     poolInfo,
     ownerInfo,
     rewardInfos,
     associatedOnly = true,
     checkCreateATAOwner = false,
     notAddComputeBudget = false,
-  }: InitRewardsParams): Promise<MakeTransaction> {
+    txVersion,
+  }: InitRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     for (const rewardInfo of rewardInfos) {
       if (rewardInfo.endTime <= rewardInfo.openTime)
         this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
@@ -1030,17 +1056,22 @@ export class Clmm extends ModuleBase {
       txBuilder.addInstruction(insInfo);
     }
     if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
+
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: { address },
+    }) as Promise<MakeTxData<T, { address: Record<string, PublicKey> }>>;
   }
 
-  public async setReward({
+  public async setReward<T extends TxVersion>({
     poolInfo,
     ownerInfo,
     rewardInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
     notAddComputeBudget = false,
-  }: SetRewardParams): Promise<MakeTransaction> {
+    txVersion,
+  }: SetRewardParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
@@ -1092,17 +1123,21 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addInstruction(insInfo);
     if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
+    return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
+      txVersion,
+      extInfo: { address: insInfo.address },
+    }) as Promise<MakeTxData<T, { address: Record<string, PublicKey> }>>;
   }
 
-  public async setRewards({
+  public async setRewards<T extends TxVersion>({
     poolInfo,
     ownerInfo,
     rewardInfos,
     associatedOnly = true,
     checkCreateATAOwner = false,
     notAddComputeBudget = false,
-  }: SetRewardsParams): Promise<MakeTransaction> {
+    txVersion,
+  }: SetRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     const txBuilder = this.createTxBuilder();
     let address: Record<string, PublicKey> = {};
     for (const rewardInfo of rewardInfos) {
@@ -1159,7 +1194,10 @@ export class Clmm extends ModuleBase {
       };
     }
     if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
+    return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
+      txVersion,
+      extInfo: { address },
+    }) as Promise<MakeTxData<T, { address: Record<string, PublicKey> }>>;
   }
 
   public async collectReward({

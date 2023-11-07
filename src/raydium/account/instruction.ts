@@ -106,6 +106,5 @@ export function makeTransferInstruction({
   multiSigners?: Signer[];
   tokenProgram?: PublicKey;
 }): TransactionInstruction {
-  console.log(123123555, source.toString(), destination.toString(), owner.toString(), String(amount));
   return createTransferInstruction(source, destination, owner, BigInt(String(amount)), multiSigners, tokenProgram);
 }

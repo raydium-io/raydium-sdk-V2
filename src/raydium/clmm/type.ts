@@ -5,6 +5,7 @@ import { TokenAmount, Percent, Price, Fraction } from "@/module";
 import { TokenInfo } from "../token/type";
 import { TickArray } from "./utils/tick";
 import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys, ApiV3Token } from "@/api/type";
+import { TxVersion } from "@/common/txTool/txType";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 
 import { ClmmPositionLayout } from "./layout";
@@ -193,6 +194,16 @@ export interface ReturnTypeMakeInstructions<T = Record<string, PublicKey>> {
   lookupTableAddress: string[];
 }
 
+export type ManipulateLiquidityExtInfo = {
+  address: {
+    tickArrayLower: PublicKey;
+    tickArrayUpper: PublicKey;
+    positionNftAccount: PublicKey;
+    personalPosition: PublicKey;
+    protocolPosition: PublicKey;
+  };
+};
+
 export interface ReturnTypeGetLiquidityAmountOut {
   liquidity: BN;
   amountSlippageA: GetTransferAmountFee;
@@ -232,7 +243,7 @@ export interface ReturnTypeFetchMultiplePoolTickArrays {
   [poolId: string]: { [key: string]: TickArray };
 }
 
-export interface CreateConcentratedPool {
+export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   programId: PublicKey;
   owner?: PublicKey;
   mint1: ApiV3Token;
@@ -240,6 +251,7 @@ export interface CreateConcentratedPool {
   ammConfig: ClmmConfigInfo;
   initialPrice: Decimal;
   startTime: BN;
+  txVersion?: T;
 }
 
 export interface UserPositionAccount {
@@ -274,7 +286,7 @@ export interface UserPositionAccount {
   };
 }
 
-export interface IncreasePositionFromLiquidity {
+export interface IncreasePositionFromLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerPosition: ClmmPositionLayout;
   ownerInfo: {
@@ -287,9 +299,10 @@ export interface IncreasePositionFromLiquidity {
   liquidity: BN;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  txVersion?: T;
 }
 
-export interface IncreasePositionFromBase {
+export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerPosition: ClmmPoolPersonalPosition;
   ownerInfo: {
@@ -300,9 +313,10 @@ export interface IncreasePositionFromBase {
   otherAmountMax: BN;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  txVersion?: T;
 }
 
-export interface DecreaseLiquidity {
+export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerPosition: ClmmPositionLayout;
   ownerInfo: {
@@ -316,6 +330,7 @@ export interface DecreaseLiquidity {
 
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  txVersion?: T;
 }
 
 export interface ClmmPoolRewardLayoutInfo {
@@ -350,7 +365,7 @@ export interface OpenPositionFromBase {
   getEphemeralSigners?: (k: number) => any;
 }
 
-export interface OpenPositionFromLiquidity {
+export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   poolKeys?: ClmmKeys;
   ownerInfo: {
@@ -365,6 +380,7 @@ export interface OpenPositionFromLiquidity {
   checkCreateATAOwner?: boolean;
   withMetadata?: "create" | "no-create";
   getEphemeralSigners?: (k: number) => any;
+  txVersion?: T;
 }
 
 export interface OpenPositionFromLiquidityExtInfo {
@@ -403,7 +419,7 @@ export interface GetAmountParams {
   epochInfo: EpochInfo;
 }
 
-export interface InitRewardParams {
+export interface InitRewardParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer?: PublicKey;
@@ -418,9 +434,10 @@ export interface InitRewardParams {
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   notAddComputeBudget?: boolean;
+  txVersion?: T;
 }
 
-export interface InitRewardsParams extends Omit<InitRewardParams, "rewardInfo"> {
+export interface InitRewardsParams<T = TxVersion.LEGACY> extends Omit<InitRewardParams<T>, "rewardInfo"> {
   rewardInfos: {
     mint: ApiV3Token;
     openTime: number;
@@ -429,7 +446,7 @@ export interface InitRewardsParams extends Omit<InitRewardParams, "rewardInfo"> 
   }[];
 }
 
-export interface SetRewardParams {
+export interface SetRewardParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer?: PublicKey;
@@ -446,9 +463,10 @@ export interface SetRewardParams {
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   notAddComputeBudget?: boolean;
+  txVersion?: T;
 }
 
-export interface SetRewardsParams extends Omit<SetRewardParams, "rewardInfo"> {
+export interface SetRewardsParams<T = TxVersion.LEGACY> extends Omit<SetRewardParams<T>, "rewardInfo"> {
   rewardInfos: {
     mint: ApiV3Token;
     openTime: number; // If the reward is being distributed, please give 0
@@ -500,4 +518,18 @@ export interface TickArrayBitmapExtension {
 
 export interface ReturnTypeFetchExBitmaps {
   [exBitmapId: string]: TickArrayBitmapExtension;
+}
+
+export interface ClosePositionExtInfo {
+  address: {
+    positionNftAccount: PublicKey;
+    personalPosition: PublicKey;
+  };
+}
+
+export interface InitRewardExtInfo {
+  address: {
+    poolRewardVault: PublicKey;
+    operationId: PublicKey;
+  };
 }

@@ -19,7 +19,14 @@ import {
   MEMO_PROGRAM_ID,
 } from "@/common";
 import { bool, s32, struct, u128, u64, u8 } from "@/marshmallow";
-import { ReturnTypeMakeInstructions, ClmmPoolPersonalPosition, OpenPositionFromLiquidityExtInfo } from "./type";
+import {
+  ReturnTypeMakeInstructions,
+  ClmmPoolPersonalPosition,
+  OpenPositionFromLiquidityExtInfo,
+  ManipulateLiquidityExtInfo,
+  ClosePositionExtInfo,
+  InitRewardExtInfo,
+} from "./type";
 import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
 import {
   getPdaPoolId,
@@ -728,7 +735,7 @@ export class ClmmInstrument {
     ownerInfo: {
       wallet: PublicKey;
     };
-  }): ReturnTypeMakeInstructions {
+  }): ReturnTypeMakeInstructions<ClosePositionExtInfo["address"]> {
     const programId = new PublicKey(poolInfo.programId);
     const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
     const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, ownerPosition.nftMint);
@@ -857,7 +864,7 @@ export class ClmmInstrument {
     liquidity: BN;
     amountMaxA: BN;
     amountMaxB: BN;
-  }): ReturnTypeMakeInstructions {
+  }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
@@ -946,7 +953,7 @@ export class ClmmInstrument {
     baseAmount: BN;
 
     otherAmountMax: BN;
-  }): ReturnTypeMakeInstructions {
+  }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
@@ -1201,7 +1208,7 @@ export class ClmmInstrument {
     amountMinA: BN;
     amountMinB: BN;
     programId?: PublicKey;
-  }): ReturnTypeMakeInstructions {
+  }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [poolProgramId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
       ownerPosition.tickLower,
@@ -1497,7 +1504,7 @@ export class ClmmInstrument {
       endTime: number;
       emissionsPerSecondX64: BN;
     };
-  }): ReturnTypeMakeInstructions {
+  }): ReturnTypeMakeInstructions<InitRewardExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const poolRewardVault = getPdaPoolRewardVaulId(programId, id, rewardInfo.mint).publicKey;
     const operationId = getPdaOperationAccount(programId).publicKey;

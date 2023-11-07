@@ -178,6 +178,17 @@ export class TxBuilder {
     return this;
   }
 
+  public async versionBuild<O = Record<string, any>>({
+    txVersion,
+    extInfo,
+  }: {
+    txVersion?: TxVersion;
+    extInfo?: O;
+  }): Promise<MakeTxData<TxVersion.LEGACY, O> | MakeTxData<TxVersion.V0, O>> {
+    if (txVersion === TxVersion.V0) return (await this.buildV0(extInfo || {})) as MakeTxData<TxVersion.V0, O>;
+    return this.build<O>(extInfo) as MakeTxData<TxVersion.LEGACY, O>;
+  }
+
   public build<O = Record<string, any>>(extInfo?: O): MakeTxData<TxVersion.LEGACY, O> {
     const transaction = new Transaction();
     if (this.allInstructions.length) transaction.add(...this.allInstructions);
@@ -191,12 +202,12 @@ export class TxBuilder {
       execute: async (): Promise<string> => {
         const recentBlockHash = await getRecentBlockHash(this.connection);
         transaction.recentBlockhash = recentBlockHash;
+        if (this.signers.length) transaction.sign(...this.signers);
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           return sendAndConfirmTransaction(this.connection, transaction, this.signers);
         }
         if (this.signAllTransactions) {
-          if (this.signers.length) transaction.partialSign(...this.signers);
           const txs = await this.signAllTransactions([transaction]);
           return await this.connection.sendRawTransaction(txs[0].serialize(), { skipPreflight: true });
         }
@@ -207,7 +218,7 @@ export class TxBuilder {
   }
 
   public buildMultiTx<T = Record<string, any>>(params: {
-    extraPreBuildData?: TxBuildData[];
+    extraPreBuildData?: MakeTxData<TxVersion.LEGACY>[];
     extInfo?: T;
   }): MultiTxBuildData {
     const { extraPreBuildData = [], extInfo } = params;
@@ -242,11 +253,11 @@ export class TxBuilder {
         if (this.signAllTransactions) {
           const partialSignedTxs = allTransactions.map((tx, idx) => {
             tx.recentBlockhash = recentBlockHash;
-            if (allSigners[idx].length) tx.partialSign(...allSigners[idx]);
+            if (allSigners[idx].length) tx.sign(...allSigners[idx]);
             return tx;
           });
-          const signedTxs = await this.signAllTransactions(partialSignedTxs);
           printSimulate(partialSignedTxs);
+          const signedTxs = await this.signAllTransactions(partialSignedTxs);
           if (sequentially) {
             let i = 0;
             const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
@@ -285,12 +296,12 @@ export class TxBuilder {
     };
   }
 
-  public async buildV0<T = Record<string, any>>(
-    props?: T & {
+  public async buildV0<O = Record<string, any>>(
+    props?: O & {
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
     },
-  ): Promise<TxV0BuildData<T>> {
+  ): Promise<MakeTxData<TxVersion.V0, O>> {
     const { lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
     const lookupTableAddressAccount = {
       ...LOOKUP_TABLE_CACHE,
@@ -303,15 +314,6 @@ export class TxBuilder {
     }
     const newCacheLTA = await getMultipleLookupTableInfo({ connection: this.connection, address: needCacheLTA });
     for (const [key, value] of Object.entries(newCacheLTA)) lookupTableAddressAccount[key] = value;
-    console.log(
-      123123,
-      "new fetched lookup",
-      newCacheLTA,
-      "all Fetched",
-      lookupTableAddressAccount,
-      "currentCache",
-      LOOKUP_TABLE_CACHE,
-    );
 
     const messageV0 = new TransactionMessage({
       payerKey: this.feePayer,
@@ -319,6 +321,7 @@ export class TxBuilder {
       instructions: [...this.allInstructions],
     }).compileToV0Message(Object.values(lookupTableAddressAccount));
     const transaction = new VersionedTransaction(messageV0);
+    transaction.sign(this.signers);
 
     return {
       builder: this,
@@ -337,12 +340,12 @@ export class TxBuilder {
         }
         throw new Error("please connect wallet first");
       },
-      extInfo: (extInfo || {}) as T,
+      extInfo: (extInfo || {}) as O,
     };
   }
 
   public async buildV0MultiTx<T = Record<string, any>>(params: {
-    extraPreBuildData?: TxV0BuildData[];
+    extraPreBuildData?: MakeTxData<TxVersion.V0>[];
     buildProps?: T & {
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
@@ -364,6 +367,10 @@ export class TxBuilder {
       ...this.instructionTypes,
       ...filterExtraBuildData.map((data) => data.instructionTypes).flat(),
     ];
+
+    allTransactions.forEach(async (tx, idx) => {
+      tx.sign(allSigners[idx]);
+    });
 
     return {
       builder: this,
@@ -515,23 +522,20 @@ export class TxBuilder {
       instructionTypes: this.instructionTypes,
       execute: async (): Promise<string[]> => {
         const recentBlockHash = await getRecentBlockHash(this.connection);
+        allTransactions.forEach(async (tx, idx) => {
+          tx.recentBlockhash = recentBlockHash;
+          tx.sign(...allSigners[idx]);
+        });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
           return await Promise.all(
             allTransactions.map(async (tx, idx) => {
-              tx.recentBlockhash = recentBlockHash;
               return await sendAndConfirmTransaction(this.connection, tx, allSigners[idx]);
             }),
           );
         }
         if (this.signAllTransactions) {
-          const partialSignedTxs = allTransactions.map((tx, idx) => {
-            tx.recentBlockhash = recentBlockHash;
-            if (allSigners[idx].length) tx.partialSign(...allSigners[idx]);
-            return tx;
-          });
-          const signedTxs = await this.signAllTransactions(partialSignedTxs);
-
+          const signedTxs = await this.signAllTransactions(allTransactions);
           const txIds: string[] = [];
           for (let i = 0; i < signedTxs.length; i += 1) {
             const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
@@ -675,11 +679,13 @@ export class TxBuilder {
       signers: allSigners,
       instructionTypes: this.instructionTypes,
       execute: async (): Promise<string[]> => {
+        allTransactions.map(async (tx, idx) => {
+          tx.sign(allSigners[idx]);
+        });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
           return await Promise.all(
             allTransactions.map(async (tx) => {
-              tx.sign([this.owner!.signer as Signer]);
               return await this.connection.sendTransaction(tx, { skipPreflight: true });
             }),
           );
