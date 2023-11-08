@@ -1384,7 +1384,6 @@ export function getLiquidityFromAmounts({
   amountB,
   slippage,
   add,
-  token2022Infos,
   epochInfo,
 }: {
   poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -1394,7 +1393,6 @@ export function getLiquidityFromAmounts({
   amountB: BN;
   slippage: number;
   add: boolean;
-  token2022Infos: ReturnTypeFetchMultipleMintInfos;
   epochInfo: EpochInfo;
 }): ReturnTypeGetLiquidityAmountOut {
   const [_tickLower, _tickUpper, _amountA, _amountB] =
@@ -1422,7 +1420,6 @@ export function getLiquidityFromAmounts({
     liquidity,
     slippage,
     add,
-    token2022Infos,
     epochInfo,
   });
 }

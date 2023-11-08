@@ -354,9 +354,7 @@ export class TxBuilder {
     const { extraPreBuildData = [], buildProps } = params;
     const { transaction } = await this.buildV0(buildProps);
 
-    const filterExtraBuildData = extraPreBuildData.filter(
-      (data) => TransactionMessage.decompile(data.transaction.message).instructions.length > 0,
-    );
+    const filterExtraBuildData = extraPreBuildData.filter((data) => data.builder.instructions.length > 0);
 
     const allTransactions: VersionedTransaction[] = [
       transaction,

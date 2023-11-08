@@ -27,8 +27,7 @@ import { PoolUtils } from "./pool";
 import { Tick, TickArray, TickUtils } from "./tick";
 import { ReturnTypeGetLiquidityAmountOut, TickArrayBitmapExtension } from "../type";
 import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
-import { ReturnTypeFetchMultipleMintInfos } from "@/raydium/type";
-import { getTransferAmountFee, minExpirationTime } from "@/common/transfer";
+import { getTransferAmountFeeV2, minExpirationTime } from "@/common/transfer";
 import { TickQuery } from "./tickQuery";
 
 export class MathUtil {
@@ -438,7 +437,6 @@ export class LiquidityMath {
     liquidity,
     slippage,
     add,
-    token2022Infos,
     epochInfo,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -448,7 +446,6 @@ export class LiquidityMath {
     slippage: number;
     add: boolean;
 
-    token2022Infos: ReturnTypeFetchMultipleMintInfos;
     epochInfo: EpochInfo;
   }): ReturnTypeGetLiquidityAmountOut {
     const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
@@ -464,22 +461,12 @@ export class LiquidityMath {
     const amounts = LiquidityMath.getAmountsFromLiquidity(sqrtPriceX64, sqrtPriceX64A, sqrtPriceX64B, liquidity, add);
 
     const [amountA, amountB] = [
-      getTransferAmountFee(amounts.amountA, token2022Infos[poolInfo.mintA.address]?.feeConfig, epochInfo, add),
-      getTransferAmountFee(amounts.amountB, token2022Infos[poolInfo.mintB.address]?.feeConfig, epochInfo, add),
+      getTransferAmountFeeV2(amounts.amountA, poolInfo.mintA.extensions.feeConfig, epochInfo, add),
+      getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions.feeConfig, epochInfo, add),
     ];
     const [amountSlippageA, amountSlippageB] = [
-      getTransferAmountFee(
-        amounts.amountA.muln(coefficientRe),
-        token2022Infos[poolInfo.mintA.address]?.feeConfig,
-        epochInfo,
-        add,
-      ),
-      getTransferAmountFee(
-        amounts.amountB.muln(coefficientRe),
-        token2022Infos[poolInfo.mintB.address]?.feeConfig,
-        epochInfo,
-        add,
-      ),
+      getTransferAmountFeeV2(amounts.amountA.muln(coefficientRe), poolInfo.mintA.extensions.feeConfig, epochInfo, add),
+      getTransferAmountFeeV2(amounts.amountB.muln(coefficientRe), poolInfo.mintB.extensions.feeConfig, epochInfo, add),
     ];
 
     return {
