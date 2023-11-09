@@ -2,8 +2,9 @@ import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
 import { BigNumberish } from "@/common/bignumber";
-import { FormatFarmInfoOut, ApiV3PoolInfoStandardItem } from "@/api/type";
+import { FormatFarmInfoOut, ApiV3PoolInfoStandardItem, ApiV3Token } from "@/api/type";
 import { poolTypeV6 } from "./config";
+import { TxVersion } from "@/common";
 
 export type RewardType = keyof typeof poolTypeV6;
 export interface APIRewardInfo {
@@ -68,31 +69,34 @@ export interface CreateFarm {
   programId?: PublicKey;
 }
 
-export interface UpdateFarmReward {
+export interface UpdateFarmReward<T = TxVersion.LEGACY> {
   farmInfo: FormatFarmInfoOut;
   newRewardInfo: FarmRewardInfo;
   payer?: PublicKey;
+  txVersion?: T;
 }
 
-export interface UpdateFarmRewards {
+export interface UpdateFarmRewards<T = TxVersion.LEGACY> {
   farmInfo: FormatFarmInfoOut;
   newRewardInfos: FarmRewardInfo[];
   payer?: PublicKey;
+  txVersion?: T;
 }
 
-export interface UpdateFarmRewards {
-  farmInfo: FormatFarmInfoOut;
-  newRewardInfos: FarmRewardInfo[];
-  payer?: PublicKey;
-}
-export interface FarmDWParam {
-  farmInfo: FormatFarmInfoOut;
+export interface FarmDWParam<T = TxVersion.LEGACY> {
+  farmInfo: {
+    id: string;
+    programId: string;
+    lpMint: ApiV3Token;
+    rewardInfos: { mint: ApiV3Token }[];
+  };
   amount: BigNumberish;
   feePayer?: PublicKey;
   useSOLBalance?: boolean;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   deposited?: BN;
+  txVersion?: T;
 }
 /* ================= pool keys ================= */
 export type FarmPoolKeys = {

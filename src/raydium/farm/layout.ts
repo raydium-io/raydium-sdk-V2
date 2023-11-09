@@ -235,6 +235,7 @@ export const farmAddRewardLayout = struct([
   u64("rewardPerSecond"),
   u64("rewardOpenTime"),
   u64("rewardEndTime"),
+  u64("rewardType"),
 ]);
 
 export type FarmStateLayoutV3 = typeof farmStateV3Layout;

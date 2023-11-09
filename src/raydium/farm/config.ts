@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 
 import { createLogger } from "@/common/logger";
 import { FARM_PROGRAM_ID_V3, FARM_PROGRAM_ID_V5, FARM_PROGRAM_ID_V6 } from "@/common/programId";
-import { RewardInfoV345, RewardInfoV6 } from "@/api/type";
+import { ApiV3Token, RewardInfoV345, RewardInfoV6 } from "@/api/type";
 
 import {
   FarmLedgerLayout,
@@ -66,7 +66,7 @@ export const farmWithdrawVersionToInstruction = (version: number): number => {
 
 export const validateFarmRewards = (params: {
   version: number;
-  rewardInfos: RewardInfoV345[] | RewardInfoV6[];
+  rewardInfos: { mint: ApiV3Token }[];
   rewardTokenAccountsPublicKeys: PublicKey[];
 }): (() => string | undefined) => {
   const { version, rewardInfos, rewardTokenAccountsPublicKeys } = params;

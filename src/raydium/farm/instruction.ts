@@ -14,7 +14,7 @@ import {
 import BN from "bn.js";
 
 import { struct, u8, u64, u32, bool } from "@/marshmallow";
-import { FormatFarmInfoOut, FormatFarmKeyOut } from "@/api/type";
+import { FormatFarmKeyOut } from "@/api/type";
 import { getATAAddress } from "@/common/pda";
 import { createLogger } from "@/common/logger";
 import { parseBigNumberish } from "@/common/bignumber";
@@ -34,7 +34,7 @@ import {
   farmLedgerLayoutV3_2,
   farmAddRewardLayout,
 } from "./layout";
-import { FarmRewardInfoConfig, RewardInfoKey } from "./type";
+import { FarmRewardInfoConfig, RewardInfoKey, RewardType } from "./type";
 import {
   getRegistrarAddress,
   getVotingTokenMint,
@@ -45,6 +45,7 @@ import {
 } from "./pda";
 import { dwLayout, farmRewardRestartLayout } from "./layout";
 import { getAssociatedLedgerAccount, getDepositEntryIndex } from "./util";
+import { poolTypeV6 } from "./config";
 
 const logger = createLogger("Raydium_farm_instruction");
 
@@ -659,7 +660,7 @@ export async function makeWithdrawTokenInstruction({
 export function makeDepositWithdrawInstruction(params: {
   instruction: number;
   amount: BN;
-  farmInfo: FormatFarmInfoOut;
+  farmInfo: { id: string; programId: string };
   farmKeys: FormatFarmKeyOut;
   lpAccount: PublicKey;
   owner: PublicKey;
@@ -794,6 +795,7 @@ export function makeAddNewRewardInstruction({
     openTime: number;
     endTime: number;
     perSecond: string;
+    rewardType: RewardType;
   };
 }): TransactionInstruction {
   const data = Buffer.alloc(farmAddRewardLayout.span);
@@ -804,6 +806,7 @@ export function makeAddNewRewardInstruction({
       rewardPerSecond: parseBigNumberish(rewardInfo.perSecond),
       rewardOpenTime: parseBigNumberish(rewardInfo.openTime),
       rewardEndTime: parseBigNumberish(rewardInfo.endTime),
+      rewardType: parseBigNumberish(poolTypeV6[rewardInfo.rewardType]),
     },
     data,
   );

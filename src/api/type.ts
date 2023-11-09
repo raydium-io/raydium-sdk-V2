@@ -441,3 +441,15 @@ export type IdoKeysData = {
     vault: string;
   };
 };
+
+export interface ApiStakePool {
+  programId: string;
+  id: string;
+  apr: number;
+  lpMint: ApiV3Token;
+  lpPrice: number;
+  symbolMints: ApiV3Token[];
+  tvl: number;
+  tags: FarmTagsItem[];
+  rewardInfos: RewardInfoV345[];
+}

@@ -1,11 +1,11 @@
 import { createAssociatedTokenAccountInstruction } from "@solana/spl-token";
-import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
-import BN from "bn.js";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
 
-import { accountMeta, AddInstructionParam, commonSystemAccountMeta, jsonInfo2PoolKeys } from "@/common";
+import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
 import { parseBigNumberish, BN_ZERO } from "@/common/bignumber";
 import { SOLMint, WSOLMint } from "@/common/pubKey";
-import { InstructionType } from "@/common/txTool/txType";
+import { MakeTxData } from "@/common/txTool/txTool";
+import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { getATAAddress } from "@/common/pda";
 import { FARM_PROGRAM_ID_V6 } from "@/common/programId";
 import { generatePubKey } from "../account/util";
@@ -192,7 +192,12 @@ export default class Farm extends ModuleBase {
       .build();
   }
 
-  public async restartReward({ farmInfo, payer, newRewardInfo }: UpdateFarmReward): Promise<MakeTransaction> {
+  public async restartReward<T extends TxVersion>({
+    farmInfo,
+    payer,
+    newRewardInfo,
+    txVersion,
+  }: UpdateFarmReward): Promise<MakeTxData<T>> {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
@@ -243,10 +248,15 @@ export default class Farm extends ModuleBase {
         ],
         instructionTypes: [InstructionType.FarmV6Restart],
       })
-      .build();
+      .versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async restartRewards({ farmInfo, payer, newRewardInfos }: UpdateFarmRewards): Promise<MakeTransaction> {
+  public async restartRewards<T extends TxVersion>({
+    farmInfo,
+    payer,
+    newRewardInfos,
+    txVersion,
+  }: UpdateFarmRewards<T>): Promise<MakeTxData<T>> {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
@@ -294,11 +304,11 @@ export default class Farm extends ModuleBase {
       });
     }
 
-    return txBuilder.build();
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async addNewRewardToken(params: UpdateFarmReward): Promise<MakeTransaction> {
-    const { farmInfo, newRewardInfo, payer } = params;
+  public async addNewRewardToken<T extends TxVersion>(params: UpdateFarmReward): Promise<MakeTxData<T>> {
+    const { txVersion, farmInfo, newRewardInfo, payer } = params;
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
@@ -326,7 +336,7 @@ export default class Farm extends ModuleBase {
 
     newRewardInfo.mint = rewardMint;
 
-    return await txBuilder
+    return txBuilder
       .addInstruction({
         instructions: [
           makeAddNewRewardInstruction({
@@ -339,11 +349,11 @@ export default class Farm extends ModuleBase {
         ],
         instructionTypes: [InstructionType.FarmV6CreatorAddReward],
       })
-      .build();
+      .versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async addNewRewardsToken(params: UpdateFarmRewards): Promise<MakeTransaction> {
-    const { farmInfo, newRewardInfos, payer } = params;
+  public async addNewRewardsToken<T extends TxVersion>(params: UpdateFarmRewards<T>): Promise<MakeTxData<T>> {
+    const { txVersion, farmInfo, newRewardInfos, payer } = params;
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
@@ -379,11 +389,19 @@ export default class Farm extends ModuleBase {
       });
     }
 
-    return txBuilder.build();
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async deposit(params: FarmDWParam): Promise<MakeTransaction> {
-    const { farmInfo, amount, feePayer, useSOLBalance, associatedOnly = true, checkCreateATAOwner = false } = params;
+  public async deposit<T extends TxVersion>(params: FarmDWParam): Promise<MakeTxData<T>> {
+    const {
+      txVersion,
+      farmInfo,
+      amount,
+      feePayer,
+      useSOLBalance,
+      associatedOnly = true,
+      checkCreateATAOwner = false,
+    } = params;
 
     if (this.scope.availability.addFarm === false)
       this.logAndCreateError("farm deposit feature disabled in your region");
@@ -483,11 +501,12 @@ export default class Farm extends ModuleBase {
         instructions: [newInstruction],
         instructionTypes: [insType[version]],
       })
-      .build();
+      .versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async withdraw(params: FarmDWParam): Promise<MakeTransaction> {
+  public async withdraw<T extends TxVersion>(params: FarmDWParam<T>): Promise<MakeTxData<T>> {
     const {
+      txVersion,
       farmInfo,
       amount,
       deposited,
@@ -608,7 +627,7 @@ export default class Farm extends ModuleBase {
         instructions: [newInstruction],
         instructionTypes: [insType[version]],
       })
-      .build();
+      .versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
   // token account needed

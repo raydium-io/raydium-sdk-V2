@@ -13,7 +13,7 @@ import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { addComputeBudget } from "@/common/txTool/txUtils";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
-import { MakeTxData } from "@/common/txTool/txTool";
+import { MakeTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
@@ -309,7 +309,7 @@ export default class LiquidityModule extends ModuleBase {
     return txBuilder.build() as MakeTxData<T>;
   }
 
-  public async removeAllLpAndCreateClmmPosition({
+  public async removeAllLpAndCreateClmmPosition<T extends TxVersion>({
     poolInfo,
     clmmPoolInfo,
     removeLpAmount,
@@ -320,6 +320,7 @@ export default class LiquidityModule extends ModuleBase {
     payer,
     tokenProgram,
     getEphemeralSigners,
+    txVersion,
   }: {
     poolInfo: ApiV3PoolInfoStandardItem;
     clmmPoolInfo: ApiV3PoolInfoConcentratedItem;
@@ -336,6 +337,7 @@ export default class LiquidityModule extends ModuleBase {
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
     tokenProgram?: PublicKey;
+    txVersion?: T;
     getEphemeralSigners?: (k: number) => any;
   }): Promise<MakeTransaction> {
     if (
@@ -439,7 +441,7 @@ export default class LiquidityModule extends ModuleBase {
       getEphemeralSigners,
     });
 
-    let farmWithdrawData: MakeTransaction<Record<string, any>> | undefined = undefined;
+    let farmWithdrawData: TxBuildData<Record<string, any>> | TxV0BuildData<Record<string, any>> | undefined = undefined;
 
     if (farmInfo) {
       const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
@@ -469,7 +471,7 @@ export default class LiquidityModule extends ModuleBase {
     }
 
     txBuilder.addInstruction({
-      instructions: [...(farmWithdrawData?.transaction.instructions ?? []), removeIns],
+      instructions: [...(farmWithdrawData?.builder.allInstructions ?? []), removeIns],
       signers: farmWithdrawData?.signers ?? [],
       instructionTypes: [
         ...(farmWithdrawData?.instructionTypes ?? []),
