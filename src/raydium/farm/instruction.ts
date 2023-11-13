@@ -657,80 +657,6 @@ export async function makeWithdrawTokenInstruction({
   return instructions;
 }
 
-export function makeDepositWithdrawInstruction(params: {
-  instruction: number;
-  amount: BN;
-  farmInfo: { id: string; programId: string };
-  farmKeys: FormatFarmKeyOut;
-  lpAccount: PublicKey;
-  owner: PublicKey;
-  rewardAccounts: PublicKey[];
-  deposit?: boolean;
-  version: 3 | 5 | 6;
-}): TransactionInstruction {
-  const { farmInfo, farmKeys, version, lpAccount, rewardAccounts, owner, instruction, amount, deposit } = params;
-
-  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
-
-  const ledgerAddress = getAssociatedLedgerAccount({
-    programId,
-    poolId: id,
-    owner,
-    version,
-  });
-
-  const data = Buffer.alloc(dwLayout.span);
-  dwLayout.encode(
-    {
-      instruction,
-      amount,
-    },
-    data,
-  );
-
-  const keys =
-    version === 6
-      ? [
-          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-          ...(deposit ? [accountMeta({ pubkey: SystemProgram.programId, isWritable: false })] : []),
-          accountMeta({ pubkey: id }),
-          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
-          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
-          accountMeta({ pubkey: ledgerAddress }),
-          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
-          accountMeta({ pubkey: lpAccount }),
-        ]
-      : [
-          accountMeta({ pubkey: id }),
-          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
-          accountMeta({ pubkey: ledgerAddress }),
-          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
-          accountMeta({ pubkey: lpAccount }),
-          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
-          accountMeta({ pubkey: rewardAccounts[0] }),
-          accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
-          // system
-          accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
-          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-        ];
-
-  if (version === 5) {
-    for (let index = 1; index < farmKeys.rewardInfos.length; index++) {
-      keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
-      keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
-    }
-  }
-
-  if (version === 6) {
-    for (let index = 0; index < farmKeys.rewardInfos.length; index++) {
-      keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
-      keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
-    }
-  }
-
-  return new TransactionInstruction({ programId, keys, data });
-}
-
 export function makeRestartRewardInstruction({
   payer,
   rewardVault,
@@ -822,4 +748,349 @@ export function makeAddNewRewardInstruction({
   ];
 
   return new TransactionInstruction({ programId: farmKeys.programId, keys, data });
+}
+
+export function makeDepositWithdrawInstruction(params: {
+  instruction: number;
+  amount: BN;
+  farmInfo: { id: string; programId: string };
+  farmKeys: FormatFarmKeyOut;
+  lpAccount: PublicKey;
+  owner: PublicKey;
+  rewardAccounts: PublicKey[];
+  deposit?: boolean;
+  version: 3 | 5 | 6;
+}): TransactionInstruction {
+  const { farmInfo, farmKeys, version, lpAccount, rewardAccounts, owner, instruction, amount, deposit } = params;
+
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId,
+    poolId: id,
+    owner,
+    version,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction,
+      amount,
+    },
+    data,
+  );
+
+  const keys =
+    version === 6
+      ? [
+          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+          ...(deposit ? [accountMeta({ pubkey: SystemProgram.programId, isWritable: false })] : []),
+          accountMeta({ pubkey: id }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+          accountMeta({ pubkey: ledgerAddress }),
+          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+          accountMeta({ pubkey: lpAccount }),
+        ]
+      : [
+          accountMeta({ pubkey: id }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+          accountMeta({ pubkey: ledgerAddress }),
+          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+          accountMeta({ pubkey: lpAccount }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+          accountMeta({ pubkey: rewardAccounts[0] }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
+          // system
+          accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+        ];
+
+  if (version === 5) {
+    for (let index = 1; index < farmKeys.rewardInfos.length; index++) {
+      keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+      keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
+    }
+  }
+
+  if (version === 6) {
+    for (let index = 0; index < farmKeys.rewardInfos.length; index++) {
+      keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
+      keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+    }
+  }
+
+  return new TransactionInstruction({ programId, keys, data });
+}
+
+interface DepositWithdrawParams {
+  amount: BN;
+  farmInfo: { id: string; programId: string };
+  farmKeys: FormatFarmKeyOut;
+  lpAccount: PublicKey;
+  owner: PublicKey;
+  rewardAccounts: PublicKey[];
+  userAuxiliaryLedgers?: PublicKey[];
+}
+
+export function makeWithdrawInstructionV6(params: DepositWithdrawParams): TransactionInstruction {
+  const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount } = params;
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId,
+    poolId: id,
+    owner,
+    version: 6,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction: 2,
+      amount: parseBigNumberish(amount),
+    },
+    data,
+  );
+
+  const keys = [
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+
+    accountMeta({ pubkey: id }),
+
+    accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+    accountMeta({ pubkey: ledgerAddress }),
+    accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+    accountMeta({ pubkey: lpAccount }),
+  ];
+
+  for (let index = 0; index < farmKeys.rewardInfos.length; index++) {
+    keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
+    keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+  }
+
+  return new TransactionInstruction({ programId, keys, data });
+}
+
+export function makeWithdrawInstructionV5(params: DepositWithdrawParams): TransactionInstruction {
+  const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount, userAuxiliaryLedgers } = params;
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId,
+    poolId: id,
+    owner,
+    version: 5,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction: 12,
+      amount: parseBigNumberish(amount),
+    },
+    data,
+  );
+
+  const keys = [
+    accountMeta({ pubkey: id }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: ledgerAddress }),
+    accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+    accountMeta({ pubkey: lpAccount }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+    accountMeta({ pubkey: rewardAccounts[0] }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
+    // system
+    accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+  ];
+
+  for (let index = 1; index < farmKeys.rewardInfos.length; index++) {
+    keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+    keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
+  }
+
+  if (userAuxiliaryLedgers) {
+    for (const auxiliaryLedger of userAuxiliaryLedgers) {
+      keys.push(accountMeta({ pubkey: auxiliaryLedger }));
+    }
+  }
+
+  return new TransactionInstruction({ programId, keys, data });
+}
+
+export function makeWithdrawInstructionV3(params: DepositWithdrawParams): TransactionInstruction {
+  const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount, userAuxiliaryLedgers } = params;
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId,
+    poolId: id,
+    owner,
+    version: 3,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction: 11,
+      amount: parseBigNumberish(amount),
+    },
+    data,
+  );
+
+  const keys = [
+    accountMeta({ pubkey: id }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: ledgerAddress }),
+    accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+    accountMeta({ pubkey: lpAccount }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+    accountMeta({ pubkey: rewardAccounts[0] }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
+    // system
+    accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+  ];
+
+  if (userAuxiliaryLedgers) {
+    for (const auxiliaryLedger of userAuxiliaryLedgers) {
+      keys.push(accountMeta({ pubkey: auxiliaryLedger }));
+    }
+  }
+
+  return new TransactionInstruction({ programId, keys, data });
+}
+
+export function makeDepositInstructionV3(params: DepositWithdrawParams): TransactionInstruction {
+  const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount, userAuxiliaryLedgers } = params;
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId,
+    poolId: id,
+    owner,
+    version: 3,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction: 10,
+      amount: parseBigNumberish(amount),
+    },
+    data,
+  );
+
+  const keys = [
+    accountMeta({ pubkey: id }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: ledgerAddress }),
+    accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+    accountMeta({ pubkey: lpAccount }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+    accountMeta({ pubkey: rewardAccounts[0] }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
+    // system
+    accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+  ];
+
+  if (userAuxiliaryLedgers) {
+    for (const auxiliaryLedger of userAuxiliaryLedgers) {
+      keys.push(accountMeta({ pubkey: auxiliaryLedger }));
+    }
+  }
+
+  return new TransactionInstruction({ programId, keys, data });
+}
+
+export function makeDepositInstructionV5(params: DepositWithdrawParams): TransactionInstruction {
+  const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount, userAuxiliaryLedgers } = params;
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId,
+    poolId: id,
+    owner,
+    version: 5,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction: 11,
+      amount: parseBigNumberish(amount),
+    },
+    data,
+  );
+
+  const keys = [
+    accountMeta({ pubkey: id }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: ledgerAddress }),
+    accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+    accountMeta({ pubkey: lpAccount }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+    accountMeta({ pubkey: rewardAccounts[0] }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
+    // system
+    accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+  ];
+
+  for (let index = 1; index < farmKeys.rewardInfos.length; index++) {
+    keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+    keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
+  }
+
+  if (userAuxiliaryLedgers) {
+    for (const auxiliaryLedger of userAuxiliaryLedgers) {
+      keys.push(accountMeta({ pubkey: auxiliaryLedger }));
+    }
+  }
+
+  return new TransactionInstruction({ programId, keys, data });
+}
+
+export function makeDepositInstructionV6(params: DepositWithdrawParams): TransactionInstruction {
+  const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount } = params;
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const ledgerAddress = getAssociatedLedgerAccount({
+    programId,
+    poolId: id,
+    owner,
+    version: 6,
+  });
+
+  const data = Buffer.alloc(dwLayout.span);
+  dwLayout.encode(
+    {
+      instruction: 1,
+      amount: parseBigNumberish(amount),
+    },
+    data,
+  );
+
+  const keys = [
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
+    accountMeta({ pubkey: id }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+    accountMeta({ pubkey: ledgerAddress }),
+    accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+    accountMeta({ pubkey: lpAccount }),
+  ];
+
+  for (let index = 0; index < farmKeys.rewardInfos.length; index++) {
+    keys.push(accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[index].vault) }));
+    keys.push(accountMeta({ pubkey: rewardAccounts[index] }));
+  }
+
+  return new TransactionInstruction({ programId, keys, data });
 }

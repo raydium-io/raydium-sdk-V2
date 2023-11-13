@@ -42,28 +42,6 @@ export const FARM_VERSION_TO_LEDGER_LAYOUT: {
 
 export const isValidFarmVersion = (version: number): boolean => [3, 5, 6].indexOf(version) !== -1;
 
-const farmDepositInstruction = {
-  3: 10,
-  5: 11,
-  6: 1,
-};
-export const farmDespotVersionToInstruction = (version: number): number => {
-  const ver = farmDepositInstruction[version];
-  if (!ver) logger.logWithError("invalid deposit farm version");
-  return ver;
-};
-
-const farmWithdrawInstruction = {
-  3: 11,
-  5: 12,
-  6: 2,
-};
-export const farmWithdrawVersionToInstruction = (version: number): number => {
-  const ver = farmWithdrawInstruction[version];
-  if (!ver) logger.logWithError("invalid withdraw farm version");
-  return ver;
-};
-
 export const validateFarmRewards = (params: {
   version: number;
   rewardInfos: { mint: ApiV3Token }[];

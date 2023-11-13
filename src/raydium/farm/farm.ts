@@ -18,8 +18,7 @@ import { MakeTransaction } from "../type";
 import {
   FARM_LOCK_MINT,
   FARM_LOCK_VAULT,
-  farmDespotVersionToInstruction,
-  farmWithdrawVersionToInstruction,
+  isValidFarmVersion,
   poolTypeV6,
   validateFarmRewards,
   FARM_PROGRAM_TO_VERSION,
@@ -28,11 +27,16 @@ import {
   createAssociatedLedgerAccountInstruction,
   makeCreateFarmInstruction,
   makeCreatorWithdrawFarmRewardInstruction,
-  makeDepositWithdrawInstruction,
   makeRestartRewardInstruction,
   makeAddNewRewardInstruction,
+  makeWithdrawInstructionV3,
+  makeWithdrawInstructionV5,
+  makeWithdrawInstructionV6,
+  makeDepositInstructionV3,
+  makeDepositInstructionV5,
+  makeDepositInstructionV6,
 } from "./instruction";
-import { farmAddRewardLayout, farmStateV6Layout } from "./layout";
+import { farmStateV6Layout } from "./layout";
 import {
   CreateFarm,
   FarmDWParam,
@@ -401,6 +405,7 @@ export default class Farm extends ModuleBase {
       useSOLBalance,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      userAuxiliaryLedgers,
     } = params;
 
     if (this.scope.availability.addFarm === false)
@@ -408,6 +413,7 @@ export default class Farm extends ModuleBase {
 
     const { rewardInfos, programId } = farmInfo;
     const version = FARM_PROGRAM_TO_VERSION[programId];
+    if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm program:", farmInfo.programId);
     const [farmProgramId, farmId] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
     const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
 
@@ -478,17 +484,22 @@ export default class Farm extends ModuleBase {
     });
     if (errorMsg) this.logAndCreateError(errorMsg);
 
-    const newInstruction = makeDepositWithdrawInstruction({
-      instruction: farmDespotVersionToInstruction(version),
+    const insParams = {
       amount: parseBigNumberish(amount),
       owner: this.scope.ownerPubKey,
       farmInfo,
       farmKeys,
       lpAccount: ownerLpTokenAccount,
       rewardAccounts,
-      deposit: true,
-      version,
-    });
+      userAuxiliaryLedgers: userAuxiliaryLedgers?.map((key) => new PublicKey(key)),
+    };
+
+    const newInstruction =
+      version === 6
+        ? makeDepositInstructionV6(insParams)
+        : version === 5
+        ? makeDepositInstructionV5(insParams)
+        : makeDepositInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Deposit,
@@ -514,6 +525,7 @@ export default class Farm extends ModuleBase {
       feePayer,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      userAuxiliaryLedgers,
     } = params;
     const { rewardInfos } = farmInfo;
 
@@ -521,6 +533,9 @@ export default class Farm extends ModuleBase {
       this.logAndCreateError("farm withdraw feature disabled in your region");
 
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
+
+    if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm program:", farmInfo.programId);
+
     const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
     const txBuilder = this.createTxBuilder();
 
@@ -605,16 +620,22 @@ export default class Farm extends ModuleBase {
     });
     if (errorMsg) this.logAndCreateError(errorMsg);
 
-    const newInstruction = makeDepositWithdrawInstruction({
-      instruction: farmWithdrawVersionToInstruction(version),
+    const insParams = {
       amount: parseBigNumberish(amount),
       owner: this.scope.ownerPubKey,
       farmInfo,
       farmKeys,
       lpAccount: ownerLpTokenAccount,
       rewardAccounts,
-      version,
-    });
+      userAuxiliaryLedgers: userAuxiliaryLedgers?.map((key) => new PublicKey(key)),
+    };
+
+    const newInstruction =
+      version === 6
+        ? makeWithdrawInstructionV6(insParams)
+        : version === 5
+        ? makeWithdrawInstructionV5(insParams)
+        : makeWithdrawInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Withdraw,
@@ -716,8 +737,16 @@ export default class Farm extends ModuleBase {
     useSOLBalance?: boolean;
     associatedOnly?: boolean;
     checkCreateATAOwner?: boolean;
+    userAuxiliaryLedgers?: string[];
   }): Promise<MakeTransaction> {
-    const { farmInfo, useSOLBalance, feePayer, associatedOnly = true, checkCreateATAOwner = false } = params;
+    const {
+      farmInfo,
+      useSOLBalance,
+      feePayer,
+      associatedOnly = true,
+      checkCreateATAOwner = false,
+      userAuxiliaryLedgers,
+    } = params;
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     const txBuilder = this.createTxBuilder();
 
@@ -782,16 +811,24 @@ export default class Farm extends ModuleBase {
         rewardAccounts.push(ownerRewardAccount);
       }
 
-      const withdrawInstruction = makeDepositWithdrawInstruction({
-        instruction: farmWithdrawVersionToInstruction(version),
+      const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
+
+      const insParams = {
         amount: BN_ZERO,
         owner: this.scope.ownerPubKey,
-        farmInfo: farmInfo as any, // to do
+        farmInfo,
+        farmKeys,
         lpAccount: ownerLpTokenAccount,
         rewardAccounts,
-        version,
-        farmKeys: farmInfo as any, // to do
-      });
+        userAuxiliaryLedgers: userAuxiliaryLedgers?.map((key) => new PublicKey(key)),
+      };
+
+      const withdrawInstruction =
+        version === 6
+          ? makeWithdrawInstructionV6(insParams)
+          : version === 5
+          ? makeWithdrawInstructionV5(insParams)
+          : makeWithdrawInstructionV3(insParams);
 
       const insType = {
         3: InstructionType.FarmV3Withdraw,

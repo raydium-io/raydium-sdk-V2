@@ -97,6 +97,7 @@ export interface FarmDWParam<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   deposited?: BN;
   txVersion?: T;
+  userAuxiliaryLedgers?: string[];
 }
 /* ================= pool keys ================= */
 export type FarmPoolKeys = {
