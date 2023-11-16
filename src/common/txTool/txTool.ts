@@ -71,16 +71,16 @@ export interface ExecuteParam {
   sequentially: boolean;
   onTxUpdate?: (completeTxs: { txId: string; status: "success" | "error" | "sent" }[]) => void;
 }
-export interface MultiTxBuildData {
+export interface MultiTxBuildData<T = Record<string, any>> {
   builder: TxBuilder;
   transactions: Transaction[];
   instructionTypes: string[];
   signers: Signer[][];
   execute: (executeParams?: ExecuteParam) => Promise<string[]>;
-  extInfo: Record<string, any>;
+  extInfo: T;
 }
 
-export interface MultiTxV0BuildData extends Omit<MultiTxBuildData, "transactions"> {
+export interface MultiTxV0BuildData<T = Record<string, any>> extends Omit<MultiTxBuildData<T>, "transactions"> {
   builder: TxBuilder;
   transactions: VersionedTransaction[];
   buildProps?: {
@@ -88,6 +88,10 @@ export interface MultiTxV0BuildData extends Omit<MultiTxBuildData, "transactions
     lookupTableAddress?: string[];
   };
 }
+
+export type MakeMultiTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extends TxVersion.LEGACY
+  ? MultiTxBuildData<O>
+  : MultiTxV0BuildData<O>;
 
 export type MakeTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extends TxVersion.LEGACY
   ? TxBuildData<O>
@@ -294,6 +298,26 @@ export class TxBuilder {
       },
       extInfo: extInfo || {},
     };
+  }
+
+  public async versionMultiBuild<T extends TxVersion, O = Record<string, any>>({
+    extraPreBuildData,
+    txVersion,
+    extInfo,
+  }: {
+    extraPreBuildData?: MakeTxData<TxVersion.V0>[] | MakeTxData<TxVersion.LEGACY>[];
+    txVersion?: T;
+    extInfo?: O;
+  }): Promise<MakeMultiTxData<T, O>> {
+    if (txVersion === TxVersion.V0)
+      return (await this.buildV0MultiTx({
+        extraPreBuildData: extraPreBuildData as MakeTxData<TxVersion.V0>[],
+        buildProps: extInfo || {},
+      })) as MakeMultiTxData<T, O>;
+    return this.buildMultiTx<O>({
+      extraPreBuildData: extraPreBuildData as MakeTxData<TxVersion.LEGACY>[],
+      extInfo,
+    }) as MakeMultiTxData<T, O>;
   }
 
   public async buildV0<O = Record<string, any>>(
@@ -522,7 +546,7 @@ export class TxBuilder {
         const recentBlockHash = await getRecentBlockHash(this.connection);
         allTransactions.forEach(async (tx, idx) => {
           tx.recentBlockhash = recentBlockHash;
-          tx.sign(...allSigners[idx]);
+          if (allSigners[idx].length) tx.sign(...allSigners[idx]);
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
@@ -678,7 +702,7 @@ export class TxBuilder {
       instructionTypes: this.instructionTypes,
       execute: async (): Promise<string[]> => {
         allTransactions.map(async (tx, idx) => {
-          tx.sign(allSigners[idx]);
+          if (allSigners[idx].length) tx.sign(allSigners[idx]);
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {

@@ -731,23 +731,25 @@ export default class Farm extends ModuleBase {
       .build();
   }
 
-  public async harvestAllRewards(params: {
-    farmInfo: FormatFarmInfoOut;
+  public async harvestAllRewards<T extends TxVersion = TxVersion.LEGACY>(params: {
+    farmInfoList: Record<string, FormatFarmInfoOut>;
     feePayer?: PublicKey;
     useSOLBalance?: boolean;
     associatedOnly?: boolean;
     checkCreateATAOwner?: boolean;
     userAuxiliaryLedgers?: string[];
-  }): Promise<MakeTransaction> {
+    txVersion?: T;
+  }): Promise<MakeTxData<T>> {
     const {
-      farmInfo,
+      farmInfoList,
       useSOLBalance,
       feePayer,
       associatedOnly = true,
       checkCreateATAOwner = false,
       userAuxiliaryLedgers,
+      txVersion,
     } = params;
-    const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
+
     const txBuilder = this.createTxBuilder();
 
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
@@ -760,16 +762,17 @@ export default class Farm extends ModuleBase {
       }
     }
 
-    for (const { lpVault, wrapped, apiPoolInfo } of Object.values(farmInfo)) {
-      if (wrapped === undefined || wrapped.pendingRewards.find((i) => i.gt(BN_ZERO)) === undefined) continue;
+    for (const farmInfo of Object.values(farmInfoList)) {
+      const { programId, lpMint: farmLpMint, rewardInfos, id } = farmInfo;
+      const version = FARM_PROGRAM_TO_VERSION[programId];
 
-      const lpMint = lpVault.mint;
-      const lpMintUseSOLBalance = useSOLBalance && lpMint.equals(WSOLMint);
-      let ownerLpTokenAccount = ownerMintToAccount[lpMint.toString()];
+      const lpMint = farmLpMint.address;
+      const lpMintUseSOLBalance = useSOLBalance && lpMint === WSOLMint.toString();
+      let ownerLpTokenAccount = ownerMintToAccount[lpMint];
 
       if (!ownerLpTokenAccount) {
         const { account: _ownerLpAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-          mint: lpMint,
+          mint: new PublicKey(lpMint),
           notUseTokenAccount: lpMintUseSOLBalance,
           createInfo: {
             payer: feePayer || this.scope.ownerPubKey,
@@ -786,13 +789,13 @@ export default class Farm extends ModuleBase {
       ownerMintToAccount[lpMint.toString()] = ownerLpTokenAccount;
 
       const rewardAccounts: PublicKey[] = [];
-      for (const itemReward of apiPoolInfo.rewardInfos) {
-        const rewardUseSOLBalance = useSOLBalance && itemReward.rewardMint.equals(WSOLMint);
+      for (const itemReward of rewardInfos) {
+        const rewardUseSOLBalance = useSOLBalance && itemReward.mint.address === WSOLMint.toString();
 
-        let ownerRewardAccount = ownerMintToAccount[itemReward.rewardMint.toString()];
+        let ownerRewardAccount = ownerMintToAccount[itemReward.mint.address];
         if (!ownerRewardAccount) {
           const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-            mint: itemReward.rewardMint,
+            mint: new PublicKey(itemReward.mint.address),
             notUseTokenAccount: rewardUseSOLBalance,
             createInfo: {
               payer: feePayer || this.scope.ownerPubKey,
@@ -807,11 +810,11 @@ export default class Farm extends ModuleBase {
           instructionParams && txBuilder.addInstruction(instructionParams);
         }
 
-        ownerMintToAccount[itemReward.rewardMint.toString()] = ownerRewardAccount;
+        ownerMintToAccount[itemReward.mint.address] = ownerRewardAccount;
         rewardAccounts.push(ownerRewardAccount);
       }
 
-      const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
+      const farmKeys = await this.scope.api.fetchFarmKeysById({ id });
 
       const insParams = {
         amount: BN_ZERO,
@@ -842,6 +845,6 @@ export default class Farm extends ModuleBase {
       });
     }
 
-    return txBuilder.build();
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 }

@@ -5,10 +5,12 @@ import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from "@sol
 import BN from "bn.js";
 import { MARKET_STATE_LAYOUT_V2 } from "./layout";
 import { struct, u16, u32, u64, u8 } from "@/marshmallow";
+import { InstructionType } from "@/common/txTool/txType";
 
 type Transactions = {
   transaction: Transaction;
   signer?: Keypair[] | undefined;
+  instructionTypes?: string[];
 }[];
 
 export function initializeMarket({
@@ -215,10 +217,27 @@ export async function makeCreateMarketInstruction({
   );
 
   return [
-    { transaction: tx1, signer: [] },
+    {
+      transaction: tx1,
+      signer: [],
+      instructionTypes: [
+        InstructionType.CreateAccount,
+        InstructionType.CreateAccount,
+        InstructionType.InitAccount,
+        InstructionType.InitAccount,
+      ],
+    },
     {
       transaction: tx2,
       signer: [],
+      instructionTypes: [
+        InstructionType.CreateAccount,
+        InstructionType.CreateAccount,
+        InstructionType.CreateAccount,
+        InstructionType.CreateAccount,
+        InstructionType.CreateAccount,
+        InstructionType.InitMarket,
+      ],
     },
   ];
 }

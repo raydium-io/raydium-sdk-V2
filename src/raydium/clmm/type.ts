@@ -491,6 +491,8 @@ export interface CollectRewardsParams extends Omit<CollectRewardParams, "rewardM
 }
 
 export interface HarvestAllRewardsParams {
+  allPoolInfo: Record<string, ApiV3PoolInfoConcentratedItem>;
+  allPositions: Record<string, ClmmPositionLayout[]>;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean;

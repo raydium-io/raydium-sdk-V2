@@ -2,35 +2,34 @@ import { PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import ModuleBase from "../moduleBase";
-import { TxBuildData } from "@/common/txTool/txTool";
+import { TxVersion } from "@/common/txTool/txType";
+import { TxBuildData, MakeMultiTxData } from "@/common/txTool/txTool";
 import { generatePubKey } from "../account/util";
 import { BN_ZERO } from "@/common/bignumber";
 import { makeCreateMarketInstruction } from "./instrument";
-import { MakeMultiTransaction } from "../type";
 
 interface ExtInfo {
-  extInfo: {
-    address: {
-      marketId: PublicKey;
-      requestQueue: PublicKey;
-      eventQueue: PublicKey;
-      bids: PublicKey;
-      asks: PublicKey;
-      baseVault: PublicKey;
-      quoteVault: PublicKey;
-      baseMint: PublicKey;
-      quoteMin: PublicKey;
-    };
+  address: {
+    marketId: PublicKey;
+    requestQueue: PublicKey;
+    eventQueue: PublicKey;
+    bids: PublicKey;
+    asks: PublicKey;
+    baseVault: PublicKey;
+    quoteVault: PublicKey;
+    baseMint: PublicKey;
+    quoteMin: PublicKey;
   };
 }
 
 export default class MarketV2 extends ModuleBase {
-  public async create({
+  public async create<T extends TxVersion>({
     baseInfo,
     quoteInfo,
     lotSize, // 1
     tickSize, // 0.01
     dexProgramId,
+    txVersion,
   }: {
     baseInfo: {
       mint: PublicKey;
@@ -43,7 +42,8 @@ export default class MarketV2 extends ModuleBase {
     lotSize: number;
     tickSize: number;
     dexProgramId: PublicKey;
-  }): Promise<MakeMultiTransaction & ExtInfo> {
+    txVersion?: T;
+  }): Promise<MakeMultiTxData<T, ExtInfo>> {
     const wallet = this.scope.ownerPubKey;
     const market = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
     const requestQueue = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
@@ -116,25 +116,27 @@ export default class MarketV2 extends ModuleBase {
       extraTxBuilder.addInstruction({
         instructions: allTxArr[i].transaction.instructions,
         signers: allTxArr[i].signer,
+        instructionTypes: allTxArr[i].instructionTypes,
       });
       extraTxBuildData.push(extraTxBuilder.build());
     }
 
-    return txBuilder.buildMultiTx({
+    return txBuilder.versionMultiBuild<T, ExtInfo>({
       extraPreBuildData: extraTxBuildData,
       extInfo: {
         address: {
-          marketId: market,
-          requestQueue,
-          eventQueue,
-          bids,
-          asks,
-          baseVault,
-          quoteVault,
+          marketId: market.publicKey,
+          requestQueue: requestQueue.publicKey,
+          eventQueue: eventQueue.publicKey,
+          bids: bids.publicKey,
+          asks: asks.publicKey,
+          baseVault: baseVault.publicKey,
+          quoteVault: quoteVault.publicKey,
           baseMint: new PublicKey(baseInfo.mint),
           quoteMin: new PublicKey(quoteInfo.mint),
         },
       },
-    }) as MakeMultiTransaction & ExtInfo;
+      txVersion,
+    }) as Promise<MakeMultiTxData<T, ExtInfo>>;
   }
 }

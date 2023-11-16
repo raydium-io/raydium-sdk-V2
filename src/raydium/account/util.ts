@@ -1,4 +1,4 @@
-import { AccountInfo, PublicKey, RpcResponseAndContext, Keypair } from "@solana/web3.js";
+import { AccountInfo, PublicKey, RpcResponseAndContext, Keypair, GetProgramAccountsResponse } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import { createLogger } from "@/common";
@@ -11,12 +11,7 @@ const logger = createLogger("Raydium_Util");
 
 export interface ParseTokenAccount {
   solAccountResp?: AccountInfo<Buffer> | null;
-  tokenAccountResp: RpcResponseAndContext<
-    Array<{
-      pubkey: PublicKey;
-      account: AccountInfo<Buffer>;
-    }>
-  >;
+  tokenAccountResp: RpcResponseAndContext<GetProgramAccountsResponse>;
 }
 
 export function parseTokenAccountResp({ solAccountResp, tokenAccountResp }: ParseTokenAccount): {

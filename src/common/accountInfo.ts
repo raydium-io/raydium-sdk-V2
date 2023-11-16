@@ -29,7 +29,7 @@ export async function getMultipleAccountsInfo(
   publicKeys: PublicKey[],
   config?: GetMultipleAccountsInfoConfig,
 ): Promise<(AccountInfo<Buffer> | null)[]> {
-  const { batchRequest, commitment } = {
+  const { batchRequest, commitment = "confirmed" } = {
     batchRequest: false,
     ...config,
   };
