@@ -26,6 +26,7 @@ export const API_URLS = {
   POOL_SEARCH: "/v3/pools/info/search/{search_text}/{type}/{sort}/{order}/{page_size}/{page}",
   POOL_SEARCH_MINT: "/v3/pools/info/mint/{mint1}/{type}/{sort}/{order}/{page_size}/{page}",
   POOL_SEARCH_MINT_2: "/v3/pools/info/mint/{mint1}/{mint2}/{type}/{sort}/{order}/{page_size}/{page}",
+  POOL_SEARCH_LP: "/v3/pools/info/lp/{lp_mint}",
   POOL_KEY_BY_ID: "/v3/pools/key/id/{id}",
   POOLS_KEY: "/v3/pools/key/{type}/{page_size}/{page}",
   POOLS_KEY_BY_MINT: "/v3/pools/key/mint/{mint1}/{type}/{page_size}/{page}",
@@ -38,6 +39,7 @@ export const API_URLS = {
   FARM_KEYS: "/v3/farms/key/id/{id}",
   OWNER_CREATED_FARM: "/v3/owner/create-pool/{owner}",
   OWNER_IDO: "/v3/owner/main/ido/{owner}",
+  OWNER_STAKE_FARMS: "/v3/owner/position/stake/{owner}",
   IDO_KEYS: "/v3/ido/key/id/{id}",
 };
 

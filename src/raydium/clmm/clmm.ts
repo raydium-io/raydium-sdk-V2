@@ -55,55 +55,6 @@ export class Clmm extends ModuleBase {
     await this.scope.token.load(params);
   }
 
-  public getAmountsFromLiquidity({
-    poolInfo,
-    ownerPosition,
-    liquidity,
-    slippage,
-    add,
-    epochInfo,
-  }: GetAmountParams): ReturnTypeGetLiquidityAmountOut {
-    const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
-      new Decimal(poolInfo.price),
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
-    const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower);
-    const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickUpper);
-
-    const coefficientRe = add ? 1 + slippage : 1 - slippage;
-
-    const amounts = LiquidityMath.getAmountsFromLiquidity(sqrtPriceX64, sqrtPriceX64A, sqrtPriceX64B, liquidity, add);
-
-    const [amountA, amountB] = [
-      getTransferAmountFeeV2(amounts.amountA, poolInfo.mintA.extensions?.feeConfig, epochInfo, true),
-      getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions?.feeConfig, epochInfo, true),
-    ];
-    const [amountSlippageA, amountSlippageB] = [
-      getTransferAmountFeeV2(
-        amounts.amountA.muln(coefficientRe),
-        poolInfo.mintA.extensions?.feeConfig,
-        epochInfo,
-        true,
-      ),
-      getTransferAmountFeeV2(
-        amounts.amountB.muln(coefficientRe),
-        poolInfo.mintB.extensions?.feeConfig,
-        epochInfo,
-        true,
-      ),
-    ];
-
-    return {
-      liquidity,
-      amountA,
-      amountB,
-      amountSlippageA,
-      amountSlippageB,
-      expirationTime: minExpirationTime(amountA.expirationTime, amountB.expirationTime),
-    };
-  }
-
   public async createPool<T extends TxVersion>(
     props: CreateConcentratedPool<T>,
   ): Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {

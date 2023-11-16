@@ -3,9 +3,12 @@ import BN from "bn.js";
 import { ClmmPoolInfo, ClmmPoolPersonalPosition, ClmmPoolRewardInfo, SDKParsedConcentratedInfo } from "../type";
 import { decimalToFraction } from "@/common/bignumber";
 import { gt, lt } from "@/common/fractionUtil";
+import { minExpirationTime, getTransferAmountFeeV2 } from "@/common";
 import { Q64 } from "./constants";
-import { MathUtil } from "./math";
+import { MathUtil, SqrtPriceMath, LiquidityMath } from "./math";
 import { Tick } from "./tick";
+import { GetAmountParams, ReturnTypeGetLiquidityAmountOut } from "../type";
+import Decimal from "decimal.js";
 
 export class PositionUtils {
   static getfeeGrowthInside(
@@ -144,5 +147,54 @@ export class PositionUtils {
     const priceLower = decimalToFraction(userPositionAccount.priceLower);
     const priceUpper = decimalToFraction(userPositionAccount.priceUpper);
     return gt(currentPrice, priceLower) && lt(currentPrice, priceUpper);
+  }
+
+  static getAmountsFromLiquidity({
+    poolInfo,
+    ownerPosition,
+    liquidity,
+    slippage,
+    add,
+    epochInfo,
+  }: GetAmountParams): ReturnTypeGetLiquidityAmountOut {
+    const sqrtPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
+      new Decimal(poolInfo.price),
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+    const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickLower);
+    const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(ownerPosition.tickUpper);
+
+    const coefficientRe = add ? 1 + slippage : 1 - slippage;
+
+    const amounts = LiquidityMath.getAmountsFromLiquidity(sqrtPriceX64, sqrtPriceX64A, sqrtPriceX64B, liquidity, add);
+
+    const [amountA, amountB] = [
+      getTransferAmountFeeV2(amounts.amountA, poolInfo.mintA.extensions?.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions?.feeConfig, epochInfo, true),
+    ];
+    const [amountSlippageA, amountSlippageB] = [
+      getTransferAmountFeeV2(
+        amounts.amountA.muln(coefficientRe),
+        poolInfo.mintA.extensions?.feeConfig,
+        epochInfo,
+        true,
+      ),
+      getTransferAmountFeeV2(
+        amounts.amountB.muln(coefficientRe),
+        poolInfo.mintB.extensions?.feeConfig,
+        epochInfo,
+        true,
+      ),
+    ];
+
+    return {
+      liquidity,
+      amountA,
+      amountB,
+      amountSlippageA,
+      amountSlippageB,
+      expirationTime: minExpirationTime(amountA.expirationTime, amountB.expirationTime),
+    };
   }
 }

@@ -453,3 +453,18 @@ export interface ApiStakePool {
   tags: FarmTagsItem[];
   rewardInfos: RewardInfoV345[];
 }
+
+export type FarmPositionData = Record<
+  string,
+  Record<
+    string,
+    Record<
+      string,
+      {
+        programId: string;
+        lpAmount: string;
+        version: "V1" | "V2";
+      }
+    >
+  >
+>;

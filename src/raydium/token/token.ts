@@ -112,22 +112,27 @@ export default class TokenModule extends ModuleBase {
       (token) => !!token.extensions?.coingeckoId && token.address !== PublicKey.default.toBase58(),
     );
 
-    const coingeckoIds = coingeckoTokens.map((token) => token.extensions.coingeckoId!);
-    const coingeckoPriceRes = await this.scope.api.getCoingeckoPrice(coingeckoIds);
+    let coingeckoPrices: { [key: string]: Price } = {};
+    try {
+      const coingeckoIds = coingeckoTokens.map((token) => token.extensions.coingeckoId!);
+      const coingeckoPriceRes = await this.scope.api.getCoingeckoPrice(coingeckoIds);
 
-    const coingeckoPrices: { [key: string]: Price } = coingeckoTokens.reduce((acc, token) => {
-      this._tokenPriceOrg.set(token.address, coingeckoPriceRes[token.extensions.coingeckoId!].usd!);
-      return coingeckoPriceRes[token.extensions.coingeckoId!]?.usd
-        ? {
-            ...acc,
-            [token.address]: parseTokenPrice({
-              token: this._tokenMap.get(token.address)!,
-              numberPrice: coingeckoPriceRes[token.extensions.coingeckoId!].usd!,
-              decimalDone: true,
-            }),
-          }
-        : acc;
-    }, {});
+      coingeckoPrices = coingeckoTokens.reduce((acc, token) => {
+        this._tokenPriceOrg.set(token.address, coingeckoPriceRes[token.extensions.coingeckoId!].usd!);
+        return coingeckoPriceRes[token.extensions.coingeckoId!]?.usd
+          ? {
+              ...acc,
+              [token.address]: parseTokenPrice({
+                token: this._tokenMap.get(token.address)!,
+                numberPrice: coingeckoPriceRes[token.extensions.coingeckoId!].usd!,
+                decimalDone: true,
+              }),
+            }
+          : acc;
+      }, {});
+    } catch {
+      console.error("coingecko price fetch error");
+    }
 
     const raydiumPriceRes = await this.scope.api.getRaydiumTokenPrice();
     const raydiumPrices: { [key: string]: Price } = Object.keys(raydiumPriceRes).reduce((acc, key) => {
