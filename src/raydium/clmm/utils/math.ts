@@ -422,8 +422,8 @@ export class LiquidityMath {
     );
     const coefficient = amountMax ? 1 + amountSlippage : 1 - amountSlippage;
 
-    const amount0Slippage = amountA.muln(coefficient);
-    const amount1Slippage = amountB.muln(coefficient);
+    const amount0Slippage = new BN(new Decimal(amountA.toString()).mul(coefficient).toFixed(0));
+    const amount1Slippage = new BN(new Decimal(amountB.toString()).mul(coefficient).toFixed(0));
     return {
       amountSlippageA: amount0Slippage,
       amountSlippageB: amount1Slippage,
@@ -658,26 +658,21 @@ export abstract class SwapMath {
       ++loopCount;
     }
 
-    // try {
-    //   console.log('state.tick', state.tick)
-    //   const { nextStartIndex: tickAarrayStartIndex } = TickQuery.nextInitializedTickArray(
-    //     state.tick,
-    //     tickSpacing,
-    //     zeroForOne,
-    //     tickArrayBitmap,
-    //     tickarrayBitmapExtension,
-    //   );
-    //   if (
-    //     lastSavedTickArrayStartIndex !== tickAarrayStartIndex
-    //   ) {
-    //     state.accounts.push(getPdaTickArrayAddress(
-    //       programId,
-    //       poolId,
-    //       tickAarrayStartIndex,
-    //     ).publicKey)
-    //     lastSavedTickArrayStartIndex = tickAarrayStartIndex;
-    //   }
-    // } catch (e) { /* empty */ }
+    try {
+      const { nextStartIndex: tickAarrayStartIndex, isExist } = TickQuery.nextInitializedTickArray(
+        state.tick,
+        tickSpacing,
+        zeroForOne,
+        tickArrayBitmap,
+        tickarrayBitmapExtension,
+      );
+      if (isExist && lastSavedTickArrayStartIndex !== tickAarrayStartIndex) {
+        state.accounts.push(getPdaTickArrayAddress(programId, poolId, tickAarrayStartIndex).publicKey);
+        lastSavedTickArrayStartIndex = tickAarrayStartIndex;
+      }
+    } catch (e) {
+      /* empty */
+    }
 
     return {
       amountCalculated: state.amountCalculated,
@@ -688,6 +683,194 @@ export abstract class SwapMath {
       accounts: state.accounts,
     };
   }
+  // public static swapCompute(
+  //   programId: PublicKey,
+  //   poolId: PublicKey,
+  //   tickArrayCache: { [key: string]: TickArray },
+  //   tickArrayBitmap: BN[],
+  //   tickarrayBitmapExtension: TickArrayBitmapExtension,
+  //   zeroForOne: boolean,
+  //   fee: number,
+  //   liquidity: BN,
+  //   currentTick: number,
+  //   tickSpacing: number,
+  //   currentSqrtPriceX64: BN,
+  //   amountSpecified: BN,
+  //   lastSavedTickArrayStartIndex: number,
+  //   sqrtPriceLimitX64?: BN,
+  // ): {
+  //   amountCalculated: BN;
+  //   feeAmount: BN;
+  //   sqrtPriceX64: BN;
+  //   liquidity: BN;
+  //   tickCurrent: number;
+  //   accounts: PublicKey[];
+  // } {
+  //   if (amountSpecified.eq(ZERO)) {
+  //     throw new Error("amountSpecified must not be 0");
+  //   }
+  //   if (!sqrtPriceLimitX64) sqrtPriceLimitX64 = zeroForOne ? MIN_SQRT_PRICE_X64.add(ONE) : MAX_SQRT_PRICE_X64.sub(ONE);
+
+  //   if (zeroForOne) {
+  //     if (sqrtPriceLimitX64.lt(MIN_SQRT_PRICE_X64)) {
+  //       throw new Error("sqrtPriceX64 must greater than MIN_SQRT_PRICE_X64");
+  //     }
+
+  //     if (sqrtPriceLimitX64.gte(currentSqrtPriceX64)) {
+  //       throw new Error("sqrtPriceX64 must smaller than current");
+  //     }
+  //   } else {
+  //     if (sqrtPriceLimitX64.gt(MAX_SQRT_PRICE_X64)) {
+  //       throw new Error("sqrtPriceX64 must smaller than MAX_SQRT_PRICE_X64");
+  //     }
+
+  //     if (sqrtPriceLimitX64.lte(currentSqrtPriceX64)) {
+  //       throw new Error("sqrtPriceX64 must greater than current");
+  //     }
+  //   }
+  //   const baseInput = amountSpecified.gt(ZERO);
+
+  //   const state = {
+  //     amountSpecifiedRemaining: amountSpecified,
+  //     amountCalculated: ZERO,
+  //     sqrtPriceX64: currentSqrtPriceX64,
+  //     tick:
+  //       currentTick > lastSavedTickArrayStartIndex
+  //         ? Math.min(lastSavedTickArrayStartIndex + TickQuery.tickCount(tickSpacing) - 1, currentTick)
+  //         : lastSavedTickArrayStartIndex,
+  //     accounts: [] as PublicKey[],
+  //     liquidity,
+  //     feeAmount: new BN(0),
+  //   };
+  //   let tickAarrayStartIndex = lastSavedTickArrayStartIndex;
+  //   let tickArrayCurrent = tickArrayCache[lastSavedTickArrayStartIndex];
+  //   let loopCount = 0;
+  //   while (
+  //     !state.amountSpecifiedRemaining.eq(ZERO) &&
+  //     !state.sqrtPriceX64.eq(sqrtPriceLimitX64)
+  //     // state.tick < MAX_TICK &&
+  //     // state.tick > MIN_TICK
+  //   ) {
+  //     if (loopCount > 10) {
+  //       throw Error("liquidity limit");
+  //     }
+  //     const step: Partial<StepComputations> = {};
+  //     step.sqrtPriceStartX64 = state.sqrtPriceX64;
+
+  //     const tickState: Tick | null = TickUtils.nextInitTick(tickArrayCurrent, state.tick, tickSpacing, zeroForOne);
+
+  //     let nextInitTick: Tick | null = tickState ? tickState : null; // TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne)
+  //     let tickArrayAddress: PublicKey | null = null;
+
+  //     if (!nextInitTick?.liquidityGross.gtn(0)) {
+  //       const nextInitTickArrayIndex = PoolUtils.nextInitializedTickArrayStartIndex(
+  //         {
+  //           tickCurrent: state.tick,
+  //           tickSpacing,
+  //           tickArrayBitmap,
+  //           exBitmapInfo: tickarrayBitmapExtension,
+  //         },
+  //         tickAarrayStartIndex,
+  //         zeroForOne,
+  //       );
+  //       if (!nextInitTickArrayIndex.isExist) {
+  //         throw Error("swapCompute LiquidityInsufficient");
+  //       }
+  //       tickAarrayStartIndex = nextInitTickArrayIndex.nextStartIndex;
+
+  //       const { publicKey: expectedNextTickArrayAddress } = getPdaTickArrayAddress(
+  //         programId,
+  //         poolId,
+  //         tickAarrayStartIndex,
+  //       );
+  //       tickArrayAddress = expectedNextTickArrayAddress;
+  //       tickArrayCurrent = tickArrayCache[tickAarrayStartIndex];
+
+  //       nextInitTick = TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne);
+  //     }
+
+  //     step.tickNext = nextInitTick.tick;
+  //     step.initialized = nextInitTick.liquidityGross.gtn(0);
+  //     if (lastSavedTickArrayStartIndex !== tickAarrayStartIndex && tickArrayAddress) {
+  //       state.accounts.push(tickArrayAddress);
+  //       lastSavedTickArrayStartIndex = tickAarrayStartIndex;
+  //     }
+  //     if (step.tickNext < MIN_TICK) {
+  //       step.tickNext = MIN_TICK;
+  //     } else if (step.tickNext > MAX_TICK) {
+  //       step.tickNext = MAX_TICK;
+  //     }
+
+  //     step.sqrtPriceNextX64 = SqrtPriceMath.getSqrtPriceX64FromTick(step.tickNext);
+  //     let targetPrice: BN;
+  //     if (
+  //       (zeroForOne && step.sqrtPriceNextX64.lt(sqrtPriceLimitX64)) ||
+  //       (!zeroForOne && step.sqrtPriceNextX64.gt(sqrtPriceLimitX64))
+  //     ) {
+  //       targetPrice = sqrtPriceLimitX64;
+  //     } else {
+  //       targetPrice = step.sqrtPriceNextX64;
+  //     }
+  //     [state.sqrtPriceX64, step.amountIn, step.amountOut, step.feeAmount] = SwapMath.swapStepCompute(
+  //       state.sqrtPriceX64,
+  //       targetPrice,
+  //       state.liquidity,
+  //       state.amountSpecifiedRemaining,
+  //       fee,
+  //     );
+
+  //     state.feeAmount = state.feeAmount.add(step.feeAmount);
+
+  //     if (baseInput) {
+  //       state.amountSpecifiedRemaining = state.amountSpecifiedRemaining.sub(step.amountIn.add(step.feeAmount));
+  //       state.amountCalculated = state.amountCalculated.sub(step.amountOut);
+  //     } else {
+  //       state.amountSpecifiedRemaining = state.amountSpecifiedRemaining.add(step.amountOut);
+  //       state.amountCalculated = state.amountCalculated.add(step.amountIn.add(step.feeAmount));
+  //     }
+  //     if (state.sqrtPriceX64.eq(step.sqrtPriceNextX64)) {
+  //       if (step.initialized) {
+  //         let liquidityNet = nextInitTick.liquidityNet;
+  //         if (zeroForOne) liquidityNet = liquidityNet.mul(NEGATIVE_ONE);
+  //         state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
+  //       }
+  //       state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
+  //     } else if (state.sqrtPriceX64 != step.sqrtPriceStartX64) {
+  //       state.tick = SqrtPriceMath.getTickFromSqrtPriceX64(state.sqrtPriceX64);
+  //     }
+  //     ++loopCount;
+  //   }
+
+  //   // try {
+  //   //   console.log('state.tick', state.tick)
+  //   //   const { nextStartIndex: tickAarrayStartIndex } = TickQuery.nextInitializedTickArray(
+  //   //     state.tick,
+  //   //     tickSpacing,
+  //   //     zeroForOne,
+  //   //     tickArrayBitmap,
+  //   //     tickarrayBitmapExtension,
+  //   //   );
+  //   //   if (
+  //   //     lastSavedTickArrayStartIndex !== tickAarrayStartIndex
+  //   //   ) {
+  //   //     state.accounts.push(getPdaTickArrayAddress(
+  //   //       programId,
+  //   //       poolId,
+  //   //       tickAarrayStartIndex,
+  //   //     ).publicKey)
+  //   //     lastSavedTickArrayStartIndex = tickAarrayStartIndex;
+  //   //   }
+  //   // } catch (e) { /* empty */ }
+
+  //   return {
+  //     amountCalculated: state.amountCalculated,
+  //     feeAmount: state.feeAmount,
+  //     sqrtPriceX64: state.sqrtPriceX64,
+  //     liquidity: state.liquidity,
+  //     tickCurrent: state.tick,
+  //     accounts: state.accounts,
+  //   };
+  // }
 
   private static swapStepCompute(
     sqrtPriceX64Current: BN,

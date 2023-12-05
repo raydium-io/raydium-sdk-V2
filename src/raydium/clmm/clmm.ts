@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import { InstructionType, WSOLMint, getTransferAmountFee, solToWSol } from "@/common";
+import { InstructionType, WSOLMint, getTransferAmountFee } from "@/common";
 import { Percent } from "@/module/percent";
 import { ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
 import { MakeTxData, MultiTxBuildData } from "@/common/txTool/txTool";
@@ -64,9 +64,9 @@ export class Clmm extends ModuleBase {
       txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    const [mintA, mintB, initPrice] = solToWSol(mint1.address)._bn.gt(solToWSol(mint2.address)._bn)
+    const [mintA, mintB, initPrice] = new BN(new PublicKey(mint1.address).toBuffer()).gt(
+      new BN(new PublicKey(mint2.address).toBuffer()),
+    )
       ? [mint2, mint1, new Decimal(1).div(initialPrice)]
       : [mint1, mint2, initialPrice];
 
@@ -552,22 +552,31 @@ export class Clmm extends ModuleBase {
     const rewardAccounts: PublicKey[] = [];
     for (const itemReward of poolInfo.rewardDefaultInfos) {
       const rewardUseSOLBalance = ownerInfo.useSOLBalance && itemReward.mint.address === WSOLMint.toString();
-      const { account: _ownerRewardAccount, instructionParams: ownerRewardAccountInstructions } =
-        await this.scope.account.getOrCreateTokenAccount({
-          tokenProgram: new PublicKey(itemReward.mint.programId),
-          mint: new PublicKey(itemReward.mint.address),
-          notUseTokenAccount: rewardUseSOLBalance,
-          owner: this.scope.ownerPubKey,
-          createInfo: {
-            payer: this.scope.ownerPubKey,
-            amount: 0,
-          },
-          skipCloseAccount: !rewardUseSOLBalance,
-          associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
-          checkCreateATAOwner,
-        });
-      ownerRewardAccountInstructions && txBuilder.addInstruction(ownerRewardAccountInstructions);
-      _ownerRewardAccount && rewardAccounts.push(_ownerRewardAccount);
+
+      let ownerRewardAccount: PublicKey | undefined;
+
+      if (itemReward.mint.address === poolInfo.mintA.address) ownerRewardAccount = ownerTokenAccountA;
+      else if (itemReward.mint.address === poolInfo.mintB.address) ownerRewardAccount = ownerTokenAccountB;
+      else {
+        const { account: _ownerRewardAccount, instructionParams: ownerRewardAccountInstructions } =
+          await this.scope.account.getOrCreateTokenAccount({
+            tokenProgram: new PublicKey(itemReward.mint.programId),
+            mint: new PublicKey(itemReward.mint.address),
+            notUseTokenAccount: rewardUseSOLBalance,
+            owner: this.scope.ownerPubKey,
+            createInfo: {
+              payer: this.scope.ownerPubKey,
+              amount: 0,
+            },
+            skipCloseAccount: !rewardUseSOLBalance,
+            associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+            checkCreateATAOwner,
+          });
+        ownerRewardAccount = _ownerRewardAccount;
+        ownerRewardAccountInstructions && txBuilder.addInstruction(ownerRewardAccountInstructions);
+      }
+
+      rewardAccounts.push(ownerRewardAccount!);
     }
 
     if (!ownerTokenAccountA && !ownerTokenAccountB)

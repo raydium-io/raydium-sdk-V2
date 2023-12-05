@@ -226,7 +226,7 @@ export class TickUtils {
     tickSpacing: number,
   ): number[] {
     const tickArrayBitmaps = [
-      ...exTickArrayBitmap.negativeTickArrayBitmap.reverse(),
+      ...[...exTickArrayBitmap.negativeTickArrayBitmap].reverse(),
       tickArrayBitmap.slice(0, 8),
       tickArrayBitmap.slice(8, 16),
       ...exTickArrayBitmap.positiveTickArrayBitmap,
@@ -254,7 +254,7 @@ export class TickUtils {
     tickSpacing: number,
   ): number[] {
     const tickArrayBitmaps = [
-      ...exTickArrayBitmap.negativeTickArrayBitmap.reverse(),
+      ...[...exTickArrayBitmap.negativeTickArrayBitmap].reverse(),
       tickArrayBitmap.slice(0, 8),
       tickArrayBitmap.slice(8, 16),
       ...exTickArrayBitmap.positiveTickArrayBitmap,

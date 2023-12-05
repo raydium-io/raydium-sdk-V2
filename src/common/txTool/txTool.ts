@@ -489,7 +489,8 @@ export class TxBuilder {
       const _signer = [..._signerStrs.values()].map((i) => new PublicKey(i));
 
       if (
-        checkLegacyTxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, signers: _signer }) ||
+        (instructionQueue.length < 12 &&
+          checkLegacyTxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, signers: _signer })) ||
         checkLegacyTxSize({ instructions: _itemIns, payer: this.feePayer, signers: _signer })
       ) {
         // current ins add to queue still not exceed tx size limit

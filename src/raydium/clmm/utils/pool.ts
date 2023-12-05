@@ -17,13 +17,22 @@ import {
 import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
 
 import { ReturnTypeFetchMultipleMintInfos } from "@/raydium/type";
-import { NEGATIVE_ONE, Q64, ZERO, MAX_TICK, MIN_TICK, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "./constants";
+import {
+  NEGATIVE_ONE,
+  Q64,
+  ZERO,
+  MAX_TICK,
+  MIN_TICK,
+  MIN_SQRT_PRICE_X64,
+  MAX_SQRT_PRICE_X64,
+  U64_IGNORE_RANGE,
+} from "./constants";
 import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
-import { getPdaTickArrayAddress, getPdaExBitmapAccount, getPdaPersonalPositionAddress } from "./pda";
+import { getPdaTickArrayAddress, getPdaPersonalPositionAddress } from "./pda";
 import { TickArray, TickUtils, TICK_ARRAY_BITMAP_SIZE, Tick } from "./tick";
 import { TickArrayBitmap, TickArrayBitmapExtensionUtils } from "./tickarrayBitmap";
 import { TickQuery } from "./tickQuery";
-import { TickArrayBitmapExtensionLayout, PoolInfoLayout, PositionInfoLayout, TickArrayLayout } from "../layout";
+import { TickArrayBitmapExtensionLayout, PositionInfoLayout, TickArrayLayout } from "../layout";
 import {
   getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
@@ -37,7 +46,6 @@ import {
 } from "../../../common";
 import { SOL_INFO } from "../../token/constant";
 import { TokenAccountRaw } from "../../account/types";
-import { splAccountLayout } from "../../account/layout";
 import { Price, Percent, TokenAmount, Token } from "../../../module";
 import { PositionUtils } from "./position";
 import Decimal from "decimal.js";
@@ -126,7 +134,7 @@ export class PoolUtils {
     if (!isExist || firstTickArrayStartIndex === undefined || !nextAccountMeta) throw new Error("Invalid tick array");
 
     try {
-      const preTick = this.preInitializedTickArrayStartIndex(poolInfo, !zeroForOne);
+      const preTick = this.preInitializedTickArrayStartIndex(poolInfo, zeroForOne);
       if (preTick.isExist) {
         const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, preTick.nextStartIndex);
         allNeededAccounts.push(address);
@@ -209,10 +217,9 @@ export class PoolUtils {
     poolInfo: ClmmPoolInfo,
     zeroForOne: boolean,
   ): { isExist: boolean; nextStartIndex: number } {
-    const currentOffset =
-      Math.floor(poolInfo.tickCurrent / TickQuery.tickCount(poolInfo.tickSpacing)) *
-      TickQuery.tickCount(poolInfo.tickSpacing);
-    const result: number[] = zeroForOne
+    const currentOffset = Math.floor(poolInfo.tickCurrent / TickQuery.tickCount(poolInfo.tickSpacing));
+
+    const result: number[] = !zeroForOne
       ? TickUtils.searchLowBitFromStart(
           poolInfo.tickArrayBitmap,
           poolInfo.exBitmapInfo,
@@ -659,8 +666,10 @@ export class PoolUtils {
   //             tickUpperState,
   //           );
   //           const rewardInfos = PositionUtils.GetPositionRewards(state, itemPA, tickLowerState, tickUpperState);
-  //           itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(ZERO) ? tokenFeeAmountA : ZERO;
-  //           itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(ZERO) ? tokenFeeAmountB : ZERO;
+  // itemPA.tokenFeeAmountA =
+  //             tokenFeeAmountA.gte(ZERO) && tokenFeeAmountA.lt(U64_IGNORE_RANGE) ? tokenFeeAmountA : ZERO
+  //           itemPA.tokenFeeAmountB =
+  //             tokenFeeAmountB.gte(ZERO) && tokenFeeAmountA.lt(U64_IGNORE_RANGE) ? tokenFeeAmountB : ZERO
   //           for (let i = 0; i < rewardInfos.length; i++) {
   //             itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(ZERO) ? rewardInfos[i] : ZERO;
   //           }
@@ -1260,7 +1269,6 @@ export class PoolUtils {
   }
 
   static getLiquidityAmountOutFromAmountIn({
-    connection,
     poolInfo,
     inputA,
     tickLower,
@@ -1271,7 +1279,6 @@ export class PoolUtils {
     epochInfo,
     amountHasFee,
   }: {
-    connection: Connection;
     poolInfo: ApiV3PoolInfoConcentratedItem;
     inputA: boolean;
     tickLower: number;
@@ -1297,7 +1304,9 @@ export class PoolUtils {
       epochInfo,
       !amountHasFee,
     );
-    const _amount = addFeeAmount.amount.sub(addFeeAmount.fee ?? ZERO).muln(coefficient);
+    const _amount = new BN(
+      new Decimal(addFeeAmount.amount.sub(addFeeAmount.fee ?? ZERO).toString()).mul(coefficient).toFixed(0),
+    );
 
     let liquidity: BN;
     if (sqrtPriceX64.lte(sqrtPriceX64A)) {
@@ -1315,7 +1324,7 @@ export class PoolUtils {
     }
 
     return PoolUtils.getAmountsFromLiquidity({
-      connection,
+      epochInfo,
       poolInfo,
       tickLower,
       tickUpper,
@@ -1326,7 +1335,7 @@ export class PoolUtils {
   }
 
   static async getAmountsFromLiquidity({
-    connection,
+    epochInfo,
     poolInfo,
     tickLower,
     tickUpper,
@@ -1334,7 +1343,7 @@ export class PoolUtils {
     slippage,
     add,
   }: {
-    connection: Connection;
+    epochInfo: EpochInfo;
     poolInfo: ApiV3PoolInfoConcentratedItem;
     tickLower: number;
     tickUpper: number;
@@ -1342,8 +1351,6 @@ export class PoolUtils {
     slippage: number;
     add: boolean;
   }): Promise<ReturnTypeGetLiquidityAmountOut> {
-    const epochInfo = await getEpochInfo(connection);
-
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
 

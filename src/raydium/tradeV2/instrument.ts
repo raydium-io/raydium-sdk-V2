@@ -2,7 +2,7 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { ClmmInstrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "../clmm";
+import { ClmmInstrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64, getPdaExBitmapAccount } from "../clmm";
 import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "@/common";
 import { struct, u64, u8 } from "@/marshmallow";
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
@@ -297,6 +297,11 @@ function makeInnerInsKey(
           ]
         : []),
       ...(remainingAccount ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+      {
+        pubkey: getPdaExBitmapAccount(new PublicKey(String(itemPool.programId)), new PublicKey(itemPool.id)).publicKey,
+        isSigner: false,
+        isWritable: true,
+      },
     ];
   } else {
     const poolKey = jsonInfo2PoolKeys(itemPoolKey as AmmV4Keys);

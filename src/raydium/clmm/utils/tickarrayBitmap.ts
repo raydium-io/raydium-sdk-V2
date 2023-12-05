@@ -37,10 +37,7 @@ export class TickArrayBitmap {
     lastTickArrayStartIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
-  ): {
-    isInit: boolean;
-    tickIndex: number;
-  } {
+  ): { isInit: boolean; tickIndex: number } {
     if (!TickQuery.checkIsValidStartIndex(lastTickArrayStartIndex, tickSpacing))
       throw Error("nextInitializedTickArrayStartIndex check error");
 

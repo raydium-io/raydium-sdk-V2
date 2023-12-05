@@ -87,6 +87,7 @@ export default class Account extends ModuleBase {
     ]);
 
     const { tokenAccounts, tokenAccountRawInfos } = parseTokenAccountResp({
+      owner: this.scope.ownerPubKey,
       solAccountResp,
       tokenAccountResp: ownerTokenAccountResp,
     });

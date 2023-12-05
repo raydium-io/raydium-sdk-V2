@@ -136,3 +136,5 @@ export const mockV3CreatePoolInfo = {
   },
   pooltype: [],
 };
+
+export const U64_IGNORE_RANGE = new BN("18446744073700000000");

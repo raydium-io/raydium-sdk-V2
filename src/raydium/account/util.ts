@@ -1,7 +1,7 @@
 import { AccountInfo, PublicKey, RpcResponseAndContext, Keypair, GetProgramAccountsResponse } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
-import { createLogger } from "@/common";
+import { createLogger, getATAAddress } from "@/common";
 
 import { splAccountLayout } from "./layout";
 import { TokenAccount, TokenAccountRaw } from "./types";
@@ -10,11 +10,12 @@ import { sha256 } from "@noble/hashes/sha256";
 const logger = createLogger("Raydium_Util");
 
 export interface ParseTokenAccount {
+  owner: PublicKey;
   solAccountResp?: AccountInfo<Buffer> | null;
   tokenAccountResp: RpcResponseAndContext<GetProgramAccountsResponse>;
 }
 
-export function parseTokenAccountResp({ solAccountResp, tokenAccountResp }: ParseTokenAccount): {
+export function parseTokenAccountResp({ owner, solAccountResp, tokenAccountResp }: ParseTokenAccount): {
   tokenAccounts: TokenAccount[];
   tokenAccountRawInfos: TokenAccountRaw[];
 } {
@@ -29,11 +30,12 @@ export function parseTokenAccountResp({ solAccountResp, tokenAccountResp }: Pars
 
     const accountInfo = splAccountLayout.decode(account.data);
     const { mint, amount } = accountInfo;
-
+    getATAAddress(owner, mint, account.owner).publicKey;
     tokenAccounts.push({
       publicKey: pubkey,
       mint,
       amount,
+      isAssociated: getATAAddress(owner, mint, account.owner).publicKey.equals(pubkey),
       isNative: false,
       programId: account.owner,
     });

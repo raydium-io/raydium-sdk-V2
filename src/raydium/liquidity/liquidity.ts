@@ -46,7 +46,7 @@ export default class LiquidityModule extends ModuleBase {
     amount: TokenAmount;
     anotherToken: Token;
     slippage: Percent;
-  }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount } {
+  }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
     const _amount = amount.token.mint.equals(SOLMint)
       ? this.scope.mintToTokenAmount({ mint: WSOLMint, amount: amount.raw, decimalDone: true })
       : amount;
@@ -90,6 +90,11 @@ export default class LiquidityModule extends ModuleBase {
           : divCeil(_amount.raw.mul(baseReserve), quoteReserve);
     }
 
+    const liquidity = divCeil(
+      amount.raw.mul(new BN(poolInfo.lpAmount)),
+      new BN(input === "base" ? poolInfo.mintAmountA : poolInfo.mintAmountB),
+    );
+
     const _slippage = new Percent(BN_ONE).add(slippage);
     const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
 
@@ -100,6 +105,7 @@ export default class LiquidityModule extends ModuleBase {
     return {
       anotherAmount: _anotherAmount,
       maxAnotherAmount: _maxAnotherAmount,
+      liquidity,
     };
   }
 
@@ -282,10 +288,10 @@ export default class LiquidityModule extends ModuleBase {
 
     txBuilder.addInstruction({
       instructions: [
-        ComputeBudgetProgram.requestUnits({
-          units: 400000,
-          additionalFee: 0,
-        }),
+        // ComputeBudgetProgram.requestUnits({
+        //   units: 400000,
+        //   additionalFee: 0,
+        // }),
         removeLiquidityInstruction({
           poolInfo,
           poolKeys,
