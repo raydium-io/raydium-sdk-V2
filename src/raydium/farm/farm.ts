@@ -36,7 +36,7 @@ import {
   makeDepositInstructionV5,
   makeDepositInstructionV6,
 } from "./instruction";
-import { farmStateV6Layout } from "./layout";
+import { farmStateV6Layout, FarmLedger } from "./layout";
 import {
   CreateFarm,
   FarmDWParam,
@@ -466,7 +466,14 @@ export default class Farm extends ModuleBase {
       rewardAccounts.push(ownerRewardAccount);
     }
 
-    if (farmInfo.programId !== FARM_PROGRAM_ID_V6.toString() && !ledger) {
+    let ledgerInfo: FarmLedger | undefined = undefined;
+    const ledgerData = await this.scope.connection.getAccountInfo(ledger);
+    if (ledgerData) {
+      const ledgerLayout = getFarmLedgerLayout(version)!;
+      ledgerInfo = ledgerLayout.decode(ledgerData.data);
+    }
+
+    if (farmInfo.programId !== FARM_PROGRAM_ID_V6.toString() && !ledgerInfo) {
       const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
         id: farmId,
         programId: farmProgramId,
