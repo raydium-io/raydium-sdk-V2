@@ -26,6 +26,7 @@ import {
   ManipulateLiquidityExtInfo,
   ClosePositionExtInfo,
   InitRewardExtInfo,
+  OpenPositionFromBaseExtInfo,
 } from "./type";
 import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
 import {
@@ -406,7 +407,7 @@ export class ClmmInstrument {
     otherAmountMax: BN;
     withMetadata: "create" | "no-create";
     getEphemeralSigners?: (k: number) => any;
-  }): Promise<ReturnTypeMakeInstructions> {
+  }): Promise<ReturnTypeMakeInstructions<OpenPositionFromBaseExtInfo>> {
     const signers: Signer[] = [];
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
 

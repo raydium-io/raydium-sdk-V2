@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { InstructionType, WSOLMint, getTransferAmountFee } from "@/common";
 import { Percent } from "@/module/percent";
 import { ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
-import { MakeTxData, MultiTxBuildData } from "@/common/txTool/txTool";
+import { MakeTxData, MakeMultiTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
 import { getATAAddress } from "@/common";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
@@ -29,6 +29,7 @@ import {
   ManipulateLiquidityExtInfo,
   ReturnTypeComputeAmountOutBaseOut,
   OpenPositionFromLiquidityExtInfo,
+  OpenPositionFromBaseExtInfo,
   ClosePositionExtInfo,
   InitRewardExtInfo,
   HarvestAllRewardsParams,
@@ -136,7 +137,7 @@ export class Clmm extends ModuleBase {
     }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
 
-  public async openPositionFromBase({
+  public async openPositionFromBase<T extends TxVersion>({
     poolInfo,
     ownerInfo,
     tickLower,
@@ -148,7 +149,8 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     withMetadata = "create",
     getEphemeralSigners,
-  }: OpenPositionFromBase): Promise<MakeTransaction> {
+    txVersion,
+  }: OpenPositionFromBase<T>): Promise<MakeTxData<T, OpenPositionFromBaseExtInfo>> {
     if (this.scope.availability.addConcentratedPosition === false)
       this.logAndCreateError("add position feature disabled in your region");
 
@@ -221,9 +223,12 @@ export class Clmm extends ModuleBase {
       withMetadata,
       getEphemeralSigners,
     });
+
     txBuilder.addInstruction(insInfo);
     await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build({ address: insInfo.address });
+    return txBuilder.versionBuild<OpenPositionFromBaseExtInfo>({ txVersion, extInfo: insInfo.address }) as Promise<
+      MakeTxData<T, OpenPositionFromBaseExtInfo>
+    >;
   }
 
   public async openPositionFromLiquidity<T extends TxVersion>({
@@ -1253,14 +1258,15 @@ export class Clmm extends ModuleBase {
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
-  public async harvestAllRewards({
+  public async harvestAllRewards<T extends TxVersion = TxVersion.LEGACY>({
     allPoolInfo,
     allPositions,
     ownerInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
     programId,
-  }: HarvestAllRewardsParams): Promise<MultiTxBuildData> {
+    txVersion,
+  }: HarvestAllRewardsParams<T>): Promise<MakeMultiTxData<T>> {
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
       if (associatedOnly) {
@@ -1354,26 +1360,26 @@ export class Clmm extends ModuleBase {
       const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
 
       for (const itemPosition of allPositions[itemInfo.id]) {
-        txBuilder.addInstruction({
-          instructions: ClmmInstrument.decreaseLiquidityInstructions({
-            poolInfo,
-            poolKeys,
-            ownerPosition: itemPosition,
-            ownerInfo: {
-              wallet: this.scope.ownerPubKey,
-              tokenAccountA: ownerTokenAccountA,
-              tokenAccountB: ownerTokenAccountB,
-              rewardAccounts,
-            },
-            liquidity: new BN(0),
-            amountMinA: new BN(0),
-            amountMinB: new BN(0),
-          }).instructions,
+        const insData = ClmmInstrument.decreaseLiquidityInstructions({
+          poolInfo,
+          poolKeys,
+          ownerPosition: itemPosition,
+          ownerInfo: {
+            wallet: this.scope.ownerPubKey,
+            tokenAccountA: ownerTokenAccountA,
+            tokenAccountB: ownerTokenAccountB,
+            rewardAccounts,
+          },
+          liquidity: new BN(0),
+          amountMinA: new BN(0),
+          amountMinB: new BN(0),
         });
+        txBuilder.addInstruction(insData);
       }
     }
 
-    return txBuilder.sizeCheckBuild();
+    if (txVersion === TxVersion.V0) return txBuilder.sizeCheckBuildV0() as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
   }
 
   public async getWhiteListMint({ programId }: { programId: PublicKey }): Promise<PublicKey[]> {

@@ -62,11 +62,20 @@ export interface FarmPoolInfoV6 {
   };
 }
 
-export interface CreateFarm {
+export interface CreateFarm<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   rewardInfos: FarmRewardInfo[];
   payer?: PublicKey;
   programId?: PublicKey;
+  txVersion?: T;
+}
+
+export interface CreateFarmExtInfo {
+  farmId: PublicKey;
+  farmAuthority: PublicKey;
+  lpVault: PublicKey;
+  lockUserAccount: PublicKey;
+  nonce: number;
 }
 
 export interface UpdateFarmReward<T = TxVersion.LEGACY> {

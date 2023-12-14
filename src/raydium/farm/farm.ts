@@ -45,6 +45,7 @@ import {
   RewardInfoKey,
   UpdateFarmReward,
   UpdateFarmRewards,
+  CreateFarmExtInfo,
 } from "./type";
 import {
   calFarmRewardAmount,
@@ -85,12 +86,13 @@ export default class Farm extends ModuleBase {
   }
 
   // token account needed
-  public async create({
+  public async create<T extends TxVersion>({
     poolInfo: propPoolInfo,
     rewardInfos,
     payer,
     programId = FARM_PROGRAM_ID_V6,
-  }: CreateFarm): Promise<MakeTransaction> {
+    txVersion,
+  }: CreateFarm<T>): Promise<MakeTxData<T, CreateFarmExtInfo>> {
     this.checkDisabled();
     this.scope.checkOwner();
 
@@ -188,12 +190,21 @@ export default class Farm extends ModuleBase {
       nonce,
     });
 
-    return await txBuilder
+    return txBuilder
       .addInstruction({
         instructions: [instruction],
         instructionTypes: [instructionType],
       })
-      .build();
+      .versionBuild<CreateFarmExtInfo>({
+        txVersion,
+        extInfo: {
+          farmId: farmKeyPair.publicKey,
+          farmAuthority: authority,
+          lpVault,
+          lockUserAccount: lockUserAccount!,
+          nonce,
+        },
+      }) as Promise<MakeTxData<T, CreateFarmExtInfo>>;
   }
 
   public async restartReward<T extends TxVersion>({
@@ -396,7 +407,7 @@ export default class Farm extends ModuleBase {
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async deposit<T extends TxVersion>(params: FarmDWParam): Promise<MakeTxData<T>> {
+  public async deposit<T extends TxVersion>(params: FarmDWParam<T>): Promise<MakeTxData<T>> {
     const {
       txVersion,
       farmInfo,
@@ -659,14 +670,16 @@ export default class Farm extends ModuleBase {
   }
 
   // token account needed
-  public async withdrawFarmReward({
+  public async withdrawFarmReward<T extends TxVersion>({
     farmInfo,
     withdrawMint,
+    txVersion,
   }: {
     farmInfo: FormatFarmInfoOut;
     withdrawMint: PublicKey;
     payer?: PublicKey;
-  }): Promise<MakeTransaction> {
+    txVersion?: T;
+  }): Promise<MakeTxData<T>> {
     this.scope.checkOwner();
     const farmKeys = jsonInfo2PoolKeys(
       (await this.scope.api.fetchFarmKeysById({ id: farmInfo.id })) as FormatFarmKeyOutV6,
@@ -730,12 +743,12 @@ export default class Farm extends ModuleBase {
       owner: this.scope.ownerPubKey,
     });
 
-    return await txBuilder
+    return txBuilder
       .addInstruction({
         instructions: [instruction],
         instructionTypes: [instructionType],
       })
-      .build();
+      .versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
   public async harvestAllRewards<T extends TxVersion = TxVersion.LEGACY>(params: {

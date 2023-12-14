@@ -347,7 +347,7 @@ export interface ClmmPoolRewardLayoutInfo {
   rewardGrowthGlobalX64: BN;
 }
 
-export interface OpenPositionFromBase {
+export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
@@ -363,6 +363,17 @@ export interface OpenPositionFromBase {
   checkCreateATAOwner?: boolean;
   withMetadata?: "create" | "no-create";
   getEphemeralSigners?: (k: number) => any;
+  txVersion?: T;
+}
+
+export interface OpenPositionFromBaseExtInfo {
+  nftMint: PublicKey;
+  tickArrayLower: PublicKey;
+  tickArrayUpper: PublicKey;
+  positionNftAccount: PublicKey;
+  metadataAccount: PublicKey;
+  personalPosition: PublicKey;
+  protocolPosition: PublicKey;
 }
 
 export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
@@ -490,7 +501,7 @@ export interface CollectRewardsParams extends Omit<CollectRewardParams, "rewardM
   rewardMints: PublicKey[];
 }
 
-export interface HarvestAllRewardsParams {
+export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   allPoolInfo: Record<string, ApiV3PoolInfoConcentratedItem>;
   allPositions: Record<string, ClmmPositionLayout[]>;
   ownerInfo: {
@@ -500,6 +511,7 @@ export interface HarvestAllRewardsParams {
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   programId?: PublicKey;
+  txVersion?: T;
 }
 
 export interface ReturnTypeComputeAmountOutBaseOut {

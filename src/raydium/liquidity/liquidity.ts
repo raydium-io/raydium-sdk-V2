@@ -1,4 +1,4 @@
-import { PublicKey, ComputeBudgetProgram } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import {
   ApiV3PoolInfoConcentratedItem,
   ApiV3PoolInfoStandardItem,
@@ -17,7 +17,6 @@ import { MakeTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
-import { MakeTransaction } from "../type";
 import { makeAddLiquidityInstruction } from "./instruction";
 import { ComputeBudgetConfig } from "../type";
 import { removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
@@ -341,7 +340,7 @@ export default class LiquidityModule extends ModuleBase {
     tokenProgram?: PublicKey;
     txVersion?: T;
     getEphemeralSigners?: (k: number) => any;
-  }): Promise<MakeTransaction> {
+  }): Promise<MakeTxData<T>> {
     if (
       this.scope.availability.removeStandardPosition === false ||
       this.scope.availability.createConcentratedPosition === false
@@ -491,7 +490,7 @@ export default class LiquidityModule extends ModuleBase {
       lookupTableAddress: clmmPoolKeys.lookupTableAccount ? [clmmPoolKeys.lookupTableAccount] : [],
     });
 
-    return txBuilder.build();
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
   public async createPoolV4<T extends TxVersion>({
