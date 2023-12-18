@@ -23,14 +23,8 @@ export function parseTokenAccountResp({ owner, solAccountResp, tokenAccountResp 
   const tokenAccountRawInfos: TokenAccountRaw[] = [];
 
   for (const { pubkey, account } of tokenAccountResp.value) {
-    if (account.data.length !== splAccountLayout.span) {
-      logger.error("invalid token account layout length", "publicKey", pubkey.toBase58());
-      throw new Error("invalid token account layout length");
-    }
-
     const accountInfo = splAccountLayout.decode(account.data);
     const { mint, amount } = accountInfo;
-    getATAAddress(owner, mint, account.owner).publicKey;
     tokenAccounts.push({
       publicKey: pubkey,
       mint,
