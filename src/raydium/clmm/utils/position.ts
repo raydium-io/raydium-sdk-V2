@@ -9,16 +9,17 @@ import { MathUtil, SqrtPriceMath, LiquidityMath } from "./math";
 import { Tick } from "./tick";
 import { GetAmountParams, ReturnTypeGetLiquidityAmountOut } from "../type";
 import Decimal from "decimal.js";
+import { ClmmPositionLayout } from "../layout";
 
 export class PositionUtils {
   static getfeeGrowthInside(
-    poolState: ClmmPoolInfo,
+    poolState: Pick<ClmmPoolInfo, "tickCurrent" | "feeGrowthGlobalX64A" | "feeGrowthGlobalX64B">,
     tickLowerState: Tick,
     tickUpperState: Tick,
   ): { feeGrowthInsideX64A: BN; feeGrowthInsideBX64: BN } {
     let feeGrowthBelowX64A = new BN(0);
     let feeGrowthBelowX64B = new BN(0);
-    if (poolState.tickCurrent > tickLowerState.tick) {
+    if (poolState.tickCurrent >= tickLowerState.tick) {
       feeGrowthBelowX64A = tickLowerState.feeGrowthOutsideX64A;
       feeGrowthBelowX64B = tickLowerState.feeGrowthOutsideX64B;
     } else {
@@ -76,6 +77,63 @@ export class PositionUtils {
     return { tokenFeeAmountA, tokenFeeAmountB };
   }
 
+  static GetPositionFeesV2(
+    ammPool: Pick<ClmmPoolInfo, "tickCurrent" | "feeGrowthGlobalX64A" | "feeGrowthGlobalX64B">,
+    positionState: ClmmPositionLayout,
+    tickLowerState: Tick,
+    tickUpperState: Tick,
+  ): { tokenFeeAmountA: BN; tokenFeeAmountB: BN } {
+    const { feeGrowthInsideX64A, feeGrowthInsideBX64 } = this.getfeeGrowthInside(
+      ammPool,
+      tickLowerState,
+      tickUpperState,
+    );
+
+    const feeGrowthdeltaA = MathUtil.mulDivFloor(
+      MathUtil.wrappingSubU128(feeGrowthInsideX64A, positionState.feeGrowthInsideLastX64A),
+      positionState.liquidity,
+      Q64,
+    );
+    const tokenFeeAmountA = positionState.tokenFeesOwedA.add(feeGrowthdeltaA);
+
+    const feeGrowthdelta1 = MathUtil.mulDivFloor(
+      MathUtil.wrappingSubU128(feeGrowthInsideBX64, positionState.feeGrowthInsideLastX64B),
+      positionState.liquidity,
+      Q64,
+    );
+    const tokenFeeAmountB = positionState.tokenFeesOwedB.add(feeGrowthdelta1);
+
+    return { tokenFeeAmountA, tokenFeeAmountB };
+  }
+
+  static GetPositionRewardsV2(
+    ammPool: Pick<ClmmPoolInfo, "tickCurrent" | "feeGrowthGlobalX64B"> & {
+      rewardInfos: { rewardGrowthGlobalX64: BN }[];
+    },
+    positionState: ClmmPositionLayout,
+    tickLowerState: Tick,
+    tickUpperState: Tick,
+  ): BN[] {
+    const rewards: BN[] = [];
+
+    const rewardGrowthsInside = this.getRewardGrowthInsideV2(
+      ammPool.tickCurrent,
+      tickLowerState,
+      tickUpperState,
+      ammPool.rewardInfos,
+    );
+    for (let i = 0; i < rewardGrowthsInside.length; i++) {
+      const rewardGrowthInside = rewardGrowthsInside[i];
+      const currRewardInfo = positionState.rewardInfos[i];
+
+      const rewardGrowthDelta = MathUtil.wrappingSubU128(rewardGrowthInside, currRewardInfo.growthInsideLastX64);
+      const amountOwedDelta = MathUtil.mulDivFloor(rewardGrowthDelta, positionState.liquidity, Q64);
+      const rewardAmountOwed = currRewardInfo.rewardAmountOwed.add(amountOwedDelta);
+      rewards.push(rewardAmountOwed);
+    }
+    return rewards;
+  }
+
   static GetPositionRewards(
     ammPool: ClmmPoolInfo,
     positionState: ClmmPoolPersonalPosition,
@@ -125,7 +183,44 @@ export class PositionUtils {
       } else if (tickCurrentIndex < tickUpperState.tick) {
         rewardGrowthsAbove = tickUpperState.rewardGrowthsOutsideX64[i];
       } else {
-        rewardGrowthsAbove = rewardInfos[i].rewardGrowthGlobalX64.add(tickUpperState.rewardGrowthsOutsideX64[i]);
+        rewardGrowthsAbove = rewardInfos[i].rewardGrowthGlobalX64.sub(tickUpperState.rewardGrowthsOutsideX64[i]);
+      }
+
+      rewardGrowthsInside.push(
+        MathUtil.wrappingSubU128(
+          MathUtil.wrappingSubU128(rewardInfos[i].rewardGrowthGlobalX64, rewardGrowthsBelow),
+          rewardGrowthsAbove,
+        ),
+      );
+    }
+
+    return rewardGrowthsInside;
+  }
+
+  static getRewardGrowthInsideV2(
+    tickCurrentIndex: number,
+    tickLowerState: Tick,
+    tickUpperState: Tick,
+    rewardInfos: Pick<ClmmPoolRewardInfo, "rewardGrowthGlobalX64">[],
+  ): BN[] {
+    const rewardGrowthsInside: BN[] = [];
+    for (let i = 0; i < rewardInfos.length; i++) {
+      let rewardGrowthsBelow = new BN(0);
+      if (tickLowerState.liquidityGross.eqn(0)) {
+        rewardGrowthsBelow = rewardInfos[i].rewardGrowthGlobalX64;
+      } else if (tickCurrentIndex < tickLowerState.tick) {
+        rewardGrowthsBelow = rewardInfos[i].rewardGrowthGlobalX64.sub(tickLowerState.rewardGrowthsOutsideX64[i]);
+      } else {
+        rewardGrowthsBelow = tickLowerState.rewardGrowthsOutsideX64[i];
+      }
+
+      let rewardGrowthsAbove = new BN(0);
+      if (tickUpperState.liquidityGross.eqn(0)) {
+        //
+      } else if (tickCurrentIndex < tickUpperState.tick) {
+        rewardGrowthsAbove = tickUpperState.rewardGrowthsOutsideX64[i];
+      } else {
+        rewardGrowthsAbove = rewardInfos[i].rewardGrowthGlobalX64.sub(tickUpperState.rewardGrowthsOutsideX64[i]);
       }
 
       rewardGrowthsInside.push(
