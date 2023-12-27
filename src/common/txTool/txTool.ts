@@ -500,9 +500,10 @@ export class TxBuilder {
 
         // if add computeBudget still not exceed tx size limit
         if (
-          autoComputeBudget &&
           checkLegacyTxSize({
-            instructions: [...computeBudgetData.instructions, ...instructionQueue],
+            instructions: autoComputeBudget
+              ? [...computeBudgetData.instructions, ...instructionQueue]
+              : [...instructionQueue],
             payer: this.feePayer,
             signers: _signer,
           })
@@ -511,7 +512,15 @@ export class TxBuilder {
         } else {
           allTransactions.push(new Transaction().add(...instructionQueue));
         }
-        allSigners.push([..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined));
+        allSigners.push(
+          Array.from(
+            new Set<string>(
+              instructionQueue.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+            ),
+          )
+            .map((i) => signerKey[i])
+            .filter((i) => i !== undefined),
+        );
         instructionQueue = [item];
       }
     });
@@ -523,9 +532,10 @@ export class TxBuilder {
       const _signers = [..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined);
 
       if (
-        autoComputeBudget &&
         checkLegacyTxSize({
-          instructions: [...computeBudgetData.instructions, ...instructionQueue],
+          instructions: autoComputeBudget
+            ? [...computeBudgetData.instructions, ...instructionQueue]
+            : [...instructionQueue],
           payer: this.feePayer,
           signers: _signers.map((s) => s.publicKey),
         })
@@ -619,10 +629,6 @@ export class TxBuilder {
     this.allInstructions.forEach((item) => {
       const _itemIns = [...instructionQueue, item];
       const _itemInsWithCompute = autoComputeBudget ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
-      const _signerStrs = new Set<string>(
-        _itemIns.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
-      );
-
       if (
         checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount }) ||
         checkV0TxSize({ instructions: _itemIns, payer: this.feePayer, lookupTableAddressAccount })
@@ -659,7 +665,15 @@ export class TxBuilder {
           }).compileToV0Message(Object.values(lookupTableAddressAccount));
           allTransactions.push(new VersionedTransaction(messageV0));
         }
-        allSigners.push([..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined));
+        allSigners.push(
+          Array.from(
+            new Set<string>(
+              instructionQueue.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+            ),
+          )
+            .map((i) => signerKey[i])
+            .filter((i) => i !== undefined),
+        );
         instructionQueue = [item];
       }
     });
