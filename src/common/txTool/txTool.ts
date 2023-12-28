@@ -553,7 +553,8 @@ export class TxBuilder {
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
-      execute: async (): Promise<string[]> => {
+      execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+        const { sequentially, onTxUpdate } = executeParams || {};
         const recentBlockHash = await getRecentBlockHash(this.connection);
         allTransactions.forEach(async (tx, idx) => {
           tx.recentBlockhash = recentBlockHash;
@@ -569,12 +570,37 @@ export class TxBuilder {
         }
         if (this.signAllTransactions) {
           const signedTxs = await this.signAllTransactions(allTransactions);
-          const txIds: string[] = [];
-          for (let i = 0; i < signedTxs.length; i += 1) {
-            const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
-            txIds.push(txId);
+          if (sequentially) {
+            let i = 0;
+            const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
+            const checkSendTx = async (): Promise<void> => {
+              if (!signedTxs[i]) return;
+              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+              processedTxs.push({ txId, status: "sent" });
+              onTxUpdate?.([...processedTxs]);
+              i++;
+              this.connection.onSignature(
+                txId,
+                (signatureResult) => {
+                  const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
+                  if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+                  onTxUpdate?.([...processedTxs]);
+                  checkSendTx();
+                },
+                "processed",
+              );
+              this.connection.getSignatureStatus(txId);
+            };
+            await checkSendTx();
+            return processedTxs.map((d) => d.txId);
+          } else {
+            const txIds: string[] = [];
+            for (let i = 0; i < signedTxs.length; i += 1) {
+              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+              txIds.push(txId);
+            }
+            return txIds;
           }
-          return txIds;
         }
         throw new Error("please connect wallet first");
       },
@@ -715,7 +741,8 @@ export class TxBuilder {
       buildProps: props,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
-      execute: async (): Promise<string[]> => {
+      execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+        const { sequentially, onTxUpdate } = executeParams || {};
         allTransactions.map(async (tx, idx) => {
           if (allSigners[idx].length) tx.sign(allSigners[idx]);
         });
@@ -729,13 +756,37 @@ export class TxBuilder {
         }
         if (this.signAllTransactions) {
           const signedTxs = await this.signAllTransactions(allTransactions);
-
-          const txIds: string[] = [];
-          for (let i = 0; i < signedTxs.length; i += 1) {
-            const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
-            txIds.push(txId);
+          if (sequentially) {
+            let i = 0;
+            const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
+            const checkSendTx = async (): Promise<void> => {
+              if (!signedTxs[i]) return;
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              processedTxs.push({ txId, status: "sent" });
+              onTxUpdate?.([...processedTxs]);
+              i++;
+              this.connection.onSignature(
+                txId,
+                (signatureResult) => {
+                  const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
+                  if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+                  onTxUpdate?.([...processedTxs]);
+                  checkSendTx();
+                },
+                "processed",
+              );
+              this.connection.getSignatureStatus(txId);
+            };
+            checkSendTx();
+            return [];
+          } else {
+            const txIds: string[] = [];
+            for (let i = 0; i < signedTxs.length; i += 1) {
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              txIds.push(txId);
+            }
+            return txIds;
           }
-          return txIds;
         }
         throw new Error("please connect wallet first");
       },

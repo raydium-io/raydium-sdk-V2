@@ -1,11 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
 import ModuleBase from "../moduleBase";
 import { makeClaimInstruction, makeClaimInstructionV4 } from "./instruction";
-import { MakeTransaction } from "../type";
 import { jsonInfo2PoolKeys } from "@/common/utility";
 import { OwnerIdoInfo, IdoKeysData } from "@/api/type";
 import { IDO_ALL_PROGRAM } from "@/common/programId";
-import { WSOLMint } from "@/common";
+import { WSOLMint } from "@/common/pubKey";
+import { TxVersion } from "@/common/txTool/txType";
+import { MakeTxData } from "@/common/txTool/txTool";
+import BN from "bn.js";
+import { userInfo } from "os";
 
 const PROGRAM_TO_VERSION = {
   [IDO_ALL_PROGRAM.IDO_PROGRAM_ID_V1.toString()]: 1,
@@ -15,47 +18,64 @@ const PROGRAM_TO_VERSION = {
 };
 
 export default class MarketV2 extends ModuleBase {
-  public async claim({
+  public async claim<T extends TxVersion>({
     ownerInfo,
     idoKeys,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    txVersion,
   }: {
     ownerInfo: OwnerIdoInfo[keyof OwnerIdoInfo] & { userIdoInfo: string };
     idoKeys: IdoKeysData;
     associatedOnly?: boolean;
     checkCreateATAOwner?: boolean;
-  }): Promise<MakeTransaction> {
+    txVersion?: T;
+  }): Promise<MakeTxData> {
     const txBuilder = this.createTxBuilder();
     const version = PROGRAM_TO_VERSION[idoKeys.programId];
 
     if (!version) this.logAndCreateError("invalid version", version);
     const poolConfigKey = jsonInfo2PoolKeys(idoKeys);
 
-    const userProjectTokenAccount = await this.scope.account.getCreatedTokenAccount({
-      programId: poolConfigKey.projectInfo.mint.programId,
-      mint: poolConfigKey.projectInfo.mint.address,
-    });
+    const [hasUnClaimedProject, hasUnClaimedBuy] = [!new BN(ownerInfo.coin).isZero(), !new BN(ownerInfo.pc).isZero()];
+
+    const userProjectUseSolBalance = poolConfigKey.projectInfo.mint.address.equals(WSOLMint);
+    const { account: userProjectTokenAccount, instructionParams: userProjectInstructionParams } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: poolConfigKey.projectInfo.mint.programId,
+        mint: poolConfigKey.projectInfo.mint.address,
+        owner: this.scope.ownerPubKey,
+        createInfo: {
+          payer: this.scope.ownerPubKey,
+          amount: 0,
+        },
+        skipCloseAccount: !userProjectUseSolBalance,
+        notUseTokenAccount: userProjectUseSolBalance,
+        associatedOnly: userProjectUseSolBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+
+    if (!userProjectTokenAccount && hasUnClaimedProject)
+      this.logAndCreateError("target token accounts not found", "mint", idoKeys.projectInfo.mint.address);
+    hasUnClaimedProject && userProjectInstructionParams && txBuilder.addInstruction(userProjectInstructionParams);
 
     const buyMintUseSolBalance = poolConfigKey.buyInfo.mint.address.equals(WSOLMint);
     const { account: userBuyTokenAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
       tokenProgram: poolConfigKey.buyInfo.mint.programId,
       mint: poolConfigKey.buyInfo.mint.address,
       owner: this.scope.ownerPubKey,
-
-      createInfo: buyMintUseSolBalance
-        ? {
-            payer: this.scope.ownerPubKey,
-            amount: 0,
-          }
-        : undefined,
-
+      createInfo: {
+        payer: this.scope.ownerPubKey,
+        amount: 0,
+      },
       skipCloseAccount: !buyMintUseSolBalance,
       notUseTokenAccount: buyMintUseSolBalance,
       associatedOnly: buyMintUseSolBalance ? false : associatedOnly,
       checkCreateATAOwner,
     });
-    instructionParams && txBuilder.addInstruction(instructionParams);
+    if (!userProjectTokenAccount && hasUnClaimedBuy)
+      this.logAndCreateError("target token accounts not found", "mint", idoKeys.projectInfo.mint.address);
+    hasUnClaimedBuy && instructionParams && txBuilder.addInstruction(instructionParams);
 
     if (!userProjectTokenAccount || !userBuyTokenAccount)
       this.logAndCreateError(
@@ -69,33 +89,42 @@ export default class MarketV2 extends ModuleBase {
       return txBuilder
         .addInstruction({
           instructions: [
-            makeClaimInstruction<"3">(
-              { programId: poolConfigKey.programId },
-              {
-                idoId: poolConfigKey.id,
-                authority: poolConfigKey.authority,
-                poolTokenAccount: poolConfigKey.projectInfo.vault,
-                userTokenAccount: userProjectTokenAccount!,
-                userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
-                userOwner: this.scope.ownerPubKey,
-              },
-            ),
-            makeClaimInstruction<"3">(
-              { programId: new PublicKey(idoKeys.programId) },
-              {
-                idoId: poolConfigKey.id,
-                authority: poolConfigKey.authority,
-                poolTokenAccount: poolConfigKey.buyInfo.vault,
-                userTokenAccount: userBuyTokenAccount!,
-                userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
-                userOwner: this.scope.ownerPubKey,
-              },
-            ),
+            ...(hasUnClaimedProject
+              ? [
+                  makeClaimInstruction<"3">(
+                    { programId: poolConfigKey.programId },
+                    {
+                      idoId: poolConfigKey.id,
+                      authority: poolConfigKey.authority,
+                      poolTokenAccount: poolConfigKey.projectInfo.vault,
+                      userTokenAccount: userProjectTokenAccount!,
+                      userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
+                      userOwner: this.scope.ownerPubKey,
+                    },
+                  ),
+                ]
+              : []),
+            ...(hasUnClaimedBuy
+              ? [
+                  makeClaimInstruction<"3">(
+                    { programId: new PublicKey(idoKeys.programId) },
+                    {
+                      idoId: poolConfigKey.id,
+                      authority: poolConfigKey.authority,
+                      poolTokenAccount: poolConfigKey.buyInfo.vault,
+                      userTokenAccount: userBuyTokenAccount!,
+                      userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
+                      userOwner: this.scope.ownerPubKey,
+                    },
+                  ),
+                ]
+              : []),
           ],
         })
-        .build();
+        .versionBuild({ txVersion }) as Promise<MakeTxData>;
     }
     if (version < 3) {
+      if (!hasUnClaimedProject && !hasUnClaimedBuy) this.logAndCreateError("no claimable rewards");
       return txBuilder
         .addInstruction({
           instructions: [
@@ -114,38 +143,7 @@ export default class MarketV2 extends ModuleBase {
             ),
           ],
         })
-        .build();
-    }
-
-    if (version === 3) {
-      return txBuilder
-        .addInstruction({
-          instructions: [
-            makeClaimInstruction<"3">(
-              { programId: poolConfigKey.programId },
-              {
-                idoId: poolConfigKey.id,
-                authority: poolConfigKey.authority,
-                poolTokenAccount: poolConfigKey.projectInfo.vault,
-                userTokenAccount: userProjectTokenAccount!,
-                userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
-                userOwner: this.scope.ownerPubKey,
-              },
-            ),
-            makeClaimInstruction<"3">(
-              { programId: new PublicKey(idoKeys.programId) },
-              {
-                idoId: poolConfigKey.id,
-                authority: poolConfigKey.authority,
-                poolTokenAccount: poolConfigKey.buyInfo.vault,
-                userTokenAccount: userBuyTokenAccount!,
-                userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
-                userOwner: this.scope.ownerPubKey,
-              },
-            ),
-          ],
-        })
-        .build();
+        .versionBuild({ txVersion }) as Promise<MakeTxData>;
     }
 
     const keys = {
@@ -169,10 +167,10 @@ export default class MarketV2 extends ModuleBase {
     return txBuilder
       .addInstruction({
         instructions: [
-          makeClaimInstructionV4({ ...keys, side: "base" }),
-          makeClaimInstructionV4({ ...keys, side: "quote" }),
+          ...(hasUnClaimedProject ? [makeClaimInstructionV4({ ...keys, side: "base" })] : []),
+          ...(hasUnClaimedBuy ? [makeClaimInstructionV4({ ...keys, side: "quote" })] : []),
         ],
       })
-      .build();
+      .versionBuild({ txVersion }) as Promise<MakeTxData>;
   }
 }

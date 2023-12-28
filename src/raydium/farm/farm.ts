@@ -13,7 +13,6 @@ import { generatePubKey } from "../account/util";
 import { createWSolAccountInstructions } from "../account/instruction";
 import ModuleBase from "../moduleBase";
 import { TOKEN_WSOL } from "../token/constant";
-import { MakeTransaction } from "../type";
 
 import {
   FARM_LOCK_MINT,
