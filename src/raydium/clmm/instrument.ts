@@ -706,7 +706,7 @@ export class ClmmInstrument {
       { pubkey: positionNftOwner, isSigner: true, isWritable: true },
       { pubkey: positionNftMint, isSigner: false, isWritable: true },
       { pubkey: positionNftAccount, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: false },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
 
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
@@ -745,7 +745,6 @@ export class ClmmInstrument {
     ins.push(
       this.closePositionInstruction(
         programId,
-
         ownerInfo.wallet,
         ownerPosition.nftMint,
         positionNftAccount,

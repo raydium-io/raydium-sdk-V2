@@ -655,7 +655,7 @@ export class Clmm extends ModuleBase {
       ownerPosition,
     });
 
-    return txBuilder.versionBuild<ClosePositionExtInfo>({
+    return txBuilder.addInstruction(ins).versionBuild<ClosePositionExtInfo>({
       txVersion,
       extInfo: { address: ins.address },
     }) as Promise<MakeTxData<T, ClosePositionExtInfo>>;
