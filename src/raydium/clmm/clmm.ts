@@ -139,6 +139,7 @@ export class Clmm extends ModuleBase {
 
   public async openPositionFromBase<T extends TxVersion>({
     poolInfo,
+    poolKeys: propPoolKeys,
     ownerInfo,
     tickLower,
     tickUpper,
@@ -190,7 +191,7 @@ export class Clmm extends ModuleBase {
         createInfo: mintBUseSOLBalance
           ? {
               payer: this.scope.ownerPubKey!,
-              amount: undefined,
+              amount: base === "MintA" ? otherAmountMax : baseAmount,
             }
           : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
@@ -204,7 +205,7 @@ export class Clmm extends ModuleBase {
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = propPoolKeys || ((await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys);
     const insInfo = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo,
       poolKeys,

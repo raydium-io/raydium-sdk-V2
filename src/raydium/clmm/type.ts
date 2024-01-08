@@ -349,6 +349,7 @@ export interface ClmmPoolRewardLayoutInfo {
 
 export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolKeys?: ClmmKeys;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
   };
