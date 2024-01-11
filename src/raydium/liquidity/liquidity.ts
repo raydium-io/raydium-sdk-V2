@@ -332,6 +332,7 @@ export default class LiquidityModule extends ModuleBase {
     createPositionInfo,
     farmInfo,
     userFarmLpAmount,
+    base,
     computeBudgetConfig,
     payer,
     tokenProgram = TOKEN_PROGRAM_ID,
@@ -346,11 +347,12 @@ export default class LiquidityModule extends ModuleBase {
       tickLower: number;
       tickUpper: number;
       liquidity: BN;
-      amountMaxA: BN;
-      amountMaxB: BN;
+      baseAmount: BN;
+      otherAmountMax: BN;
     };
     farmInfo?: FormatFarmInfoOutV6;
     userFarmLpAmount?: BN;
+    base: "MintA" | "MintB";
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
     tokenProgram?: PublicKey;
@@ -444,13 +446,18 @@ export default class LiquidityModule extends ModuleBase {
     const { account: baseTokenAccount, instructionParams: ownerTokenAccountBaseInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
         mint: new PublicKey(poolInfo.mintA.address),
-        tokenProgram,
+        tokenProgram: new PublicKey(poolInfo.mintA.programId),
         owner: this.scope.ownerPubKey,
+
+        createInfo: mintBaseUseSOLBalance
+          ? {
+              payer: this.scope.ownerPubKey,
+              amount: base === "MintA" ? createPositionInfo.baseAmount : createPositionInfo.otherAmountMax,
+            }
+          : undefined,
         skipCloseAccount: !mintBaseUseSOLBalance,
-        createInfo: {
-          payer: payer || this.scope.ownerPubKey,
-        },
-        associatedOnly: true,
+        notUseTokenAccount: mintBaseUseSOLBalance,
+        associatedOnly: !mintBaseUseSOLBalance,
         checkCreateATAOwner,
       });
     txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
@@ -458,15 +465,18 @@ export default class LiquidityModule extends ModuleBase {
 
     const { account: quoteTokenAccount, instructionParams: ownerTokenAccountQuoteInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: new PublicKey(poolInfo.mintB.programId),
         mint: new PublicKey(poolInfo.mintB.address),
-        tokenProgram,
         owner: this.scope.ownerPubKey,
+        createInfo: mintQuoteUseSOLBalance
+          ? {
+              payer: this.scope.ownerPubKey!,
+              amount: base === "MintA" ? createPositionInfo.otherAmountMax : createPositionInfo.baseAmount,
+            }
+          : undefined,
         skipCloseAccount: !mintQuoteUseSOLBalance,
-        createInfo: {
-          payer: payer || this.scope.ownerPubKey,
-          amount: 0,
-        },
-        associatedOnly: true,
+        notUseTokenAccount: mintQuoteUseSOLBalance,
+        associatedOnly: !mintQuoteUseSOLBalance,
         checkCreateATAOwner,
       });
     txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
@@ -502,16 +512,19 @@ export default class LiquidityModule extends ModuleBase {
         : [quoteTokenAccount, baseTokenAccount];
 
     const clmmPoolKeys = (await this.scope.api.fetchPoolKeysById({ id: clmmPoolInfo.id })) as ClmmKeys;
-    const createPositionIns = await ClmmInstrument.openPositionFromLiquidityInstructions({
+
+    const createPositionIns = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo: clmmPoolInfo,
       poolKeys: clmmPoolKeys,
       ownerInfo: {
+        feePayer: this.scope.ownerPubKey,
         wallet: this.scope.ownerPubKey,
         tokenAccountA,
         tokenAccountB,
       },
       withMetadata: "create",
       ...createPositionInfo,
+      base,
       getEphemeralSigners,
     });
 

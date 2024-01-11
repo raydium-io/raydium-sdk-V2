@@ -1392,6 +1392,7 @@ export function getLiquidityFromAmounts({
   slippage,
   add,
   epochInfo,
+  amountHasFee,
 }: {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   tickLower: number;
@@ -1401,6 +1402,7 @@ export function getLiquidityFromAmounts({
   slippage: number;
   add: boolean;
   epochInfo: EpochInfo;
+  amountHasFee: boolean;
 }): ReturnTypeGetLiquidityAmountOut {
   const [_tickLower, _tickUpper, _amountA, _amountB] =
     tickLower < tickUpper ? [tickLower, tickUpper, amountA, amountB] : [tickUpper, tickLower, amountB, amountA];
@@ -1412,12 +1414,17 @@ export function getLiquidityFromAmounts({
   const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(_tickLower);
   const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(_tickUpper);
 
+  const [amountFeeA, amountFeeB] = [
+    getTransferAmountFeeV2(_amountA, poolInfo.mintA.extensions.feeConfig, epochInfo, !amountHasFee),
+    getTransferAmountFeeV2(_amountB, poolInfo.mintB.extensions.feeConfig, epochInfo, !amountHasFee),
+  ];
+
   const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
     sqrtPriceX64,
     sqrtPriceX64A,
     sqrtPriceX64B,
-    _amountA,
-    _amountB,
+    amountFeeA.amount.sub(amountFeeA.fee ?? ZERO),
+    amountFeeB.amount.sub(amountFeeB.fee ?? ZERO),
   );
 
   return LiquidityMath.getAmountsOutFromLiquidity({
@@ -1428,5 +1435,6 @@ export function getLiquidityFromAmounts({
     slippage,
     add,
     epochInfo,
+    amountAddFee: !amountHasFee,
   });
 }
