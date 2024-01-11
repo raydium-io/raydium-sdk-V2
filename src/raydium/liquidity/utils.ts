@@ -1,7 +1,16 @@
-import { PublicKey } from "@solana/web3.js";
-import { findProgramAddress } from "@/common/txTool/txUtils";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { AmmV4Keys, AmmV5Keys } from "@/api/type";
+import {
+  findProgramAddress,
+  simulateMultipleInstruction,
+  parseSimulateLogToJson,
+  parseSimulateValue,
+} from "@/common/txTool/txUtils";
 import { getSerumAssociatedAuthority } from "./serum";
 import { LiquidityPoolKeys } from "./type";
+import { StableLayout } from "./stable";
+import { makeSimulatePoolInfoInstruction } from "./instruction";
+import BN from "bn.js";
 
 type AssociatedName =
   | "amm_associated_seed"
@@ -100,4 +109,72 @@ export function getAssociatedPoolKeys({
     marketAuthority,
     lookupTableAccount: PublicKey.default,
   };
+}
+
+let stableLayout: StableLayout | undefined;
+
+export async function fetchMultipleInfo({
+  connection,
+  poolKeysList,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  config,
+}: {
+  connection: Connection;
+  poolKeysList: (AmmV4Keys | AmmV5Keys)[];
+  config: any;
+}): Promise<
+  {
+    status: BN;
+    baseDecimals: number;
+    quoteDecimals: number;
+    lpDecimals: number;
+    baseReserve: BN;
+    quoteReserve: BN;
+    lpSupply: BN;
+    startTime: BN;
+  }[]
+> {
+  if (!stableLayout) {
+    stableLayout = new StableLayout({ connection });
+    await stableLayout.initStableModelLayout();
+  }
+
+  const instructions = poolKeysList.map((pool) => makeSimulatePoolInfoInstruction({ poolKeys: pool }));
+  const logs = await simulateMultipleInstruction(
+    connection,
+    instructions.map((i) => i.instruction),
+    "GetPoolData",
+  );
+
+  const poolsInfo = logs.map((log) => {
+    const json = parseSimulateLogToJson(log, "GetPoolData");
+
+    const status = new BN(parseSimulateValue(json, "status"));
+    const baseDecimals = Number(parseSimulateValue(json, "coin_decimals"));
+    const quoteDecimals = Number(parseSimulateValue(json, "pc_decimals"));
+    const lpDecimals = Number(parseSimulateValue(json, "lp_decimals"));
+    const baseReserve = new BN(parseSimulateValue(json, "pool_coin_amount"));
+    const quoteReserve = new BN(parseSimulateValue(json, "pool_pc_amount"));
+    const lpSupply = new BN(parseSimulateValue(json, "pool_lp_supply"));
+    // TODO fix it when split stable
+    let startTime = "0";
+    try {
+      startTime = parseSimulateValue(json, "pool_open_time");
+    } catch (error) {
+      //
+    }
+
+    return {
+      status,
+      baseDecimals,
+      quoteDecimals,
+      lpDecimals,
+      baseReserve,
+      quoteReserve,
+      lpSupply,
+      startTime: new BN(startTime),
+    };
+  });
+
+  return poolsInfo;
 }

@@ -6,7 +6,6 @@ import {
   AmmV4Keys,
   AmmV5Keys,
   ClmmKeys,
-  FormatFarmInfoOut,
   FormatFarmInfoOutV6,
 } from "@/api/type";
 import { Token, TokenAmount, Percent } from "@/module";
@@ -14,9 +13,8 @@ import { solToWSol } from "@/common/pubKey";
 import { toToken } from "../token";
 import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
-import { addComputeBudget } from "@/common/txTool/txUtils";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
-import { MakeTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txTool";
+import { MakeTxData } from "@/common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
@@ -28,8 +26,6 @@ import { getAssociatedPoolKeys } from "./utils";
 
 import {
   FARM_PROGRAM_TO_VERSION,
-  isValidFarmVersion,
-  validateFarmRewards,
   makeWithdrawInstructionV3,
   makeWithdrawInstructionV5,
   makeWithdrawInstructionV6,

@@ -437,3 +437,38 @@ export function makeInitPoolInstructionV4({
     data,
   });
 }
+
+export function makeSimulatePoolInfoInstruction({ poolKeys }: { poolKeys: AmmV4Keys | AmmV5Keys }): {
+  instruction: TransactionInstruction;
+} {
+  const LAYOUT = struct([u8("instruction"), u8("simulateType")]);
+  const data = Buffer.alloc(LAYOUT.span);
+  LAYOUT.encode(
+    {
+      instruction: 12,
+      simulateType: 0,
+    },
+    data,
+  );
+
+  const keys = [
+    // amm
+    accountMeta({ pubkey: new PublicKey(poolKeys.id), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.openOrders), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.vault.A), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.vault.B), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.mintLp.address), isWritable: false }),
+    // serum
+    accountMeta({ pubkey: new PublicKey(poolKeys.marketId), isWritable: false }),
+    accountMeta({ pubkey: new PublicKey(poolKeys.marketEventQueue), isWritable: false }),
+  ];
+
+  return {
+    instruction: new TransactionInstruction({
+      programId: new PublicKey(poolKeys.programId),
+      keys,
+      data,
+    }),
+  };
+}
