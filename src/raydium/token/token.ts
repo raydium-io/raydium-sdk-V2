@@ -74,7 +74,7 @@ export default class TokenModule extends ModuleBase {
     });
 
     this._tokenList = Array.from(this._tokenMap).map((data) => data[1]);
-    if (fetchTokenPrice) await this.fetchTokenPrices(forceUpdate);
+    // if (fetchTokenPrice) await this.fetchTokenPrices(forceUpdate);
   }
 
   get tokenList(): TokenInfo[] {
@@ -90,69 +90,35 @@ export default class TokenModule extends ModuleBase {
     return this._mintGroup;
   }
 
-  get tokenPriceMap(): Map<string, Price> {
-    return this._tokenPrice;
-  }
+  // public async fetchTokenPrices(forceUpdate?: boolean): Promise<Map<string, Price>> {
+  //   const totalCount = this._mintGroup.official.size + this._mintGroup.jup.size;
+  //   if (
+  //     !forceUpdate &&
+  //     totalCount <= this._tokenPriceFetched.prevCount &&
+  //     Date.now() - this._tokenPriceFetched.fetched < 60 * 1000 * 5
+  //   )
+  //     return this._tokenPrice;
 
-  get tokenPriceOrgMap(): Map<string, number> {
-    return this._tokenPriceOrg;
-  }
-
-  public async fetchTokenPrices(forceUpdate?: boolean): Promise<Map<string, Price>> {
-    const totalCount = this._mintGroup.official.size + this._mintGroup.jup.size;
-    if (
-      !forceUpdate &&
-      totalCount <= this._tokenPriceFetched.prevCount &&
-      Date.now() - this._tokenPriceFetched.fetched < 60 * 1000 * 5
-    )
-      return this._tokenPrice;
-
-    this._tokenPrice = new Map();
-    const coingeckoTokens = this._tokenList.filter(
-      (token) => !!token.extensions?.coingeckoId && token.address !== PublicKey.default.toBase58(),
-    );
-
-    let coingeckoPrices: { [key: string]: Price } = {};
-    try {
-      const coingeckoIds = coingeckoTokens.map((token) => token.extensions.coingeckoId!);
-      const coingeckoPriceRes = await this.scope.api.getCoingeckoPrice(coingeckoIds);
-
-      coingeckoPrices = coingeckoTokens.reduce((acc, token) => {
-        this._tokenPriceOrg.set(token.address, coingeckoPriceRes[token.extensions.coingeckoId!].usd!);
-        return coingeckoPriceRes[token.extensions.coingeckoId!]?.usd
-          ? {
-              ...acc,
-              [token.address]: parseTokenPrice({
-                token: this._tokenMap.get(token.address)!,
-                numberPrice: coingeckoPriceRes[token.extensions.coingeckoId!].usd!,
-                decimalDone: true,
-              }),
-            }
-          : acc;
-      }, {});
-    } catch {
-      console.error("coingecko price fetch error");
-    }
-
-    const raydiumPriceRes = await this.scope.api.getRaydiumTokenPrice();
-    const raydiumPrices: { [key: string]: Price } = Object.keys(raydiumPriceRes).reduce((acc, key) => {
-      this._tokenPriceOrg.set(key, raydiumPriceRes[key]);
-      return this._tokenMap.get(key)
-        ? {
-            ...acc,
-            [key]: parseTokenPrice({
-              token: this._tokenMap.get(key)!,
-              numberPrice: raydiumPriceRes[key],
-              decimalDone: true,
-            }),
-          }
-        : acc;
-    }, {});
-    this._tokenPrice = new Map([...Object.entries(coingeckoPrices), ...Object.entries(raydiumPrices)]);
-    this._tokenPrice.set(PublicKey.default.toString(), this._tokenPrice.get(WSOLMint.toString())!);
-    this._tokenPriceFetched = { prevCount: totalCount, fetched: Date.now() };
-    return this._tokenPrice;
-  }
+  //   this._tokenPrice = new Map();
+  //   const raydiumPriceRes = await this.scope.api.getRaydiumTokenPrice();
+  //   const raydiumPrices: { [key: string]: Price } = Object.keys(raydiumPriceRes).reduce((acc, key) => {
+  //     this._tokenPriceOrg.set(key, raydiumPriceRes[key]);
+  //     return this._tokenMap.get(key)
+  //       ? {
+  //           ...acc,
+  //           [key]: parseTokenPrice({
+  //             token: this._tokenMap.get(key)!,
+  //             numberPrice: raydiumPriceRes[key],
+  //             decimalDone: true,
+  //           }),
+  //         }
+  //       : acc;
+  //   }, {});
+  //   this._tokenPrice = new Map(Object.entries(raydiumPrices));
+  //   this._tokenPrice.set(PublicKey.default.toString(), this._tokenPrice.get(WSOLMint.toString())!);
+  //   this._tokenPriceFetched = { prevCount: totalCount, fetched: Date.now() };
+  //   return this._tokenPrice;
+  // }
 
   /** === util functions === */
 

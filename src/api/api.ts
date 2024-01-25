@@ -137,10 +137,6 @@ export class Api {
     return res.data;
   }
 
-  async getCoingeckoPrice(coingeckoIds: string[]): Promise<Record<string, { usd?: number }>> {
-    return this.api.get(`${API_URLS.COINGECKO}?ids=${coingeckoIds.join(",")}&vs_currencies=usd`);
-  }
-
   async getRaydiumTokenPrice(): Promise<Record<string, number>> {
     return this.api.get(this.urlConfigs.PRICE || API_URLS.PRICE);
   }
