@@ -342,7 +342,6 @@ export default class LiquidityModule extends ModuleBase {
     createPositionInfo: {
       tickLower: number;
       tickUpper: number;
-      liquidity: BN;
       baseAmount: BN;
       otherAmountMax: BN;
     };

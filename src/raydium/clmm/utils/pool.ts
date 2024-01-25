@@ -1151,20 +1151,19 @@ export class PoolUtils {
 
   static estimateAprsForPriceRangeDelta({
     poolInfo,
+    poolLiquidity,
     aprType,
     mintPrice,
-    rewardMintDecimals,
     liquidity,
     positionTickLowerIndex,
     positionTickUpperIndex,
     chainTime,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolLiquidity: BN;
     aprType: "day" | "week" | "month";
 
-    mintPrice: { [mint: string]: Price };
-
-    rewardMintDecimals: { [mint: string]: number };
+    mintPrice: { [mint: string]: { value: number } };
 
     liquidity: BN;
     positionTickLowerIndex: number;
@@ -1199,12 +1198,12 @@ export class PoolUtils {
         sqrtPriceX64,
         sqrtPriceX64A,
         sqrtPriceX64B,
-        new BN(0), // to do
-        // poolInfo.liquidity,
+        poolLiquidity,
         false,
         false,
         0,
       );
+
     const { amountSlippageA: userLiquidityA, amountSlippageB: userLiquidityB } =
       LiquidityMath.getAmountsFromLiquidityWithSlippage(
         sqrtPriceX64,
@@ -1218,20 +1217,12 @@ export class PoolUtils {
 
     const poolTvl = new Decimal(poolLiquidityA.toString())
       .div(new Decimal(10).pow(mintDecimalsA))
-      .mul(mintPriceA.toFixed(mintDecimalsA))
-      .add(
-        new Decimal(poolLiquidityB.toString())
-          .div(new Decimal(10).pow(mintDecimalsB))
-          .mul(mintPriceB.toFixed(mintDecimalsB)),
-      );
+      .mul(mintPriceA.value)
+      .add(new Decimal(poolLiquidityB.toString()).div(new Decimal(10).pow(mintDecimalsB)).mul(mintPriceB.value));
     const userTvl = new Decimal(userLiquidityA.toString())
       .div(new Decimal(10).pow(mintDecimalsA))
-      .mul(mintPriceA.toFixed(mintDecimalsA))
-      .add(
-        new Decimal(userLiquidityB.toString())
-          .div(new Decimal(10).pow(mintDecimalsB))
-          .mul(mintPriceB.toFixed(mintDecimalsB)),
-      );
+      .mul(mintPriceA.value)
+      .add(new Decimal(userLiquidityB.toString()).div(new Decimal(10).pow(mintDecimalsB)).mul(mintPriceB.value));
 
     const p = userTvl.div(poolTvl.add(userTvl)).div(userTvl);
 
@@ -1241,7 +1232,7 @@ export class PoolUtils {
     const SECONDS_PER_YEAR = 3600 * 24 * 365;
 
     const rewardsApr = poolInfo.rewardDefaultInfos.map((i) => {
-      const iDecimal = rewardMintDecimals[i.mint.address];
+      const iDecimal = i.mint.decimals;
       const iPrice = mintPrice[i.mint.address];
 
       if (
@@ -1253,7 +1244,7 @@ export class PoolUtils {
       )
         return 0;
 
-      return new Decimal(iPrice.toFixed(iDecimal))
+      return new Decimal(iPrice.value)
         .mul(new Decimal(i.perSecond).mul(SECONDS_PER_YEAR))
         .div(new Decimal(10).pow(iDecimal))
         .mul(p)
