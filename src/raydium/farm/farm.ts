@@ -1,6 +1,7 @@
 import { createAssociatedTokenAccountInstruction } from "@solana/spl-token";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 
+import { FormatFarmKeyOut } from "@/api/type";
 import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
 import { parseBigNumberish, BN_ZERO } from "@/common/bignumber";
 import { SOLMint, WSOLMint } from "@/common/pubKey";
@@ -215,7 +216,7 @@ export default class Farm extends ModuleBase {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
-    const farmInfoKeys = jsonInfo2PoolKeys(await this.scope.api.fetchFarmKeysById({ id: farmInfo.id }));
+    const farmInfoKeys = jsonInfo2PoolKeys((await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0]);
 
     const farmKeys = {
       id: farmInfoKeys.id,
@@ -274,7 +275,7 @@ export default class Farm extends ModuleBase {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
-    const farmInfoKeys = jsonInfo2PoolKeys(await this.scope.api.fetchFarmKeysById({ id: farmInfo.id }));
+    const farmInfoKeys = jsonInfo2PoolKeys((await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0]);
 
     const farmKeys = {
       id: farmInfoKeys.id,
@@ -326,7 +327,7 @@ export default class Farm extends ModuleBase {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
-    const farmKeys = jsonInfo2PoolKeys(await this.scope.api.fetchFarmKeysById({ id: farmInfo.id }));
+    const farmKeys = jsonInfo2PoolKeys((await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0]);
     const payerPubKey = payer ?? this.scope.ownerPubKey;
     const txBuilder = this.createTxBuilder();
 
@@ -371,7 +372,7 @@ export default class Farm extends ModuleBase {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
-    const farmKeys = jsonInfo2PoolKeys(await this.scope.api.fetchFarmKeysById({ id: farmInfo.id }));
+    const farmKeys = jsonInfo2PoolKeys((await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0]);
     const payerPubKey = payer ?? this.scope.ownerPubKey;
     const txBuilder = this.createTxBuilder();
 
@@ -425,7 +426,7 @@ export default class Farm extends ModuleBase {
     const version = FARM_PROGRAM_TO_VERSION[programId];
     if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm program:", farmInfo.programId);
     const [farmProgramId, farmId] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
-    const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
+    const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
 
     const ledger = getAssociatedLedgerAccount({
       programId: farmProgramId,
@@ -553,7 +554,7 @@ export default class Farm extends ModuleBase {
 
     if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm program:", farmInfo.programId);
 
-    const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
+    const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
     const txBuilder = this.createTxBuilder();
 
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
@@ -681,7 +682,7 @@ export default class Farm extends ModuleBase {
   }): Promise<MakeTxData<T>> {
     this.scope.checkOwner();
     const farmKeys = jsonInfo2PoolKeys(
-      (await this.scope.api.fetchFarmKeysById({ id: farmInfo.id })) as FormatFarmKeyOutV6,
+      (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0] as FormatFarmKeyOutV6,
     );
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version", version);
@@ -781,6 +782,15 @@ export default class Farm extends ModuleBase {
       }
     }
 
+    const allFarmKeys = await this.scope.api.fetchFarmKeysById({
+      ids: Object.values(farmInfoList)
+        .map((f) => f.id)
+        .join(","),
+    });
+    const farmKeyMap: { [key: string]: FormatFarmKeyOut } = allFarmKeys.reduce(
+      (acc, cur) => ({ ...acc, [cur.id]: cur }),
+      {},
+    );
     for (const farmInfo of Object.values(farmInfoList)) {
       const { programId, lpMint: farmLpMint, rewardInfos, id } = farmInfo;
       const version = FARM_PROGRAM_TO_VERSION[programId];
@@ -833,8 +843,7 @@ export default class Farm extends ModuleBase {
         rewardAccounts.push(ownerRewardAccount);
       }
 
-      const farmKeys = await this.scope.api.fetchFarmKeysById({ id });
-
+      const farmKeys = farmKeyMap[id];
       const insParams = {
         amount: BN_ZERO,
         owner: this.scope.ownerPubKey,

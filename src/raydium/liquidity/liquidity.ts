@@ -407,7 +407,7 @@ export default class LiquidityModule extends ModuleBase {
           rewardTokenAccounts.push(farmRewardAccount!);
         }
       }
-      const farmKeys = await this.scope.api.fetchFarmKeysById({ id: farmInfo.id });
+      const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
       const insParams = {
         amount: userFarmLpAmount!,
         owner: this.scope.ownerPubKey,

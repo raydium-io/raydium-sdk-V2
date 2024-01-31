@@ -201,10 +201,10 @@ export class Api {
     return res.data;
   }
 
-  async searchPoolById(props: { id: string }): Promise<SearchPoolsApiReturn> {
-    const { id } = props;
+  async searchPoolById(props: { ids: string }): Promise<SearchPoolsApiReturn> {
+    const { ids } = props;
     const res = await this.api.get(
-      (this.urlConfigs.POOL_SEARCH_BY_ID || DEV_API_URLS.POOL_SEARCH_BY_ID).replace("{id}", id),
+      (this.urlConfigs.POOL_SEARCH_BY_ID || DEV_API_URLS.POOL_SEARCH_BY_ID).replace("{ids}", ids),
     );
     return res.data;
   }
@@ -254,17 +254,12 @@ export class Api {
     return res.data;
   }
 
-  async fetchFarmKeysById(props: { id: string }): Promise<FormatFarmKeyOut> {
-    const { id } = props;
+  async fetchFarmKeysById(props: { ids: string }): Promise<FormatFarmKeyOut[]> {
+    const { ids } = props;
 
-    if (farmKeysCache.has(id)) {
-      return farmKeysCache.get(id)!;
-    }
-
-    const res = await this.api.get<FormatFarmKeyOut>(
-      (this.urlConfigs.FARM_KEYS || DEV_API_URLS.FARM_KEYS).replace("{id}", id),
+    const res = await this.api.get<FormatFarmKeyOut[]>(
+      (this.urlConfigs.FARM_KEYS || DEV_API_URLS.FARM_KEYS).replace("{ids}", ids),
     );
-    farmKeysCache.set(id, res.data);
     return res.data;
   }
 

@@ -13,7 +13,7 @@ export const API_URLS = {
   PRICE: "/v2/main/price",
 
   // api v3
-  CHECK_AVAILABILITY: "/v3/main/AvailabilityCheckAPI3",
+  CHECK_AVAILABILITY: "/v3/main/AvailabilityCheckAPI",
   RPCS: "/v3/main/rpcs",
   INFO: "/v3/main/info",
   STAKE_POOLS: "/v3/main/stake-pools",
@@ -22,25 +22,25 @@ export const API_URLS = {
   TOKEN_INFO: "/v3/mint/item/{mint}",
   JUP_TOKEN_LIST: "https://token.jup.ag/{type}",
   POOL_LIST: "/v3/pools/info/{type}/{sort}/{order}/{page_size}/{page}",
-  POOL_SEARCH_BY_ID: "/v3/pools/info/id/{id}",
+  POOL_SEARCH_BY_ID: "/v3/pools/info/ids/{ids}",
   POOL_SEARCH: "/v3/pools/info/search/{search_text}/{type}/{sort}/{order}/{page_size}/{page}",
   POOL_SEARCH_MINT: "/v3/pools/info/mint/{mint1}/{type}/{sort}/{order}/{page_size}/{page}",
   POOL_SEARCH_MINT_2: "/v3/pools/info/mint/{mint1}/{mint2}/{type}/{sort}/{order}/{page_size}/{page}",
-  POOL_SEARCH_LP: "/v3/pools/info/lp/{lp_mint}",
+  POOL_SEARCH_LP: "/v3/pools/info/lps/{lp_mints}",
   POOL_KEY_BY_ID: "/v3/pools/key/id/{id}",
   POOLS_KEY: "/v3/pools/key/{type}/{page_size}/{page}",
   POOLS_KEY_BY_MINT: "/v3/pools/key/mint/{mint1}/{type}/{page_size}/{page}",
   POOLS_KEY_BY_MINT_2: "/v3/pools/key/mint/{mint1}/{mint2}/{type}/{page_size}/{page}",
   POOL_LIQUIDITY_LINE: "/v3/pools/line/liquidity/{id}",
   POOL_POSITION_LINE: "/v3/pools/line/position/{id}",
-  FARM_INFO: "/v3/farms/info/id/{id}",
+  FARM_INFO: "/v3/farms/info/ids/{ids}",
   FARM_LP_INFO: "/v3/farms/info/lp/{pool_lp}/{page_size}/{page}",
   FARM_LIST: "/v3/farms/info/list/all/{page_size}/{page}",
-  FARM_KEYS: "/v3/farms/key/id/{id}",
+  FARM_KEYS: "/v3/farms/key/ids/{ids}",
   OWNER_CREATED_FARM: "/v3/owner/create-pool/{owner}",
   OWNER_IDO: "/v3/owner/main/ido/{owner}",
   OWNER_STAKE_FARMS: "/v3/owner/position/stake/{owner}",
-  IDO_KEYS: "/v3/ido/key/id/{id}",
+  IDO_KEYS: "/v3/ido/key/ids/{ids}",
 };
 
 export const DEV_API_URLS = {
@@ -59,7 +59,7 @@ export const DEV_API_URLS = {
   /**
    * id: pool id
    */
-  POOL_SEARCH_BY_ID: "/v3/pools/info/id/{id}",
+  POOL_SEARCH_BY_ID: "/v3/pools/info/ids/{ids}",
   /**
    * search_text: search text
    * type: {all | concentrated | standard}
