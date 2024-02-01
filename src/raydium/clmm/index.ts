@@ -9,4 +9,5 @@ export * from "./utils/pool";
 export * from "./utils/position";
 export * from "./utils/tick";
 export * from "./utils/tickQuery";
+export * from "./utils/tickarrayBitmap";
 export * from "./utils/util";

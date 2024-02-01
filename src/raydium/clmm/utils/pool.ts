@@ -6,7 +6,7 @@ import {
   ClmmPoolRewardInfo,
   ClmmPoolRewardLayoutInfo,
   ReturnTypeGetLiquidityAmountOut,
-  TickArrayBitmapExtension,
+  TickArrayBitmapExtensionType,
   ReturnTypeFetchExBitmaps,
   ReturnTypeFetchMultiplePoolTickArrays,
   SDKParsedConcentratedInfo,
@@ -17,16 +17,7 @@ import {
 import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
 
 import { ReturnTypeFetchMultipleMintInfos } from "@/raydium/type";
-import {
-  NEGATIVE_ONE,
-  Q64,
-  ZERO,
-  MAX_TICK,
-  MIN_TICK,
-  MIN_SQRT_PRICE_X64,
-  MAX_SQRT_PRICE_X64,
-  U64_IGNORE_RANGE,
-} from "./constants";
+import { NEGATIVE_ONE, Q64, ZERO, MAX_TICK, MIN_TICK, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "./constants";
 import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
 import { getPdaTickArrayAddress, getPdaPersonalPositionAddress } from "./pda";
 import { TickArray, TickUtils, TICK_ARRAY_BITMAP_SIZE, Tick } from "./tick";
@@ -41,7 +32,6 @@ import {
   minExpirationTime,
   WSOLMint,
   SOLMint,
-  getEpochInfo,
   solToWSol,
 } from "../../../common";
 import { SOL_INFO } from "../../token/constant";
@@ -244,7 +234,7 @@ export class PoolUtils {
           tickCurrent: number;
           tickSpacing: number;
           tickArrayBitmap: BN[];
-          exBitmapInfo: TickArrayBitmapExtension;
+          exBitmapInfo: TickArrayBitmapExtensionType;
         }
       | ClmmPoolInfo,
     lastTickArrayStartIndex: number,

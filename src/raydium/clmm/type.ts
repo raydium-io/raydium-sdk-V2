@@ -139,7 +139,7 @@ export interface ClmmPoolInfo {
 
   startTime: number;
 
-  exBitmapInfo: TickArrayBitmapExtension;
+  exBitmapInfo: TickArrayBitmapExtensionType;
 }
 
 export interface ReturnTypeMakeHarvestTransaction {
@@ -525,14 +525,14 @@ export interface ReturnTypeComputeAmountOutBaseOut {
   remainingAccounts: PublicKey[];
 }
 
-export interface TickArrayBitmapExtension {
+export interface TickArrayBitmapExtensionType {
   poolId: PublicKey;
   positiveTickArrayBitmap: BN[][];
   negativeTickArrayBitmap: BN[][];
 }
 
 export interface ReturnTypeFetchExBitmaps {
-  [exBitmapId: string]: TickArrayBitmapExtension;
+  [exBitmapId: string]: TickArrayBitmapExtensionType;
 }
 
 export interface ClosePositionExtInfo {

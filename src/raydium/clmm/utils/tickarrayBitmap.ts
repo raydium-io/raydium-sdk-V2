@@ -1,6 +1,6 @@
 import BN from "bn.js";
 
-import { TickArrayBitmapExtension } from "../type";
+import { TickArrayBitmapExtensionType } from "../type";
 
 import { MAX_TICK, MIN_TICK } from "./constants";
 import { TICK_ARRAY_BITMAP_SIZE, TICK_ARRAY_SIZE, TickUtils } from "./tick";
@@ -98,7 +98,7 @@ export class TickArrayBitmapExtensionUtils {
   public static getBitmap(
     tickIndex: number,
     tickSpacing: number,
-    tickArrayBitmapExtension: TickArrayBitmapExtension,
+    tickArrayBitmapExtension: TickArrayBitmapExtensionType,
   ): { offset: number; tickarrayBitmap: BN[] } {
     const offset = this.getBitmapOffset(tickIndex, tickSpacing);
     if (tickIndex < 0) {
@@ -135,7 +135,7 @@ export class TickArrayBitmapExtensionUtils {
   public static checkTickArrayIsInit(
     tickArrayStartIndex: number,
     tickSpacing: number,
-    tickArrayBitmapExtension: TickArrayBitmapExtension,
+    tickArrayBitmapExtension: TickArrayBitmapExtensionType,
   ): { isInitialized: boolean; startIndex: number } {
     const { tickarrayBitmap } = this.getBitmap(tickArrayStartIndex, tickSpacing, tickArrayBitmapExtension);
 
@@ -151,7 +151,7 @@ export class TickArrayBitmapExtensionUtils {
     lastTickArrayStartIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
-    tickArrayBitmapExtension: TickArrayBitmapExtension,
+    tickArrayBitmapExtension: TickArrayBitmapExtensionType,
   ): {
     isInit: boolean;
     tickIndex: number;

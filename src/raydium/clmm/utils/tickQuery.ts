@@ -7,7 +7,7 @@ import { TickArrayLayout } from "../layout";
 import { MAX_TICK, MIN_TICK } from "./constants";
 import { getPdaTickArrayAddress } from "./pda";
 import { Tick, TICK_ARRAY_SIZE, TickArray, TickUtils } from "./tick";
-import { TickArrayBitmapExtension } from "../type";
+import { TickArrayBitmapExtensionType } from "../type";
 
 export const FETCH_TICKARRAY_COUNT = 15;
 
@@ -26,7 +26,7 @@ export class TickQuery {
     tickCurrent: number,
     tickSpacing: number,
     tickArrayBitmapArray: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtension,
+    exTickArrayBitmap: TickArrayBitmapExtensionType,
   ): Promise<{ [key: string]: TickArray }> {
     const tickArraysToFetch: PublicKey[] = [];
     const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(tickCurrent, tickSpacing);
@@ -104,7 +104,7 @@ export class TickQuery {
     tickSpacing: number,
     zeroForOne: boolean,
     tickArrayBitmap: BN[],
-    exBitmapInfo: TickArrayBitmapExtension,
+    exBitmapInfo: TickArrayBitmapExtensionType,
   ): {
     isExist: boolean;
     nextStartIndex: number;

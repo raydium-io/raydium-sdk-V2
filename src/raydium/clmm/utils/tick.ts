@@ -3,7 +3,7 @@ import BN from "bn.js";
 import Decimal from "decimal.js";
 
 import { getPdaTickArrayAddress } from "./pda";
-import { TickArrayBitmapExtension } from "../type";
+import { TickArrayBitmapExtensionType } from "../type";
 import { TickQuery } from "./tickQuery";
 import { MIN_TICK, MAX_TICK } from "./constants";
 import { SqrtPriceMath, TickMath } from "./math";
@@ -143,7 +143,7 @@ export class TickUtils {
 
   public static getInitializedTickArrayInRange(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtension,
+    exTickArrayBitmap: TickArrayBitmapExtensionType,
     tickSpacing: number,
     tickArrayStartIndex: number,
     expectedCount: number,
@@ -172,7 +172,7 @@ export class TickUtils {
 
   public static getAllInitializedTickArrayStartIndex(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtension,
+    exTickArrayBitmap: TickArrayBitmapExtensionType,
     tickSpacing: number,
   ): number[] {
     // find from offset 0 to 1024
@@ -189,7 +189,7 @@ export class TickUtils {
     programId: PublicKey,
     poolId: PublicKey,
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtension,
+    exTickArrayBitmap: TickArrayBitmapExtensionType,
     tickSpacing: number,
   ): {
     tickArrayStartIndex: number;
@@ -220,7 +220,7 @@ export class TickUtils {
 
   public static searchLowBitFromStart(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtension,
+    exTickArrayBitmap: TickArrayBitmapExtensionType,
     currentTickArrayBitStartIndex: number,
     expectedCount: number,
     tickSpacing: number,
@@ -248,7 +248,7 @@ export class TickUtils {
 
   public static searchHightBitFromStart(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtension,
+    exTickArrayBitmap: TickArrayBitmapExtensionType,
     currentTickArrayBitStartIndex: number,
     expectedCount: number,
     tickSpacing: number,
@@ -283,6 +283,7 @@ export class TickUtils {
     currentTickIndex: number,
     tickSpacing: number,
     zeroForOne: boolean,
+    t: boolean,
   ): Tick | null {
     const currentTickArrayStartIndex = TickQuery.getArrayStartIndex(currentTickIndex, tickSpacing);
     if (currentTickArrayStartIndex != tickArrayCurrent.startTickIndex) {
@@ -298,7 +299,7 @@ export class TickUtils {
         offsetInArray = offsetInArray - 1;
       }
     } else {
-      offsetInArray = offsetInArray + 1;
+      if (!t) offsetInArray = offsetInArray + 1;
       while (offsetInArray < TICK_ARRAY_SIZE) {
         if (tickArrayCurrent.ticks[offsetInArray].liquidityGross.gtn(0)) {
           return tickArrayCurrent.ticks[offsetInArray];

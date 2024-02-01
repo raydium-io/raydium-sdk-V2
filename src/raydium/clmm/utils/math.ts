@@ -25,7 +25,7 @@ import {
 import { getPdaTickArrayAddress } from "./pda";
 import { PoolUtils } from "./pool";
 import { Tick, TickArray, TickUtils } from "./tick";
-import { ReturnTypeGetLiquidityAmountOut, TickArrayBitmapExtension } from "../type";
+import { ReturnTypeGetLiquidityAmountOut, TickArrayBitmapExtensionType } from "../type";
 import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
 import { getTransferAmountFeeV2, minExpirationTime } from "@/common/transfer";
 import { TickQuery } from "./tickQuery";
@@ -517,7 +517,7 @@ export abstract class SwapMath {
     poolId: PublicKey,
     tickArrayCache: { [key: string]: TickArray },
     tickArrayBitmap: BN[],
-    tickarrayBitmapExtension: TickArrayBitmapExtension,
+    tickarrayBitmapExtension: TickArrayBitmapExtensionType,
     zeroForOne: boolean,
     fee: number,
     liquidity: BN,
@@ -574,6 +574,7 @@ export abstract class SwapMath {
     let tickAarrayStartIndex = lastSavedTickArrayStartIndex;
     let tickArrayCurrent = tickArrayCache[lastSavedTickArrayStartIndex];
     let loopCount = 0;
+    let t = !zeroForOne && tickArrayCurrent.startTickIndex === state.tick;
     while (
       !state.amountSpecifiedRemaining.eq(ZERO) &&
       !state.sqrtPriceX64.eq(sqrtPriceLimitX64)
@@ -586,7 +587,7 @@ export abstract class SwapMath {
       const step: Partial<StepComputations> = {};
       step.sqrtPriceStartX64 = state.sqrtPriceX64;
 
-      const tickState: Tick | null = TickUtils.nextInitTick(tickArrayCurrent, state.tick, tickSpacing, zeroForOne);
+      const tickState: Tick | null = TickUtils.nextInitTick(tickArrayCurrent, state.tick, tickSpacing, zeroForOne, t);
 
       let nextInitTick: Tick | null = tickState ? tickState : null; // TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne)
       let tickArrayAddress: PublicKey | null = null;
@@ -663,9 +664,12 @@ export abstract class SwapMath {
           if (zeroForOne) liquidityNet = liquidityNet.mul(NEGATIVE_ONE);
           state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
         }
+        t = step.tickNext != state.tick && !zeroForOne && tickArrayCurrent.startTickIndex === step.tickNext;
         state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
       } else if (state.sqrtPriceX64 != step.sqrtPriceStartX64) {
-        state.tick = SqrtPriceMath.getTickFromSqrtPriceX64(state.sqrtPriceX64);
+        const _T = SqrtPriceMath.getTickFromSqrtPriceX64(state.sqrtPriceX64);
+        t = _T != state.tick && !zeroForOne && tickArrayCurrent.startTickIndex === _T;
+        state.tick = _T;
       }
       ++loopCount;
     }
@@ -700,7 +704,7 @@ export abstract class SwapMath {
   //   poolId: PublicKey,
   //   tickArrayCache: { [key: string]: TickArray },
   //   tickArrayBitmap: BN[],
-  //   tickarrayBitmapExtension: TickArrayBitmapExtension,
+  //   tickarrayBitmapExtension: TickArrayBitmapExtensionType,
   //   zeroForOne: boolean,
   //   fee: number,
   //   liquidity: BN,

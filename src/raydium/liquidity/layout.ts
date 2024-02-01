@@ -154,3 +154,5 @@ export const LIQUIDITY_VERSION_TO_STATE_LAYOUT: {
   4: liquidityStateV4Layout,
   5: liquidityStateV5Layout,
 };
+
+export const createPoolFeeLayout = struct([u64("fee")]);

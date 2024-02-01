@@ -5,7 +5,7 @@ import { FormatFarmKeyOut } from "@/api/type";
 import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
 import { parseBigNumberish, BN_ZERO } from "@/common/bignumber";
 import { SOLMint, WSOLMint } from "@/common/pubKey";
-import { MakeTxData } from "@/common/txTool/txTool";
+import { MakeTxData, MakeMultiTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { getATAAddress } from "@/common/pda";
 import { FARM_PROGRAM_ID_V6 } from "@/common/programId";
@@ -759,7 +759,7 @@ export default class Farm extends ModuleBase {
     checkCreateATAOwner?: boolean;
     userAuxiliaryLedgers?: string[];
     txVersion?: T;
-  }): Promise<MakeTxData<T>> {
+  }): Promise<MakeMultiTxData<T>> {
     const {
       farmInfoList,
       useSOLBalance,
@@ -873,6 +873,7 @@ export default class Farm extends ModuleBase {
       });
     }
 
-    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
+    if (txVersion === TxVersion.LEGACY) return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuildV0() as Promise<MakeMultiTxData<T>>;
   }
 }

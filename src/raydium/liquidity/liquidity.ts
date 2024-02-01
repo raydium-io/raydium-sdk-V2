@@ -22,8 +22,8 @@ import { makeAddLiquidityInstruction } from "./instruction";
 import { ComputeBudgetConfig } from "../type";
 import { removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
 import { ClmmInstrument } from "../clmm/instrument";
-import { getAssociatedPoolKeys } from "./utils";
-
+import { getAssociatedPoolKeys, getAssociatedConfigId } from "./utils";
+import { createPoolFeeLayout } from "./layout";
 import {
   FARM_PROGRAM_TO_VERSION,
   makeWithdrawInstructionV3,
@@ -646,5 +646,14 @@ export default class LiquidityModule extends ModuleBase {
         address: createPoolKeys,
       },
     }) as Promise<MakeTxData<T, { address: CreatePoolAddress }>>;
+  }
+
+  public async getCreatePoolFee({ programId }: { programId: PublicKey }): Promise<BN> {
+    const configId = getAssociatedConfigId({ programId });
+
+    const account = await this.scope.connection.getAccountInfo(configId, { dataSlice: { offset: 536, length: 8 } });
+    if (account === null) throw Error("get config account error");
+
+    return createPoolFeeLayout.decode(account.data).fee;
   }
 }

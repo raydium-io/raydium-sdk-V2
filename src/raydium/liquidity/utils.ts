@@ -29,6 +29,11 @@ interface GetAssociatedParam {
   marketId: PublicKey;
 }
 
+export function getAssociatedConfigId({ programId }: { programId: PublicKey }): PublicKey {
+  const { publicKey } = findProgramAddress([Buffer.from("amm_config_account_seed", "utf-8")], programId);
+  return publicKey;
+}
+
 export function getLiquidityAssociatedId({ name, programId, marketId }: GetAssociatedParam): PublicKey {
   const { publicKey } = findProgramAddress(
     [programId.toBuffer(), marketId.toBuffer(), Buffer.from(name, "utf-8")],
