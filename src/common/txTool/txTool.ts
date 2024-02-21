@@ -656,7 +656,8 @@ export class TxBuilder {
       const _itemIns = [...instructionQueue, item];
       const _itemInsWithCompute = autoComputeBudget ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
       if (
-        checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount }) ||
+        (instructionQueue.length < 12 &&
+          checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount })) ||
         checkV0TxSize({ instructions: _itemIns, payer: this.feePayer, lookupTableAddressAccount })
       ) {
         // current ins add to queue still not exceed tx size limit
@@ -675,11 +676,13 @@ export class TxBuilder {
             instructions: [...computeBudgetData.instructions, ...instructionQueue],
             payer: this.feePayer,
             lookupTableAddressAccount,
+            recentBlockhash: blockHash,
           })
         ) {
           const messageV0 = new TransactionMessage({
             payerKey: this.feePayer,
             recentBlockhash: blockHash,
+
             instructions: [...computeBudgetData.instructions, ...instructionQueue],
           }).compileToV0Message(Object.values(lookupTableAddressAccount));
           allTransactions.push(new VersionedTransaction(messageV0));
@@ -716,6 +719,7 @@ export class TxBuilder {
           instructions: [...computeBudgetData.instructions, ...instructionQueue],
           payer: this.feePayer,
           lookupTableAddressAccount,
+          recentBlockhash: blockHash,
         })
       ) {
         const messageV0 = new TransactionMessage({

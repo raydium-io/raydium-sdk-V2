@@ -244,20 +244,23 @@ export function checkV0TxSize({
   instructions,
   payer,
   lookupTableAddressAccount,
+  recentBlockhash = Keypair.generate().publicKey.toString(),
 }: {
   instructions: TransactionInstruction[];
   payer: PublicKey;
   lookupTableAddressAccount?: CacheLTA;
+  recentBlockhash?: string;
 }): boolean {
   const transactionMessage = new TransactionMessage({
     payerKey: payer,
-    recentBlockhash: Keypair.generate().publicKey.toString(),
+    recentBlockhash,
     instructions,
   });
 
   const messageV0 = transactionMessage.compileToV0Message(Object.values(lookupTableAddressAccount ?? {}));
   try {
-    return Buffer.from(messageV0.serialize()).toString("base64").length < MAX_BASE64_SIZE;
+    const buildLength = Buffer.from(new VersionedTransaction(messageV0).serialize()).toString("base64").length;
+    return buildLength < MAX_BASE64_SIZE;
   } catch (error) {
     return false;
   }

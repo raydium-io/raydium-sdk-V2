@@ -14,12 +14,12 @@ import { toToken } from "../token";
 import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
-import { MakeTxData } from "@/common/txTool/txTool";
+import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
 import { makeAddLiquidityInstruction } from "./instruction";
-import { ComputeBudgetConfig } from "../type";
+import { ComputeBudgetConfig, MakeMultiTransaction } from "../type";
 import { removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
 import { ClmmInstrument } from "../clmm/instrument";
 import { getAssociatedPoolKeys, getAssociatedConfigId } from "./utils";
@@ -354,7 +354,7 @@ export default class LiquidityModule extends ModuleBase {
     checkCreateATAOwner?: boolean;
     txVersion?: T;
     getEphemeralSigners?: (k: number) => any;
-  }): Promise<MakeTxData<T>> {
+  }): Promise<MakeMultiTxData<T>> {
     if (
       this.scope.availability.removeStandardPosition === false ||
       this.scope.availability.createConcentratedPosition === false
@@ -383,6 +383,51 @@ export default class LiquidityModule extends ModuleBase {
 
     const lpTokenAccount = mintToAccount[poolInfo.lpMint.address];
     if (lpTokenAccount === undefined) throw Error("find lp account error in trade accounts");
+
+    const amountIn = removeLpAmount.add(userFarmLpAmount ?? new BN(0));
+    const mintBaseUseSOLBalance = poolInfo.mintA.address === Token.WSOL.mint.toString();
+    const mintQuoteUseSOLBalance = poolInfo.mintB.address === Token.WSOL.mint.toString();
+
+    const { account: baseTokenAccount, instructionParams: ownerTokenAccountBaseInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: TOKEN_PROGRAM_ID,
+        mint: new PublicKey(poolInfo.mintA.address),
+        owner: this.scope.ownerPubKey,
+
+        createInfo: mintBaseUseSOLBalance
+          ? {
+              payer: this.scope.ownerPubKey,
+            }
+          : undefined,
+        skipCloseAccount: !mintBaseUseSOLBalance,
+        notUseTokenAccount: mintBaseUseSOLBalance,
+        associatedOnly: true,
+        checkCreateATAOwner,
+      });
+    txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
+    if (baseTokenAccount === undefined) throw new Error("base token account not found");
+
+    const { account: quoteTokenAccount, instructionParams: ownerTokenAccountQuoteInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: TOKEN_PROGRAM_ID,
+        mint: new PublicKey(poolInfo.mintB.address),
+        owner: this.scope.ownerPubKey,
+        createInfo: mintQuoteUseSOLBalance
+          ? {
+              payer: this.scope.ownerPubKey!,
+              amount: 0,
+            }
+          : undefined,
+        skipCloseAccount: !mintQuoteUseSOLBalance,
+        notUseTokenAccount: mintQuoteUseSOLBalance,
+        associatedOnly: true,
+        checkCreateATAOwner,
+      });
+    txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
+    if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
+
+    mintToAccount[poolInfo.mintA.address] = baseTokenAccount;
+    mintToAccount[poolInfo.mintB.address] = quoteTokenAccount;
 
     if (farmInfo !== undefined && !userFarmLpAmount?.isZero()) {
       const rewardTokenAccounts: PublicKey[] = [];
@@ -433,49 +478,6 @@ export default class LiquidityModule extends ModuleBase {
         instructionTypes: [insType[version]],
       });
     }
-
-    const amountIn = removeLpAmount.add(userFarmLpAmount ?? new BN(0));
-    const mintBaseUseSOLBalance = poolInfo.mintA.address === Token.WSOL.mint.toString();
-    const mintQuoteUseSOLBalance = poolInfo.mintB.address === Token.WSOL.mint.toString();
-
-    const { account: baseTokenAccount, instructionParams: ownerTokenAccountBaseInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: new PublicKey(poolInfo.mintA.address),
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
-        owner: this.scope.ownerPubKey,
-
-        createInfo: mintBaseUseSOLBalance
-          ? {
-              payer: this.scope.ownerPubKey,
-              amount: base === "MintA" ? createPositionInfo.baseAmount : createPositionInfo.otherAmountMax,
-            }
-          : undefined,
-        skipCloseAccount: !mintBaseUseSOLBalance,
-        notUseTokenAccount: mintBaseUseSOLBalance,
-        associatedOnly: !mintBaseUseSOLBalance,
-        checkCreateATAOwner,
-      });
-    txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
-    if (baseTokenAccount === undefined) throw new Error("base token account not found");
-
-    const { account: quoteTokenAccount, instructionParams: ownerTokenAccountQuoteInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintB.programId),
-        mint: new PublicKey(poolInfo.mintB.address),
-        owner: this.scope.ownerPubKey,
-        createInfo: mintQuoteUseSOLBalance
-          ? {
-              payer: this.scope.ownerPubKey!,
-              amount: base === "MintA" ? createPositionInfo.otherAmountMax : createPositionInfo.baseAmount,
-            }
-          : undefined,
-        skipCloseAccount: !mintQuoteUseSOLBalance,
-        notUseTokenAccount: mintQuoteUseSOLBalance,
-        associatedOnly: !mintQuoteUseSOLBalance,
-        checkCreateATAOwner,
-      });
-    txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
-    if (quoteTokenAccount === undefined) throw new Error("quote token account not found");
 
     const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
 
@@ -530,7 +532,8 @@ export default class LiquidityModule extends ModuleBase {
       lookupTableAddress: clmmPoolKeys.lookupTableAccount ? [clmmPoolKeys.lookupTableAccount] : [],
     });
 
-    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
+    if (txVersion === TxVersion.V0) return txBuilder.sizeCheckBuildV0() as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
   }
 
   public async createPoolV4<T extends TxVersion>({
