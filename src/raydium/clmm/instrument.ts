@@ -1238,8 +1238,8 @@ export class ClmmInstrument {
     }[] = [];
     for (let i = 0; i < poolInfo.rewardDefaultInfos.length; i++) {
       rewardAccounts.push({
-        poolRewardVault: new PublicKey(poolKeys.rewardInfos[0].vault),
-        ownerRewardVault: ownerInfo.rewardAccounts[0],
+        poolRewardVault: new PublicKey(poolKeys.rewardInfos[i].vault),
+        ownerRewardVault: ownerInfo.rewardAccounts[i],
         rewardMint: new PublicKey(poolInfo.rewardDefaultInfos[i].mint.address),
       });
     }

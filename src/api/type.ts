@@ -140,7 +140,7 @@ export interface TransferFeeDataBaseType {
   };
 }
 
-type TagsItem = "hasFreeze" | "hasTransferFee";
+type TagsItem = "hasFreeze" | "hasTransferFee" | "token-2022" | "community";
 type ExtensionsItem = {
   coingeckoId?: string;
   feeConfig?: TransferFeeDataBaseType;

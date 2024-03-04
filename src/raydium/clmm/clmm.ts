@@ -17,9 +17,7 @@ import {
   DecreaseLiquidity,
   OpenPositionFromBase,
   OpenPositionFromLiquidity,
-  ReturnTypeGetLiquidityAmountOut,
   SwapInParams,
-  GetAmountParams,
   InitRewardParams,
   InitRewardsParams,
   SetRewardParams,
@@ -41,6 +39,7 @@ import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
 import { ClmmPositionLayout, OperationLayout } from "./layout";
 import BN from "bn.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 export class Clmm extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -162,18 +161,21 @@ export class Clmm extends ModuleBase {
     let ownerTokenAccountB: PublicKey | null = null;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toString();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toString();
+    const [amountA, amountB] = base === "MintA" ? [baseAmount, otherAmountMax] : [otherAmountMax, baseAmount];
+
     const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        tokenProgram: poolInfo.mintA.programId,
         mint: new PublicKey(poolInfo.mintA.address),
         owner: this.scope.ownerPubKey,
 
-        createInfo: mintAUseSOLBalance
-          ? {
-              payer: this.scope.ownerPubKey,
-              amount: base === "MintA" ? baseAmount : otherAmountMax,
-            }
-          : undefined,
+        createInfo:
+          mintAUseSOLBalance || amountA.isZero()
+            ? {
+                payer: this.scope.ownerPubKey,
+                amount: amountA,
+              }
+            : undefined,
         skipCloseAccount: !mintAUseSOLBalance,
         notUseTokenAccount: mintAUseSOLBalance,
         associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
@@ -184,16 +186,17 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintB.programId),
+        tokenProgram: poolInfo.mintB.programId,
         mint: new PublicKey(poolInfo.mintB.address),
         owner: this.scope.ownerPubKey,
 
-        createInfo: mintBUseSOLBalance
-          ? {
-              payer: this.scope.ownerPubKey!,
-              amount: base === "MintA" ? otherAmountMax : baseAmount,
-            }
-          : undefined,
+        createInfo:
+          mintBUseSOLBalance || amountB.isZero()
+            ? {
+                payer: this.scope.ownerPubKey!,
+                amount: amountB,
+              }
+            : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
         notUseTokenAccount: mintBUseSOLBalance,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
@@ -258,7 +261,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        tokenProgram: poolInfo.mintA.programId,
         mint: new PublicKey(poolInfo.mintA.address),
         owner: this.scope.ownerPubKey,
 
@@ -279,7 +282,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintB.programId),
+        tokenProgram: poolInfo.mintB.programId,
         mint: new PublicKey(poolInfo.mintB.address),
         owner: this.scope.ownerPubKey,
 
@@ -351,7 +354,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        tokenProgram: poolInfo.mintA.programId,
         mint: new PublicKey(poolInfo.mintA.address),
         notUseTokenAccount: mintAUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -436,7 +439,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        tokenProgram: poolInfo.mintA.programId,
         mint: new PublicKey(poolInfo.mintA.address),
         notUseTokenAccount: mintAUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -523,7 +526,7 @@ export class Clmm extends ModuleBase {
     let ownerTokenAccountB: PublicKey | undefined = undefined;
     const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        tokenProgram: poolInfo.mintA.programId,
         mint: new PublicKey(poolInfo.mintA.address),
         notUseTokenAccount: mintAUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -540,7 +543,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintB.programId),
+        tokenProgram: poolInfo.mintB.programId,
         mint: new PublicKey(poolInfo.mintB.address),
         notUseTokenAccount: mintBUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -698,7 +701,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        tokenProgram: poolInfo.mintA.programId,
         mint: new PublicKey(poolInfo.mintA.address),
         notUseTokenAccount: mintAUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -718,7 +721,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintB.programId),
+        tokenProgram: poolInfo.mintB.programId,
         mint: new PublicKey(poolInfo.mintB.address),
         notUseTokenAccount: mintBUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -813,7 +816,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(poolInfo.mintA.programId),
+        tokenProgram: poolInfo.mintA.programId,
         mint: new PublicKey(poolInfo.mintA.address),
         notUseTokenAccount: mintAUseSOLBalance,
         owner: this.scope.ownerPubKey,
@@ -1295,7 +1298,7 @@ export class Clmm extends ModuleBase {
       let ownerTokenAccountA = ownerMintToAccount[poolInfo.mintA.address];
       if (!ownerTokenAccountA) {
         const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-          tokenProgram: new PublicKey(poolInfo.mintA.programId),
+          tokenProgram: poolInfo.mintA.programId,
           mint: new PublicKey(poolInfo.mintA.address),
           notUseTokenAccount: mintAUseSOLBalance,
           owner: this.scope.ownerPubKey,
@@ -1314,7 +1317,7 @@ export class Clmm extends ModuleBase {
       let ownerTokenAccountB = ownerMintToAccount[poolInfo.mintB.address];
       if (!ownerTokenAccountB) {
         const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-          tokenProgram: new PublicKey(poolInfo.mintB.programId),
+          tokenProgram: poolInfo.mintB.programId,
           mint: new PublicKey(poolInfo.mintB.address),
           notUseTokenAccount: mintBUseSOLBalance,
           owner: this.scope.ownerPubKey,

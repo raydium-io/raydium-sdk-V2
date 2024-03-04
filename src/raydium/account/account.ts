@@ -145,9 +145,9 @@ export default class Account extends ModuleBase {
       notUseTokenAccount = false,
       skipCloseAccount = false,
       checkCreateATAOwner = false,
-      tokenProgram = TOKEN_PROGRAM_ID,
     } = params;
-    const ata = this.getAssociatedTokenAccount(mint, tokenProgram);
+    const tokenProgram = new PublicKey(params.tokenProgram || TOKEN_PROGRAM_ID);
+    const ata = this.getAssociatedTokenAccount(mint, new PublicKey(tokenProgram));
     const accounts = (notUseTokenAccount ? [] : this.tokenAccountRawInfos)
       .filter((i) => i.accountInfo.mint.equals(mint) && (!associatedOnly || i.pubkey.equals(ata)))
       .sort((a, b) => (a.accountInfo.amount.lt(b.accountInfo.amount) ? 1 : -1));

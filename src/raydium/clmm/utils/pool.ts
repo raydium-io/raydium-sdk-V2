@@ -1281,7 +1281,7 @@ export class PoolUtils {
     const coefficient = add ? 1 - slippage : 1 + slippage;
     const addFeeAmount = getTransferAmountFeeV2(
       amount,
-      poolInfo[inputA ? "mintA" : "mintB"].extensions.feeConfig,
+      poolInfo[inputA ? "mintA" : "mintB"].extensions?.feeConfig,
       epochInfo,
       !amountHasFee,
     );
@@ -1345,12 +1345,22 @@ export class PoolUtils {
       add,
     );
     const [amountA, amountB] = [
-      getTransferAmountFeeV2(amounts.amountA, poolInfo.mintA.extensions.feeConfig, epochInfo, true),
-      getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amounts.amountA, poolInfo.mintA.extensions?.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions?.feeConfig, epochInfo, true),
     ];
     const [amountSlippageA, amountSlippageB] = [
-      getTransferAmountFeeV2(amounts.amountA.muln(coefficientRe), poolInfo.mintA.extensions.feeConfig, epochInfo, true),
-      getTransferAmountFeeV2(amounts.amountB.muln(coefficientRe), poolInfo.mintB.extensions.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(
+        amounts.amountA.muln(coefficientRe),
+        poolInfo.mintA.extensions?.feeConfig,
+        epochInfo,
+        true,
+      ),
+      getTransferAmountFeeV2(
+        amounts.amountB.muln(coefficientRe),
+        poolInfo.mintB.extensions?.feeConfig,
+        epochInfo,
+        true,
+      ),
     ];
 
     return {
@@ -1396,8 +1406,8 @@ export function getLiquidityFromAmounts({
   const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(_tickUpper);
 
   const [amountFeeA, amountFeeB] = [
-    getTransferAmountFeeV2(_amountA, poolInfo.mintA.extensions.feeConfig, epochInfo, !amountHasFee),
-    getTransferAmountFeeV2(_amountB, poolInfo.mintB.extensions.feeConfig, epochInfo, !amountHasFee),
+    getTransferAmountFeeV2(_amountA, poolInfo.mintA.extensions?.feeConfig, epochInfo, !amountHasFee),
+    getTransferAmountFeeV2(_amountB, poolInfo.mintB.extensions?.feeConfig, epochInfo, !amountHasFee),
   ];
 
   const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(

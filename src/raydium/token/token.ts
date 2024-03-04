@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { MintLayout, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import { Price, Token, TokenAmount, Fraction } from "@/module";
 import { PublicKeyish, validateAndParsePublicKey, SOLMint, WSOLMint } from "@/common/pubKey";
@@ -57,19 +57,43 @@ export default class TokenModule extends ModuleBase {
 
     mintList.forEach((token) => {
       if (this._blackTokenMap.has(token.address)) return;
-      this._tokenMap.set(token.address, { ...token, type: "raydium", priority: 2 });
+      this._tokenMap.set(token.address, {
+        ...token,
+        type: "raydium",
+        priority: 2,
+        programId:
+          token.programId || token.tags.includes("token-2022")
+            ? TOKEN_2022_PROGRAM_ID.toBase58()
+            : TOKEN_PROGRAM_ID.toBase58(),
+      });
       this._mintGroup.official.add(token.address);
     });
 
     jup.forEach((token) => {
       if (this._blackTokenMap.has(token.address) || this._tokenMap.has(token.address)) return;
-      this._tokenMap.set(token.address, { ...token, type: "jupiter", priority: 1 });
+      this._tokenMap.set(token.address, {
+        ...token,
+        type: "jupiter",
+        priority: 1,
+        programId:
+          token.programId || token.tags.includes("token-2022")
+            ? TOKEN_2022_PROGRAM_ID.toBase58()
+            : TOKEN_PROGRAM_ID.toBase58(),
+      });
       this._mintGroup.jup.add(token.address);
     });
 
     this._extraTokenList.forEach((token) => {
       if (this._blackTokenMap.has(token.address) || this._tokenMap.has(token.address)) return;
-      this._tokenMap.set(token.address, { ...token, type: "extra", priority: 1 });
+      this._tokenMap.set(token.address, {
+        ...token,
+        type: "extra",
+        priority: 1,
+        programId:
+          token.programId || token.tags.includes("token-2022")
+            ? TOKEN_2022_PROGRAM_ID.toBase58()
+            : TOKEN_PROGRAM_ID.toBase58(),
+      });
       this._mintGroup.extra.add(token.address);
     });
 
