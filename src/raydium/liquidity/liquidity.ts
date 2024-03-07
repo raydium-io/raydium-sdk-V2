@@ -56,19 +56,8 @@ export default class LiquidityModule extends ModuleBase {
     slippage: Percent;
     baseIn?: boolean;
   }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
-    // const _amount = amount.token.mint.equals(SOLMint)
-    //   ? this.scope.mintToTokenAmount({ mint: WSOLMint, amount: amount.raw, decimalDone: true })
-    //   : amount;
     const inputAmount = new BN(new Decimal(amount).mul(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals).toFixed(0));
     const _anotherToken = toToken(poolInfo[baseIn ? "mintB" : "mintA"]);
-    // const _anotherToken = anotherToken.mint.equals(SOLMint)
-    //   ? this.scope.mintToToken(WSOLMint)
-    //   : new Token({
-    //       mint: anotherToken.mint,
-    //       decimals: anotherToken.decimals,
-    //       symbol: anotherToken.symbol,
-    //       name: anotherToken.name,
-    //     });
 
     const [baseReserve, quoteReserve] = [
       new BN(new Decimal(poolInfo.mintAmountA).mul(10 ** poolInfo.mintA.decimals).toString()),
@@ -101,8 +90,10 @@ export default class LiquidityModule extends ModuleBase {
     }
 
     const liquidity = divCeil(
-      inputAmount.mul(new BN(poolInfo.lpAmount)),
-      new BN(input === "base" ? poolInfo.mintAmountA : poolInfo.mintAmountB),
+      inputAmount.mul(new BN(poolInfo.lpAmount).mul(new BN(10).pow(new BN(poolInfo.lpMint.decimals)))),
+      new BN(input === "base" ? poolInfo.mintAmountA : poolInfo.mintAmountB).mul(
+        new BN(10).pow(new BN(poolInfo[input === "base" ? "mintA" : "mintB"].decimals)),
+      ),
     );
 
     const _slippage = new Percent(BN_ONE).add(slippage);
