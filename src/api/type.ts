@@ -65,8 +65,9 @@ export interface ApiClmmConfigInfo {
   tradeFeeRate: number;
   tickSpacing: number;
   fundFeeRate: number;
-  fundOwner: string;
   description: string;
+  defaultRange: number;
+  defaultRangePoint: number[];
 }
 
 export interface ApiClmmPoolsItemStatistics {
@@ -233,6 +234,7 @@ export enum PoolFetchType {
   Standard = "standard",
   Concentrated = "concentrated",
 }
+
 export interface FetchPoolParams {
   type?: PoolFetchType;
   sort?:

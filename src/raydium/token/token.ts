@@ -62,9 +62,8 @@ export default class TokenModule extends ModuleBase {
         type: "raydium",
         priority: 2,
         programId:
-          token.programId || token.tags.includes("token-2022")
-            ? TOKEN_2022_PROGRAM_ID.toBase58()
-            : TOKEN_PROGRAM_ID.toBase58(),
+          token.programId ??
+          (token.tags.includes("token-2022") ? TOKEN_2022_PROGRAM_ID.toBase58() : TOKEN_PROGRAM_ID.toBase58()),
       });
       this._mintGroup.official.add(token.address);
     });
@@ -76,9 +75,8 @@ export default class TokenModule extends ModuleBase {
         type: "jupiter",
         priority: 1,
         programId:
-          token.programId || token.tags.includes("token-2022")
-            ? TOKEN_2022_PROGRAM_ID.toBase58()
-            : TOKEN_PROGRAM_ID.toBase58(),
+          token.programId ??
+          (token.tags.includes("token-2022") ? TOKEN_2022_PROGRAM_ID.toBase58() : TOKEN_PROGRAM_ID.toBase58()),
       });
       this._mintGroup.jup.add(token.address);
     });

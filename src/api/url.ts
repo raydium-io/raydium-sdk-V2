@@ -6,7 +6,7 @@ export const API_URLS = {
   FARM_ARP: "/main/farm/info",
   FARM_ARP_LINE: "/main/farm-apr-tv",
 
-  AMM_V3_CONFIG: "/v2/ammV3/ammConfigs",
+  AMM_V3_CONFIG: "/v3/pools/clmm-config",
 
   VERSION: "/v2/main/version",
 

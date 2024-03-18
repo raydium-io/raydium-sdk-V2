@@ -125,7 +125,7 @@ export class Api {
   //   return this.api.get(this.urlConfigs.TOKEN || API_URLS.TOKEN);
   // }
 
-  async getClmmConfigs(): Promise<Record<string, ApiClmmConfigInfo>> {
+  async getClmmConfigs(): Promise<ApiClmmConfigInfo[]> {
     const res = await this.api.get(this.urlConfigs.AMM_V3_CONFIG || API_URLS.AMM_V3_CONFIG);
     return res.data;
   }
