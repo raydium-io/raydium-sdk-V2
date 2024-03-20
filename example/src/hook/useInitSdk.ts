@@ -19,7 +19,6 @@ export default function useInitSdk() {
         connection,
         logRequests: true,
         disableFeatureCheck: true,
-        urlConfigs: { BASE_HOST: 'https://api-v3.asdf1234.win' },
       })
     }
   }, [initRaydium, connection])

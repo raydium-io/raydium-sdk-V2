@@ -2,6 +2,7 @@ import AppBar from '@mui/material/AppBar'
 import Box from '@mui/material/Box'
 import Grid from '@mui/material/Grid'
 import Toolbar from '@mui/material/Toolbar'
+import { clusterApiUrl } from '@solana/web3.js'
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui'
@@ -39,10 +40,7 @@ const Context: FC<{ children: ReactNode }> = ({ children }) => {
   const network = WalletAdapterNetwork.Mainnet
 
   // You can also provide a custom RPC endpoint.
-  const endpoint = 'https://rpc.asdf1234.win' // mainnet has rate limit so use Project Serum-hosted api node
-
-  // You can also provide a custom RPC endpoint.
-  //   const endpoint = useMemo(() => clusterApiUrl(network), [network])
+  const endpoint = useMemo(() => clusterApiUrl(network), [network])
 
   const wallets = useMemo(
     () => [
