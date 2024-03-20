@@ -1,0 +1,124 @@
+import { PublicKey, TransactionInstruction, SYSVAR_CLOCK_PUBKEY } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { RENT_PROGRAM_ID, CLOCK_PROGRAM_ID } from "@/common/pubKey";
+import {
+  PurchaseInstructionKeys,
+  ClaimInstructionKeysV3,
+  ClaimInstructionKeys,
+  IdoClaimInstructionParams,
+} from "./type";
+import { purchaseLayout, claimLayout } from "./layout";
+
+export function makePurchaseInstruction({
+  programId,
+  amount,
+  instructionKeys,
+}: {
+  programId: PublicKey;
+  amount: string | number;
+  instructionKeys: PurchaseInstructionKeys;
+}): TransactionInstruction {
+  const keys = [
+    // system
+    { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: CLOCK_PROGRAM_ID, isSigner: false, isWritable: false },
+    // pubkeys
+    ...Object.entries(instructionKeys).map(([name, pubkey]) => ({
+      pubkey,
+      isSigner: name === "userOwner",
+      isWritable: !["authority", "userOwner", "userIdoCheck", "userStakeInfo"].includes(name),
+    })),
+  ];
+
+  const data = Buffer.alloc(purchaseLayout.span);
+  purchaseLayout.encode({ instruction: 1, amount: Number(amount) }, data);
+
+  return new TransactionInstruction({ keys, programId, data });
+}
+
+export function makeClaimInstruction<Version extends "" | "3" = "">(
+  { programId }: { programId: PublicKey },
+  instructionKeys: Version extends "3" ? ClaimInstructionKeysV3 : ClaimInstructionKeys,
+): TransactionInstruction {
+  const keys = [
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: CLOCK_PROGRAM_ID, isSigner: false, isWritable: false },
+    ...Object.entries(instructionKeys).map(([name, pubkey]) => ({
+      pubkey,
+      isSigner: name === "userOwner",
+      isWritable: !["authority", "userOwner"].includes(name),
+    })),
+  ];
+
+  const data = Buffer.alloc(claimLayout.span);
+  claimLayout.encode({ instruction: 2 }, data);
+
+  return new TransactionInstruction({ keys, programId, data });
+}
+
+export function makeClaimInstructionV4(params: IdoClaimInstructionParams): TransactionInstruction {
+  const { poolConfig, userKeys, side } = params;
+
+  const tokenAccount = side === "base" ? userKeys.baseTokenAccount : userKeys.quoteTokenAccount;
+  const vault = side === "base" ? poolConfig.baseVault : poolConfig.quoteVault;
+  const data = Buffer.alloc(claimLayout.span);
+  claimLayout.encode(
+    {
+      instruction: 2,
+    },
+    data,
+  );
+
+  const keys = [
+    {
+      pubkey: TOKEN_PROGRAM_ID,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: SYSVAR_CLOCK_PUBKEY,
+      isWritable: false,
+      isSigner: false,
+    },
+    // ido
+    {
+      pubkey: poolConfig.id,
+      isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: poolConfig.authority,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: vault,
+      isWritable: true,
+      isSigner: false,
+    },
+    // user
+    {
+      pubkey: tokenAccount,
+      isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: userKeys.ledgerAccount,
+      isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: userKeys.owner,
+      isWritable: false,
+      isSigner: true,
+    },
+  ];
+
+  return new TransactionInstruction({
+    programId: poolConfig.programId,
+    keys,
+    data,
+  });
+}

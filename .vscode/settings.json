@@ -2,12 +2,24 @@
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.tabSize": 2,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
-  },
-
+  // format flow
+  "editor.codeActionsOnSave": ["source.formatDocument", "source.organizeImports.sortImports"],
   "eslint.validate": ["typescript"],
-
+  // https://marketplace.visualstudio.com/items?itemName=dozerg.tsimportsorter
+  "tsImportSorter.configuration.groupRules": [
+    ["^@\\w", "^\\w"],
+    ["^@/"],
+    ["^\\.\\."],
+    ["^\\."],
+    { "flags": "scripts" }
+  ],
+  "tsImportSorter.configuration.keepUnused": [".*"],
+  "tsImportSorter.configuration.wrappingStyle": {
+    "maxNamesPerWrappedLine": 0,
+    "maxBindingNamesPerLine": 0,
+    "maxDefaultAndBindingNamesPerLine": 0
+  },
+  // aaron-bond.better-comments
   "better-comments.multilineComments": true,
   "better-comments.tags": [
     {

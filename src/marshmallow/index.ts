@@ -1,11 +1,22 @@
+import { PublicKey } from "@solana/web3.js";
 import BN, { isBN } from "bn.js";
 
-import { PublicKey } from "@solana/web3.js";
 import {
-  bits, Blob, blob, Layout, offset as _offset, seq as _seq, Structure as _Structure, u32 as _u32,
-  u8 as _u8, UInt, union as _union, Union as _Union
-} from "../types/buffer-layout";
+  bits,
+  blob,
+  Blob,
+  Layout,
+  offset as _offset,
+  seq as _seq,
+  Structure as _Structure,
+  u32 as _u32,
+  u8 as _u8,
+  UInt,
+  union as _union,
+  Union as _Union,
+} from "./buffer-layout";
 
+export * from "./buffer-layout";
 export { blob };
 
 export class BNLayout<P extends string = ""> extends Layout<BN, P> {
@@ -20,7 +31,7 @@ export class BNLayout<P extends string = ""> extends Layout<BN, P> {
   }
 
   /** @override */
-  decode(b: Buffer, offset = 0) {
+  decode(b: Buffer, offset = 0): BN {
     const num = new BN(this.blob.decode(b, offset), 10, "le");
     if (this.signed) {
       return num.fromTwos(this.span * 8).clone();
@@ -29,7 +40,7 @@ export class BNLayout<P extends string = ""> extends Layout<BN, P> {
   }
 
   /** @override */
-  encode(src: BN, b: Buffer, offset = 0) {
+  encode(src: BN, b: Buffer, offset = 0): number {
     if (typeof src === "number") src = new BN(src); // src will pass a number accidently in union
     if (this.signed) {
       src = src.toTwos(this.span * 8);
@@ -41,7 +52,7 @@ export class BNLayout<P extends string = ""> extends Layout<BN, P> {
 export class WideBits<P extends string = ""> extends Layout<Record<string, boolean>, P> {
   _lower: any;
   _upper: any;
-  // TODO: nknown
+  // TODO: unknown
   constructor(property?: P) {
     //@ts-expect-error type wrong for super()'s type different from extends , but it desn't matter
     super(8, property);
@@ -49,7 +60,7 @@ export class WideBits<P extends string = ""> extends Layout<Record<string, boole
     this._upper = bits(_u32(), false);
   }
 
-  addBoolean(property: string) {
+  addBoolean(property: string): void {
     if (this._lower.fields.length < 32) {
       this._lower.addBoolean(property);
     } else {
@@ -63,7 +74,7 @@ export class WideBits<P extends string = ""> extends Layout<Record<string, boole
     return { ...lowerDecoded, ...upperDecoded };
   }
 
-  encode(src: any /* TEMP */, b: Buffer, offset = 0) {
+  encode(src: any /* TEMP */, b: Buffer, offset = 0): any {
     return this._lower.encode(src, b, offset) + this._upper.encode(src, b, offset + this._lower.span);
   }
 }
@@ -82,6 +93,10 @@ export function u64<P extends string = "">(property?: P): BNLayout<P> {
 
 export function u128<P extends string = "">(property?: P): BNLayout<P> {
   return new BNLayout(16, false, property);
+}
+
+export function i8<P extends string = "">(property?: P): BNLayout<P> {
+  return new BNLayout(1, true, property);
 }
 
 export function i64<P extends string = "">(property?: P): BNLayout<P> {
@@ -205,7 +220,7 @@ export function vec<T, P extends string = "">(elementLayout: Layout<T>, property
 export function tagged<T, P extends string = "">(tag: BN, layout: Layout<T>, property?: P): Layout<T, P> {
   const wrappedLayout: Layout<{ tag: BN; data: T }> = struct([u64("tag"), layout.replicate("data")]) as any; // Something I don't know
 
-  function decodeTag({ tag: receivedTag, data }: { tag: BN; data: T }) {
+  function decodeTag({ tag: receivedTag, data }: { tag: BN; data: T }): T {
     if (!receivedTag.eq(tag)) {
       throw new Error("Invalid tag, expected: " + tag.toString("hex") + ", got: " + receivedTag.toString("hex"));
     }
@@ -261,7 +276,7 @@ export function array<T, P extends string = "">(
 
 export class Structure<T, P, D> extends _Structure<T, P, D> {
   /** @override */
-  decode(b: Buffer, offset?: number) {
+  decode(b: Buffer, offset?: number): D {
     return super.decode(b, offset);
   }
 }
@@ -297,7 +312,7 @@ export class Union<Schema> extends _Union<Schema> {
     return b.slice(0, this.encode(instruction, b));
   }
 
-  decodeInstruction(instruction: any) {
+  decodeInstruction(instruction: any): Partial<Schema> {
     return this.decode(instruction);
   }
 }
@@ -310,7 +325,7 @@ export function union<UnionSchema extends { [key: string]: any } = any>(
 }
 
 class Zeros extends Blob {
-  decode(b: Buffer, offset: number) {
+  decode(b: Buffer, offset: number): Buffer {
     const slice = super.decode(b, offset);
     if (!slice.every((v) => v === 0)) {
       throw new Error("nonzero padding bytes");
@@ -319,7 +334,7 @@ class Zeros extends Blob {
   }
 }
 
-export function zeros(length: number) {
+export function zeros(length: number): Zeros {
   return new Zeros(length);
 }
 
@@ -335,7 +350,7 @@ export function seq<T, P extends string = "", AnotherP extends string = "">(
       : isBN(count)
       ? count.toNumber()
       : new Proxy(count as unknown as Layout<number> /* pretend to be Layout<number> */, {
-          get(target, property) {
+          get(target, property): any {
             if (!parsedCount) {
               // get count in targetLayout. note that count may be BN
               const countProperty = Reflect.get(target, "count");
@@ -348,7 +363,7 @@ export function seq<T, P extends string = "", AnotherP extends string = "">(
             }
             return Reflect.get(target, property);
           },
-          set(target, property, value) {
+          set(target, property, value): any {
             if (property === "count") {
               parsedCount = value;
             }

@@ -9,7 +9,12 @@ module.exports = {
     node: true,
   },
   rules: {
-    "tsdoc/syntax": "warn",
+    "tsdoc/syntax": "off",
+    "tsdoc-malformed-inline-tag": "off",
     "@typescript-eslint/no-explicit-any": 0,
+    "object-shorthand": ["error", "always"],
+    "@typescript-eslint/explicit-function-return-type": ["warn"],
+    "@typescript-eslint/no-non-null-assertion": "off",
+    "no-inner-declarations": ["warn"],
   },
 };

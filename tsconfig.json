@@ -3,16 +3,20 @@
 
   "compilerOptions": {
     "target": "es6",
-    "lib": ["es2019"],
+    "lib": ["es2019", "DOM"],
     "outDir": "./lib",
     "allowJs": true,
     "checkJs": true,
     "declaration": true,
     "declarationMap": true,
     "noImplicitAny": false,
-    "resolveJsonModule": true,
+    "esModuleInterop": true,
     "sourceMap": true,
-    "jsx": "react"
+    "jsx": "react",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["./src/**/*"],
   "exclude": ["node_modules"],
