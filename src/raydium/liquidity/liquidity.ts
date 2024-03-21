@@ -540,6 +540,7 @@ export default class LiquidityModule extends ModuleBase {
     checkCreateATAOwner = false,
     tokenProgram,
     txVersion,
+    feeDestinationId,
   }: CreatePoolParam<T>): Promise<MakeTxData<T, { address: CreatePoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(NATIVE_MINT);
@@ -612,6 +613,8 @@ export default class LiquidityModule extends ModuleBase {
       poolTempLp: poolInfo.lpVault,
       marketProgramId: poolInfo.marketProgramId,
       marketId: poolInfo.marketId,
+      ammConfigId: poolInfo.configId,
+      feeDestinationId,
     };
 
     const { instruction, instructionType } = createPoolV4InstructionV2({

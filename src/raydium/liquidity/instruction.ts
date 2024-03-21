@@ -166,6 +166,8 @@ export function createPoolV4InstructionV2({
   openTime,
   coinAmount,
   pcAmount,
+  ammConfigId,
+  feeDestinationId,
 }: {
   programId: PublicKey;
   ammId: PublicKey;
@@ -185,6 +187,8 @@ export function createPoolV4InstructionV2({
   userCoinVault: PublicKey;
   userPcVault: PublicKey;
   userLpVault: PublicKey;
+  ammConfigId: PublicKey;
+  feeDestinationId: PublicKey;
 
   nonce: number;
   openTime: BN;
@@ -205,10 +209,10 @@ export function createPoolV4InstructionV2({
     { pubkey: coinMint, isSigner: false, isWritable: false },
     { pubkey: pcMint, isSigner: false, isWritable: false },
     { pubkey: coinVault, isSigner: false, isWritable: true },
-    { pubkey: pcVault, isSigner: false, isWritable: true },
-    { pubkey: withdrawQueue, isSigner: false, isWritable: true },
-    { pubkey: ammTargetOrders, isSigner: false, isWritable: true },
-    { pubkey: poolTempLp, isSigner: false, isWritable: true },
+    { pubkey: pcVault, isSigner: false, isWritable: true }, //12
+    { pubkey: ammTargetOrders, isSigner: false, isWritable: true }, //13
+    { pubkey: ammConfigId, isSigner: false, isWritable: false },
+    { pubkey: feeDestinationId, isSigner: false, isWritable: true },
     { pubkey: marketProgramId, isSigner: false, isWritable: false },
     { pubkey: marketId, isSigner: false, isWritable: false },
     { pubkey: userWallet, isSigner: true, isWritable: true },

@@ -42,6 +42,14 @@ export function getLiquidityAssociatedId({ name, programId, marketId }: GetAssoc
   return publicKey;
 }
 
+export function getAssociatedOpenOrders({ programId, marketId }: { programId: PublicKey; marketId: PublicKey }) {
+  const { publicKey } = findProgramAddress(
+    [programId.toBuffer(), marketId.toBuffer(), Buffer.from("open_order_associated_seed", "utf-8")],
+    programId,
+  );
+  return publicKey;
+}
+
 export function getLiquidityAssociatedAuthority({ programId }: { programId: PublicKey }): {
   publicKey: PublicKey;
   nonce: number;
@@ -76,7 +84,7 @@ export function getAssociatedPoolKeys({
   const baseVault = getLiquidityAssociatedId({ name: "coin_vault_associated_seed", programId, marketId });
   const quoteVault = getLiquidityAssociatedId({ name: "pc_vault_associated_seed", programId, marketId });
   const lpVault = getLiquidityAssociatedId({ name: "temp_lp_token_associated_seed", programId, marketId });
-  const openOrders = getLiquidityAssociatedId({ name: "open_order_associated_seed", programId, marketId });
+  const openOrders = getAssociatedOpenOrders({ programId, marketId });
   const targetOrders = getLiquidityAssociatedId({ name: "target_associated_seed", programId, marketId });
   const withdrawQueue = getLiquidityAssociatedId({ name: "withdraw_associated_seed", programId, marketId });
 
@@ -113,6 +121,7 @@ export function getAssociatedPoolKeys({
     marketId,
     marketAuthority,
     lookupTableAccount: PublicKey.default,
+    configId: getAssociatedConfigId({ programId }),
   };
 }
 

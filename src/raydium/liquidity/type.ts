@@ -83,6 +83,7 @@ export interface LiquidityPoolKeys {
   marketId: PublicKey;
   marketAuthority: PublicKey;
   lookupTableAccount: PublicKey;
+  configId: PublicKey;
 }
 
 export interface CreatePoolParam<T> {
@@ -111,6 +112,7 @@ export interface CreatePoolParam<T> {
   associatedOnly: boolean;
   checkCreateATAOwner?: boolean;
   tokenProgram?: PublicKey;
+  feeDestinationId: PublicKey;
   txVersion?: T;
 }
 
@@ -129,6 +131,8 @@ export interface CreatePoolAddress {
   poolTempLp: PublicKey;
   marketProgramId: PublicKey;
   marketId: PublicKey;
+  ammConfigId: PublicKey;
+  feeDestinationId: PublicKey;
 }
 
 export interface SwapFixedInInstructionParamsV4 {
