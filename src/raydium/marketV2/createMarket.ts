@@ -3,7 +3,7 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import ModuleBase from "../moduleBase";
 import { TxVersion } from "@/common/txTool/txType";
-import { TxBuildData, MakeMultiTxData } from "@/common/txTool/txTool";
+import { MakeTxData, TxBuildData, TxV0BuildData, MakeMultiTxData } from "@/common/txTool/txTool";
 import { generatePubKey } from "../account/util";
 import { BN_ZERO } from "@/common/bignumber";
 import { makeCreateMarketInstruction } from "./instrument";
@@ -54,8 +54,7 @@ export default class MarketV2 extends ModuleBase {
     const quoteVault = generatePubKey({ fromPublicKey: wallet, programId: TOKEN_PROGRAM_ID });
     const feeRateBps = 0;
     const quoteDustThreshold = new BN(100);
-
-    function getVaultOwnerAndNonce(): { vaultOwner: PublicKey; vaultSignerNonce: BN } {
+    function getVaultOwnerAndNonce() {
       const vaultSignerNonce = new BN(0);
       // eslint-disable-next-line no-constant-condition
       while (true) {
@@ -72,13 +71,11 @@ export default class MarketV2 extends ModuleBase {
       }
     }
     const { vaultOwner, vaultSignerNonce } = getVaultOwnerAndNonce();
-
     const baseLotSize = new BN(Math.round(10 ** baseInfo.decimals * lotSize));
     const quoteLotSize = new BN(Math.round(lotSize * 10 ** quoteInfo.decimals * tickSize));
 
     if (baseLotSize.eq(BN_ZERO)) throw Error("lot size is too small");
     if (quoteLotSize.eq(BN_ZERO)) throw Error("tick size or lot size is too small");
-
     const allTxArr = await makeCreateMarketInstruction({
       connection: this.scope.connection,
       wallet: this.scope.ownerPubKey,
@@ -102,23 +99,23 @@ export default class MarketV2 extends ModuleBase {
         quoteLotSize,
       },
     });
-
     const txBuilder = this.createTxBuilder();
     txBuilder.addInstruction({
       instructions: allTxArr[0].transaction.instructions,
       signers: allTxArr[0].signer,
     });
 
-    const extraTxBuildData: TxBuildData[] = [];
+    const extraTxBuildData: any[] = [];
 
-    for (let i = 1; i < allTxArr.length; i++) {
+    for await (const txData of allTxArr.slice(1, allTxArr.length)) {
       const extraTxBuilder = this.createTxBuilder();
       extraTxBuilder.addInstruction({
-        instructions: allTxArr[i].transaction.instructions,
-        signers: allTxArr[i].signer,
-        instructionTypes: allTxArr[i].instructionTypes,
+        instructions: txData.transaction.instructions,
+        signers: txData.signer,
+        instructionTypes: txData.instructionTypes,
       });
-      extraTxBuildData.push(extraTxBuilder.build());
+      const build = await extraTxBuilder.versionBuild({ txVersion });
+      extraTxBuildData.push(build);
     }
 
     return txBuilder.versionMultiBuild<T, ExtInfo>({
