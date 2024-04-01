@@ -141,7 +141,6 @@ export interface TransferFeeDataBaseType {
   };
 }
 
-type TagsItem = "hasFreeze" | "hasTransferFee" | "token-2022" | "community";
 type ExtensionsItem = {
   coingeckoId?: string;
   feeConfig?: TransferFeeDataBaseType;
@@ -155,7 +154,7 @@ export type ApiV3Token = {
   symbol: string;
   name: string;
   decimals: number;
-  tags: TagsItem[];
+  tags: string[]; // "hasFreeze" | "hasTransferFee" | "token-2022" | "community" | "unknown" ..etc
   extensions: ExtensionsItem;
 };
 

@@ -68,6 +68,7 @@ interface CreatePoolInstruction {
   ammConfigId: PublicKey;
   initialPriceX64: BN;
   startTime: BN;
+  forerunCreate?: boolean;
 }
 
 export class ClmmInstrument {
@@ -130,7 +131,8 @@ export class ClmmInstrument {
       mintBVault: PublicKey;
     }>
   > {
-    const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } = props;
+    const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime, forerunCreate } =
+      props;
     const observationId = generatePubKey({ fromPublicKey: owner, programId });
     const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
     const ins = [
@@ -139,7 +141,7 @@ export class ClmmInstrument {
         basePubkey: owner,
         seed: observationId.seed,
         newAccountPubkey: observationId.publicKey,
-        lamports: await connection.getMinimumBalanceForRentExemption(ObservationInfoLayout.span),
+        lamports: forerunCreate ? 0 : await connection.getMinimumBalanceForRentExemption(ObservationInfoLayout.span),
         space: ObservationInfoLayout.span,
         programId,
       }),
@@ -1737,17 +1739,6 @@ export class ClmmInstrument {
       instructionTypes: [InstructionType.ClmmCollectReward],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
-  }
-
-  static addComputations(): TransactionInstruction[] {
-    return [
-      ComputeBudgetProgram.setComputeUnitLimit({
-        units: 1000000,
-      }),
-      ComputeBudgetProgram.setComputeUnitPrice({
-        microLamports: 1,
-      }),
-    ];
   }
 
   static swapBaseOutInstructions({

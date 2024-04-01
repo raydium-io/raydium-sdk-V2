@@ -7,6 +7,7 @@ import { TickArray } from "./utils/tick";
 import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys, ApiV3Token } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
+import { ComputeBudgetConfig } from "@/raydium/type";
 
 import { ClmmPositionLayout } from "./layout";
 
@@ -251,6 +252,8 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   ammConfig: ClmmConfigInfo;
   initialPrice: Decimal;
   startTime: BN;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  forerunCreate?: boolean;
   txVersion?: T;
 }
 
@@ -299,6 +302,7 @@ export interface IncreasePositionFromLiquidity<T = TxVersion.LEGACY> {
   liquidity: BN;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
 
@@ -313,6 +317,7 @@ export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
   otherAmountMax: BN;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
 
@@ -330,6 +335,7 @@ export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
 
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
 
@@ -364,6 +370,7 @@ export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   withMetadata?: "create" | "no-create";
   getEphemeralSigners?: (k: number) => any;
+  computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
 
@@ -407,21 +414,6 @@ export interface OpenPositionFromLiquidityExtInfo {
   };
 }
 
-export interface SwapInParams {
-  poolInfo: ApiV3PoolInfoConcentratedItem;
-  ownerInfo: {
-    feePayer: PublicKey;
-    useSOLBalance?: boolean;
-  };
-  inputMint: PublicKey;
-  amountIn: BN;
-  amountOutMin: BN;
-  priceLimit?: Decimal;
-  remainingAccounts: PublicKey[];
-  associatedOnly?: boolean;
-  checkCreateATAOwner?: boolean;
-}
-
 export interface GetAmountParams {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerPosition: ClmmPositionLayout;
@@ -445,7 +437,7 @@ export interface InitRewardParams<T = TxVersion.LEGACY> {
   };
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
-  notAddComputeBudget?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
 
@@ -474,7 +466,7 @@ export interface SetRewardParams<T = TxVersion.LEGACY> {
   };
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
-  notAddComputeBudget?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
 

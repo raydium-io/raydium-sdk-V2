@@ -42,6 +42,8 @@ export default class MarketV2 extends ModuleBase {
     lotSize: number;
     tickSize: number;
     dexProgramId: PublicKey;
+    eventQueue?: PublicKey;
+    requestQueue?: PublicKey;
     txVersion?: T;
   }): Promise<MakeMultiTxData<T, ExtInfo>> {
     const wallet = this.scope.ownerPubKey;

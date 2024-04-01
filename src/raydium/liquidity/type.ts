@@ -4,6 +4,7 @@ import { TxVersion } from "@/common/txTool/txType";
 import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
 import Decimal from "decimal.js-light";
+import { ComputeBudgetConfig } from "@/raydium/type";
 
 export type LiquiditySide = "a" | "b";
 export type AmountSide = "base" | "quote";
@@ -113,6 +114,7 @@ export interface CreatePoolParam<T> {
   checkCreateATAOwner?: boolean;
   tokenProgram?: PublicKey;
   feeDestinationId: PublicKey;
+  computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
 

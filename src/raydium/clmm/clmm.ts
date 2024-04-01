@@ -17,7 +17,6 @@ import {
   DecreaseLiquidity,
   OpenPositionFromBase,
   OpenPositionFromLiquidity,
-  SwapInParams,
   InitRewardParams,
   InitRewardsParams,
   SetRewardParams,
@@ -39,7 +38,6 @@ import { TickArray } from "./utils/tick";
 import { getPdaOperationAccount } from "./utils/pda";
 import { ClmmPositionLayout, OperationLayout } from "./layout";
 import BN from "bn.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 export class Clmm extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -61,6 +59,8 @@ export class Clmm extends ModuleBase {
       ammConfig,
       initialPrice,
       startTime,
+      computeBudgetConfig,
+      forerunCreate,
       txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
@@ -81,12 +81,17 @@ export class Clmm extends ModuleBase {
       ammConfigId: ammConfig.id,
       initialPriceX64,
       startTime,
+      forerunCreate,
     });
 
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
-    return txBuilder.versionBuild<{ mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>({
+    return txBuilder.versionBuild<{
+      mockPoolInfo: ApiV3PoolInfoConcentratedItem;
+      address: ClmmKeys;
+      forerunCreate?: boolean;
+    }>({
       txVersion,
       extInfo: {
         address: {
@@ -132,6 +137,7 @@ export class Clmm extends ModuleBase {
           },
           ...mockV3CreatePoolInfo,
         },
+        forerunCreate,
       },
     }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
@@ -149,6 +155,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     withMetadata = "create",
     getEphemeralSigners,
+    computeBudgetConfig,
     txVersion,
   }: OpenPositionFromBase<T>): Promise<MakeTxData<T, OpenPositionFromBaseExtInfo>> {
     if (this.scope.availability.addConcentratedPosition === false)
@@ -229,7 +236,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     return txBuilder.versionBuild<OpenPositionFromBaseExtInfo>({ txVersion, extInfo: insInfo.address }) as Promise<
       MakeTxData<T, OpenPositionFromBaseExtInfo>
     >;
@@ -322,7 +329,6 @@ export class Clmm extends ModuleBase {
       getEphemeralSigners,
     });
     txBuilder.addInstruction(makeOpenPositionInstructions);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
 
     return txBuilder.versionBuild<OpenPositionFromLiquidityExtInfo>({
       txVersion,
@@ -342,6 +348,7 @@ export class Clmm extends ModuleBase {
       ownerInfo,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      computeBudgetConfig,
       txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
@@ -408,7 +415,7 @@ export class Clmm extends ModuleBase {
       amountMaxB,
     });
     txBuilder.addInstruction(ins);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
@@ -428,6 +435,7 @@ export class Clmm extends ModuleBase {
       ownerInfo,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      computeBudgetConfig,
       txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
@@ -493,7 +501,7 @@ export class Clmm extends ModuleBase {
       otherAmountMax,
     });
     txBuilder.addInstruction(ins);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
@@ -513,6 +521,7 @@ export class Clmm extends ModuleBase {
       liquidity,
       associatedOnly = true,
       checkCreateATAOwner = false,
+      computeBudgetConfig,
       txVersion,
     } = props;
     if (this.scope.availability.removeConcentratedPosition === false)
@@ -631,7 +640,7 @@ export class Clmm extends ModuleBase {
       });
       extInfo = { ...extInfo, ...closeInsInfo.address };
     }
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
@@ -665,232 +674,13 @@ export class Clmm extends ModuleBase {
     }) as Promise<MakeTxData<T, ClosePositionExtInfo>>;
   }
 
-  public async swapBaseIn({
-    poolInfo,
-    ownerInfo,
-    inputMint,
-    amountIn,
-    amountOutMin,
-    priceLimit,
-    remainingAccounts,
-    associatedOnly = true,
-    checkCreateATAOwner = false,
-  }: SwapInParams): Promise<MakeTransaction> {
-    this.scope.checkOwner();
-
-    let sqrtPriceLimitX64: BN;
-    if (!priceLimit || priceLimit.equals(new Decimal(0))) {
-      sqrtPriceLimitX64 =
-        inputMint.toString() === poolInfo.mintA.address ? MIN_SQRT_PRICE_X64.add(ONE) : MAX_SQRT_PRICE_X64.sub(ONE);
-    } else {
-      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
-        priceLimit,
-        poolInfo.mintA.decimals,
-        poolInfo.mintB.decimals,
-      );
-    }
-
-    const txBuilder = this.createTxBuilder();
-    const isInputMintA = poolInfo.mintA.address === inputMint.toString();
-
-    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toString();
-    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toString();
-
-    let ownerTokenAccountA: PublicKey | undefined = undefined;
-    let ownerTokenAccountB: PublicKey | undefined = undefined;
-
-    const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
-      await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: poolInfo.mintA.programId,
-        mint: new PublicKey(poolInfo.mintA.address),
-        notUseTokenAccount: mintAUseSOLBalance,
-        owner: this.scope.ownerPubKey,
-        createInfo:
-          mintAUseSOLBalance || !isInputMintA
-            ? {
-                payer: this.scope.ownerPubKey,
-                amount: isInputMintA ? amountIn : 0,
-              }
-            : undefined,
-        skipCloseAccount: !(mintAUseSOLBalance || !isInputMintA),
-        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
-        checkCreateATAOwner,
-      });
-    ownerTokenAccountA = _ownerTokenAccountA;
-    accountAInstructions && txBuilder.addInstruction(accountAInstructions);
-
-    const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
-      await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: poolInfo.mintB.programId,
-        mint: new PublicKey(poolInfo.mintB.address),
-        notUseTokenAccount: mintBUseSOLBalance,
-        owner: this.scope.ownerPubKey,
-        createInfo:
-          mintBUseSOLBalance || isInputMintA
-            ? {
-                payer: this.scope.ownerPubKey,
-                amount: isInputMintA ? 0 : amountIn,
-              }
-            : undefined,
-        skipCloseAccount: !(mintBUseSOLBalance || isInputMintA),
-        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
-        checkCreateATAOwner,
-      });
-    ownerTokenAccountB = _ownerTokenAccountB;
-    accountBInstructions && txBuilder.addInstruction(accountBInstructions);
-
-    if (!ownerTokenAccountA && !ownerTokenAccountB)
-      this.logAndCreateError(
-        "cannot found target token accounts",
-        "tokenAccounts",
-        this.scope.account.tokenAccountRawInfos,
-      );
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
-    const insInfo = await ClmmInstrument.makeSwapBaseInInstructions({
-      poolInfo,
-      poolKeys,
-      ownerInfo: {
-        wallet: this.scope.ownerPubKey,
-        tokenAccountA: ownerTokenAccountA!,
-        tokenAccountB: ownerTokenAccountB!,
-      },
-
-      inputMint,
-
-      amountIn,
-      amountOutMin,
-      sqrtPriceLimitX64,
-
-      remainingAccounts,
-    });
-    txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build();
-  }
-
-  public async swapBaseOut({
-    poolInfo,
-    ownerInfo,
-
-    outputMint,
-    amountOut,
-    amountInMax,
-    priceLimit,
-
-    remainingAccounts,
-    associatedOnly = true,
-    checkCreateATAOwner = false,
-  }: {
-    poolInfo: ApiV3PoolInfoConcentratedItem;
-    ownerInfo: {
-      useSOLBalance?: boolean; // if has WSOL mint
-    };
-
-    outputMint: PublicKey;
-    amountOut: BN;
-    amountInMax: BN;
-    priceLimit?: Decimal;
-    remainingAccounts: PublicKey[];
-    associatedOnly?: boolean;
-    checkCreateATAOwner?: boolean;
-  }): Promise<MakeTransaction> {
-    const txBuilder = this.createTxBuilder();
-    let sqrtPriceLimitX64: BN;
-    if (!priceLimit || priceLimit.equals(new Decimal(0))) {
-      sqrtPriceLimitX64 =
-        outputMint.toString() === poolInfo.mintB.address ? MIN_SQRT_PRICE_X64.add(ONE) : MAX_SQRT_PRICE_X64.sub(ONE);
-    } else {
-      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
-        priceLimit,
-        poolInfo.mintA.decimals,
-        poolInfo.mintB.decimals,
-      );
-    }
-
-    const isInputMintA = poolInfo.mintA.address == outputMint.toString();
-    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toString();
-    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toString();
-
-    let ownerTokenAccountA: PublicKey | undefined = undefined;
-    let ownerTokenAccountB: PublicKey | undefined = undefined;
-
-    const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
-      await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: poolInfo.mintA.programId,
-        mint: new PublicKey(poolInfo.mintA.address),
-        notUseTokenAccount: mintAUseSOLBalance,
-        owner: this.scope.ownerPubKey,
-        createInfo:
-          mintAUseSOLBalance || !isInputMintA
-            ? {
-                payer: this.scope.ownerPubKey,
-                amount: isInputMintA ? amountInMax : 0,
-              }
-            : undefined,
-        skipCloseAccount: !(mintAUseSOLBalance || !isInputMintA),
-        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
-        checkCreateATAOwner,
-      });
-    ownerTokenAccountA = _ownerTokenAccountA;
-    accountAInstructions && txBuilder.addInstruction(accountAInstructions);
-
-    const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: new PublicKey(poolInfo.mintB.address),
-        notUseTokenAccount: mintBUseSOLBalance,
-        owner: this.scope.ownerPubKey,
-        createInfo:
-          mintBUseSOLBalance || isInputMintA
-            ? {
-                payer: this.scope.ownerPubKey,
-                amount: isInputMintA ? 0 : amountInMax,
-              }
-            : undefined,
-        skipCloseAccount: !(mintBUseSOLBalance || isInputMintA),
-        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
-        checkCreateATAOwner,
-      });
-    ownerTokenAccountB = _ownerTokenAccountB;
-    accountBInstructions && txBuilder.addInstruction(accountBInstructions);
-
-    if (!ownerTokenAccountA && !ownerTokenAccountB) {
-      this.logAndCreateError(
-        "cannot found target token accounts",
-        "tokenAccounts",
-        this.scope.account.tokenAccountRawInfos,
-      );
-    }
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
-    const insInfo = ClmmInstrument.swapBaseOutInstructions({
-      poolInfo,
-      poolKeys,
-      ownerInfo: {
-        wallet: this.scope.ownerPubKey,
-        tokenAccountA: ownerTokenAccountA!,
-        tokenAccountB: ownerTokenAccountB!,
-      },
-
-      outputMint,
-
-      amountOut,
-      amountInMax,
-      sqrtPriceLimitX64,
-
-      remainingAccounts,
-    });
-
-    txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-    return txBuilder.build();
-  }
-
   public async initReward<T extends TxVersion>({
     poolInfo,
     ownerInfo,
     rewardInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
-    notAddComputeBudget = false,
+    computeBudgetConfig,
     txVersion,
   }: InitRewardParams<T>): Promise<MakeTxData<T, InitRewardExtInfo>> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -943,8 +733,7 @@ export class Clmm extends ModuleBase {
       },
     });
     txBuilder.addInstruction(insInfo);
-    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     return txBuilder.versionBuild<InitRewardExtInfo>({
       txVersion,
       extInfo: { address: insInfo.address },
@@ -957,7 +746,7 @@ export class Clmm extends ModuleBase {
     rewardInfos,
     associatedOnly = true,
     checkCreateATAOwner = false,
-    notAddComputeBudget = false,
+    computeBudgetConfig,
     txVersion,
   }: InitRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     for (const rewardInfo of rewardInfos) {
@@ -1019,8 +808,7 @@ export class Clmm extends ModuleBase {
       };
       txBuilder.addInstruction(insInfo);
     }
-    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
-
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     return txBuilder.versionBuild({
       txVersion,
       extInfo: { address },
@@ -1033,7 +821,7 @@ export class Clmm extends ModuleBase {
     rewardInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
-    notAddComputeBudget = false,
+    computeBudgetConfig,
     txVersion,
   }: SetRewardParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -1086,7 +874,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
       extInfo: { address: insInfo.address },
@@ -1099,7 +887,7 @@ export class Clmm extends ModuleBase {
     rewardInfos,
     associatedOnly = true,
     checkCreateATAOwner = false,
-    notAddComputeBudget = false,
+    computeBudgetConfig,
     txVersion,
   }: SetRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     const txBuilder = this.createTxBuilder();
@@ -1157,7 +945,7 @@ export class Clmm extends ModuleBase {
         ...insInfo.address,
       };
     }
-    if (!notAddComputeBudget) await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
       extInfo: { address },
@@ -1205,7 +993,7 @@ export class Clmm extends ModuleBase {
       rewardMint,
     });
     txBuilder.addInstruction(insInfo);
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
   }
 
@@ -1258,7 +1046,7 @@ export class Clmm extends ModuleBase {
       txBuilder.addInstruction(insInfo);
       address = { ...address, ...insInfo.address };
     }
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 

@@ -19,7 +19,7 @@ import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
 import { makeAddLiquidityInstruction } from "./instruction";
-import { ComputeBudgetConfig, MakeMultiTransaction } from "../type";
+import { ComputeBudgetConfig } from "../type";
 import { removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
 import { ClmmInstrument } from "../clmm/instrument";
 import { getAssociatedPoolKeys, getAssociatedConfigId } from "./utils";
@@ -362,6 +362,7 @@ export default class LiquidityModule extends ModuleBase {
       throw Error("mint check error");
 
     const txBuilder = this.createTxBuilder();
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     const mintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
       if (
@@ -527,6 +528,7 @@ export default class LiquidityModule extends ModuleBase {
     return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
   }
 
+  // calComputeBudget
   public async createPoolV4<T extends TxVersion>({
     programId,
     marketInfo,
@@ -541,6 +543,7 @@ export default class LiquidityModule extends ModuleBase {
     tokenProgram,
     txVersion,
     feeDestinationId,
+    computeBudgetConfig,
   }: CreatePoolParam<T>): Promise<MakeTxData<T, { address: CreatePoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(NATIVE_MINT);
@@ -635,7 +638,7 @@ export default class LiquidityModule extends ModuleBase {
       instructionTypes: [instructionType],
     });
 
-    await txBuilder.calComputeBudget(ClmmInstrument.addComputations());
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild({
       txVersion,

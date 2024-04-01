@@ -1,27 +1,11 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { MintLayout, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Price, Token, TokenAmount } from "@/module";
-import { parseNumberInfo, Numberish, BigNumberish } from "@/common/bignumber";
+import { Token, TokenAmount } from "@/module";
+import { BigNumberish } from "@/common/bignumber";
 import { TokenInfo } from "./type";
 import { SOL_INFO, TOKEN_WSOL } from "./constant";
 
-import BN from "bn.js";
 import { ApiV3Token } from "@/api";
-
-export function parseTokenPrice(params: { token: TokenInfo; numberPrice: Numberish; decimalDone?: boolean }): Price {
-  const { token, numberPrice, decimalDone } = params;
-  const usdCurrency = new Token({ mint: "", decimals: 6, symbol: "usd", name: "usd", skipMint: true });
-  const { numerator, denominator } = parseNumberInfo(numberPrice);
-  const parsedNumerator = decimalDone ? new BN(numerator).mul(new BN(10).pow(new BN(token.decimals))) : numerator;
-  const parsedDenominator = new BN(denominator).mul(new BN(10).pow(new BN(usdCurrency.decimals)));
-
-  return new Price({
-    baseToken: usdCurrency,
-    denominator: parsedDenominator.toString(),
-    quoteToken: new Token({ ...token, skipMint: true, mint: "" }),
-    numerator: parsedNumerator.toString(),
-  });
-}
 
 export const parseTokenInfo = async ({
   connection,

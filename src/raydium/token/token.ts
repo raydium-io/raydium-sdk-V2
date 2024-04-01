@@ -1,15 +1,13 @@
-import { PublicKey } from "@solana/web3.js";
 import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import { Price, Token, TokenAmount, Fraction } from "@/module";
-import { PublicKeyish, validateAndParsePublicKey, SOLMint, WSOLMint } from "@/common/pubKey";
+import { PublicKeyish, validateAndParsePublicKey, SOLMint } from "@/common/pubKey";
 import { BigNumberish, parseNumberInfo, toBN } from "@/common/bignumber";
 import { JupTokenType } from "@/api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { LoadParams } from "../type";
 
 import { TokenInfo } from "./type";
-import { parseTokenPrice } from "./utils";
 import { SOL_INFO } from "./constant";
 import BN from "bn.js";
 
@@ -40,7 +38,7 @@ export default class TokenModule extends ModuleBase {
 
   public async load(params?: LoadParams & { fetchTokenPrice?: boolean; type?: JupTokenType }): Promise<void> {
     this.checkDisabled();
-    const { forceUpdate = false, type = JupTokenType.ALL, fetchTokenPrice = false } = params || {};
+    const { forceUpdate = false, type = JupTokenType.Strict } = params || {};
     const { mintList, blacklist } = await this.scope.fetchV3TokenList(forceUpdate);
     const jup = await this.scope.fetchJupTokenList(type, forceUpdate);
     // reset all data
@@ -111,36 +109,6 @@ export default class TokenModule extends ModuleBase {
   get mintGroup(): { official: Set<string>; jup: Set<string> } {
     return this._mintGroup;
   }
-
-  // public async fetchTokenPrices(forceUpdate?: boolean): Promise<Map<string, Price>> {
-  //   const totalCount = this._mintGroup.official.size + this._mintGroup.jup.size;
-  //   if (
-  //     !forceUpdate &&
-  //     totalCount <= this._tokenPriceFetched.prevCount &&
-  //     Date.now() - this._tokenPriceFetched.fetched < 60 * 1000 * 5
-  //   )
-  //     return this._tokenPrice;
-
-  //   this._tokenPrice = new Map();
-  //   const raydiumPriceRes = await this.scope.api.getRaydiumTokenPrice();
-  //   const raydiumPrices: { [key: string]: Price } = Object.keys(raydiumPriceRes).reduce((acc, key) => {
-  //     this._tokenPriceOrg.set(key, raydiumPriceRes[key]);
-  //     return this._tokenMap.get(key)
-  //       ? {
-  //           ...acc,
-  //           [key]: parseTokenPrice({
-  //             token: this._tokenMap.get(key)!,
-  //             numberPrice: raydiumPriceRes[key],
-  //             decimalDone: true,
-  //           }),
-  //         }
-  //       : acc;
-  //   }, {});
-  //   this._tokenPrice = new Map(Object.entries(raydiumPrices));
-  //   this._tokenPrice.set(PublicKey.default.toString(), this._tokenPrice.get(WSOLMint.toString())!);
-  //   this._tokenPriceFetched = { prevCount: totalCount, fetched: Date.now() };
-  //   return this._tokenPrice;
-  // }
 
   /** === util functions === */
 

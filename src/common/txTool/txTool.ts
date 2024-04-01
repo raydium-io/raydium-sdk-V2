@@ -150,15 +150,26 @@ export class TxBuilder {
     };
   }
 
-  public async calComputeBudget(defaultIns?: TransactionInstruction[]): Promise<void> {
+  public addCustomComputeBudget(config?: ComputeBudgetConfig) {
+    if (config) {
+      const { instructions, instructionTypes } = addComputeBudget(config);
+      this.instructions.unshift(...instructions);
+      this.instructionTypes.unshift(...instructionTypes);
+      return true;
+    }
+    return false;
+  }
+
+  public async calComputeBudget({
+    config: propConfig,
+    defaultIns,
+  }: {
+    config?: ComputeBudgetConfig;
+    defaultIns?: TransactionInstruction[];
+  }): Promise<void> {
     try {
-      const config = await this.getComputeBudgetConfig();
-      if (config) {
-        const { instructions, instructionTypes } = addComputeBudget(config);
-        this.instructions.unshift(...instructions);
-        this.instructionTypes.unshift(...instructionTypes);
-        return;
-      }
+      const config = propConfig || (await this.getComputeBudgetConfig());
+      if (this.addCustomComputeBudget(config)) return;
       defaultIns && this.instructions.unshift(...defaultIns);
     } catch {
       defaultIns && this.instructions.unshift(...defaultIns);
@@ -189,7 +200,7 @@ export class TxBuilder {
     txVersion?: TxVersion;
     extInfo?: O;
   }): Promise<MakeTxData<TxVersion.LEGACY, O> | MakeTxData<TxVersion.V0, O>> {
-    if (txVersion === TxVersion.V0) return (await this.buildV0(extInfo || {})) as MakeTxData<TxVersion.V0, O>;
+    if (txVersion === TxVersion.V0) return (await this.buildV0({ ...(extInfo || {}) })) as MakeTxData<TxVersion.V0, O>;
     return this.build<O>(extInfo) as MakeTxData<TxVersion.LEGACY, O>;
   }
 
@@ -324,9 +335,10 @@ export class TxBuilder {
     props?: O & {
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
+      forerunCreate?: boolean;
     },
   ): Promise<MakeTxData<TxVersion.V0, O>> {
-    const { lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
+    const { lookupTableCache = {}, lookupTableAddress = [], forerunCreate, ...extInfo } = props || {};
     const lookupTableAddressAccount = {
       ...LOOKUP_TABLE_CACHE,
       ...lookupTableCache,
@@ -341,7 +353,7 @@ export class TxBuilder {
 
     const messageV0 = new TransactionMessage({
       payerKey: this.feePayer,
-      recentBlockhash: await getRecentBlockHash(this.connection),
+      recentBlockhash: forerunCreate ? PublicKey.default.toBase58() : await getRecentBlockHash(this.connection),
       instructions: [...this.allInstructions],
     }).compileToV0Message(Object.values(lookupTableAddressAccount));
     const transaction = new VersionedTransaction(messageV0);

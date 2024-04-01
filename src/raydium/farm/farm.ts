@@ -417,6 +417,7 @@ export default class Farm extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
       userAuxiliaryLedgers,
+      computeBudgetConfig,
     } = params;
 
     if (this.scope.availability.addFarm === false)
@@ -436,6 +437,7 @@ export default class Farm extends ModuleBase {
     });
 
     const txBuilder = this.createTxBuilder();
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {
@@ -544,6 +546,7 @@ export default class Farm extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
       userAuxiliaryLedgers,
+      computeBudgetConfig,
     } = params;
     const { rewardInfos } = farmInfo;
 
@@ -556,7 +559,7 @@ export default class Farm extends ModuleBase {
 
     const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
     const txBuilder = this.createTxBuilder();
-
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {

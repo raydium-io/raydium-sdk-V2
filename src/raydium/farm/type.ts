@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
-
+import { ComputeBudgetConfig } from "@/raydium/type";
 import { BigNumberish } from "@/common/bignumber";
 import { FormatFarmInfoOut, ApiV3PoolInfoStandardItem, ApiV3Token } from "@/api/type";
 import { poolTypeV6 } from "./config";
@@ -107,6 +107,7 @@ export interface FarmDWParam<T = TxVersion.LEGACY> {
   deposited?: BN;
   txVersion?: T;
   userAuxiliaryLedgers?: string[];
+  computeBudgetConfig?: ComputeBudgetConfig;
 }
 /* ================= pool keys ================= */
 export type FarmPoolKeys = {
