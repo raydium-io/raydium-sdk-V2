@@ -1,8 +1,6 @@
 import BN from "bn.js";
 
 import { ClmmPoolInfo, ClmmPoolPersonalPosition, ClmmPoolRewardInfo, SDKParsedConcentratedInfo } from "../type";
-import { decimalToFraction } from "@/common/bignumber";
-import { gt, lt } from "@/common/fractionUtil";
 import { minExpirationTime, getTransferAmountFeeV2 } from "@/common";
 import { Q64 } from "./constants";
 import { MathUtil, SqrtPriceMath, LiquidityMath } from "./math";
@@ -232,16 +230,6 @@ export class PositionUtils {
     }
 
     return rewardGrowthsInside;
-  }
-
-  static checkIsInRange(
-    sdkConcentratedInfo: SDKParsedConcentratedInfo,
-    userPositionAccount: ClmmPoolPersonalPosition,
-  ): boolean {
-    const currentPrice = decimalToFraction(sdkConcentratedInfo.state.currentPrice);
-    const priceLower = decimalToFraction(userPositionAccount.priceLower);
-    const priceUpper = decimalToFraction(userPositionAccount.priceUpper);
-    return gt(currentPrice, priceLower) && lt(currentPrice, priceUpper);
   }
 
   static getAmountsFromLiquidity({

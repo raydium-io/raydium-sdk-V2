@@ -505,6 +505,7 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   programId?: PublicKey;
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
 }
 
 export interface ReturnTypeComputeAmountOutBaseOut {

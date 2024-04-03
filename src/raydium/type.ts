@@ -13,7 +13,7 @@ export interface MakeTransaction<T = Record<string, any>> {
   signers: Signer[];
   transaction: Transaction;
   instructionTypes: string[];
-  execute: () => Promise<string>;
+  execute: () => Promise<{ txId: string; signedTx: Transaction }>;
   extInfo: T;
 }
 
@@ -31,7 +31,10 @@ export interface MakeMultiTransaction {
   signers: Signer[][];
   transactions: Transaction[];
   instructionTypes: string[];
-  execute: (params?: ExecuteParam) => Promise<string[]>;
+  execute: (params?: ExecuteParam) => Promise<{
+    txIds: string[];
+    signedTxs: Transaction[];
+  }>;
   extInfo: Record<string, any>;
 }
 

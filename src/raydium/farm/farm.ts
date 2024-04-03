@@ -14,7 +14,7 @@ import { generatePubKey } from "../account/util";
 import { createWSolAccountInstructions } from "../account/instruction";
 import ModuleBase from "../moduleBase";
 import { TOKEN_WSOL } from "../token/constant";
-
+import { ComputeBudgetConfig } from "@/raydium/type";
 import {
   FARM_LOCK_MINT,
   FARM_LOCK_VAULT,
@@ -762,6 +762,7 @@ export default class Farm extends ModuleBase {
     checkCreateATAOwner?: boolean;
     userAuxiliaryLedgers?: string[];
     txVersion?: T;
+    computeBudgetConfig?: ComputeBudgetConfig;
   }): Promise<MakeMultiTxData<T>> {
     const {
       farmInfoList,
@@ -771,10 +772,11 @@ export default class Farm extends ModuleBase {
       checkCreateATAOwner = false,
       userAuxiliaryLedgers,
       txVersion,
+      computeBudgetConfig,
     } = params;
 
     const txBuilder = this.createTxBuilder();
-
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {

@@ -2,11 +2,10 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
 import { GetMultipleAccountsInfoConfig, getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
-import { parseBigNumberish, BN_ONE, BN_TEN, toTotalPrice, toFraction } from "@/common/bignumber";
+import { parseBigNumberish } from "@/common/bignumber";
 import { createLogger } from "@/common/logger";
 import { findProgramAddress, ProgramAddress } from "@/common/txTool/txUtils";
 import { DateParam, isDateAfter, isDateBefore } from "@/common/date";
-import { CurrencyAmount, Fraction, Price, Token } from "@/module";
 import { jsonInfo2PoolKeys } from "@/common/utility";
 import { RewardInfoV6 } from "@/api/type";
 
@@ -308,59 +307,6 @@ export function judgeFarmType(
         return "closed pool";
       }
     }
-  }
-}
-
-/** deprecated */
-export function calculateFarmPoolAprList(
-  info: any,
-  payload: {
-    currentBlockChainDate: Date;
-    blockSlotCountForSecond: number;
-    tvl: CurrencyAmount | undefined;
-    rewardTokens: (Token | undefined)[];
-    rewardTokenPrices: (Price | undefined)[];
-  },
-): (Fraction | undefined)[] {
-  if (info.version === 6) {
-    return info.state.rewardInfos.map(({ rewardPerSecond, rewardOpenTime, rewardEndTime }, idx) => {
-      // don't calculate upcoming reward || inactive reward
-      const isRewardBeforeStart = isDateBefore(payload.currentBlockChainDate, rewardOpenTime.toNumber(), { unit: "s" });
-      const isRewardAfterEnd = isDateAfter(payload.currentBlockChainDate, rewardEndTime.toNumber(), { unit: "s" });
-      if (isRewardBeforeStart || isRewardAfterEnd) return undefined;
-      const rewardToken = payload.rewardTokens[idx];
-      if (!rewardToken) return undefined;
-      const rewardTokenPrice = payload.rewardTokenPrices[idx];
-      if (!rewardTokenPrice) return undefined;
-      const rewardtotalPricePerYear = toTotalPrice(
-        new Fraction(rewardPerSecond, BN_ONE)
-          .div(BN_TEN.pow(new BN(rewardToken.decimals || 1)))
-          .mul(new BN(60 * 60 * 24 * 365)),
-        rewardTokenPrice,
-      );
-      if (!payload.tvl) return undefined;
-      // if tvl is zero, apr should be zero
-      const apr = payload.tvl.isZero() ? toFraction(0) : rewardtotalPricePerYear.div(payload.tvl ?? BN_ONE);
-      return apr;
-    });
-  } else {
-    const calcAprList = info.state.rewardInfos.map(({ perSlotReward }, idx) => {
-      const rewardToken = payload.rewardTokens[idx];
-      if (!rewardToken) return undefined;
-      const rewardTokenPrice = payload.rewardTokenPrices[idx];
-      if (!rewardTokenPrice) return undefined;
-      const rewardtotalPricePerYear = toTotalPrice(
-        new Fraction(perSlotReward, BN_ONE)
-          .div(BN_TEN.pow(new BN(rewardToken.decimals || 1)))
-          .mul(new BN(payload.blockSlotCountForSecond * 60 * 60 * 24 * 365)),
-        rewardTokenPrice,
-      );
-      if (!payload.tvl) return undefined;
-      // if tvl is zero, apr should be zero
-      const apr = payload.tvl.isZero() ? toFraction(0) : rewardtotalPricePerYear.div(payload.tvl ?? BN_ONE);
-      return apr;
-    });
-    return calcAprList;
   }
 }
 

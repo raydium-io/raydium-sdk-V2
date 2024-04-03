@@ -1058,6 +1058,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     programId,
     txVersion,
+    computeBudgetConfig,
   }: HarvestAllRewardsParams<T>): Promise<MakeMultiTxData<T>> {
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
@@ -1069,7 +1070,7 @@ export class Clmm extends ModuleBase {
       }
     }
     const txBuilder = this.createTxBuilder();
-
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     for (const itemInfo of Object.values(allPoolInfo)) {
       if (allPositions[itemInfo.id] === undefined) continue;
       if (

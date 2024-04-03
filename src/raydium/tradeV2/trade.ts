@@ -1,23 +1,7 @@
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { createTransferInstruction } from "@solana/spl-token";
-import BN from "bn.js";
-
-import { ClmmPoolInfo, ReturnTypeFetchMultiplePoolTickArrays, PoolUtils } from "../clmm";
-import {
-  forecastTransactionSize,
-  jsonInfo2PoolKeys,
-  parseSimulateLogToJson,
-  parseSimulateValue,
-  simulateMultipleInstruction,
-  solToWSol,
-  TxBuilder,
-  BN_ZERO,
-  SOLMint,
-  WSOLMint,
-  addComputeBudget,
-  minExpirationTime,
-} from "@/common";
-import { Fraction, Percent, Price, Token, TokenAmount } from "@/module";
+import { forecastTransactionSize, solToWSol, TxBuilder, BN_ZERO, SOLMint, WSOLMint, addComputeBudget } from "@/common";
+import { Token } from "@/module";
 import { StableLayout } from "../liquidity/stable";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
@@ -25,12 +9,9 @@ import {
   ComputeAmountOutRouteLayout,
   PoolAccountInfoV4,
   ReturnTypeGetAddLiquidityDefaultPool,
-  ReturnTypeFetchMultipleInfo,
-  ReturnTypeGetAllRoute,
-  RoutePathType,
 } from "./type";
 import { makeSwapInstruction } from "./instrument";
-import { MakeMultiTransaction, MakeTransaction, ReturnTypeFetchMultipleMintInfos, TransferAmountFee } from "../type";
+import { MakeMultiTransaction, MakeTransaction } from "../type";
 import { InstructionType } from "@/common/txTool/txType";
 import { BigNumberish, parseBigNumberish } from "@/common/bignumber";
 import {
@@ -39,14 +20,12 @@ import {
   makeTransferInstruction,
 } from "../account/instruction";
 import { TokenAccount } from "../account/types";
+import { ComputeBudgetConfig } from "@/raydium/type";
 
 type LiquidityPoolJsonInfo = any;
 export default class TradeV2 extends ModuleBase {
-  private _stableLayout: StableLayout;
-
   constructor(params: ModuleBaseProps) {
     super(params);
-    this._stableLayout = new StableLayout({ connection: this.scope.connection });
   }
 
   static getAddLiquidityDefaultPool({
@@ -493,9 +472,15 @@ export default class TradeV2 extends ModuleBase {
     return tokenAccounts;
   }
 
-  public async unWrapWSol(amount: BigNumberish, tokenProgram?: PublicKey): Promise<MakeTransaction> {
+  public async unWrapWSol(props: {
+    amount: BigNumberish;
+    computeBudgetConfig?: ComputeBudgetConfig;
+    tokenProgram?: PublicKey;
+  }): Promise<MakeTransaction> {
+    const { amount, tokenProgram } = props;
     const tokenAccounts = await this.getWSolAccounts();
     const txBuilder = this.createTxBuilder();
+    txBuilder.addCustomComputeBudget(props.computeBudgetConfig);
     const ins = await createWSolAccountInstructions({
       connection: this.scope.connection,
       owner: this.scope.ownerPubKey,

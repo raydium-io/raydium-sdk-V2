@@ -54,17 +54,18 @@ export interface TxBuildData<T = Record<string, any>> {
   transaction: Transaction;
   instructionTypes: string[];
   signers: Signer[];
-  execute: () => Promise<string>;
+  execute: () => Promise<{ txId: string; signedTx: Transaction }>;
   extInfo: T;
 }
 
-export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData<T>, "transaction"> {
+export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData<T>, "transaction" | "execute"> {
   builder: TxBuilder;
   transaction: VersionedTransaction;
   buildProps?: {
     lookupTableCache?: CacheLTA;
     lookupTableAddress?: string[];
   };
+  execute: () => Promise<{ txId: string; signedTx: VersionedTransaction }>;
 }
 
 export interface ExecuteParam {
@@ -76,17 +77,19 @@ export interface MultiTxBuildData<T = Record<string, any>> {
   transactions: Transaction[];
   instructionTypes: string[];
   signers: Signer[][];
-  execute: (executeParams?: ExecuteParam) => Promise<string[]>;
+  execute: (executeParams?: ExecuteParam) => Promise<{ txIds: string[]; signedTxs: Transaction[] }>;
   extInfo: T;
 }
 
-export interface MultiTxV0BuildData<T = Record<string, any>> extends Omit<MultiTxBuildData<T>, "transactions"> {
+export interface MultiTxV0BuildData<T = Record<string, any>>
+  extends Omit<MultiTxBuildData<T>, "transactions" | "execute"> {
   builder: TxBuilder;
   transactions: VersionedTransaction[];
   buildProps?: {
     lookupTableCache?: CacheLTA;
     lookupTableAddress?: string[];
   };
+  execute: (executeParams?: ExecuteParam) => Promise<{ txIds: string[]; signedTxs: VersionedTransaction[] }>;
 }
 
 export type MakeMultiTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extends TxVersion.LEGACY
@@ -214,17 +217,23 @@ export class TxBuilder {
       transaction,
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
-      execute: async (): Promise<string> => {
+      execute: async () => {
         const recentBlockHash = await getRecentBlockHash(this.connection);
         transaction.recentBlockhash = recentBlockHash;
         if (this.signers.length) transaction.sign(...this.signers);
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
-          return sendAndConfirmTransaction(this.connection, transaction, this.signers);
+          return {
+            txId: await sendAndConfirmTransaction(this.connection, transaction, this.signers),
+            signedTx: transaction,
+          };
         }
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions([transaction]);
-          return await this.connection.sendRawTransaction(txs[0].serialize(), { skipPreflight: true });
+          return {
+            txId: await this.connection.sendRawTransaction(txs[0].serialize(), { skipPreflight: true }),
+            signedTx: txs[0],
+          };
         }
         throw new Error("please connect wallet first");
       },
@@ -253,16 +262,19 @@ export class TxBuilder {
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: allInstructionTypes,
-      execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+      execute: async (executeParams?: ExecuteParam) => {
         const { sequentially, onTxUpdate } = executeParams || {};
         const recentBlockHash = await getRecentBlockHash(this.connection);
         if (this.owner?.isKeyPair) {
-          return await Promise.all(
-            allTransactions.map(async (tx, idx) => {
-              tx.recentBlockhash = recentBlockHash;
-              return await sendAndConfirmTransaction(this.connection, tx, allSigners[idx]);
-            }),
-          );
+          return {
+            txIds: await await Promise.all(
+              allTransactions.map(async (tx, idx) => {
+                tx.recentBlockhash = recentBlockHash;
+                return await sendAndConfirmTransaction(this.connection, tx, allSigners[idx]);
+              }),
+            ),
+            signedTxs: allTransactions,
+          };
         }
 
         if (this.signAllTransactions) {
@@ -295,14 +307,20 @@ export class TxBuilder {
               this.connection.getSignatureStatus(txId);
             };
             await checkSendTx();
-            return processedTxs.map((d) => d.txId);
+            return {
+              txIds: processedTxs.map((d) => d.txId),
+              signedTxs,
+            };
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
               const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
               txIds.push(txId);
             }
-            return txIds;
+            return {
+              txIds,
+              signedTxs,
+            };
           }
         }
         throw new Error("please connect wallet first");
@@ -364,15 +382,21 @@ export class TxBuilder {
       transaction,
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
-      execute: async (): Promise<string> => {
+      execute: async () => {
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           transaction.sign([this.owner.signer as Signer]);
-          return await this.connection.sendTransaction(transaction, { skipPreflight: true });
+          return {
+            txId: await this.connection.sendTransaction(transaction, { skipPreflight: true }),
+            signedTx: transaction,
+          };
         }
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions<VersionedTransaction>([transaction]);
-          return await this.connection.sendTransaction(txs[0], { skipPreflight: true });
+          return {
+            txId: await this.connection.sendTransaction(txs[0], { skipPreflight: true }),
+            signedTx: txs[0],
+          };
         }
         throw new Error("please connect wallet first");
       },
@@ -412,16 +436,19 @@ export class TxBuilder {
       signers: allSigners,
       instructionTypes: allInstructionTypes,
       buildProps,
-      execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+      execute: async (executeParams?: ExecuteParam) => {
         printSimulate(allTransactions);
         const { sequentially, onTxUpdate } = executeParams || {};
         if (this.owner?.isKeyPair) {
-          return await Promise.all(
-            allTransactions.map(async (tx) => {
-              tx.sign([this.owner!.signer as Signer]);
-              return await this.connection.sendTransaction(tx);
-            }),
-          );
+          allTransactions.forEach((tx) => tx.sign([this.owner!.signer as Signer]));
+          return {
+            txIds: await Promise.all(
+              allTransactions.map(async (tx) => {
+                return await this.connection.sendTransaction(tx);
+              }),
+            ),
+            signedTxs: allTransactions,
+          };
         }
 
         if (this.signAllTransactions) {
@@ -449,14 +476,17 @@ export class TxBuilder {
               this.connection.getSignatureStatus(txId);
             };
             checkSendTx();
-            return [];
+            return {
+              txIds: [],
+              signedTxs,
+            };
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
               const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
               txIds.push(txId);
             }
-            return txIds;
+            return { txIds, signedTxs };
           }
         }
         throw new Error("please connect wallet first");
@@ -565,7 +595,7 @@ export class TxBuilder {
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
-      execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+      execute: async (executeParams?: ExecuteParam) => {
         const { sequentially, onTxUpdate } = executeParams || {};
         const recentBlockHash = await getRecentBlockHash(this.connection);
         allTransactions.forEach(async (tx, idx) => {
@@ -574,11 +604,14 @@ export class TxBuilder {
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
-          return await Promise.all(
-            allTransactions.map(async (tx, idx) => {
-              return await sendAndConfirmTransaction(this.connection, tx, allSigners[idx]);
-            }),
-          );
+          return {
+            txIds: await Promise.all(
+              allTransactions.map(async (tx, idx) => {
+                return await sendAndConfirmTransaction(this.connection, tx, allSigners[idx]);
+              }),
+            ),
+            signedTxs: allTransactions,
+          };
         }
         if (this.signAllTransactions) {
           const signedTxs = await this.signAllTransactions(allTransactions);
@@ -604,14 +637,17 @@ export class TxBuilder {
               this.connection.getSignatureStatus(txId);
             };
             await checkSendTx();
-            return processedTxs.map((d) => d.txId);
+            return {
+              txIds: processedTxs.map((d) => d.txId),
+              signedTxs,
+            };
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
               const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
               txIds.push(txId);
             }
-            return txIds;
+            return { txIds, signedTxs };
           }
         }
         throw new Error("please connect wallet first");
@@ -757,18 +793,21 @@ export class TxBuilder {
       buildProps: props,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
-      execute: async (executeParams?: ExecuteParam): Promise<string[]> => {
+      execute: async (executeParams?: ExecuteParam) => {
         const { sequentially, onTxUpdate } = executeParams || {};
         allTransactions.map(async (tx, idx) => {
           if (allSigners[idx].length) tx.sign(allSigners[idx]);
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
-          return await Promise.all(
-            allTransactions.map(async (tx) => {
-              return await this.connection.sendTransaction(tx, { skipPreflight: true });
-            }),
-          );
+          return {
+            txIds: await Promise.all(
+              allTransactions.map(async (tx) => {
+                return await this.connection.sendTransaction(tx, { skipPreflight: true });
+              }),
+            ),
+            signedTxs: allTransactions,
+          };
         }
         if (this.signAllTransactions) {
           const signedTxs = await this.signAllTransactions(allTransactions);
@@ -794,14 +833,17 @@ export class TxBuilder {
               this.connection.getSignatureStatus(txId);
             };
             checkSendTx();
-            return [];
+            return {
+              txIds: [],
+              signedTxs,
+            };
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
               const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
               txIds.push(txId);
             }
-            return txIds;
+            return { txIds, signedTxs };
           }
         }
         throw new Error("please connect wallet first");
