@@ -199,6 +199,7 @@ export interface ApiV3PoolInfoBaseItem {
   mintA: ApiV3Token;
   mintB: ApiV3Token;
   rewardDefaultInfos: PoolFarmRewardInfo[];
+  rewardDefaultPoolInfos: "Ecosystem" | "Fusion" | "Raydium" | "Clmm";
   price: number;
   mintAmountA: number;
   mintAmountB: number;

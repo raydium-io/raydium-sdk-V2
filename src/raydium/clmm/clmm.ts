@@ -117,6 +117,7 @@ export class Clmm extends ModuleBase {
         },
         mockPoolInfo: {
           type: "Concentrated",
+          rewardDefaultPoolInfos: "Clmm",
           id: insInfo.address.poolId.toString(),
           mintA,
           mintB,
