@@ -1,5 +1,6 @@
 export const API_URLS = {
   BASE_HOST: "https://uapi.raydium.io",
+  OWNER_BASE_HOST: "https://owner.raydium.io",
 
   COINGECKO: "https://api.coingecko.com/api/v3/simple/price",
 
@@ -57,9 +58,9 @@ export const API_URLS = {
   FARM_LP_INFO: "/v3/farms/info/lp/{pool_lp}/{page_size}/{page}",
   FARM_LIST: "/v3/farms/info/list/all/{page_size}/{page}",
   FARM_KEYS: "/v3/farms/key/ids/{ids}",
-  OWNER_CREATED_FARM: "/v3/owner/create-pool/{owner}",
-  OWNER_IDO: "/v3/owner/main/ido/{owner}",
-  OWNER_STAKE_FARMS: "/v3/owner/position/stake/{owner}",
+  OWNER_CREATED_FARM: "/v1/create-pool/{owner}",
+  OWNER_IDO: "/v1/ido/{owner}",
+  OWNER_STAKE_FARMS: "/v1/position/stake/{owner}",
   IDO_KEYS: "/v3/ido/key/ids/{ids}",
   SWAP_HOST: "https://transaction.raydium.io",
   SWAP_COMPUTE: "/v1/compute/",
