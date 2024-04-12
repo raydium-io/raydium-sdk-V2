@@ -3,10 +3,11 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import ModuleBase from "../moduleBase";
 import { TxVersion } from "@/common/txTool/txType";
-import { MakeTxData, TxBuildData, TxV0BuildData, MakeMultiTxData } from "@/common/txTool/txTool";
+import { MakeMultiTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txTool";
 import { generatePubKey } from "../account/util";
 import { BN_ZERO } from "@/common/bignumber";
 import { makeCreateMarketInstruction } from "./instrument";
+import { ComputeBudgetConfig } from "@/raydium/type";
 
 interface ExtInfo {
   address: {
@@ -30,6 +31,7 @@ export default class MarketV2 extends ModuleBase {
     tickSize, // 0.01
     dexProgramId,
     txVersion,
+    computeBudgetConfig,
   }: {
     baseInfo: {
       mint: PublicKey;
@@ -45,6 +47,7 @@ export default class MarketV2 extends ModuleBase {
     eventQueue?: PublicKey;
     requestQueue?: PublicKey;
     txVersion?: T;
+    computeBudgetConfig?: ComputeBudgetConfig;
   }): Promise<MakeMultiTxData<T, ExtInfo>> {
     const wallet = this.scope.ownerPubKey;
     const market = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
@@ -102,6 +105,7 @@ export default class MarketV2 extends ModuleBase {
       },
     });
     const txBuilder = this.createTxBuilder();
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addInstruction({
       instructions: allTxArr[0].transaction.instructions,
       signers: allTxArr[0].signer,
@@ -111,6 +115,7 @@ export default class MarketV2 extends ModuleBase {
 
     for await (const txData of allTxArr.slice(1, allTxArr.length)) {
       const extraTxBuilder = this.createTxBuilder();
+      extraTxBuilder.addCustomComputeBudget(computeBudgetConfig);
       extraTxBuilder.addInstruction({
         instructions: txData.transaction.instructions,
         signers: txData.signer,

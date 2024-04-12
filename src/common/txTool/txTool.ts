@@ -68,9 +68,14 @@ export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData
   execute: () => Promise<{ txId: string; signedTx: VersionedTransaction }>;
 }
 
+type TxUpdateParams = {
+  txId: string;
+  status: "success" | "error" | "sent";
+  signedTx: Transaction | VersionedTransaction;
+};
 export interface ExecuteParam {
   sequentially: boolean;
-  onTxUpdate?: (completeTxs: { txId: string; status: "success" | "error" | "sent" }[]) => void;
+  onTxUpdate?: (completeTxs: TxUpdateParams[]) => void;
 }
 export interface MultiTxBuildData<T = Record<string, any>> {
   builder: TxBuilder;
@@ -287,11 +292,11 @@ export class TxBuilder {
           const signedTxs = await this.signAllTransactions(partialSignedTxs);
           if (sequentially) {
             let i = 0;
-            const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
+            const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
               const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
-              processedTxs.push({ txId, status: "sent" });
+              processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
               this.connection.onSignature(
@@ -456,11 +461,11 @@ export class TxBuilder {
 
           if (sequentially) {
             let i = 0;
-            const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
+            const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
               const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
-              processedTxs.push({ txId, status: "sent" });
+              processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
               this.connection.onSignature(
@@ -617,11 +622,11 @@ export class TxBuilder {
           const signedTxs = await this.signAllTransactions(allTransactions);
           if (sequentially) {
             let i = 0;
-            const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
+            const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
               const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
-              processedTxs.push({ txId, status: "sent" });
+              processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
               this.connection.onSignature(
@@ -813,11 +818,11 @@ export class TxBuilder {
           const signedTxs = await this.signAllTransactions(allTransactions);
           if (sequentially) {
             let i = 0;
-            const processedTxs: { txId: string; status: "success" | "error" | "sent" }[] = [];
+            const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
               const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
-              processedTxs.push({ txId, status: "sent" });
+              processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
               this.connection.onSignature(
