@@ -1092,7 +1092,7 @@ export class Clmm extends ModuleBase {
           mint: new PublicKey(poolInfo.mintA.address),
           notUseTokenAccount: mintAUseSOLBalance,
           owner: this.scope.ownerPubKey,
-          skipCloseAccount: true,
+          skipCloseAccount: !mintAUseSOLBalance,
           createInfo: {
             payer: ownerInfo.feePayer || this.scope.ownerPubKey,
             amount: 0,
@@ -1111,7 +1111,7 @@ export class Clmm extends ModuleBase {
           mint: new PublicKey(poolInfo.mintB.address),
           notUseTokenAccount: mintBUseSOLBalance,
           owner: this.scope.ownerPubKey,
-          skipCloseAccount: true,
+          skipCloseAccount: !mintBUseSOLBalance,
           createInfo: {
             payer: ownerInfo.feePayer || this.scope.ownerPubKey,
             amount: 0,
