@@ -5,6 +5,7 @@ import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
 import Decimal from "decimal.js-light";
 import { ComputeBudgetConfig } from "@/raydium/type";
+import { TokenAmount } from "@/module/amount";
 
 export type LiquiditySide = "a" | "b";
 export type AmountSide = "base" | "quote";
@@ -12,8 +13,8 @@ export type AmountSide = "base" | "quote";
 export interface AddLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
-  amountInA: string | Decimal | BN;
-  amountInB: string | Decimal | BN;
+  amountInA: TokenAmount;
+  amountInB: TokenAmount;
   fixedSide: LiquiditySide;
   config?: {
     bypassAssociatedCheck?: boolean;

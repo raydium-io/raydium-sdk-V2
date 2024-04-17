@@ -182,47 +182,4 @@ export default class TokenModule extends ModuleBase {
       tokenInfo: fullInfo,
     };
   }
-
-  public mintToToken(mint: PublicKeyish): Token {
-    const _mint = validateAndParsePublicKey({ publicKey: mint });
-    const tokenInfo = this._tokenMap.get(_mint.toBase58());
-    if (!tokenInfo)
-      this.logAndCreateError("token not found, mint:", _mint.toBase58(), ", use getChainTokenInfo to get info instead");
-    const { decimals, name, symbol } = tokenInfo!;
-    const isSol = _mint.equals(SOLMint);
-    return new Token({
-      decimals,
-      name,
-      symbol,
-      skipMint: isSol,
-      mint: isSol ? "" : mint,
-      isToken2022: tokenInfo!.programId === TOKEN_2022_PROGRAM_ID.toBase58(),
-    });
-  }
-
-  public mintToTokenAmount({ mint, amount, decimalDone, token }: MintToTokenAmount): TokenAmount {
-    const _token = token || this.mintToToken(mint);
-
-    if (decimalDone) {
-      const numberDetails = parseNumberInfo(amount);
-      const amountBigNumber = toBN(new Fraction(numberDetails.numerator, numberDetails.denominator));
-      return new TokenAmount(_token, amountBigNumber);
-    }
-    return new TokenAmount(_token, this.decimalAmount({ mint, amount, decimalDone }));
-  }
-
-  public decimalAmount({ mint, amount, token }: MintToTokenAmount): BN {
-    const numberDetails = parseNumberInfo(amount);
-    const _token = token || this.mintToToken(mint);
-    return toBN(new Fraction(numberDetails.numerator, numberDetails.denominator).mul(new BN(10 ** _token.decimals)));
-  }
-
-  public uiAmount({ mint, amount, token }: MintToTokenAmount): string {
-    const numberDetails = parseNumberInfo(amount);
-    const _token = token || this.mintToToken(mint);
-    if (!_token) return "";
-    return new Fraction(numberDetails.numerator, numberDetails.denominator)
-      .div(new BN(10 ** _token.decimals))
-      .toSignificant(_token.decimals);
-  }
 }

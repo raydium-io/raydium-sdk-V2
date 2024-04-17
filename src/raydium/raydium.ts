@@ -304,41 +304,4 @@ export class Raydium {
       return {};
     }
   }
-
-  public mintToToken(mint: PublicKeyish): Token {
-    return this.token.mintToToken(mint);
-  }
-  public mintToTokenAmount(params: MintToTokenAmount): TokenAmount {
-    return this.token.mintToTokenAmount(params);
-  }
-  // export interface TransferAmountFee {amount: TokenAmount | CurrencyAmount, fee: TokenAmount | CurrencyAmount | undefined, expirationTime: number | undefined}
-  public solToWsolTokenAmount(tokenAmount: TokenAmount): TokenAmount {
-    if (!tokenAmount.token.mint.equals(SOLMint)) return tokenAmount;
-    return this.token.mintToTokenAmount({
-      mint: WSOLMint,
-      amount: tokenAmount.toExact(),
-    });
-  }
-  public solToWsolTransferAmountFee(tokenAmountFee: TransferAmountFee): TransferAmountFee {
-    if (!tokenAmountFee.amount.token.mint.equals(SOLMint)) return tokenAmountFee;
-    return {
-      amount: this.token.mintToTokenAmount({
-        mint: WSOLMint,
-        amount: tokenAmountFee.amount.toExact(),
-      }),
-      fee: tokenAmountFee.fee
-        ? this.token.mintToTokenAmount({
-            mint: WSOLMint,
-            amount: tokenAmountFee.fee.toExact(),
-          })
-        : tokenAmountFee.fee,
-      expirationTime: tokenAmountFee.expirationTime,
-    };
-  }
-  public decimalAmount(params: MintToTokenAmount): BN {
-    return this.token.decimalAmount(params);
-  }
-  public uiAmount(params: MintToTokenAmount): string {
-    return this.token.uiAmount(params);
-  }
 }

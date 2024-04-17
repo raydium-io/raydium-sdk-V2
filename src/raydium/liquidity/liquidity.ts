@@ -111,19 +111,10 @@ export default class LiquidityModule extends ModuleBase {
   }
 
   public async addLiquidity<T extends TxVersion>(params: AddLiquidityParams<T>): Promise<MakeTxData<T>> {
-    const { poolInfo, amountInA: _amountInA, amountInB: _amountInB, fixedSide, config, txVersion } = params;
+    const { poolInfo, amountInA, amountInB, fixedSide, config, txVersion } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
-
-    const amountInA = this.scope.mintToTokenAmount({
-      mint: solToWSol(poolInfo.mintA.address),
-      amount: _amountInA.toString(),
-    });
-    const amountInB = this.scope.mintToTokenAmount({
-      mint: solToWSol(poolInfo.mintB.address),
-      amount: _amountInB.toString(),
-    });
 
     this.logDebug("amountInA:", amountInA, "amountInB:", amountInB);
     if (amountInA.isZero() || amountInB.isZero())
