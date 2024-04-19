@@ -44,10 +44,6 @@ export class Clmm extends ModuleBase {
     super(params);
   }
 
-  public async load(params?: LoadParams): Promise<void> {
-    await this.scope.token.load(params);
-  }
-
   public async createPool<T extends TxVersion>(
     props: CreateConcentratedPool<T>,
   ): Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {

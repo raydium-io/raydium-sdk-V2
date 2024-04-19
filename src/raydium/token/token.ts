@@ -9,7 +9,6 @@ import { LoadParams } from "../type";
 
 import { TokenInfo } from "./type";
 import { SOL_INFO } from "./constant";
-import BN from "bn.js";
 
 export interface MintToTokenAmount {
   token?: Token;

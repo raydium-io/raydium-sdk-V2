@@ -62,9 +62,9 @@ export const API_URLS = {
   OWNER_IDO: "/v1/ido/{owner}",
   OWNER_STAKE_FARMS: "/v1/position/stake/{owner}",
   IDO_KEYS: "/v3/ido/key/ids/{ids}",
-  SWAP_HOST: "https://transaction.raydium.io",
-  SWAP_COMPUTE: "/v1/compute/",
-  SWAP_TX: "/v1/transaction/",
+  SWAP_HOST: "https://transaction-v1.raydium.io",
+  SWAP_COMPUTE: "/compute/",
+  SWAP_TX: "/transaction/",
   MINT_PRICE: "/v3/mint/price",
   MIGRATE_CONFIG: "/v3/main/migrate-lp",
 };
