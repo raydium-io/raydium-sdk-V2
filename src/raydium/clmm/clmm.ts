@@ -1067,7 +1067,6 @@ export class Clmm extends ModuleBase {
       }
     }
     const txBuilder = this.createTxBuilder();
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     for (const itemInfo of Object.values(allPoolInfo)) {
       if (allPositions[itemInfo.id] === undefined) continue;
       if (
@@ -1168,8 +1167,9 @@ export class Clmm extends ModuleBase {
       }
     }
 
-    if (txVersion === TxVersion.V0) return txBuilder.sizeCheckBuildV0() as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async getWhiteListMint({ programId }: { programId: PublicKey }): Promise<PublicKey[]> {

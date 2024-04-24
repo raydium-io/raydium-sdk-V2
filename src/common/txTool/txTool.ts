@@ -501,22 +501,16 @@ export class TxBuilder {
   }
 
   public async sizeCheckBuild(
-    props?: Record<string, any> & { autoComputeBudget?: boolean },
+    props?: Record<string, any> & { computeBudgetConfig?: ComputeBudgetConfig },
   ): Promise<MultiTxBuildData> {
-    const { autoComputeBudget = false, ...extInfo } = props || {};
+    const { computeBudgetConfig, ...extInfo } = props || {};
 
-    let computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } = {
-      instructions: [],
-      instructionTypes: [],
-    };
-
-    if (autoComputeBudget) {
-      const computeConfig = autoComputeBudget ? await this.getComputeBudgetConfig() : undefined;
-      computeBudgetData =
-        autoComputeBudget && computeConfig
-          ? addComputeBudget(computeConfig)
-          : { instructions: [], instructionTypes: [] };
-    }
+    let computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } = computeBudgetConfig
+      ? addComputeBudget(computeBudgetConfig)
+      : {
+          instructions: [],
+          instructionTypes: [],
+        };
 
     const signerKey: { [key: string]: Signer } = this.signers.reduce(
       (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
@@ -529,7 +523,7 @@ export class TxBuilder {
     let instructionQueue: TransactionInstruction[] = [];
     this.allInstructions.forEach((item) => {
       const _itemIns = [...instructionQueue, item];
-      const _itemInsWithCompute = autoComputeBudget ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
+      const _itemInsWithCompute = computeBudgetConfig ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
       const _signerStrs = new Set<string>(
         _itemIns.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
       );
@@ -548,7 +542,7 @@ export class TxBuilder {
         // if add computeBudget still not exceed tx size limit
         if (
           checkLegacyTxSize({
-            instructions: autoComputeBudget
+            instructions: computeBudgetConfig
               ? [...computeBudgetData.instructions, ...instructionQueue]
               : [...instructionQueue],
             payer: this.feePayer,
@@ -580,7 +574,7 @@ export class TxBuilder {
 
       if (
         checkLegacyTxSize({
-          instructions: autoComputeBudget
+          instructions: computeBudgetConfig
             ? [...computeBudgetData.instructions, ...instructionQueue]
             : [...instructionQueue],
           payer: this.feePayer,
@@ -663,12 +657,12 @@ export class TxBuilder {
 
   public async sizeCheckBuildV0(
     props?: Record<string, any> & {
-      autoComputeBudget?: boolean;
+      computeBudgetConfig?: ComputeBudgetConfig;
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
     },
   ): Promise<MultiTxV0BuildData> {
-    const { autoComputeBudget = false, lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
+    const { computeBudgetConfig, lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
     const lookupTableAddressAccount = {
       ...LOOKUP_TABLE_CACHE,
       ...lookupTableCache,
@@ -681,18 +675,12 @@ export class TxBuilder {
     const newCacheLTA = await getMultipleLookupTableInfo({ connection: this.connection, address: needCacheLTA });
     for (const [key, value] of Object.entries(newCacheLTA)) lookupTableAddressAccount[key] = value;
 
-    let computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } = {
-      instructions: [],
-      instructionTypes: [],
-    };
-
-    if (autoComputeBudget) {
-      const computeConfig = autoComputeBudget ? await this.getComputeBudgetConfig() : undefined;
-      computeBudgetData =
-        autoComputeBudget && computeConfig
-          ? addComputeBudget(computeConfig)
-          : { instructions: [], instructionTypes: [] };
-    }
+    let computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } = computeBudgetConfig
+      ? addComputeBudget(computeBudgetConfig)
+      : {
+          instructions: [],
+          instructionTypes: [],
+        };
 
     const blockHash = await getRecentBlockHash(this.connection);
 
@@ -707,7 +695,7 @@ export class TxBuilder {
     let instructionQueue: TransactionInstruction[] = [];
     this.allInstructions.forEach((item) => {
       const _itemIns = [...instructionQueue, item];
-      const _itemInsWithCompute = autoComputeBudget ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
+      const _itemInsWithCompute = computeBudgetConfig ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
       if (
         (instructionQueue.length < 12 &&
           checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount })) ||
@@ -724,7 +712,7 @@ export class TxBuilder {
         }
         // if add computeBudget still not exceed tx size limit
         if (
-          autoComputeBudget &&
+          computeBudgetConfig &&
           checkV0TxSize({
             instructions: [...computeBudgetData.instructions, ...instructionQueue],
             payer: this.feePayer,
@@ -767,7 +755,7 @@ export class TxBuilder {
       const _signers = [..._signerStrs.values()].map((i) => signerKey[i]).filter((i) => i !== undefined);
 
       if (
-        autoComputeBudget &&
+        computeBudgetConfig &&
         checkV0TxSize({
           instructions: [...computeBudgetData.instructions, ...instructionQueue],
           payer: this.feePayer,

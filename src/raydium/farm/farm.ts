@@ -776,7 +776,6 @@ export default class Farm extends ModuleBase {
     } = params;
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {
@@ -878,7 +877,8 @@ export default class Farm extends ModuleBase {
       });
     }
 
-    if (txVersion === TxVersion.LEGACY) return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuildV0() as Promise<MakeMultiTxData<T>>;
+    if (txVersion === TxVersion.LEGACY)
+      return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 }
