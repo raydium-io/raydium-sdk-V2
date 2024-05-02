@@ -305,7 +305,7 @@ export class TxBuilder {
                   const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
                   if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
                   onTxUpdate?.([...processedTxs]);
-                  checkSendTx();
+                  if (!signatureResult.err) checkSendTx();
                 },
                 "processed",
               );
@@ -474,7 +474,7 @@ export class TxBuilder {
                   const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
                   if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
                   onTxUpdate?.([...processedTxs]);
-                  checkSendTx();
+                  if (!signatureResult.err) checkSendTx();
                 },
                 "processed",
               );
@@ -629,7 +629,7 @@ export class TxBuilder {
                   const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
                   if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
                   onTxUpdate?.([...processedTxs]);
-                  checkSendTx();
+                  if (!signatureResult.err) checkSendTx();
                 },
                 "processed",
               );
@@ -819,7 +819,7 @@ export class TxBuilder {
                   const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
                   if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
                   onTxUpdate?.([...processedTxs]);
-                  checkSendTx();
+                  if (!signatureResult.err) checkSendTx();
                 },
                 "processed",
               );
