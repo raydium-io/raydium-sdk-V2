@@ -1,4 +1,4 @@
-import { GetStructureSchema, publicKey, seq, struct, u128, u64, u8 } from "@/marshmallow";
+import { GetStructureSchema, publicKey, seq, struct, u128, u64, u8, u16, blob, bool } from "@/marshmallow";
 
 export const fixedSwapInLayout = struct([u8("instruction"), u64("amountIn"), u64("minAmountOut")]);
 export const fixedSwapOutLayout = struct([u8("instruction"), u64("maxAmountIn"), u64("amountOut")]);
@@ -156,3 +156,52 @@ export const LIQUIDITY_VERSION_TO_STATE_LAYOUT: {
 };
 
 export const createPoolFeeLayout = struct([u64("fee")]);
+
+export const CpmmConfigInfoLayout = struct([
+  blob(8),
+  u8("bump"),
+  bool("disableCreatePool"),
+  u16("index"),
+  u64("tradeFeeRate"),
+  u64("protocolFeeRate"),
+  u64("fundFeeRate"),
+  u64("createPoolFee"),
+
+  publicKey("protocolOwner"),
+  publicKey("fundOwner"),
+  seq(u64(), 16),
+]);
+
+export const CpmmPoolInfoLayout = struct([
+  blob(8),
+
+  publicKey("configId"),
+  publicKey("poolCreator"),
+  publicKey("vaultA"),
+  publicKey("vaultB"),
+
+  publicKey("mintLp"),
+  publicKey("mintA"),
+  publicKey("mintB"),
+
+  publicKey("mintProgramA"),
+  publicKey("mintProgramB"),
+
+  publicKey("observationId"),
+
+  u8("bump"),
+  u8("status"),
+
+  u8("lpDecimals"),
+  u8("mintDecimalA"),
+  u8("mintDecimalB"),
+
+  u64("lpAmount"),
+  u64("protocolFeesMintA"),
+  u64("protocolFeesMintB"),
+  u64("fundFeesMintA"),
+  u64("fundFeesMintB"),
+  u64("openTime"),
+
+  seq(u64(), 32),
+]);

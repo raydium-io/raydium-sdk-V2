@@ -20,7 +20,6 @@ import { PublicKey } from "@solana/web3.js";
 
 const logger = createLogger("Raydium_Api");
 const poolKeysCache: Map<string, PoolKeys> = new Map();
-const farmKeysCache: Map<string, FormatFarmKeyOut> = new Map();
 
 export async function endlessRetry<T>(name: string, call: () => Promise<T>, interval = 1000): Promise<T> {
   let result: T | undefined;

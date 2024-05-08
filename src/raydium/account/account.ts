@@ -1,4 +1,9 @@
-import { createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, AccountLayout } from "@solana/spl-token";
+import {
+  createAssociatedTokenAccountInstruction,
+  TOKEN_PROGRAM_ID,
+  AccountLayout,
+  TOKEN_2022_PROGRAM_ID,
+} from "@solana/spl-token";
 import { Commitment, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import { getATAAddress, BigNumberish, InstructionType, WSOLMint } from "@/common";
 import { AddInstructionParam } from "@/common/txTool/txTool";
@@ -77,11 +82,16 @@ export default class Account extends ModuleBase {
     const defaultConfig = {};
     const customConfig = { ...defaultConfig, ...config };
 
-    const [solAccountResp, ownerTokenAccountResp] = await Promise.all([
+    const [solAccountResp, ownerTokenAccountResp, ownerToken2022AccountResp] = await Promise.all([
       this.scope.connection.getAccountInfo(this.scope.ownerPubKey, customConfig.commitment),
       this.scope.connection.getTokenAccountsByOwner(
         this.scope.ownerPubKey,
         { programId: TOKEN_PROGRAM_ID },
+        customConfig.commitment,
+      ),
+      this.scope.connection.getTokenAccountsByOwner(
+        this.scope.ownerPubKey,
+        { programId: TOKEN_2022_PROGRAM_ID },
         customConfig.commitment,
       ),
     ]);
@@ -89,7 +99,10 @@ export default class Account extends ModuleBase {
     const { tokenAccounts, tokenAccountRawInfos } = parseTokenAccountResp({
       owner: this.scope.ownerPubKey,
       solAccountResp,
-      tokenAccountResp: ownerTokenAccountResp,
+      tokenAccountResp: {
+        context: ownerTokenAccountResp.context,
+        value: [...ownerTokenAccountResp.value, ...ownerToken2022AccountResp.value],
+      },
     });
 
     this._tokenAccounts = tokenAccounts;

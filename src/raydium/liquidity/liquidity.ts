@@ -9,7 +9,6 @@ import {
   FormatFarmInfoOutV6,
 } from "@/api/type";
 import { Token, TokenAmount, Percent } from "@/module";
-import { solToWSol } from "@/common/pubKey";
 import { toToken } from "../token";
 import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
@@ -17,13 +16,31 @@ import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
-import { makeAddLiquidityInstruction } from "./instruction";
+import {
+  AmountSide,
+  AddLiquidityParams,
+  RemoveParams,
+  CreatePoolParam,
+  CreatePoolAddress,
+  CreateCpmmPoolParam,
+  CreateCpmmPoolAddress,
+  AddCpmmLiquidityParams,
+  WithdrawCpmmLiquidityParams,
+  CpmmSwapParams,
+} from "./type";
+import { makeAddLiquidityInstruction, removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
 import { ComputeBudgetConfig } from "../type";
-import { removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
 import { ClmmInstrument } from "../clmm/instrument";
 import { getAssociatedPoolKeys, getAssociatedConfigId } from "./utils";
 import { createPoolFeeLayout } from "./layout";
+import { getCreatePoolKeys, getPdaObservationId } from "./pda";
+import {
+  makeCreateCpmmPoolInInstruction,
+  makeDepositCpmmInInstruction,
+  makeWithdrawCpmmInInstruction,
+  makeSwapCpmmBaseInInInstruction,
+  makeSwapCpmmBaseOutInInstruction,
+} from "./cpmmInstruction";
 import {
   FARM_PROGRAM_TO_VERSION,
   makeWithdrawInstructionV3,
@@ -519,7 +536,6 @@ export default class LiquidityModule extends ModuleBase {
     return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
   }
 
-  // calComputeBudget
   public async createPoolV4<T extends TxVersion>({
     programId,
     marketInfo,
@@ -646,5 +662,364 @@ export default class LiquidityModule extends ModuleBase {
     if (account === null) throw Error("get config account error");
 
     return createPoolFeeLayout.decode(account.data).fee;
+  }
+
+  public async createCpmmPool<T extends TxVersion>({
+    programId,
+    poolFeeAccount,
+    mintA,
+    mintB,
+    mintAAmount,
+    mintBAmount,
+    startTime,
+    ownerInfo,
+    associatedOnly = false,
+    checkCreateATAOwner = false,
+    txVersion,
+    computeBudgetConfig,
+  }: CreateCpmmPoolParam<T>): Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>> {
+    const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && mintA.address === NATIVE_MINT.toBase58();
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && mintB.address === NATIVE_MINT.toBase58();
+    const [mintAPubkey, mintBPubkey] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
+
+    const txBuilder = this.createTxBuilder();
+
+    const { account: userVaultA, instructionParams: userVaultAInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: mintAPubkey,
+        tokenProgram: mintA.programId,
+        owner: this.scope.ownerPubKey,
+        createInfo: mintAUseSOLBalance
+          ? {
+              payer: payer!,
+              amount: mintAAmount,
+            }
+          : undefined,
+        notUseTokenAccount: mintAUseSOLBalance,
+        skipCloseAccount: !mintAUseSOLBalance,
+        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    txBuilder.addInstruction(userVaultAInstruction || {});
+
+    const { account: userVaultB, instructionParams: userVaultBInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: new PublicKey(mintB.address),
+        tokenProgram: mintB.programId,
+        owner: this.scope.ownerPubKey,
+        createInfo: mintBUseSOLBalance
+          ? {
+              payer: payer!,
+              amount: mintBAmount,
+            }
+          : undefined,
+
+        notUseTokenAccount: mintBUseSOLBalance,
+        skipCloseAccount: !mintBUseSOLBalance,
+        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    txBuilder.addInstruction(userVaultBInstruction || {});
+
+    if (userVaultA === undefined || userVaultB === undefined) throw Error("you don't has some token account");
+
+    const poolKeys = getCreatePoolKeys({
+      programId,
+      mintA: mintAPubkey,
+      mintB: mintBPubkey,
+    });
+
+    txBuilder.addInstruction({
+      instructions: [
+        makeCreateCpmmPoolInInstruction(
+          programId,
+          this.scope.ownerPubKey,
+          poolKeys.configId,
+          poolKeys.authority,
+          poolKeys.poolId,
+          mintAPubkey,
+          mintBPubkey,
+          poolKeys.lpMint,
+          userVaultA,
+          userVaultB,
+          getATAAddress(this.scope.ownerPubKey, poolKeys.lpMint).publicKey,
+          poolKeys.vaultA,
+          poolKeys.vaultB,
+          poolFeeAccount,
+          new PublicKey(mintA.programId ?? TOKEN_PROGRAM_ID),
+          new PublicKey(mintB.programId ?? TOKEN_PROGRAM_ID),
+          poolKeys.observationId,
+          mintAAmount,
+          mintBAmount,
+          startTime,
+        ),
+      ],
+      instructionTypes: [InstructionType.CpmmCreatePool],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: {
+        address: { ...poolKeys, mintA, mintB, programId, poolFeeAccount },
+      },
+    }) as Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>>;
+  }
+
+  public async addCpmmLiquidity<T extends TxVersion>(params: AddCpmmLiquidityParams<T>): Promise<MakeTxData<T>> {
+    const { poolInfo, inputAmount, anotherAmount, baseIn, liquidity, computeBudgetConfig, config, txVersion } = params;
+
+    if (this.scope.availability.addStandardPosition === false)
+      this.logAndCreateError("add liquidity feature disabled in your region");
+
+    if (inputAmount.isZero() || anotherAmount.isZero())
+      this.logAndCreateError("amounts must greater than zero", "amountInA & amountInB", {
+        amountInA: inputAmount.toString(),
+        amountInB: anotherAmount.toString(),
+      });
+    const { account } = this.scope;
+    const { bypassAssociatedCheck, checkCreateATAOwner } = {
+      // default
+      ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false },
+      // custom
+      ...config,
+    };
+    const txBuilder = this.createTxBuilder();
+    const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
+    const tokenAccountA = await account.getCreatedTokenAccount({
+      mint: mintA,
+      associatedOnly: false,
+    });
+    const tokenAccountB = await account.getCreatedTokenAccount({
+      mint: mintB,
+      associatedOnly: false,
+    });
+    if (!tokenAccountA && !tokenAccountB)
+      this.logAndCreateError("cannot found target token accounts", "tokenAccounts", account.tokenAccounts);
+
+    const lpTokenAccount = await account.getCreatedTokenAccount({
+      mint: new PublicKey(poolInfo.lpMint.address),
+    });
+    const { tokenAccount: _lpTokenAccount, ...lpInstruction } = await account.handleTokenAccount({
+      side: "out",
+      amount: 0,
+      mint: new PublicKey(poolInfo.lpMint.address),
+      tokenAccount: lpTokenAccount,
+      bypassAssociatedCheck,
+      checkCreateATAOwner,
+    });
+    txBuilder.addInstruction(lpInstruction);
+
+    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
+
+    txBuilder.addInstruction({
+      instructions: [
+        makeDepositCpmmInInstruction(
+          new PublicKey(poolInfo.programId),
+          this.scope.ownerPubKey,
+          new PublicKey(poolKeys.authority),
+          new PublicKey(poolInfo.id),
+          _lpTokenAccount!,
+          tokenAccountA!,
+          tokenAccountB!,
+          new PublicKey(poolKeys.vault.A),
+          new PublicKey(poolKeys.vault.B),
+          mintA,
+          mintB,
+          new PublicKey(poolInfo.lpMint.address),
+
+          liquidity,
+          baseIn ? inputAmount : anotherAmount,
+          baseIn ? anotherAmount : inputAmount,
+        ),
+      ],
+      instructionTypes: [InstructionType.CpmmAddLiquidity],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
+    });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
+  }
+
+  public async withdrawCpmmLiquidity<T extends TxVersion>(
+    params: WithdrawCpmmLiquidityParams<T>,
+  ): Promise<MakeTxData<T>> {
+    const { poolInfo, lpAmount, computeBudgetConfig, txVersion } = params;
+
+    if (this.scope.availability.addStandardPosition === false)
+      this.logAndCreateError("add liquidity feature disabled in your region");
+
+    const { account } = this.scope;
+    const txBuilder = this.createTxBuilder();
+    const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
+    const tokenAccountA = await account.getCreatedTokenAccount({
+      mint: mintA,
+      associatedOnly: false,
+    });
+    const tokenAccountB = await account.getCreatedTokenAccount({
+      mint: mintB,
+      associatedOnly: false,
+    });
+    if (!tokenAccountA && !tokenAccountB)
+      this.logAndCreateError("cannot found target token accounts", "tokenAccounts", account.tokenAccounts);
+
+    const lpTokenAccount = await account.getCreatedTokenAccount({
+      mint: new PublicKey(poolInfo.lpMint.address),
+    });
+
+    if (!lpTokenAccount)
+      this.logAndCreateError("cannot found lp token account", "tokenAccounts", account.tokenAccounts);
+
+    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
+
+    txBuilder.addInstruction({
+      instructions: [
+        makeWithdrawCpmmInInstruction(
+          new PublicKey(poolInfo.programId),
+          this.scope.ownerPubKey,
+          new PublicKey(poolKeys.authority),
+          new PublicKey(poolInfo.id),
+          lpTokenAccount!,
+          tokenAccountA!,
+          tokenAccountB!,
+          new PublicKey(poolKeys.vault.A),
+          new PublicKey(poolKeys.vault.B),
+          mintA,
+          mintB,
+          new PublicKey(poolInfo.lpMint.address),
+
+          lpAmount,
+          lpAmount
+            .mul(
+              new BN(
+                new Decimal(poolInfo.mintAmountA).mul(10 ** poolInfo.mintA.decimals).toFixed(0, Decimal.ROUND_DOWN),
+              ),
+            )
+            .div(
+              new BN(new Decimal(poolInfo.lpAmount).mul(10 ** poolInfo.lpMint.decimals).toFixed(0, Decimal.ROUND_DOWN)),
+            ),
+          lpAmount
+            .mul(
+              new BN(
+                new Decimal(poolInfo.mintAmountB).mul(10 ** poolInfo.mintB.decimals).toFixed(0, Decimal.ROUND_DOWN),
+              ),
+            )
+            .div(
+              new BN(new Decimal(poolInfo.lpAmount).mul(10 ** poolInfo.lpMint.decimals).toFixed(0), Decimal.ROUND_DOWN),
+            ),
+        ),
+      ],
+      instructionTypes: [InstructionType.CpmmWithdrawLiquidity],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
+    });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
+  }
+
+  public async cpmmSwap<T extends TxVersion>(params: CpmmSwapParams): Promise<MakeTxData<T>> {
+    const { poolInfo, baseIn, swapResult, config, computeBudgetConfig, txVersion } = params;
+
+    const { bypassAssociatedCheck, checkCreateATAOwner } = {
+      // default
+      ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false },
+      // custom
+      ...config,
+    };
+
+    const txBuilder = this.createTxBuilder();
+
+    const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
+
+    const mintATokenAcc = await this.scope.account.getCreatedTokenAccount({
+      programId: new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
+      mint: mintA,
+      associatedOnly: false,
+    });
+
+    const mintBTokenAcc = await this.scope.account.getCreatedTokenAccount({
+      programId: new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
+      mint: mintB,
+      associatedOnly: false,
+    });
+
+    const { tokenAccount: _mintATokenAcc, ...mintATokenAccInstruction } = await this.scope.account.handleTokenAccount({
+      side: baseIn ? "in" : "out",
+      amount: baseIn ? swapResult.sourceAmountSwapped : swapResult.destinationAmountSwapped,
+      mint: mintA,
+      tokenAccount: mintATokenAcc,
+      bypassAssociatedCheck,
+      checkCreateATAOwner,
+    });
+    txBuilder.addInstruction(mintATokenAccInstruction);
+
+    const { tokenAccount: _mintBTokenAcc, ...mintBTokenAccInstruction } = await this.scope.account.handleTokenAccount({
+      side: baseIn ? "out" : "in",
+      amount: baseIn ? swapResult.destinationAmountSwapped : swapResult.sourceAmountSwapped,
+      mint: mintB,
+      tokenAccount: mintBTokenAcc,
+      bypassAssociatedCheck,
+      checkCreateATAOwner,
+    });
+    txBuilder.addInstruction(mintBTokenAccInstruction);
+
+    if (!_mintATokenAcc && !_mintBTokenAcc)
+      this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
+
+    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
+
+    txBuilder.addInstruction({
+      instructions: [
+        baseIn
+          ? makeSwapCpmmBaseInInInstruction(
+              new PublicKey(poolInfo.programId),
+              this.scope.ownerPubKey,
+              new PublicKey(poolKeys.authority),
+              new PublicKey(poolKeys.id), // todo config id
+              new PublicKey(poolInfo.id),
+              _mintATokenAcc!,
+              _mintBTokenAcc!,
+              new PublicKey(poolKeys.vault.A),
+              new PublicKey(poolKeys.vault.B),
+              new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
+              new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
+              mintA,
+              mintB,
+              getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
+
+              swapResult.sourceAmountSwapped,
+              swapResult.destinationAmountSwapped,
+            )
+          : makeSwapCpmmBaseOutInInstruction(
+              new PublicKey(poolInfo.programId),
+              this.scope.ownerPubKey,
+              new PublicKey(poolKeys.authority),
+              new PublicKey(poolKeys.id), // todo config id
+              new PublicKey(poolInfo.id),
+
+              _mintBTokenAcc!,
+              _mintATokenAcc!,
+
+              new PublicKey(poolKeys.vault.B),
+              new PublicKey(poolKeys.vault.A),
+
+              new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
+              new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
+
+              mintB,
+              mintA,
+
+              getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
+
+              swapResult.sourceAmountSwapped,
+              swapResult.destinationAmountSwapped,
+            ),
+      ],
+      instructionTypes: [baseIn ? InstructionType.CpmmSwapBaseIn : InstructionType.CpmmSwapBaseOut],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 }

@@ -1,11 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "@/api/type";
+import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys, ApiV3Token } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
-import Decimal from "decimal.js-light";
 import { ComputeBudgetConfig } from "@/raydium/type";
 import { TokenAmount } from "@/module/amount";
+import { SwapResult } from "./curve/calculator";
 
 export type LiquiditySide = "a" | "b";
 export type AmountSide = "base" | "quote";
@@ -182,4 +182,118 @@ export interface InitPoolInstructionParamsV4 {
     payer: PublicKey;
   };
   startTime: BigNumberish;
+}
+
+export interface CpmmConfigInfoInterface {
+  bump: number;
+  disableCreatePool: boolean;
+  index: number;
+  tradeFeeRate: BN;
+  protocolFeeRate: BN;
+  fundFeeRate: BN;
+  createPoolFee: BN;
+
+  protocolOwner: PublicKey;
+  fundOwner: PublicKey;
+}
+
+export interface CpmmPoolInfoInterface {
+  configId: PublicKey;
+  poolCreator: PublicKey;
+  vaultA: PublicKey;
+  vaultB: PublicKey;
+
+  mintLp: PublicKey;
+  mintA: PublicKey;
+  mintB: PublicKey;
+
+  mintProgramA: PublicKey;
+  mintProgramB: PublicKey;
+
+  observationId: PublicKey;
+
+  bump: number;
+  status: number;
+
+  lpDecimals: number;
+  mintDecimalA: number;
+  mintDecimalB: number;
+
+  lpAmount: BN;
+  protocolFeesMintA: BN;
+  protocolFeesMintB: BN;
+  fundFeesMintA: BN;
+  fundFeesMintB: BN;
+  openTime: BN;
+}
+
+export interface CreateCpmmPoolParam<T> {
+  programId: PublicKey;
+  poolFeeAccount: PublicKey;
+  mintA: ApiV3Token;
+  mintB: ApiV3Token;
+  mintAAmount: BN;
+  mintBAmount: BN;
+  startTime: BN;
+
+  associatedOnly: boolean;
+  checkCreateATAOwner?: boolean;
+
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
+export interface CreateCpmmPoolAddress {
+  poolId: PublicKey;
+  configId: PublicKey;
+  authority: PublicKey;
+  lpMint: PublicKey;
+  vaultA: PublicKey;
+  vaultB: PublicKey;
+  observationId: PublicKey;
+  mintA: ApiV3Token;
+  mintB: ApiV3Token;
+  programId: PublicKey;
+  poolFeeAccount: PublicKey;
+}
+
+export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItem;
+  payer?: PublicKey;
+  inputAmount: BN;
+  anotherAmount: BN;
+  liquidity: BN;
+  baseIn: boolean;
+  config?: {
+    bypassAssociatedCheck?: boolean;
+    checkCreateATAOwner?: boolean;
+  };
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
+export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItem;
+  payer?: PublicKey;
+  lpAmount: BN;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
+export interface CpmmSwapParams<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItem;
+  payer?: PublicKey;
+  baseIn: boolean;
+  swapResult: SwapResult;
+
+  config?: {
+    bypassAssociatedCheck?: boolean;
+    checkCreateATAOwner?: boolean;
+  };
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
 }

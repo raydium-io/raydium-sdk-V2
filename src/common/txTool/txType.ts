@@ -63,4 +63,10 @@ export const InstructionType = {
   FarmV6Restart: "FarmV6Restart",
   FarmV6CreatorAddReward: "FarmV6CreatorAddReward",
   FarmV6CreatorWithdraw: "FarmV6CreatorWithdraw",
+
+  CpmmCreatePool: "CpmmCreatePool",
+  CpmmAddLiquidity: "CpmmAddLiquidity",
+  CpmmWithdrawLiquidity: "CpmmWithdrawLiquidity",
+  CpmmSwapBaseIn: "CpmmSwapBaseIn",
+  CpmmSwapBaseOut: "CpmmSwapBaseOut",
 };

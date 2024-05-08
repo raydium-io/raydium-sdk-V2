@@ -1,13 +1,11 @@
 import { Connection, Keypair, PublicKey, EpochInfo } from "@solana/web3.js";
-import BN from "bn.js";
 import { merge } from "lodash";
 
 import { Api, API_URL_CONFIG, ApiV3TokenRes, ApiV3Token, JupTokenType, AvailabilityCheckAPI3 } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
 import { Owner } from "../common/owner";
-import { PublicKeyish, WSOLMint, SOLMint } from "../common/pubKey";
-import { TokenAmount } from "../module/amount";
+import { PublicKeyish } from "../common/pubKey";
 import { Token } from "../module/token";
 import { Cluster } from "../solana";
 
@@ -20,8 +18,8 @@ import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
 import Ido from "./ido";
 
-import TokenModule, { MintToTokenAmount } from "./token/token";
-import { SignAllTransactions, TransferAmountFee } from "./type";
+import TokenModule from "./token/token";
+import { SignAllTransactions } from "./type";
 import { TokenInfo } from "./token";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
@@ -43,8 +41,8 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   logRequests?: boolean;
   logCount?: number;
   jupTokenType?: JupTokenType;
-  preloadTokenPrice?: boolean;
   disableFeatureCheck?: boolean;
+  disableLoadToken?: boolean;
 }
 
 export interface RaydiumApiBatchRequestParams {
@@ -164,10 +162,10 @@ export class Raydium {
     });
 
     await raydium.fetchAvailabilityStatus(config.disableFeatureCheck);
-    await raydium.token.load({
-      type: config.jupTokenType,
-      fetchTokenPrice: config.preloadTokenPrice,
-    });
+    if (!config.disableLoadToken)
+      await raydium.token.load({
+        type: config.jupTokenType,
+      });
 
     return raydium;
   }
@@ -277,10 +275,6 @@ export class Raydium {
       value: await this.connection.getEpochInfo(),
     };
     return this._epochInfo.value;
-  }
-
-  public async getChainTokenInfo(mint: PublicKeyish): Promise<{ token: Token; tokenInfo: TokenInfo }> {
-    return this.token.getChainTokenInfo(mint);
   }
 
   public async fetchAvailabilityStatus(skipCheck?: boolean): Promise<Partial<AvailabilityCheckAPI3>> {
