@@ -223,6 +223,7 @@ export type ApiV3PoolInfoConcentratedItem = ApiV3PoolInfoBaseItem & {
 export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
   type: "Standard";
   marketId: string;
+  configId: string;
   lpPrice: number;
   lpAmount: number;
   lpMint: ApiV3Token;

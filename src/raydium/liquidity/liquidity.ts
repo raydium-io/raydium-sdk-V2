@@ -845,7 +845,7 @@ export default class LiquidityModule extends ModuleBase {
   public async withdrawCpmmLiquidity<T extends TxVersion>(
     params: WithdrawCpmmLiquidityParams<T>,
   ): Promise<MakeTxData<T>> {
-    const { poolInfo, lpAmount, computeBudgetConfig, txVersion } = params;
+    const { poolInfo, lpAmount, amountMintA, amountMintB, computeBudgetConfig, txVersion } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
@@ -890,24 +890,8 @@ export default class LiquidityModule extends ModuleBase {
           new PublicKey(poolInfo.lpMint.address),
 
           lpAmount,
-          lpAmount
-            .mul(
-              new BN(
-                new Decimal(poolInfo.mintAmountA).mul(10 ** poolInfo.mintA.decimals).toFixed(0, Decimal.ROUND_DOWN),
-              ),
-            )
-            .div(
-              new BN(new Decimal(poolInfo.lpAmount).mul(10 ** poolInfo.lpMint.decimals).toFixed(0, Decimal.ROUND_DOWN)),
-            ),
-          lpAmount
-            .mul(
-              new BN(
-                new Decimal(poolInfo.mintAmountB).mul(10 ** poolInfo.mintB.decimals).toFixed(0, Decimal.ROUND_DOWN),
-              ),
-            )
-            .div(
-              new BN(new Decimal(poolInfo.lpAmount).mul(10 ** poolInfo.lpMint.decimals).toFixed(0), Decimal.ROUND_DOWN),
-            ),
+          amountMintA,
+          amountMintB,
         ),
       ],
       instructionTypes: [InstructionType.CpmmWithdrawLiquidity],

@@ -280,6 +280,8 @@ export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
   lpAmount: BN;
+  amountMintA: BN;
+  amountMintB: BN;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
