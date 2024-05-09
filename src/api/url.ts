@@ -31,14 +31,6 @@ export const API_URLS = {
   POOL_LIST: "/v3/pools/info/{type}/{sort}/{order}/{page_size}/{page}",
   POOL_SEARCH_BY_ID: "/v3/pools/info/ids/{ids}",
   /**
-   * search_text: search text
-   * type: {all | concentrated | standard}
-   * sort: {liquidity | volume_24h / 7d / 30d | fee_24h / 7d / 30d | apr_24h / 7d / 30d}
-   * order: {desc/asc}
-   * page: number
-   */
-  POOL_SEARCH: "/v3/pools/info/search/{search_text}/{type}/{sort}/{order}/{page_size}/{page}",
-  /**
    * mint1/mint2: search pool by mint
    * sort: {liquidity | volume_24h / 7d / 30d | fee_24h / 7d / 30d | apr_24h / 7d / 30d}
    * type: {all | concentrated | standard}

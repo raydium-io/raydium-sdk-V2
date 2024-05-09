@@ -8,9 +8,9 @@ import {
   ClmmKeys,
   FormatFarmInfoOutV6,
 } from "@/api/type";
-import { Token, TokenAmount, Percent } from "@/module";
+import { Token, TokenAmount } from "@/module";
 import { toToken } from "../token";
-import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
+import { BN_ZERO, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
@@ -63,14 +63,12 @@ export default class LiquidityModule extends ModuleBase {
   public computePairAmount({
     poolInfo,
     amount,
-    // anotherToken,
     slippage,
     baseIn,
   }: {
     poolInfo: ApiV3PoolInfoStandardItem;
     amount: string | Decimal;
-    // anotherToken: Token;
-    slippage: Percent;
+    slippage: string | number; // in percent
     baseIn?: boolean;
   }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
     const inputAmount = new BN(new Decimal(amount).mul(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals).toFixed(0));
@@ -90,7 +88,7 @@ export default class LiquidityModule extends ModuleBase {
       "anotherToken:",
       baseIn ? poolInfo.mintB.symbol : poolInfo.mintA.symbol,
       "slippage:",
-      `${slippage.toSignificant()}%`,
+      `${slippage}%`,
     );
 
     // input is fixed
@@ -113,8 +111,10 @@ export default class LiquidityModule extends ModuleBase {
       ),
     );
 
-    const _slippage = new Percent(BN_ONE).add(slippage);
-    const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
+    const _slippage = new Decimal(slippage).div(100).add(1);
+    const slippageAdjustedAmount = new BN(
+      new Decimal(amountRaw.toString()).mul(_slippage).toFixed(0, Decimal.ROUND_DOWN),
+    );
 
     const _anotherAmount = new TokenAmount(_anotherToken, amountRaw);
     const _maxAnotherAmount = new TokenAmount(_anotherToken, slippageAdjustedAmount);

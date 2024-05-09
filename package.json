@@ -1,6 +1,6 @@
 {
   "name": "test-rrr-sdk",
-  "version": "0.0.13-alpha",
+  "version": "0.0.14-alpha",
   "description": "An SDK for building applications on top of Raydium.",
   "license": "GPL-3.0",
   "main": "./lib/index.js",

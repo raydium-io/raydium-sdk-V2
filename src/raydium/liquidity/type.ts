@@ -230,8 +230,8 @@ export interface CpmmPoolInfoInterface {
 export interface CreateCpmmPoolParam<T> {
   programId: PublicKey;
   poolFeeAccount: PublicKey;
-  mintA: ApiV3Token;
-  mintB: ApiV3Token;
+  mintA: Pick<ApiV3Token, "address" | "decimals" | "programId">;
+  mintB: Pick<ApiV3Token, "address" | "decimals" | "programId">;
   mintAAmount: BN;
   mintBAmount: BN;
   startTime: BN;
