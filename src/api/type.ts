@@ -204,7 +204,7 @@ export interface ApiV3PoolInfoBaseItem {
   mintAmountA: number;
   mintAmountB: number;
   feeRate: number;
-  openTime: number;
+  openTime: string;
   tvl: number;
 
   day: ApiV3PoolInfoCountItem;
@@ -345,8 +345,8 @@ export interface RewardKeyInfoV6 {
   vault: string;
   type: FarmRewardTypeV6Key;
   perSecond: number;
-  openTime: number;
-  endTime: number;
+  openTime: string;
+  endTime: string;
   sender: string;
 }
 interface FormatFarmKeyOutBase {
@@ -375,15 +375,15 @@ export interface RewardInfoV345 {
   mint: ApiV3Token;
   type: FarmRewardTypeV6Key;
   apr: number;
-  perSecond: number;
+  perSecond: string;
 }
 export interface RewardInfoV6 {
   mint: ApiV3Token;
   type: FarmRewardTypeV6Key;
   apr: number;
-  perSecond: number;
-  openTime: number;
-  endTime: number;
+  perSecond: string;
+  openTime: string;
+  endTime: string;
 }
 export type FarmTagsItem = "Ecosystem" | "Farm" | "Fusion" | "Stake";
 export interface FormatFarmInfoOutBase {

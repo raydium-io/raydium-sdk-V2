@@ -2,7 +2,7 @@ export const API_URLS = {
   BASE_HOST: "https://uapi.raydium.io",
   OWNER_BASE_HOST: "https://owner-v1.raydium.io",
 
-  COINGECKO: "https://api.coingecko.com/api/v3/simple/price",
+  NEW_BASE_HOST: "https://uapi.raydium.io",
 
   FARM_ARP: "/main/farm/info",
   FARM_ARP_LINE: "/main/farm-apr-tv",
@@ -11,16 +11,17 @@ export const API_URLS = {
 
   VERSION: "/v3/main/version",
 
-  PRICE: "/v2/main/price",
-
   // api v3
   CHECK_AVAILABILITY: "/v3/main/AvailabilityCheckAPI",
   RPCS: "/v3/main/rpcs",
   INFO: "/v3/main/info",
   STAKE_POOLS: "/v3/main/stake-pools",
   CHAIN_TIME: "/v3/main/chain-time",
+
   TOKEN_LIST: "/v3/mint/list",
   TOKEN_INFO: "/v3/mint/item/{mint}",
+  MINT_INFO_ID: "/mint/ids",
+
   JUP_TOKEN_LIST: "https://token.jup.ag/{type}",
   /**
    * type: {all | concentrated | standard}
@@ -59,6 +60,7 @@ export const API_URLS = {
   SWAP_TX: "/transaction/",
   MINT_PRICE: "/v3/mint/price",
   MIGRATE_CONFIG: "/v3/main/migrate-lp",
+  PRIORITY_FEE: "/main/auto-fee",
 };
 
 export const DEV_API_URLS = {

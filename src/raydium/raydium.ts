@@ -5,8 +5,6 @@ import { Api, API_URL_CONFIG, ApiV3TokenRes, ApiV3Token, JupTokenType, Availabil
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
 import { Owner } from "../common/owner";
-import { PublicKeyish } from "../common/pubKey";
-import { Token } from "../module/token";
 import { Cluster } from "../solana";
 
 import Account, { TokenAccountDataProp } from "./account/account";
@@ -20,7 +18,6 @@ import Ido from "./ido";
 
 import TokenModule from "./token/token";
 import { SignAllTransactions } from "./type";
-import { TokenInfo } from "./token";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */

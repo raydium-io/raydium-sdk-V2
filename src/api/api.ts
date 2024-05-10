@@ -125,7 +125,9 @@ export class Api {
   // }
 
   async getClmmConfigs(): Promise<ApiClmmConfigInfo[]> {
-    const res = await this.api.get(this.urlConfigs.AMM_V3_CONFIG || API_URLS.AMM_V3_CONFIG);
+    const res = await this.api.get(this.urlConfigs.AMM_V3_CONFIG || API_URLS.AMM_V3_CONFIG, {
+      baseURL: this.urlConfigs.NEW_BASE_HOST,
+    });
     return res.data;
   }
 
@@ -134,10 +136,6 @@ export class Api {
       `${this.urlConfigs.POOL_LIQUIDITY_LINE || API_URLS.POOL_LIQUIDITY_LINE}?pool_id=${poolId}`,
     );
     return res.data;
-  }
-
-  async getRaydiumTokenPrice(): Promise<Record<string, number>> {
-    return this.api.get(this.urlConfigs.PRICE || API_URLS.PRICE);
   }
 
   async getBlockSlotCountForSecond(endpointUrl?: string): Promise<number> {
@@ -157,18 +155,24 @@ export class Api {
   }
 
   async getChainTimeOffset(): Promise<{ offset: number }> {
-    return this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME);
+    return this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME, {
+      baseURL: this.urlConfigs.NEW_BASE_HOST,
+    });
   }
 
   async getRpcs(): Promise<{
     rpcs: { batch: boolean; name: string; url: string; weight: number }[];
     strategy: string;
   }> {
-    return this.api.get(this.urlConfigs.RPCS || API_URLS.RPCS);
+    return this.api.get(this.urlConfigs.RPCS || API_URLS.RPCS, {
+      baseURL: this.urlConfigs.NEW_BASE_HOST,
+    });
   }
 
   async getTokenList(): Promise<{ mintList: ApiV3Token[]; blacklist: ApiV3Token[] }> {
-    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {});
+    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {
+      baseURL: this.urlConfigs.NEW_BASE_HOST,
+    });
     return res.data;
   }
 
@@ -184,6 +188,13 @@ export class Api {
   async getTokenInfo(mint: string | PublicKey): Promise<ApiV3Token | undefined> {
     const res = await this.api.get(
       (this.urlConfigs.TOKEN_INFO || DEV_API_URLS.TOKEN_INFO).replace("{mint}", mint.toString()),
+    );
+    return res.data;
+  }
+
+  async getTokenInfoNew(mint: (string | PublicKey)[]): Promise<ApiV3Token[] | undefined> {
+    const res = await this.api.get(
+      (this.urlConfigs.MINT_INFO_ID || DEV_API_URLS.MINT_INFO_ID) + `?mints=${mint.map((m) => m.toString()).join(",")}`,
     );
     return res.data;
   }
