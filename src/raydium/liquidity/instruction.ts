@@ -110,8 +110,8 @@ export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): 
     if (version === 5) {
       keys.push(accountMeta({ pubkey: MODEL_DATA_PUBKEY }));
     } else {
-      keys.push(accountMeta({ pubkey: poolKeys.withdrawQueue }));
-      keys.push(accountMeta({ pubkey: poolKeys.vault.Lp }));
+      keys.push(accountMeta({ pubkey: poolKeys.id }));
+      keys.push(accountMeta({ pubkey: poolKeys.id }));
     }
 
     keys.push(
@@ -424,10 +424,10 @@ export function makeInitPoolInstructionV4({
     accountMeta({ pubkey: poolKeys.mintB.address, isWritable: false }),
     accountMeta({ pubkey: poolKeys.vault.A, isWritable: false }),
     accountMeta({ pubkey: poolKeys.vault.B, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.withdrawQueue }),
+    accountMeta({ pubkey: poolKeys.id }),
     accountMeta({ pubkey: poolKeys.targetOrders }),
     accountMeta({ pubkey: userKeys.lpTokenAccount }),
-    accountMeta({ pubkey: poolKeys.vault.Lp, isWritable: false }),
+    accountMeta({ pubkey: poolKeys.id, isWritable: false }),
     // serum
     accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
     accountMeta({ pubkey: poolKeys.marketId, isWritable: false }),

@@ -40,6 +40,10 @@ export class Clmm extends ModuleBase {
     super(params);
   }
 
+  public async getClmmPoolKeys(poolId: string): Promise<ClmmKeys> {
+    return ((await this.scope.api.fetchPoolKeysById({ idList: [poolId] })) as ClmmKeys[])[0];
+  }
+
   public async createPool<T extends TxVersion>(
     props: CreateConcentratedPool<T>,
   ): Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {
@@ -92,7 +96,7 @@ export class Clmm extends ModuleBase {
           id: insInfo.address.poolId.toString(),
           mintA,
           mintB,
-          openTime: startTime.toNumber(),
+          openTime: startTime.toString(),
           vault: { A: insInfo.address.mintAVault.toString(), B: insInfo.address.mintBVault.toString() },
           rewardInfos: [],
           config: {
@@ -208,7 +212,7 @@ export class Clmm extends ModuleBase {
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const poolKeys = propPoolKeys || ((await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys);
+    const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id));
     const insInfo = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo,
       poolKeys,
@@ -303,7 +307,8 @@ export class Clmm extends ModuleBase {
     if (ownerTokenAccountA === undefined || ownerTokenAccountB === undefined)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const poolKeys = propPoolKeys || ((await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys);
+    const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id));
+    console.log(123123444, poolKeys);
 
     const makeOpenPositionInstructions = await ClmmInstrument.openPositionFromLiquidityInstructions({
       poolInfo,
@@ -393,7 +398,7 @@ export class Clmm extends ModuleBase {
 
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
     const ins = ClmmInstrument.increasePositionFromLiquidityInstructions({
       poolInfo,
       poolKeys,
@@ -479,7 +484,7 @@ export class Clmm extends ModuleBase {
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
     const ins = ClmmInstrument.increasePositionFromBaseInstructions({
       poolInfo,
       poolKeys,
@@ -597,7 +602,7 @@ export class Clmm extends ModuleBase {
         this.scope.account.tokenAccountRawInfos,
       );
 
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
 
     const decreaseInsInfo = await ClmmInstrument.decreaseLiquidityInstructions({
       poolInfo,
@@ -653,7 +658,7 @@ export class Clmm extends ModuleBase {
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");
     const txBuilder = this.createTxBuilder();
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
     const ins = ClmmInstrument.closePositionInstructions({
       poolInfo,
       poolKeys,
@@ -709,7 +714,7 @@ export class Clmm extends ModuleBase {
 
     if (!ownerRewardAccount)
       this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
     const insInfo = ClmmInstrument.initRewardInstructions({
       poolInfo,
       poolKeys,
@@ -779,7 +784,7 @@ export class Clmm extends ModuleBase {
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
 
-      const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+      const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
       const insInfo = ClmmInstrument.initRewardInstructions({
         poolInfo,
         poolKeys,
@@ -850,7 +855,7 @@ export class Clmm extends ModuleBase {
     ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
     if (!ownerRewardAccount)
       this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
     const insInfo = ClmmInstrument.setRewardInstructions({
       poolInfo,
       poolKeys,
@@ -917,7 +922,7 @@ export class Clmm extends ModuleBase {
       ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
-      const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+      const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
       const insInfo = ClmmInstrument.setRewardInstructions({
         poolInfo,
         poolKeys,
@@ -975,7 +980,7 @@ export class Clmm extends ModuleBase {
 
     if (!ownerRewardAccount)
       this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
     const insInfo = ClmmInstrument.collectRewardInstructions({
       poolInfo,
       poolKeys,
@@ -1025,7 +1030,7 @@ export class Clmm extends ModuleBase {
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
       ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
-      const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+      const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
       const insInfo = ClmmInstrument.collectRewardInstructions({
         poolInfo,
         poolKeys,
@@ -1043,6 +1048,7 @@ export class Clmm extends ModuleBase {
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
+  // currently only support
   public async swap<T extends TxVersion>({
     poolInfo,
     inputMint,
@@ -1129,7 +1135,7 @@ export class Clmm extends ModuleBase {
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("user do not have token account", this.scope.account.tokenAccountRawInfos);
 
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
     txBuilder.addInstruction(
       ClmmInstrument.makeSwapBaseInInstructions({
         poolInfo,
@@ -1249,7 +1255,7 @@ export class Clmm extends ModuleBase {
         rewardAccounts.push(ownerRewardAccount!);
       }
 
-      const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as ClmmKeys;
+      const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
 
       for (const itemPosition of allPositions[itemInfo.id]) {
         const insData = ClmmInstrument.decreaseLiquidityInstructions({

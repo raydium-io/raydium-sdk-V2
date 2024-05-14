@@ -228,7 +228,19 @@ export type ApiV3PoolInfoStandardItem = ApiV3PoolInfoBaseItem & {
   lpAmount: number;
   lpMint: ApiV3Token;
 };
-export type ApiV3PoolInfoItem = ApiV3PoolInfoConcentratedItem | ApiV3PoolInfoStandardItem;
+
+export type ApiV3PoolInfoStandardItemCpmm = ApiV3PoolInfoBaseItem & {
+  type: "Standard";
+  lpMint: ApiV3Token;
+  lpPrice: number;
+  lpAmount: number;
+  config: ApiCpmmConfigV3;
+};
+
+export type ApiV3PoolInfoItem =
+  | ApiV3PoolInfoConcentratedItem
+  | ApiV3PoolInfoStandardItem
+  | ApiV3PoolInfoStandardItemCpmm;
 
 export enum PoolFetchType {
   All = "all",
@@ -265,24 +277,38 @@ export interface LiquidityLineApi {
 }
 
 // pool key
+
 interface Base {
   programId: string;
   id: string;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
   lookupTableAccount?: string;
-  openTime: number;
+  openTime: string;
   vault: { A: string; B: string };
 }
-interface AmmKeys {
+interface _Amm {
   authority: string;
   openOrders: string;
   targetOrders: string;
-  withdrawQueue: string;
   mintLp: ApiV3Token;
-  vault: { Lp: string }; // stable Publickey default
 }
-interface MarketKeys {
+
+interface ApiCpmmConfigV3 {
+  id: string;
+  index: number;
+  protocolFeeRate: number;
+  tradeFeeRate: number;
+  fundFeeRate: number;
+  createPoolFee: string;
+}
+
+interface _Cpmm {
+  authority: string;
+  mintLp: ApiV3Token;
+  config: ApiCpmmConfigV3;
+}
+interface _Market {
   marketProgramId: string;
   marketId: string;
   marketAuthority: string;
@@ -292,14 +318,15 @@ interface MarketKeys {
   marketAsks: string;
   marketEventQueue: string;
 }
-export type AmmV4Keys = Base & AmmKeys & MarketKeys;
-export type AmmV5Keys = Base & AmmKeys & MarketKeys & { modelDataAccount: string };
-interface ClmmRewardType {
+export type AmmV4Keys = Base & _Amm & _Market;
+export type AmmV5Keys = Base & _Amm & _Market & { modelDataAccount: string };
+export type CpmmKeys = Base & _Cpmm;
+export interface ClmmRewardType {
   mint: ApiV3Token;
   vault: string;
 }
 export type ClmmKeys = Base & { config: ApiClmmConfigV3; rewardInfos: ClmmRewardType[] };
-export type PoolKeys = AmmV4Keys | AmmV5Keys | ClmmKeys;
+export type PoolKeys = AmmV4Keys | AmmV5Keys | ClmmKeys | CpmmKeys;
 
 // clmm config
 export interface ApiClmmConfigV3 {

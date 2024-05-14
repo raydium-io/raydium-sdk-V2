@@ -667,18 +667,14 @@ export class PoolUtils {
       poolInfo.mintA.decimals,
       poolInfo.mintB.decimals,
     );
-    const executionPrice =
-      baseMint.toBase58() === poolInfo.mintA.address ? _executionPrice : new Decimal(1).div(_executionPrice);
+    const executionPrice = isBaseIn ? _executionPrice : new Decimal(1).div(_executionPrice);
 
     const _minAmountOut = _expectedAmountOut
       .mul(new BN(Math.floor((1 - slippage) * 10000000000)))
       .div(new BN(10000000000));
     const minAmountOut = getTransferAmountFeeV2(_minAmountOut, outFeeConfig, epochInfo, false);
 
-    const poolPrice =
-      poolInfo.mintA.address === baseMint.toBase58()
-        ? poolInfo.currentPrice
-        : new Decimal(1).div(poolInfo.currentPrice);
+    const poolPrice = isBaseIn ? poolInfo.currentPrice : new Decimal(1).div(poolInfo.currentPrice);
 
     const _numerator = new Decimal(executionPrice).sub(poolPrice).abs();
     const _denominator = poolPrice;

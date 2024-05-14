@@ -11,10 +11,11 @@ import {
   SearchPoolsApiReturn,
   JupTokenType,
   PoolKeys,
+  FormatFarmInfoOut,
   FormatFarmKeyOut,
   AvailabilityCheckAPI3,
 } from "./type";
-import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
+import { API_URLS, API_URL_CONFIG } from "./url";
 import { updateReqHistory } from "./utils";
 import { PublicKey } from "@solana/web3.js";
 
@@ -120,14 +121,8 @@ export class Api {
     );
   }
 
-  // async getTokens(): Promise<ApiTokens> {
-  //   return this.api.get(this.urlConfigs.TOKEN || API_URLS.TOKEN);
-  // }
-
   async getClmmConfigs(): Promise<ApiClmmConfigInfo[]> {
-    const res = await this.api.get(this.urlConfigs.AMM_V3_CONFIG || API_URLS.AMM_V3_CONFIG, {
-      baseURL: this.urlConfigs.NEW_BASE_HOST,
-    });
+    const res = await this.api.get(this.urlConfigs.CLMM_CONFIG || API_URLS.CLMM_CONFIG);
     return res.data;
   }
 
@@ -155,112 +150,82 @@ export class Api {
   }
 
   async getChainTimeOffset(): Promise<{ offset: number }> {
-    return this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME, {
-      baseURL: this.urlConfigs.NEW_BASE_HOST,
-    });
+    return this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME);
   }
 
   async getRpcs(): Promise<{
     rpcs: { batch: boolean; name: string; url: string; weight: number }[];
     strategy: string;
   }> {
-    return this.api.get(this.urlConfigs.RPCS || API_URLS.RPCS, {
-      baseURL: this.urlConfigs.NEW_BASE_HOST,
-    });
+    return this.api.get(this.urlConfigs.RPCS || API_URLS.RPCS);
   }
 
   async getTokenList(): Promise<{ mintList: ApiV3Token[]; blacklist: ApiV3Token[] }> {
-    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || DEV_API_URLS.TOKEN_LIST, {
-      baseURL: this.urlConfigs.NEW_BASE_HOST,
-    });
+    const res = await this.api.get(this.urlConfigs.TOKEN_LIST || API_URLS.TOKEN_LIST);
     return res.data;
   }
 
   async getJupTokenList(type?: JupTokenType): Promise<ApiV3Token[]> {
     return this.api.get("/", {
-      baseURL: (this.urlConfigs.JUP_TOKEN_LIST || DEV_API_URLS.JUP_TOKEN_LIST).replace(
-        "{type}",
-        type || JupTokenType.ALL,
-      ),
+      baseURL: (this.urlConfigs.JUP_TOKEN_LIST || API_URLS.JUP_TOKEN_LIST).replace("{type}", type || JupTokenType.ALL),
     });
   }
 
-  async getTokenInfo(mint: string | PublicKey): Promise<ApiV3Token | undefined> {
+  async getTokenInfo(mint: (string | PublicKey)[]): Promise<ApiV3Token[]> {
     const res = await this.api.get(
-      (this.urlConfigs.TOKEN_INFO || DEV_API_URLS.TOKEN_INFO).replace("{mint}", mint.toString()),
-    );
-    return res.data;
-  }
-
-  async getTokenInfoNew(mint: (string | PublicKey)[]): Promise<ApiV3Token[] | undefined> {
-    const res = await this.api.get(
-      (this.urlConfigs.MINT_INFO_ID || DEV_API_URLS.MINT_INFO_ID) + `?mints=${mint.map((m) => m.toString()).join(",")}`,
+      (this.urlConfigs.MINT_INFO_ID || API_URLS.MINT_INFO_ID) + `?mints=${mint.map((m) => m.toString()).join(",")}`,
     );
     return res.data;
   }
 
   async getPoolList(props: FetchPoolParams = {}): Promise<PoolsApiReturn> {
-    const { type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
+    const { type = "all", sort = "liquidity", order = "desc", page = 0, pageSize = 100 } = props;
     const res = await this.api.get<PoolsApiReturn>(
-      (this.urlConfigs.POOL_LIST || DEV_API_URLS.POOL_LIST)
-        .replace("{type}", type)
-        .replace("{sort}", sort)
-        .replace("{order}", order)
-        .replace("{page}", String(page)),
+      (this.urlConfigs.POOL_LIST || API_URLS.POOL_LIST) +
+        `?poolType=${type}&poolSortField=${sort}&sortType=${order}&page=${page}&pageSize=${pageSize}`,
     );
     return res.data;
   }
 
-  async searchPoolById(props: { ids: string }): Promise<SearchPoolsApiReturn> {
+  async fetchPoolById(props: { ids: string }): Promise<SearchPoolsApiReturn> {
     const { ids } = props;
-    const res = await this.api.get(
-      (this.urlConfigs.POOL_SEARCH_BY_ID || DEV_API_URLS.POOL_SEARCH_BY_ID).replace("{ids}", ids),
-    );
+    const res = await this.api.get((this.urlConfigs.POOL_SEARCH_BY_ID || API_URLS.POOL_SEARCH_BY_ID) + `?ids=${ids}`);
     return res.data;
   }
 
-  async searchPoolByMint(props: FetchPoolParams & { mint: string }): Promise<PoolsApiReturn> {
-    const { mint, type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
+  async fetchPoolKeysById(props: { idList: string[] }): Promise<PoolKeys[]> {
+    const { idList } = props;
 
-    const res = await this.api.get<PoolsApiReturn>(
-      (this.urlConfigs.POOL_SEARCH_MINT || DEV_API_URLS.POOL_SEARCH_MINT)
-        .replace("{mint1}", mint)
-        .replace("{type}", type)
-        .replace("{sort}", sort)
-        .replace("{order}", order)
-        .replace("{page}", String(page)),
-    );
-    return res.data;
-  }
+    const cacheList: PoolKeys[] = [];
 
-  async searchPoolByMints(props: FetchPoolParams & { mint1: string; mint2: string }): Promise<PoolsApiReturn> {
-    const { mint1, mint2, type = "all", sort = "liquidity", order = "desc", page = 0 } = props;
+    const readyList = idList.filter((poolId) => {
+      if (poolKeysCache.has(poolId)) {
+        cacheList.push(poolKeysCache.get(poolId)!);
+        return false;
+      }
+      return true;
+    });
 
-    const [mintA, mintB] = mint1 > mint2 ? [mint1, mint2] : [mint2, mint1];
-
-    const res = await this.api.get<PoolsApiReturn>(
-      (this.urlConfigs.POOL_SEARCH_MINT_2 || DEV_API_URLS.POOL_SEARCH_MINT_2)
-        .replace("{mint1}", mintB)
-        .replace("{mint2}", mintA)
-        .replace("{type}", type)
-        .replace("{sort}", sort)
-        .replace("{order}", order)
-        .replace("{page}", String(page)),
-    );
-    return res.data;
-  }
-
-  async fetchPoolKeysById(props: { id: string }): Promise<PoolKeys> {
-    const { id } = props;
-
-    if (poolKeysCache.has(id)) {
-      return poolKeysCache.get(id)!;
+    let data: PoolKeys[] = [];
+    if (readyList.length) {
+      const res = await this.api.get<PoolKeys[]>(
+        (this.urlConfigs.POOL_KEY_BY_ID || API_URLS.POOL_KEY_BY_ID) + `?ids=${readyList.join(",")}`,
+      );
+      data = res.data.filter(Boolean);
+      data.forEach((poolKey) => {
+        poolKeysCache.set(poolKey.id, poolKey);
+      });
     }
 
-    const res = await this.api.get<PoolKeys>(
-      (this.urlConfigs.POOL_KEY_BY_ID || DEV_API_URLS.POOL_KEY_BY_ID).replace("{id}", id),
+    return cacheList.concat(data);
+  }
+
+  async fetchFarmInfoById(props: { ids: string }): Promise<FormatFarmInfoOut[]> {
+    const { ids } = props;
+
+    const res = await this.api.get<FormatFarmInfoOut[]>(
+      (this.urlConfigs.FARM_INFO || API_URLS.FARM_INFO) + `?ids=${ids}`,
     );
-    poolKeysCache.set(id, res.data);
     return res.data;
   }
 
@@ -268,14 +233,14 @@ export class Api {
     const { ids } = props;
 
     const res = await this.api.get<FormatFarmKeyOut[]>(
-      (this.urlConfigs.FARM_KEYS || DEV_API_URLS.FARM_KEYS).replace("{ids}", ids),
+      (this.urlConfigs.FARM_KEYS || API_URLS.FARM_KEYS) + `?ids=${ids}`,
     );
     return res.data;
   }
 
   async fetchAvailabilityStatus(): Promise<AvailabilityCheckAPI3> {
     const res = await this.api.get<AvailabilityCheckAPI3>(
-      this.urlConfigs.CHECK_AVAILABILITY || DEV_API_URLS.CHECK_AVAILABILITY,
+      this.urlConfigs.CHECK_AVAILABILITY || API_URLS.CHECK_AVAILABILITY,
     );
     return res.data;
   }

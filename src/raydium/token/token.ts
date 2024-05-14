@@ -107,7 +107,7 @@ export default class TokenModule extends ModuleBase {
     if (info) return info;
     if (mintStr.toLocaleUpperCase() === "SOL") return SOL_INFO;
 
-    const apiTokenInfo = await this.scope.api.getTokenInfo(mintStr);
+    const apiTokenInfo = (await this.scope.api.getTokenInfo([mintStr]))[0];
     if (apiTokenInfo) {
       this._mintGroup.extra.add(mintStr);
       this._tokenMap.set(mintStr, { ...apiTokenInfo, priority: 2 });
