@@ -182,3 +182,25 @@ export interface InitPoolInstructionParamsV4 {
   };
   startTime: BigNumberish;
 }
+
+export interface ComputeAmountOutParam {
+  poolInfo: ApiV3PoolInfoStandardItem & {
+    baseReserve: BN;
+    quoteReserve: BN;
+  };
+  mintIn: string | PublicKey;
+  mintOut: string | PublicKey;
+  amountIn: BN;
+  slippage: number;
+}
+
+export interface SwapParam<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItem;
+  associatedOnly: boolean;
+  amountIn: BN;
+  amountOut: BN;
+  inputMint: string;
+  fixedSide: SwapSide;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}

@@ -1,5 +1,4 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { AccountLayout } from "@solana/spl-token";
 import { AmmV4Keys, AmmV5Keys } from "@/api/type";
 import {
   findProgramAddress,
@@ -7,11 +6,13 @@ import {
   parseSimulateLogToJson,
   parseSimulateValue,
 } from "@/common/txTool/txUtils";
+import { AMM_V4 } from "@/common/programId";
 import { getSerumAssociatedAuthority } from "./serum";
-import { LiquidityPoolKeys } from "./type";
+import { LiquidityPoolKeys, ComputeAmountOutParam } from "./type";
 import { StableLayout } from "./stable";
 import { makeSimulatePoolInfoInstruction } from "./instruction";
 import BN from "bn.js";
+import Decimal from "decimal.js-light";
 
 type AssociatedName =
   | "amm_associated_seed"

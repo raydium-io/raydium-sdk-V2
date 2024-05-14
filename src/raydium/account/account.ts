@@ -334,7 +334,7 @@ export default class Account extends ModuleBase {
   // old _handleTokenAccount
   public async handleTokenAccount(
     params: HandleTokenAccountParams,
-  ): Promise<AddInstructionParam & { tokenAccount?: PublicKey }> {
+  ): Promise<AddInstructionParam & { tokenAccount: PublicKey }> {
     const {
       side,
       amount,
