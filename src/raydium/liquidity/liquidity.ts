@@ -7,7 +7,7 @@ import {
   AmmV5Keys,
   FormatFarmInfoOutV6,
 } from "@/api/type";
-import { Token, TokenAmount } from "@/module";
+import { Token, TokenAmount, Percent } from "@/module";
 import { toToken } from "../token";
 import { AMM_V4 } from "@/common/programId";
 import { BN_ZERO, divCeil } from "@/common/bignumber";
@@ -67,12 +67,13 @@ export default class LiquidityModule extends ModuleBase {
   public computePairAmount({
     poolInfo,
     amount,
+    // anotherToken,
     slippage,
     baseIn,
   }: {
     poolInfo: ApiV3PoolInfoStandardItem;
     amount: string | Decimal;
-    slippage: string | number; // in percent
+    slippage: Percent;
     baseIn?: boolean;
   }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
     const inputAmount = new BN(new Decimal(amount).mul(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals).toFixed(0));
@@ -82,6 +83,9 @@ export default class LiquidityModule extends ModuleBase {
       new BN(new Decimal(poolInfo.mintAmountA).mul(10 ** poolInfo.mintA.decimals).toString()),
       new BN(new Decimal(poolInfo.mintAmountB).mul(10 ** poolInfo.mintB.decimals).toString()),
     ];
+    const lpAmount = new BN(
+      new Decimal(poolInfo.lpAmount).mul(10 ** poolInfo.lpMint.decimals).toFixed(0, Decimal.ROUND_DOWN),
+    );
     this.logDebug("baseReserve:", baseReserve.toString(), "quoteReserve:", quoteReserve.toString());
 
     this.logDebug(
@@ -92,7 +96,7 @@ export default class LiquidityModule extends ModuleBase {
       "anotherToken:",
       baseIn ? poolInfo.mintB.symbol : poolInfo.mintA.symbol,
       "slippage:",
-      `${slippage}%`,
+      `${slippage.toSignificant()}%`,
     );
 
     // input is fixed
@@ -109,16 +113,14 @@ export default class LiquidityModule extends ModuleBase {
     }
 
     const liquidity = divCeil(
-      inputAmount.mul(new BN(poolInfo.lpAmount).mul(new BN(10).pow(new BN(poolInfo.lpMint.decimals)))),
+      inputAmount.mul(lpAmount),
       new BN(input === "base" ? poolInfo.mintAmountA : poolInfo.mintAmountB).mul(
         new BN(10).pow(new BN(poolInfo[input === "base" ? "mintA" : "mintB"].decimals)),
       ),
     );
 
-    const _slippage = new Decimal(slippage).div(100).add(1);
-    const slippageAdjustedAmount = new BN(
-      new Decimal(amountRaw.toString()).mul(_slippage).toFixed(0, Decimal.ROUND_DOWN),
-    );
+    const _slippage = new Percent(new BN(1)).add(slippage);
+    const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
 
     const _anotherAmount = new TokenAmount(_anotherToken, amountRaw);
     const _maxAnotherAmount = new TokenAmount(_anotherToken, slippageAdjustedAmount);
@@ -136,7 +138,7 @@ export default class LiquidityModule extends ModuleBase {
   }
 
   public async addLiquidity<T extends TxVersion>(params: AddLiquidityParams<T>): Promise<MakeTxData<T>> {
-    const { poolInfo, amountInA, amountInB, fixedSide, config, txVersion } = params;
+    const { poolInfo, amountInA, amountInB, fixedSide, config, txVersion, computeBudgetConfig } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
@@ -245,6 +247,7 @@ export default class LiquidityModule extends ModuleBase {
       ],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     if (txVersion === TxVersion.V0) (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
   }
@@ -252,7 +255,7 @@ export default class LiquidityModule extends ModuleBase {
   public async removeLiquidity<T extends TxVersion>(params: RemoveParams<T>): Promise<Promise<MakeTxData<T>>> {
     if (this.scope.availability.removeStandardPosition === false)
       this.logAndCreateError("remove liquidity feature disabled in your region");
-    const { poolInfo, amountIn, config, txVersion } = params;
+    const { poolInfo, amountIn, config, txVersion, computeBudgetConfig } = params;
     const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
     const [baseMint, quoteMint, lpMint] = [
       new PublicKey(poolInfo.mintA.address),
@@ -324,6 +327,7 @@ export default class LiquidityModule extends ModuleBase {
           : InstructionType.AmmV4RemoveLiquidity,
       ],
     });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
   }

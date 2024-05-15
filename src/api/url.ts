@@ -1,5 +1,5 @@
 export const API_URLS = {
-  BASE_HOST: "https://uapi.raydium.io",
+  BASE_HOST: "https://api-v3.raydium.io",
   OWNER_BASE_HOST: "https://owner-v1.raydium.io",
 
   FARM_ARP: "/main/farm/info",
@@ -51,7 +51,7 @@ export const API_URLS = {
 
   FARM_INFO: "/farms/info/ids",
   /** ?lp=string&pageSize=100&page=number */
-  FARM_LP_INFO: "/farms/info/lp/{pool_lp}/{page_size}/{page}",
+  FARM_LP_INFO: "/farms/info/lp",
   FARM_KEYS: "/farms/key/ids",
 
   OWNER_CREATED_FARM: "/create-pool/{owner}",

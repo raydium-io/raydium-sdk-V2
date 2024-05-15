@@ -20,6 +20,7 @@ export interface AddLiquidityParams<T = TxVersion.LEGACY> {
     checkCreateATAOwner?: boolean;
   };
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
 }
 
 export interface RemoveParams<T = TxVersion.LEGACY> {
@@ -31,6 +32,7 @@ export interface RemoveParams<T = TxVersion.LEGACY> {
     checkCreateATAOwner?: boolean;
   };
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
 }
 
 export interface LiquidityUserKeys {

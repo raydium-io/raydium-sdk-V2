@@ -4,6 +4,7 @@ import { TxVersion } from "@/common/txTool/txType";
 import BN from "bn.js";
 import { ComputeBudgetConfig } from "@/raydium/type";
 import { SwapResult } from "./curve/calculator";
+import { Percent } from "@/module";
 
 export interface CpmmConfigInfoInterface {
   bump: number;
@@ -86,9 +87,8 @@ export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
   inputAmount: BN;
-  anotherAmount: BN;
-  liquidity: BN;
   baseIn: boolean;
+  slippage: Percent;
   config?: {
     bypassAssociatedCheck?: boolean;
     checkCreateATAOwner?: boolean;
@@ -101,8 +101,7 @@ export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   payer?: PublicKey;
   lpAmount: BN;
-  amountMintA: BN;
-  amountMintB: BN;
+  slippage: Percent;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }

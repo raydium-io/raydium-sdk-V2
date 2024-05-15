@@ -6,13 +6,11 @@ import {
   parseSimulateLogToJson,
   parseSimulateValue,
 } from "@/common/txTool/txUtils";
-import { AMM_V4 } from "@/common/programId";
 import { getSerumAssociatedAuthority } from "./serum";
-import { LiquidityPoolKeys, ComputeAmountOutParam } from "./type";
+import { LiquidityPoolKeys } from "./type";
 import { StableLayout } from "./stable";
 import { makeSimulatePoolInfoInstruction } from "./instruction";
 import BN from "bn.js";
-import Decimal from "decimal.js-light";
 
 type AssociatedName =
   | "amm_associated_seed"

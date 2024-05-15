@@ -2,10 +2,10 @@ import BN from "bn.js";
 
 import { AccountMeta, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { SYSTEM_PROGRAM_ID, RENT_PROGRAM_ID, MEMO_PROGRAM_ID2 } from "@/common";
+import { SYSTEM_PROGRAM_ID, RENT_PROGRAM_ID, MEMO_PROGRAM_ID2, createLogger } from "@/common";
 
 import { struct, u64 } from "@/marshmallow";
-
+const logger = createLogger("Raydium_Cpmm_ins");
 const anchorDataBuf = {
   initialize: [175, 175, 109, 31, 13, 152, 155, 237],
   deposit: [242, 35, 198, 137, 82, 225, 242, 182],
@@ -98,6 +98,13 @@ export function makeDepositCpmmInInstruction(
   amountMaxA: BN,
   amountMaxB: BN,
 ): TransactionInstruction {
+  logger.info(123123, {
+    mintA: mintA.toBase58(),
+    mintB: mintB.toBase58(),
+    lpAmount: lpAmount.toString(),
+    amountMaxA: amountMaxA.toString(),
+    amountMaxB: amountMaxB.toString(),
+  });
   const dataLayout = struct([u64("lpAmount"), u64("amountMaxA"), u64("amountMaxB")]);
 
   const keys: Array<AccountMeta> = [
@@ -117,6 +124,11 @@ export function makeDepositCpmmInInstruction(
   ];
 
   const data = Buffer.alloc(dataLayout.span);
+  logger.debug("cpmm deposit data", {
+    lpAmount: lpAmount.toString(),
+    amountMaxA: amountMaxA.toString(),
+    amountMaxB: amountMaxB.toString(),
+  });
   dataLayout.encode(
     {
       lpAmount,
