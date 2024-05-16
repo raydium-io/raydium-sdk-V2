@@ -3,7 +3,6 @@ import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
-import Decimal from "decimal.js-light";
 import { ComputeBudgetConfig } from "@/raydium/type";
 import { TokenAmount } from "@/module/amount";
 
@@ -21,6 +20,7 @@ export interface AddLiquidityParams<T = TxVersion.LEGACY> {
     checkCreateATAOwner?: boolean;
   };
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
 }
 
 export interface RemoveParams<T = TxVersion.LEGACY> {
@@ -32,6 +32,7 @@ export interface RemoveParams<T = TxVersion.LEGACY> {
     checkCreateATAOwner?: boolean;
   };
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
 }
 
 export interface LiquidityUserKeys {
@@ -182,4 +183,26 @@ export interface InitPoolInstructionParamsV4 {
     payer: PublicKey;
   };
   startTime: BigNumberish;
+}
+
+export interface ComputeAmountOutParam {
+  poolInfo: ApiV3PoolInfoStandardItem & {
+    baseReserve: BN;
+    quoteReserve: BN;
+  };
+  mintIn: string | PublicKey;
+  mintOut: string | PublicKey;
+  amountIn: BN;
+  slippage: number;
+}
+
+export interface SwapParam<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItem;
+  associatedOnly: boolean;
+  amountIn: BN;
+  amountOut: BN;
+  inputMint: string;
+  fixedSide: SwapSide;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
 }

@@ -5,22 +5,34 @@ import {
   ApiV3PoolInfoStandardItem,
   AmmV4Keys,
   AmmV5Keys,
-  ClmmKeys,
   FormatFarmInfoOutV6,
 } from "@/api/type";
 import { Token, TokenAmount, Percent } from "@/module";
-import { solToWSol } from "@/common/pubKey";
 import { toToken } from "../token";
-import { BN_ZERO, BN_ONE, divCeil } from "@/common/bignumber";
+import { AMM_V4 } from "@/common/programId";
+import { BN_ZERO, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
+import { BNDivCeil } from "@/common/transfer";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { AmountSide, AddLiquidityParams, RemoveParams, CreatePoolParam, CreatePoolAddress } from "./type";
-import { makeAddLiquidityInstruction } from "./instruction";
+import {
+  AmountSide,
+  AddLiquidityParams,
+  RemoveParams,
+  CreatePoolParam,
+  CreatePoolAddress,
+  ComputeAmountOutParam,
+  SwapParam,
+} from "./type";
+import {
+  makeAddLiquidityInstruction,
+  removeLiquidityInstruction,
+  createPoolV4InstructionV2,
+  makeAMMSwapInstruction,
+} from "./instruction";
 import { ComputeBudgetConfig } from "../type";
-import { removeLiquidityInstruction, createPoolV4InstructionV2 } from "./instruction";
 import { ClmmInstrument } from "../clmm/instrument";
 import { getAssociatedPoolKeys, getAssociatedConfigId } from "./utils";
 import { createPoolFeeLayout } from "./layout";
@@ -30,13 +42,22 @@ import {
   makeWithdrawInstructionV5,
   makeWithdrawInstructionV6,
 } from "@/raydium/farm";
+import { StableLayout, getStablePrice, getDyByDxBaseIn, getDxByDyBaseIn } from "./stable";
+import { LIQUIDITY_FEES_NUMERATOR, LIQUIDITY_FEES_DENOMINATOR } from "./constant";
 
 import BN from "bn.js";
 import Decimal from "decimal.js";
 
 export default class LiquidityModule extends ModuleBase {
+  private stableLayout: StableLayout;
+
   constructor(params: ModuleBaseProps) {
     super(params);
+    this.stableLayout = new StableLayout({ connection: this.scope.connection });
+  }
+
+  public async initLayout(): Promise<void> {
+    await this.stableLayout.initStableModelLayout();
   }
 
   public async load(): Promise<void> {
@@ -52,7 +73,6 @@ export default class LiquidityModule extends ModuleBase {
   }: {
     poolInfo: ApiV3PoolInfoStandardItem;
     amount: string | Decimal;
-    // anotherToken: Token;
     slippage: Percent;
     baseIn?: boolean;
   }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
@@ -63,6 +83,9 @@ export default class LiquidityModule extends ModuleBase {
       new BN(new Decimal(poolInfo.mintAmountA).mul(10 ** poolInfo.mintA.decimals).toString()),
       new BN(new Decimal(poolInfo.mintAmountB).mul(10 ** poolInfo.mintB.decimals).toString()),
     ];
+    const lpAmount = new BN(
+      new Decimal(poolInfo.lpAmount).mul(10 ** poolInfo.lpMint.decimals).toFixed(0, Decimal.ROUND_DOWN),
+    );
     this.logDebug("baseReserve:", baseReserve.toString(), "quoteReserve:", quoteReserve.toString());
 
     this.logDebug(
@@ -90,13 +113,13 @@ export default class LiquidityModule extends ModuleBase {
     }
 
     const liquidity = divCeil(
-      inputAmount.mul(new BN(poolInfo.lpAmount).mul(new BN(10).pow(new BN(poolInfo.lpMint.decimals)))),
+      inputAmount.mul(lpAmount),
       new BN(input === "base" ? poolInfo.mintAmountA : poolInfo.mintAmountB).mul(
         new BN(10).pow(new BN(poolInfo[input === "base" ? "mintA" : "mintB"].decimals)),
       ),
     );
 
-    const _slippage = new Percent(BN_ONE).add(slippage);
+    const _slippage = new Percent(new BN(1)).add(slippage);
     const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
 
     const _anotherAmount = new TokenAmount(_anotherToken, amountRaw);
@@ -110,8 +133,12 @@ export default class LiquidityModule extends ModuleBase {
     };
   }
 
+  public async getAmmPoolKeys(poolId: string): Promise<AmmV4Keys | AmmV5Keys> {
+    return ((await this.scope.api.fetchPoolKeysById({ idList: [poolId] })) as (AmmV4Keys | AmmV5Keys)[])[0];
+  }
+
   public async addLiquidity<T extends TxVersion>(params: AddLiquidityParams<T>): Promise<MakeTxData<T>> {
-    const { poolInfo, amountInA, amountInB, fixedSide, config, txVersion } = params;
+    const { poolInfo, amountInA, amountInB, fixedSide, config, txVersion, computeBudgetConfig } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
@@ -166,7 +193,7 @@ export default class LiquidityModule extends ModuleBase {
     const [baseTokenAccount, quoteTokenAccount] = _tokenAccounts;
     const [baseAmountRaw, quoteAmountRaw] = rawAmounts;
 
-    const poolKeys = await this.scope.api.fetchPoolKeysById({ id: poolInfo.id });
+    const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
 
     const txBuilder = this.createTxBuilder();
 
@@ -220,6 +247,7 @@ export default class LiquidityModule extends ModuleBase {
       ],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     if (txVersion === TxVersion.V0) (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
   }
@@ -227,8 +255,8 @@ export default class LiquidityModule extends ModuleBase {
   public async removeLiquidity<T extends TxVersion>(params: RemoveParams<T>): Promise<Promise<MakeTxData<T>>> {
     if (this.scope.availability.removeStandardPosition === false)
       this.logAndCreateError("remove liquidity feature disabled in your region");
-    const { poolInfo, amountIn, config, txVersion } = params;
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
+    const { poolInfo, amountIn, config, txVersion, computeBudgetConfig } = params;
+    const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
     const [baseMint, quoteMint, lpMint] = [
       new PublicKey(poolInfo.mintA.address),
       new PublicKey(poolInfo.mintB.address),
@@ -299,6 +327,7 @@ export default class LiquidityModule extends ModuleBase {
           : InstructionType.AmmV4RemoveLiquidity,
       ],
     });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
   }
@@ -462,7 +491,7 @@ export default class LiquidityModule extends ModuleBase {
       });
     }
 
-    const poolKeys = (await this.scope.api.fetchPoolKeysById({ id: poolInfo.id })) as AmmV4Keys | AmmV5Keys;
+    const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
 
     const removeIns = removeLiquidityInstruction({
       poolInfo,
@@ -491,7 +520,7 @@ export default class LiquidityModule extends ModuleBase {
         ? [baseTokenAccount, quoteTokenAccount]
         : [quoteTokenAccount, baseTokenAccount];
 
-    const clmmPoolKeys = (await this.scope.api.fetchPoolKeysById({ id: clmmPoolInfo.id })) as ClmmKeys;
+    const clmmPoolKeys = await this.scope.clmm.getClmmPoolKeys(poolInfo.id);
 
     const createPositionIns = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo: clmmPoolInfo,
@@ -519,7 +548,6 @@ export default class LiquidityModule extends ModuleBase {
     return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
   }
 
-  // calComputeBudget
   public async createPoolV4<T extends TxVersion>({
     programId,
     marketInfo,
@@ -646,5 +674,180 @@ export default class LiquidityModule extends ModuleBase {
     if (account === null) throw Error("get config account error");
 
     return createPoolFeeLayout.decode(account.data).fee;
+  }
+
+  public computeAmountOut({ poolInfo, amountIn, mintIn, mintOut, slippage }: ComputeAmountOutParam): {
+    amountOut: BN;
+    minAmountOut: BN;
+    currentPrice: Decimal;
+    executionPrice: Decimal;
+    priceImpact: Decimal;
+    fee: BN;
+  } {
+    if (mintIn !== poolInfo.mintA.address && mintIn !== poolInfo.mintA.address) throw new Error("toke not match");
+    if (mintOut !== poolInfo.mintB.address && mintOut !== poolInfo.mintB.address) throw new Error("toke not match");
+
+    const { baseReserve, quoteReserve } = poolInfo;
+
+    const reserves = [baseReserve, quoteReserve];
+
+    // input is fixed
+    const input = mintIn == poolInfo.mintA.address ? "base" : "quote";
+    if (input === "quote") {
+      reserves.reverse();
+    }
+
+    const [reserveIn, reserveOut] = reserves;
+    const isVersion4 = poolInfo.programId === AMM_V4.toBase58();
+    let currentPrice: Decimal;
+    if (isVersion4) {
+      currentPrice = new Decimal(reserveOut.toString()).div(reserveIn.toString());
+    } else {
+      const p = getStablePrice(
+        this.stableLayout.stableModelData,
+        baseReserve.toNumber(),
+        quoteReserve.toNumber(),
+        false,
+      );
+      if (input === "quote") currentPrice = new Decimal(1e6).div(p * 1e6);
+      else currentPrice = new Decimal(p * 1e6).div(1e6);
+    }
+
+    const amountInRaw = amountIn;
+    let amountOutRaw = new BN(0);
+    let feeRaw = new BN(0);
+
+    if (!amountInRaw.isZero()) {
+      if (isVersion4) {
+        feeRaw = BNDivCeil(amountInRaw.mul(LIQUIDITY_FEES_NUMERATOR), LIQUIDITY_FEES_DENOMINATOR);
+        const amountInWithFee = amountInRaw.sub(feeRaw);
+
+        const denominator = reserveIn.add(amountInWithFee);
+        amountOutRaw = reserveOut.mul(amountInWithFee).div(denominator);
+      } else {
+        feeRaw = amountInRaw.mul(new BN(2)).div(new BN(10000));
+        const amountInWithFee = amountInRaw.sub(feeRaw);
+        if (input === "quote")
+          amountOutRaw = new BN(
+            getDyByDxBaseIn(
+              this.stableLayout.stableModelData,
+              quoteReserve.toNumber(),
+              baseReserve.toNumber(),
+              amountInWithFee.toNumber(),
+            ),
+          );
+        else {
+          amountOutRaw = new BN(
+            getDxByDyBaseIn(
+              this.stableLayout.stableModelData,
+              quoteReserve.toNumber(),
+              baseReserve.toNumber(),
+              amountInWithFee.toNumber(),
+            ),
+          );
+        }
+      }
+    }
+
+    const minAmountOutRaw = new BN(new Decimal(amountOutRaw.toString()).mul(1 - slippage).toFixed(0));
+
+    const amountOut = amountOutRaw;
+    const minAmountOut = minAmountOutRaw;
+
+    let executionPrice = new Decimal(amountOutRaw.toString()).div(
+      new Decimal(amountInRaw.sub(feeRaw).toString()).toFixed(0),
+    );
+    if (!amountInRaw.isZero() && !amountOutRaw.isZero()) {
+      // executionPrice = new Price(currencyIn, amountInRaw.sub(feeRaw), currencyOut, amountOutRaw);
+      executionPrice = new Decimal(amountOutRaw.toString()).div(amountInRaw.sub(feeRaw).toString());
+    }
+
+    const priceImpact = currentPrice.sub(executionPrice).div(currentPrice).mul(100);
+
+    // logger.debug("priceImpact:", `${priceImpact.toSignificant()}%`);
+
+    const fee = feeRaw;
+
+    return {
+      amountOut,
+      minAmountOut,
+      currentPrice,
+      executionPrice,
+      priceImpact,
+      fee,
+    };
+  }
+
+  public async swap<T extends TxVersion>({
+    poolInfo,
+    amountIn,
+    amountOut,
+    inputMint,
+    fixedSide,
+    txVersion,
+    computeBudgetConfig,
+  }: SwapParam<T>): Promise<MakeTxData<T>> {
+    const txBuilder = this.createTxBuilder();
+    const [tokenIn, tokenOut] =
+      inputMint === poolInfo.mintA.address ? [poolInfo.mintA, poolInfo.mintB] : [poolInfo.mintB, poolInfo.mintA];
+    const tokenAccountIn = await this.scope.account.getCreatedTokenAccount({
+      mint: new PublicKey(tokenIn.address),
+      programId: new PublicKey(tokenIn.programId),
+      associatedOnly: false,
+    });
+
+    const tokenAccountOut = await this.scope.account.getCreatedTokenAccount({
+      mint: new PublicKey(tokenOut.address),
+      programId: new PublicKey(tokenOut.programId),
+      associatedOnly: false,
+    });
+
+    const { tokenAccount: _tokenAccountIn, ...accountInIns } = await this.scope.account.handleTokenAccount({
+      side: "in",
+      amount: amountIn,
+      mint: new PublicKey(tokenIn.address),
+      tokenAccount: tokenAccountIn,
+      bypassAssociatedCheck: false,
+      checkCreateATAOwner: false,
+    });
+    txBuilder.addInstruction(accountInIns);
+
+    const { tokenAccount: _tokenAccountOut, ...accountOutIns } = await this.scope.account.handleTokenAccount({
+      side: "out",
+      amount: 0,
+      mint: new PublicKey(tokenOut.address),
+      tokenAccount: tokenAccountOut,
+      bypassAssociatedCheck: false,
+      checkCreateATAOwner: false,
+    });
+    txBuilder.addInstruction(accountOutIns);
+
+    const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
+    let version = 4;
+    if (poolInfo.pooltype.includes("StablePool")) version = 5;
+
+    txBuilder.addInstruction({
+      instructions: [
+        makeAMMSwapInstruction({
+          version,
+          poolKeys,
+          userKeys: {
+            tokenAccountIn: _tokenAccountIn,
+            tokenAccountOut: _tokenAccountOut,
+            owner: this.scope.ownerPubKey,
+          },
+          amountIn,
+          amountOut,
+          fixedSide,
+        }),
+      ],
+      instructionTypes: [version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV5SwapBaseIn],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
   }
 }

@@ -12,37 +12,34 @@ import {
   SDKParsedConcentratedInfo,
   ReturnTypeComputeAmountOut,
   ReturnTypeComputeAmountOutFormat,
+  ComputeClmmPoolInfo,
 } from "../type";
 
-import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
+import { ApiV3PoolInfoConcentratedItem, ApiV3Token } from "@/api/type";
 
-import { ReturnTypeFetchMultipleMintInfos } from "@/raydium/type";
 import { NEGATIVE_ONE, Q64, ZERO, MAX_TICK, MIN_TICK, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64 } from "./constants";
 import { MathUtil, SwapMath, SqrtPriceMath, LiquidityMath } from "./math";
-import { getPdaTickArrayAddress, getPdaPersonalPositionAddress } from "./pda";
+import { getPdaTickArrayAddress, getPdaPersonalPositionAddress, getPdaExBitmapAccount } from "./pda";
 import { TickArray, TickUtils, TICK_ARRAY_BITMAP_SIZE, Tick } from "./tick";
 import { TickArrayBitmap, TickArrayBitmapExtensionUtils } from "./tickarrayBitmap";
 import { TickQuery } from "./tickQuery";
-import { TickArrayBitmapExtensionLayout, PositionInfoLayout, TickArrayLayout } from "../layout";
+import { TickArrayBitmapExtensionLayout, PositionInfoLayout, TickArrayLayout, PoolInfoLayout } from "../layout";
 import {
   getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
-  getTransferAmountFee,
   getTransferAmountFeeV2,
   minExpirationTime,
-  WSOLMint,
-  SOLMint,
   solToWSol,
 } from "../../../common";
-import { SOL_INFO } from "../../token/constant";
 import { TokenAccountRaw } from "../../account/types";
 import { Price, Percent, TokenAmount, Token } from "../../../module";
 import { PositionUtils } from "./position";
 import Decimal from "decimal.js";
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 
 export class PoolUtils {
   public static getOutputAmountAndRemainAccounts(
-    poolInfo: ClmmPoolInfo,
+    poolInfo: ComputeClmmPoolInfo,
     tickArrayCache: { [key: string]: TickArray },
     inputTokenMint: PublicKey,
     inputAmount: BN,
@@ -53,7 +50,7 @@ export class PoolUtils {
     executionPrice: BN;
     feeAmount: BN;
   } {
-    const zeroForOne = inputTokenMint.equals(poolInfo.mintA.mint);
+    const zeroForOne = inputTokenMint.toBase58() === poolInfo.mintA.address;
 
     const allNeededAccounts: PublicKey[] = [];
     const {
@@ -107,13 +104,13 @@ export class PoolUtils {
   }
 
   public static getInputAmountAndRemainAccounts(
-    poolInfo: ClmmPoolInfo,
+    poolInfo: ComputeClmmPoolInfo,
     tickArrayCache: { [key: string]: TickArray },
     outputTokenMint: PublicKey,
     outputAmount: BN,
     sqrtPriceLimitX64?: BN,
   ): { expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
-    const zeroForOne = outputTokenMint.equals(poolInfo.mintB.mint);
+    const zeroForOne = outputTokenMint.toBase58() === poolInfo.mintB.address;
 
     const allNeededAccounts: PublicKey[] = [];
     const {
@@ -160,7 +157,7 @@ export class PoolUtils {
   }
 
   public static getFirstInitializedTickArray(
-    poolInfo: ClmmPoolInfo,
+    poolInfo: ComputeClmmPoolInfo,
     zeroForOne: boolean,
   ):
     | { isExist: true; startIndex: number; nextAccountMeta: PublicKey }
@@ -204,7 +201,7 @@ export class PoolUtils {
   }
 
   public static preInitializedTickArrayStartIndex(
-    poolInfo: ClmmPoolInfo,
+    poolInfo: ComputeClmmPoolInfo,
     zeroForOne: boolean,
   ): { isExist: boolean; nextStartIndex: number } {
     const currentOffset = Math.floor(poolInfo.tickCurrent / TickQuery.tickCount(poolInfo.tickSpacing));
@@ -405,297 +402,13 @@ export class PoolUtils {
     return returnTypeFetchExBitmaps;
   }
 
-  // deprecated, new api doesn't need
-  // static async fetchMultiplePoolInfos({
-  //   connection,
-  //   poolKeys,
-  //   ownerInfo,
-  //   chainTime,
-  //   batchRequest = false,
-  //   updateOwnerRewardAndFee = true,
-  // }: {
-  //   connection: Connection;
-  //   poolKeys: ApiV3PoolInfoConcentratedItem[];
-  //   ownerInfo?: { wallet: PublicKey; tokenAccounts: TokenAccountRaw[] };
-  //   chainTime: number;
-  //   batchRequest?: boolean;
-  //   updateOwnerRewardAndFee?: boolean;
-  // }): Promise<ReturnTypeFetchMultiplePoolInfos> {
-  //   const poolAccountInfos = await getMultipleAccountsInfo(
-  //     connection,
-  //     poolKeys.map((i) => new PublicKey(i.id)),
-  //     { batchRequest },
-  //   );
-  //   const exBitmapAddress: { [poolId: string]: PublicKey } = {};
-  //   for (let index = 0; index < poolKeys.length; index++) {
-  //     const apiPoolInfo = poolKeys[index];
-  //     const accountInfo = poolAccountInfos[index];
-
-  //     if (accountInfo === null) continue;
-  //     exBitmapAddress[apiPoolInfo.id] = getPdaExBitmapAccount(
-  //       accountInfo.owner,
-  //       new PublicKey(apiPoolInfo.id),
-  //     ).publicKey;
-  //   }
-
-  //   const exBitmapAccountInfos = await this.fetchExBitmaps({
-  //     connection,
-  //     exBitmapAddress: Object.values(exBitmapAddress),
-  //     batchRequest,
-  //   });
-
-  //   const programIds: PublicKey[] = [];
-
-  //   const poolsInfo: ReturnTypeFetchMultiplePoolInfos = {};
-
-  //   const updateRewardInfos: ClmmPoolRewardInfo[] = [];
-
-  //   for (let index = 0; index < poolKeys.length; index++) {
-  //     const apiPoolInfo = poolKeys[index];
-  //     const accountInfo = poolAccountInfos[index];
-  //     const exBitmapInfo = exBitmapAccountInfos[exBitmapAddress[apiPoolInfo.id].toString()];
-
-  //     if (accountInfo === null) continue;
-
-  //     const layoutAccountInfo = PoolInfoLayout.decode(accountInfo.data);
-  //     poolsInfo[apiPoolInfo.id] = {
-  //       state: {
-  //         id: new PublicKey(apiPoolInfo.id),
-  //         mintA: {
-  //           programId: new PublicKey(apiPoolInfo.mintA.programId),
-  //           mint: layoutAccountInfo.mintA,
-  //           vault: layoutAccountInfo.vaultA,
-  //           decimals: layoutAccountInfo.mintDecimalsA,
-  //         },
-  //         mintB: {
-  //           programId: new PublicKey(apiPoolInfo.mintB.programId),
-  //           mint: layoutAccountInfo.mintB,
-  //           vault: layoutAccountInfo.vaultB,
-  //           decimals: layoutAccountInfo.mintDecimalsB,
-  //         },
-  //         observationId: layoutAccountInfo.observationId,
-  //         ammConfig: {
-  //           ...apiPoolInfo.config,
-  //           fundOwner: apiPoolInfo.config.id,
-  //           id: new PublicKey(apiPoolInfo.config.id),
-  //         },
-
-  //         creator: layoutAccountInfo.creator,
-  //         programId: accountInfo.owner,
-  //         version: 6,
-
-  //         tickSpacing: layoutAccountInfo.tickSpacing,
-  //         liquidity: layoutAccountInfo.liquidity,
-  //         sqrtPriceX64: layoutAccountInfo.sqrtPriceX64,
-  //         currentPrice: SqrtPriceMath.sqrtPriceX64ToPrice(
-  //           layoutAccountInfo.sqrtPriceX64,
-  //           layoutAccountInfo.mintDecimalsA,
-  //           layoutAccountInfo.mintDecimalsB,
-  //         ),
-  //         tickCurrent: layoutAccountInfo.tickCurrent,
-  //         observationIndex: layoutAccountInfo.observationIndex,
-  //         observationUpdateDuration: layoutAccountInfo.observationUpdateDuration,
-  //         feeGrowthGlobalX64A: layoutAccountInfo.feeGrowthGlobalX64A,
-  //         feeGrowthGlobalX64B: layoutAccountInfo.feeGrowthGlobalX64B,
-  //         protocolFeesTokenA: layoutAccountInfo.protocolFeesTokenA,
-  //         protocolFeesTokenB: layoutAccountInfo.protocolFeesTokenB,
-  //         swapInAmountTokenA: layoutAccountInfo.swapInAmountTokenA,
-  //         swapOutAmountTokenB: layoutAccountInfo.swapOutAmountTokenB,
-  //         swapInAmountTokenB: layoutAccountInfo.swapInAmountTokenB,
-  //         swapOutAmountTokenA: layoutAccountInfo.swapOutAmountTokenA,
-  //         tickArrayBitmap: layoutAccountInfo.tickArrayBitmap,
-
-  //         rewardInfos: await PoolUtils.updatePoolRewardInfos({
-  //           connection,
-  //           apiPoolInfo,
-  //           chainTime,
-  //           poolLiquidity: layoutAccountInfo.liquidity,
-  //           rewardInfos: layoutAccountInfo.rewardInfos.filter((i) => !i.tokenMint.equals(PublicKey.default)),
-  //         }),
-
-  //         day: apiPoolInfo.day,
-  //         week: apiPoolInfo.week,
-  //         month: apiPoolInfo.month,
-  //         tvl: apiPoolInfo.tvl,
-  //         lookupTableAccount: new PublicKey(apiPoolInfo.lookupTableAccount),
-
-  //         startTime: layoutAccountInfo.startTime.toNumber(),
-
-  //         exBitmapInfo,
-  //       },
-  //     };
-
-  //     if (ownerInfo) {
-  //       updateRewardInfos.push(
-  //         ...poolsInfo[apiPoolInfo.id].state.rewardInfos.filter((i) => i.creator.equals(ownerInfo.wallet)),
-  //       );
-  //     }
-
-  //     if (!programIds.find((i) => i.equals(accountInfo.owner))) programIds.push(accountInfo.owner);
-  //   }
-
-  //   if (ownerInfo) {
-  //     const allMint = ownerInfo.tokenAccounts
-  //       .filter((i) => i.accountInfo.amount.eq(new BN(1)))
-  //       .map((i) => i.accountInfo.mint);
-  //     const allPositionKey: PublicKey[] = [];
-  //     for (const itemMint of allMint) {
-  //       for (const itemProgramId of programIds) {
-  //         allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
-  //       }
-  //     }
-  //     const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });
-
-  //     const keyToTickArrayAddress: { [key: string]: PublicKey } = {};
-  //     for (const itemAccountInfo of positionAccountInfos) {
-  //       if (itemAccountInfo === null) continue;
-  //       const position = PositionInfoLayout.decode(itemAccountInfo.data);
-  //       const itemPoolId = position.poolId.toString();
-  //       const poolInfoA = poolsInfo[itemPoolId];
-  //       if (poolInfoA === undefined) continue;
-
-  //       const poolInfo = poolInfoA.state;
-
-  //       const priceLower = TickUtils._getTickPriceLegacy({
-  //         poolInfo,
-  //         tick: position.tickLower,
-  //         baseIn: true,
-  //       });
-  //       const priceUpper = TickUtils._getTickPriceLegacy({
-  //         poolInfo,
-  //         tick: position.tickUpper,
-  //         baseIn: true,
-  //       });
-  //       const { amountA, amountB } = LiquidityMath.getAmountsFromLiquidity(
-  //         poolInfo.sqrtPriceX64,
-  //         priceLower.tickSqrtPriceX64,
-  //         priceUpper.tickSqrtPriceX64,
-  //         position.liquidity,
-  //         false,
-  //       );
-
-  //       const leverage = 1 / (1 - Math.sqrt(Math.sqrt(priceLower.price.div(priceUpper.price).toNumber())));
-
-  //       poolsInfo[itemPoolId].positionAccount = [
-  //         ...(poolsInfo[itemPoolId].positionAccount ?? []),
-  //         {
-  //           poolId: position.poolId,
-  //           nftMint: position.nftMint,
-
-  //           priceLower: priceLower.price,
-  //           priceUpper: priceUpper.price,
-  //           amountA,
-  //           amountB,
-  //           tickLower: position.tickLower,
-  //           tickUpper: position.tickUpper,
-  //           liquidity: position.liquidity,
-  //           feeGrowthInsideLastX64A: position.feeGrowthInsideLastX64A,
-  //           feeGrowthInsideLastX64B: position.feeGrowthInsideLastX64B,
-  //           tokenFeesOwedA: position.tokenFeesOwedA,
-  //           tokenFeesOwedB: position.tokenFeesOwedB,
-  //           rewardInfos: position.rewardInfos.map((i) => ({
-  //             ...i,
-  //             pendingReward: new BN(0),
-  //           })),
-
-  //           leverage,
-  //           tokenFeeAmountA: new BN(0),
-  //           tokenFeeAmountB: new BN(0),
-  //         },
-  //       ];
-
-  //       const tickArrayLowerAddress = TickUtils.getTickArrayAddressByTick(
-  //         poolsInfo[itemPoolId].state.programId,
-  //         position.poolId,
-  //         position.tickLower,
-  //         poolsInfo[itemPoolId].state.tickSpacing,
-  //       );
-  //       const tickArrayUpperAddress = TickUtils.getTickArrayAddressByTick(
-  //         poolsInfo[itemPoolId].state.programId,
-  //         position.poolId,
-  //         position.tickUpper,
-  //         poolsInfo[itemPoolId].state.tickSpacing,
-  //       );
-  //       keyToTickArrayAddress[
-  //         `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickLower}`
-  //       ] = tickArrayLowerAddress;
-  //       keyToTickArrayAddress[
-  //         `${poolsInfo[itemPoolId].state.programId.toString()}-${position.poolId.toString()}-${position.tickUpper}`
-  //       ] = tickArrayUpperAddress;
-  //     }
-
-  //     if (updateOwnerRewardAndFee) {
-  //       const tickArrayKeys = Object.values(keyToTickArrayAddress);
-  //       const tickArrayDatas = await getMultipleAccountsInfo(connection, tickArrayKeys, { batchRequest });
-  //       const tickArrayLayout: { [key: string]: TickArray } = {};
-  //       for (let index = 0; index < tickArrayKeys.length; index++) {
-  //         const tickArrayData = tickArrayDatas[index];
-  //         if (tickArrayData === null) continue;
-  //         const key = tickArrayKeys[index];
-  //         tickArrayLayout[key.toString()] = {
-  //           address: key,
-  //           ...TickArrayLayout.decode(tickArrayData.data),
-  //         };
-  //       }
-
-  //       for (const { state, positionAccount } of Object.values(poolsInfo)) {
-  //         if (!positionAccount) continue;
-  //         for (const itemPA of positionAccount) {
-  //           const keyLower = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickLower}`;
-  //           const keyUpper = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickUpper}`;
-  //           const tickArrayLower = tickArrayLayout[keyToTickArrayAddress[keyLower].toString()];
-  //           const tickArrayUpper = tickArrayLayout[keyToTickArrayAddress[keyUpper].toString()];
-  //           const tickLowerState: Tick =
-  //             tickArrayLower.ticks[TickUtils.getTickOffsetInArray(itemPA.tickLower, state.tickSpacing)];
-  //           const tickUpperState: Tick =
-  //             tickArrayUpper.ticks[TickUtils.getTickOffsetInArray(itemPA.tickUpper, state.tickSpacing)];
-  //           const { tokenFeeAmountA, tokenFeeAmountB } = PositionUtils.GetPositionFees(
-  //             state,
-  //             itemPA,
-  //             tickLowerState,
-  //             tickUpperState,
-  //           );
-  //           const rewardInfos = PositionUtils.GetPositionRewards(state, itemPA, tickLowerState, tickUpperState);
-  // itemPA.tokenFeeAmountA =
-  //             tokenFeeAmountA.gte(ZERO) && tokenFeeAmountA.lt(U64_IGNORE_RANGE) ? tokenFeeAmountA : ZERO
-  //           itemPA.tokenFeeAmountB =
-  //             tokenFeeAmountB.gte(ZERO) && tokenFeeAmountA.lt(U64_IGNORE_RANGE) ? tokenFeeAmountB : ZERO
-  //           for (let i = 0; i < rewardInfos.length; i++) {
-  //             itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(ZERO) ? rewardInfos[i] : ZERO;
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-
-  //   if (updateRewardInfos.length > 0) {
-  //     const vaults = updateRewardInfos.map((i) => i.tokenVault);
-  //     const rewardVaultInfos = await getMultipleAccountsInfo(connection, vaults, { batchRequest });
-  //     const rewardVaultAmount: { [mint: string]: BN } = {};
-  //     for (let index = 0; index < vaults.length; index++) {
-  //       const valutKey = vaults[index].toString();
-  //       const itemRewardVaultInfo = rewardVaultInfos[index];
-  //       if (itemRewardVaultInfo === null) continue;
-  //       const info = splAccountLayout.decode(itemRewardVaultInfo.data);
-  //       rewardVaultAmount[valutKey] = info.amount;
-  //     }
-  //     for (const item of updateRewardInfos) {
-  //       const vaultAmount = rewardVaultAmount[item.tokenVault.toString()];
-  //       item.remainingRewards =
-  //         vaultAmount !== undefined ? vaultAmount.sub(item.rewardTotalEmissioned.sub(item.rewardClaimed)) : ZERO;
-  //     }
-  //   }
-
-  //   return poolsInfo;
-  // }
-
   static async fetchMultiplePoolTickArrays({
     connection,
     poolKeys,
     batchRequest,
   }: {
     connection: Connection;
-    poolKeys: ClmmPoolInfo[];
+    poolKeys: ComputeClmmPoolInfo[];
     batchRequest?: boolean;
   }): Promise<ReturnTypeFetchMultiplePoolTickArrays> {
     const tickArraysToPoolId: { [key: string]: PublicKey } = {};
@@ -901,17 +614,15 @@ export class PoolUtils {
     poolInfo,
     tickArrayCache,
     baseMint,
-    token2022Infos,
     epochInfo,
     amountIn,
     slippage,
     priceLimit = new Decimal(0),
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ComputeClmmPoolInfo;
     tickArrayCache: { [key: string]: TickArray };
     baseMint: PublicKey;
 
-    token2022Infos: ReturnTypeFetchMultipleMintInfos;
     epochInfo: EpochInfo;
 
     amountIn: BN;
@@ -919,10 +630,13 @@ export class PoolUtils {
     priceLimit?: Decimal;
   }): ReturnTypeComputeAmountOut {
     let sqrtPriceLimitX64: BN;
+    const isBaseIn = baseMint.toBase58() === poolInfo.mintA.address;
+    const [baseFeeConfig, outFeeConfig] = isBaseIn
+      ? [poolInfo.mintA.extensions.feeConfig, poolInfo.mintB.extensions.feeConfig]
+      : [poolInfo.mintB.extensions.feeConfig, poolInfo.mintA.extensions.feeConfig];
+
     if (priceLimit.equals(new Decimal(0))) {
-      sqrtPriceLimitX64 = baseMint.equals(poolInfo.mintA.mint)
-        ? MIN_SQRT_PRICE_X64.add(new BN(1))
-        : MAX_SQRT_PRICE_X64.sub(new BN(1));
+      sqrtPriceLimitX64 = isBaseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
       sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
         priceLimit,
@@ -931,12 +645,7 @@ export class PoolUtils {
       );
     }
 
-    const realAmountIn = getTransferAmountFee(
-      amountIn,
-      token2022Infos[baseMint.toString()]?.feeConfig,
-      epochInfo,
-      false,
-    );
+    const realAmountIn = getTransferAmountFeeV2(amountIn, baseFeeConfig, epochInfo, false);
 
     const {
       expectedAmountOut: _expectedAmountOut,
@@ -951,34 +660,21 @@ export class PoolUtils {
       sqrtPriceLimitX64,
     );
 
-    const outMint = poolInfo.mintA.mint.equals(baseMint) ? poolInfo.mintB.mint : poolInfo.mintA.mint;
-    const amountOut = getTransferAmountFee(
-      _expectedAmountOut,
-      token2022Infos[outMint.toString()]?.feeConfig,
-      epochInfo,
-      false,
-    );
+    const amountOut = getTransferAmountFeeV2(_expectedAmountOut, outFeeConfig, epochInfo, false);
 
     const _executionPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
       _executionPriceX64,
       poolInfo.mintA.decimals,
       poolInfo.mintB.decimals,
     );
-    const executionPrice = baseMint.equals(poolInfo.mintA.mint) ? _executionPrice : new Decimal(1).div(_executionPrice);
+    const executionPrice = isBaseIn ? _executionPrice : new Decimal(1).div(_executionPrice);
 
     const _minAmountOut = _expectedAmountOut
       .mul(new BN(Math.floor((1 - slippage) * 10000000000)))
       .div(new BN(10000000000));
-    const minAmountOut = getTransferAmountFee(
-      _minAmountOut,
-      token2022Infos[outMint.toString()]?.feeConfig,
-      epochInfo,
-      false,
-    );
+    const minAmountOut = getTransferAmountFeeV2(_minAmountOut, outFeeConfig, epochInfo, false);
 
-    const poolPrice = poolInfo.mintA.mint.equals(baseMint)
-      ? poolInfo.currentPrice
-      : new Decimal(1).div(poolInfo.currentPrice);
+    const poolPrice = isBaseIn ? poolInfo.currentPrice : new Decimal(1).div(poolInfo.currentPrice);
 
     const _numerator = new Decimal(executionPrice).sub(poolPrice).abs();
     const _denominator = poolPrice;
@@ -1004,25 +700,32 @@ export class PoolUtils {
   static async computeAmountOutFormat({
     poolInfo,
     tickArrayCache,
-    token2022Infos,
     amountIn,
     tokenOut: _tokenOut,
     slippage,
     epochInfo,
   }: {
-    poolInfo: ClmmPoolInfo;
+    poolInfo: ComputeClmmPoolInfo;
     tickArrayCache: { [key: string]: TickArray };
-    token2022Infos: ReturnTypeFetchMultipleMintInfos;
-    amountIn: TokenAmount;
-    tokenOut: Token;
-    slippage: Percent;
+    amountIn: BN;
+    tokenOut: ApiV3Token;
+    slippage: number;
     epochInfo: EpochInfo;
   }): Promise<ReturnTypeComputeAmountOutFormat> {
-    const inputMint = amountIn.token.equals(Token.WSOL) ? WSOLMint : amountIn.token.mint;
-    const _slippage = slippage.numerator.toNumber() / slippage.denominator.toNumber();
-    const tokenOut = _tokenOut.mint.equals(SOLMint)
-      ? new Token({ mint: "sol", decimals: SOL_INFO.decimals })
-      : _tokenOut;
+    const baseIn = _tokenOut.address === poolInfo.mintB.address;
+    const [inputMint, outMint] = baseIn ? [poolInfo.mintA, poolInfo.mintB] : [poolInfo.mintB, poolInfo.mintA];
+    const [baseToken, outToken] = [
+      new Token({
+        ...inputMint,
+        mint: inputMint.address,
+        isToken2022: inputMint.programId === TOKEN_2022_PROGRAM_ID.toBase58(),
+      }),
+      new Token({
+        ...outMint,
+        mint: outMint.address,
+        isToken2022: outMint.programId === TOKEN_2022_PROGRAM_ID.toBase58(),
+      }),
+    ];
 
     const {
       realAmountIn: _realAmountIn,
@@ -1037,43 +740,42 @@ export class PoolUtils {
     } = await PoolUtils.computeAmountOut({
       poolInfo,
       tickArrayCache,
-      baseMint: inputMint,
-      amountIn: amountIn.raw,
-      slippage: _slippage,
-      token2022Infos,
+      baseMint: new PublicKey(inputMint.address),
+      amountIn,
+      slippage,
       epochInfo,
     });
 
     const realAmountIn = {
       ..._realAmountIn,
-      amount: new TokenAmount(amountIn.token, _realAmountIn.amount),
-      fee: _realAmountIn.fee === undefined ? undefined : new TokenAmount(amountIn.token, _realAmountIn.fee),
+      amount: new TokenAmount(baseToken, _realAmountIn.amount),
+      fee: _realAmountIn.fee === undefined ? undefined : new TokenAmount(baseToken, _realAmountIn.fee),
     };
 
     const amountOut = {
       ..._amountOut,
-      amount: new TokenAmount(tokenOut, _amountOut.amount),
-      fee: _amountOut.fee === undefined ? undefined : new TokenAmount(tokenOut, _amountOut.fee),
+      amount: new TokenAmount(outToken, _amountOut.amount),
+      fee: _amountOut.fee === undefined ? undefined : new TokenAmount(outToken, _amountOut.fee),
     };
     const minAmountOut = {
       ..._minAmountOut,
-      amount: new TokenAmount(tokenOut, _minAmountOut.amount),
-      fee: _minAmountOut.fee === undefined ? undefined : new TokenAmount(tokenOut, _minAmountOut.fee),
+      amount: new TokenAmount(outToken, _minAmountOut.amount),
+      fee: _minAmountOut.fee === undefined ? undefined : new TokenAmount(outToken, _minAmountOut.fee),
     };
 
     const _currentPrice = new Price({
-      baseToken: amountIn.token,
-      denominator: new BN(10).pow(new BN(20 + amountIn.token.decimals)),
-      quoteToken: tokenOut,
-      numerator: currentPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
+      baseToken,
+      denominator: new BN(10).pow(new BN(20 + baseToken.decimals)),
+      quoteToken: outToken,
+      numerator: currentPrice.mul(new Decimal(10 ** (20 + outToken.decimals))).toFixed(0),
     });
     const _executionPrice = new Price({
-      baseToken: amountIn.token,
-      denominator: new BN(10).pow(new BN(20 + amountIn.token.decimals)),
-      quoteToken: tokenOut,
-      numerator: executionPrice.mul(new Decimal(10 ** (20 + tokenOut.decimals))).toFixed(0),
+      baseToken,
+      denominator: new BN(10).pow(new BN(20 + baseToken.decimals)),
+      quoteToken: outToken,
+      numerator: executionPrice.mul(new Decimal(10 ** (20 + outToken.decimals))).toFixed(0),
     });
-    const _fee = new TokenAmount(amountIn.token, fee);
+    const _fee = new TokenAmount(baseToken, fee);
 
     return {
       realAmountIn,
@@ -1370,6 +1072,43 @@ export class PoolUtils {
       amountSlippageA,
       amountSlippageB,
       expirationTime: minExpirationTime(amountA.expirationTime, amountB.expirationTime),
+    };
+  }
+
+  static async fetchComputeClmmInfo({
+    owner,
+    connection,
+    poolInfo,
+  }: {
+    owner: PublicKey;
+    connection: Connection;
+    poolInfo: ApiV3PoolInfoConcentratedItem;
+  }): Promise<ComputeClmmPoolInfo> {
+    const data = await connection.getAccountInfo(new PublicKey(poolInfo.id));
+    if (!data) throw new Error(`pool not found ${poolInfo.id}`);
+    const rpcPool = PoolInfoLayout.decode(data.data);
+
+    const pda = getPdaExBitmapAccount(owner, new PublicKey(poolInfo.id)).publicKey;
+    const exBitData = await PoolUtils.fetchExBitmaps({
+      connection,
+      exBitmapAddress: [pda],
+      batchRequest: false,
+    });
+
+    return {
+      ...rpcPool,
+      id: new PublicKey(poolInfo.id),
+      programId: new PublicKey(poolInfo.programId),
+      mintA: poolInfo.mintA,
+      mintB: poolInfo.mintB,
+      ammConfig: {
+        ...poolInfo.config,
+        id: new PublicKey(poolInfo.config.id),
+        fundOwner: "",
+      },
+      currentPrice: new Decimal(poolInfo.price),
+      exBitmapInfo: exBitData[pda.toBase58()],
+      startTime: rpcPool.startTime.toNumber(),
     };
   }
 }

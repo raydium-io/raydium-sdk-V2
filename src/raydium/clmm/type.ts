@@ -143,6 +143,39 @@ export interface ClmmPoolInfo {
   exBitmapInfo: TickArrayBitmapExtensionType;
 }
 
+export interface ComputeClmmPoolInfo {
+  id: PublicKey;
+  mintA: ApiV3Token;
+  mintB: ApiV3Token;
+
+  ammConfig: ClmmConfigInfo;
+  observationId: PublicKey;
+
+  creator: PublicKey;
+  programId: PublicKey;
+
+  tickSpacing: number;
+  liquidity: BN;
+  sqrtPriceX64: BN;
+  currentPrice: Decimal;
+  tickCurrent: number;
+  observationIndex: number;
+  observationUpdateDuration: number;
+  feeGrowthGlobalX64A: BN;
+  feeGrowthGlobalX64B: BN;
+  protocolFeesTokenA: BN;
+  protocolFeesTokenB: BN;
+  swapInAmountTokenA: BN;
+  swapOutAmountTokenB: BN;
+  swapInAmountTokenB: BN;
+  swapOutAmountTokenA: BN;
+  tickArrayBitmap: BN[];
+
+  startTime: number;
+
+  exBitmapInfo: TickArrayBitmapExtensionType;
+}
+
 export interface ReturnTypeMakeHarvestTransaction {
   transactions: {
     transaction: Transaction;

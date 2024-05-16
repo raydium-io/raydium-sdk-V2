@@ -1,29 +1,19 @@
+import { PublicKey } from "@solana/web3.js";
 import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-import { Price, Token, TokenAmount, Fraction } from "@/module";
-import { PublicKeyish, validateAndParsePublicKey, SOLMint } from "@/common/pubKey";
-import { BigNumberish, parseNumberInfo, toBN } from "@/common/bignumber";
-import { JupTokenType } from "@/api/type";
+import { Price, Token } from "@/module";
+import { validateAndParsePublicKey, SOLMint } from "@/common/pubKey";
+import { ApiV3Token, JupTokenType } from "@/api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { LoadParams } from "../type";
 
 import { TokenInfo } from "./type";
 import { SOL_INFO } from "./constant";
 
-export interface MintToTokenAmount {
-  token?: Token;
-  mint: PublicKeyish;
-  amount: BigNumberish;
-  decimalDone?: boolean;
-}
-
 export default class TokenModule extends ModuleBase {
   private _tokenList: TokenInfo[] = [];
   private _tokenMap: Map<string, TokenInfo> = new Map();
   private _blackTokenMap: Map<string, TokenInfo> = new Map();
-  private _tokenPrice: Map<string, Price> = new Map();
-  private _tokenPriceOrg: Map<string, number> = new Map();
-  private _tokenPriceFetched = { prevCount: 0, fetched: 0 };
   private _mintGroup: { official: Set<string>; jup: Set<string>; extra: Set<string> } = {
     official: new Set(),
     jup: new Set(),
@@ -35,7 +25,7 @@ export default class TokenModule extends ModuleBase {
     super(params);
   }
 
-  public async load(params?: LoadParams & { fetchTokenPrice?: boolean; type?: JupTokenType }): Promise<void> {
+  public async load(params?: LoadParams & { type?: JupTokenType }): Promise<void> {
     this.checkDisabled();
     const { forceUpdate = false, type = JupTokenType.Strict } = params || {};
     const { mintList, blacklist } = await this.scope.fetchV3TokenList(forceUpdate);
@@ -93,7 +83,6 @@ export default class TokenModule extends ModuleBase {
     });
 
     this._tokenList = Array.from(this._tokenMap).map((data) => data[1]);
-    // if (fetchTokenPrice) await this.fetchTokenPrices(forceUpdate);
   }
 
   get tokenList(): TokenInfo[] {
@@ -111,51 +100,28 @@ export default class TokenModule extends ModuleBase {
 
   /** === util functions === */
 
-  public async getChainTokenInfo(mint: PublicKeyish): Promise<{ token: Token; tokenInfo: TokenInfo }> {
-    const _mint = validateAndParsePublicKey({ publicKey: mint });
-    const mintStr = _mint.toBase58();
-    const mintSymbol = _mint.toString().substring(0, 6);
-    const isSol = _mint.equals(SOLMint);
+  public async getTokenInfo(mint: string | PublicKey): Promise<ApiV3Token> {
+    if (!mint) throw new Error("please input mint");
+    const mintStr = mint.toString();
+    const info = this._tokenMap.get(mintStr);
+    if (info) return info;
+    if (mintStr.toLocaleUpperCase() === "SOL") return SOL_INFO;
 
-    if (isSol) {
-      return {
-        token: new Token({
-          decimals: SOL_INFO.decimals,
-          name: SOL_INFO.name,
-          symbol: SOL_INFO.symbol,
-          skipMint: true,
-          mint: "",
-        }),
-        tokenInfo: SOL_INFO,
-      };
-    }
-
-    const tokenInfo = await this.scope.api.getTokenInfo(_mint);
-    if (tokenInfo) {
+    const apiTokenInfo = (await this.scope.api.getTokenInfo([mintStr]))[0];
+    if (apiTokenInfo) {
       this._mintGroup.extra.add(mintStr);
-      const fullInfo = { ...tokenInfo, priority: 2 };
-      this._tokenMap.set(mintStr, fullInfo);
-      return {
-        token: new Token({
-          mint: _mint,
-          decimals: tokenInfo.decimals,
-          symbol: tokenInfo.symbol || mintSymbol,
-          name: tokenInfo.name || mintSymbol,
-          isToken2022: tokenInfo.programId === TOKEN_2022_PROGRAM_ID.toBase58(),
-        }),
-        tokenInfo: fullInfo,
-      };
+      this._tokenMap.set(mintStr, { ...apiTokenInfo, priority: 2 });
+      return apiTokenInfo;
     }
 
-    const info = await this.scope.connection.getAccountInfo(_mint);
-    if (!info) this.logAndCreateError("On chain token not found, mint:", _mint.toBase58());
-
-    const data = MintLayout.decode(info!.data);
-
+    const onlineInfo = await this.scope.connection.getAccountInfo(new PublicKey(mintStr));
+    if (!onlineInfo) throw new Error(`mint address not found: ${mintStr}`);
+    const data = MintLayout.decode(onlineInfo.data);
+    const mintSymbol = mintStr.toString().substring(0, 6);
     const fullInfo = {
       chainId: 101,
       address: mintStr,
-      programId: info!.owner.toBase58(),
+      programId: onlineInfo.owner.toBase58(),
       logoURI: "",
       symbol: mintSymbol,
       name: mintSymbol,
@@ -163,22 +129,10 @@ export default class TokenModule extends ModuleBase {
       tags: [],
       extensions: {},
       priority: 0,
+      type: "unknown",
     };
-
-    if (!this._tokenMap.has(mintStr)) {
-      this._mintGroup.extra.add(mintStr);
-      this._tokenMap.set(mintStr, fullInfo);
-    }
-
-    return {
-      token: new Token({
-        mint: _mint,
-        decimals: data.decimals,
-        symbol: mintSymbol,
-        name: mintSymbol,
-        isToken2022: info!.owner.equals(TOKEN_2022_PROGRAM_ID),
-      }),
-      tokenInfo: fullInfo,
-    };
+    this._mintGroup.extra.add(mintStr);
+    this._tokenMap.set(mintStr, fullInfo);
+    return fullInfo;
   }
 }

@@ -8,7 +8,6 @@ import { WSOLMint } from "@/common/pubKey";
 import { TxVersion } from "@/common/txTool/txType";
 import { MakeTxData } from "@/common/txTool/txTool";
 import BN from "bn.js";
-import { userInfo } from "os";
 
 const PROGRAM_TO_VERSION = {
   [IDO_ALL_PROGRAM.IDO_PROGRAM_ID_V1.toString()]: 1,

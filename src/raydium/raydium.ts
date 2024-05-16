@@ -1,28 +1,24 @@
 import { Connection, Keypair, PublicKey, EpochInfo } from "@solana/web3.js";
-import BN from "bn.js";
 import { merge } from "lodash";
 
 import { Api, API_URL_CONFIG, ApiV3TokenRes, ApiV3Token, JupTokenType, AvailabilityCheckAPI3 } from "../api";
 import { EMPTY_CONNECTION, EMPTY_OWNER } from "../common/error";
 import { createLogger, Logger } from "../common/logger";
 import { Owner } from "../common/owner";
-import { PublicKeyish, WSOLMint, SOLMint } from "../common/pubKey";
-import { TokenAmount } from "../module/amount";
-import { Token } from "../module/token";
 import { Cluster } from "../solana";
 
 import Account, { TokenAccountDataProp } from "./account/account";
 import Farm from "./farm/farm";
 import Liquidity from "./liquidity/liquidity";
 import { Clmm } from "./clmm";
+import Cpmm from "./cpmm/cpmm";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
 import Ido from "./ido";
 
-import TokenModule, { MintToTokenAmount } from "./token/token";
-import { SignAllTransactions, TransferAmountFee } from "./type";
-import { TokenInfo } from "./token";
+import TokenModule from "./token/token";
+import { SignAllTransactions } from "./type";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */
@@ -43,8 +39,8 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   logRequests?: boolean;
   logCount?: number;
   jupTokenType?: JupTokenType;
-  preloadTokenPrice?: boolean;
   disableFeatureCheck?: boolean;
+  disableLoadToken?: boolean;
 }
 
 export interface RaydiumApiBatchRequestParams {
@@ -77,6 +73,7 @@ export class Raydium {
   public account: Account;
   public liquidity: Liquidity;
   public clmm: Clmm;
+  public cpmm: Cpmm;
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
   public marketV2: MarketV2;
@@ -126,6 +123,7 @@ export class Raydium {
     this.token = new TokenModule({ scope: this, moduleName: "Raydium_tokenV2" });
     this.tradeV2 = new TradeV2({ scope: this, moduleName: "Raydium_tradeV2" });
     this.clmm = new Clmm({ scope: this, moduleName: "Raydium_clmm" });
+    this.cpmm = new Cpmm({ scope: this, moduleName: "Raydium_cpmm" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
     this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
@@ -164,10 +162,10 @@ export class Raydium {
     });
 
     await raydium.fetchAvailabilityStatus(config.disableFeatureCheck);
-    await raydium.token.load({
-      type: config.jupTokenType,
-      fetchTokenPrice: config.preloadTokenPrice,
-    });
+    if (!config.disableLoadToken)
+      await raydium.token.load({
+        type: config.jupTokenType,
+      });
 
     return raydium;
   }
@@ -277,10 +275,6 @@ export class Raydium {
       value: await this.connection.getEpochInfo(),
     };
     return this._epochInfo.value;
-  }
-
-  public async getChainTokenInfo(mint: PublicKeyish): Promise<{ token: Token; tokenInfo: TokenInfo }> {
-    return this.token.getChainTokenInfo(mint);
   }
 
   public async fetchAvailabilityStatus(skipCheck?: boolean): Promise<Partial<AvailabilityCheckAPI3>> {

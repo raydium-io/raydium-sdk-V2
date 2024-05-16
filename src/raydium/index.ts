@@ -4,6 +4,7 @@ export * from "./farm";
 export * from "./token";
 export * from "./tradeV2";
 export * from "./clmm";
+export * from "./cpmm";
 export * from "./serum";
 export * from "./liquidity";
 export * from "./utils1216";

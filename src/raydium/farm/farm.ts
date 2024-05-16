@@ -69,7 +69,11 @@ export default class Farm extends ModuleBase {
         connection: this.scope.connection,
         owner: this.scope.ownerPubKey,
         payer,
-        amount: calFarmRewardAmount(rewardInfo),
+        amount: calFarmRewardAmount({
+          ...rewardInfo,
+          openTime: rewardInfo.openTime.toString(),
+          endTime: rewardInfo.endTime.toString(),
+        }),
       });
       return {
         rewardPubKey: txInstructions.addresses.newAccount,
@@ -708,6 +712,8 @@ export default class Farm extends ModuleBase {
         payer: this.scope.ownerPubKey,
         amount: calFarmRewardAmount({
           ...rewardInfo,
+          openTime: rewardInfo.openTime as unknown as string,
+          endTime: rewardInfo.endTime as unknown as string,
           perSecond: new Decimal(rewardInfo.perSecond).mul(10 ** rewardInfo.mint.decimals).toString(),
         }),
       });

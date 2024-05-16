@@ -1,4 +1,4 @@
-import { GetStructureSchema, publicKey, seq, struct, u128, u64, u8 } from "@/marshmallow";
+import { GetStructureSchema, publicKey, seq, struct, u128, u64, u8, u16, blob, bool } from "@/marshmallow";
 
 export const fixedSwapInLayout = struct([u8("instruction"), u64("amountIn"), u64("minAmountOut")]);
 export const fixedSwapOutLayout = struct([u8("instruction"), u64("maxAmountIn"), u64("amountOut")]);
@@ -154,5 +154,4 @@ export const LIQUIDITY_VERSION_TO_STATE_LAYOUT: {
   4: liquidityStateV4Layout,
   5: liquidityStateV5Layout,
 };
-
 export const createPoolFeeLayout = struct([u64("fee")]);
