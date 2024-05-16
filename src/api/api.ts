@@ -8,7 +8,7 @@ import {
   ApiV3Token,
   FetchPoolParams,
   PoolsApiReturn,
-  SearchPoolsApiReturn,
+  ApiV3PoolInfoItem,
   JupTokenType,
   PoolKeys,
   FormatFarmInfoOut,
@@ -187,7 +187,7 @@ export class Api {
     return res.data;
   }
 
-  async fetchPoolById(props: { ids: string }): Promise<SearchPoolsApiReturn> {
+  async fetchPoolById(props: { ids: string }): Promise<ApiV3PoolInfoItem[]> {
     const { ids } = props;
     const res = await this.api.get((this.urlConfigs.POOL_SEARCH_BY_ID || API_URLS.POOL_SEARCH_BY_ID) + `?ids=${ids}`);
     return res.data;

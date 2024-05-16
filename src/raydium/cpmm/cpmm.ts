@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, AccountLayout } from "@solana/spl-token";
-import { ApiV3PoolInfoStandardItem, CpmmKeys } from "@/api/type";
+import { CpmmKeys } from "@/api/type";
 import { TokenAmount, Percent } from "@/module";
 import { toToken } from "../token";
 import { BN_ZERO } from "@/common/bignumber";
@@ -16,6 +16,8 @@ import {
   AddCpmmLiquidityParams,
   WithdrawCpmmLiquidityParams,
   CpmmSwapParams,
+  ComputePairAmountParams,
+  CpmmConfigInfoInterface,
 } from "./type";
 import { getCreatePoolKeys, getPdaObservationId } from "./pda";
 import {
@@ -26,7 +28,7 @@ import {
   makeSwapCpmmBaseOutInInstruction,
 } from "./instruction";
 import BN from "bn.js";
-import { CpmmPoolInfoLayout } from "./layout";
+import { CpmmPoolInfoLayout, CpmmConfigInfoLayout } from "./layout";
 import Decimal from "decimal.js";
 
 export default class CpmmModule extends ModuleBase {
@@ -42,10 +44,14 @@ export default class CpmmModule extends ModuleBase {
     return ((await this.scope.api.fetchPoolKeysById({ idList: [poolId] })) as CpmmKeys[])[0];
   }
 
-  public async getRpcPoolInfo(poolId: string): Promise<
+  public async getRpcPoolInfo(
+    poolId: string,
+    fetchConfigInfo?: boolean,
+  ): Promise<
     ReturnType<typeof CpmmPoolInfoLayout.decode> & {
       baseReserve: BN;
       quoteReserve: BN;
+      configInfo?: CpmmConfigInfoInterface;
     }
   > {
     const accountData = await this.scope.connection.getAccountInfo(new PublicKey(poolId));
@@ -59,6 +65,12 @@ export default class CpmmModule extends ModuleBase {
     if (!poolVaultAState) throw new Error(`pool vaultA info not found: ${poolInfo.vaultA.toBase58()}`);
     if (!poolVaultBState) throw new Error(`pool vaultB info not found: ${poolInfo.vaultB.toBase58()}`);
 
+    let configInfo: CpmmConfigInfoInterface | undefined;
+    if (fetchConfigInfo) {
+      const configState = await this.scope.connection.getAccountInfo(poolInfo.configId);
+      if (configState) configInfo = CpmmConfigInfoLayout.decode(configState.data);
+    }
+
     return {
       ...poolInfo,
       baseReserve: new BN(AccountLayout.decode(poolVaultAState.data).amount.toString())
@@ -67,6 +79,7 @@ export default class CpmmModule extends ModuleBase {
       quoteReserve: new BN(AccountLayout.decode(poolVaultBState.data).amount.toString())
         .sub(poolInfo.protocolFeesMintB)
         .sub(poolInfo.fundFeesMintB),
+      configInfo,
     };
   }
 
@@ -82,7 +95,9 @@ export default class CpmmModule extends ModuleBase {
     ...params
   }: CreateCpmmPoolParam<T>): Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
-    const isFront = params.mintA.address < params.mintB.address;
+    const isFront = new BN(new PublicKey(params.mintA.address).toBuffer()).lte(
+      new BN(new PublicKey(params.mintB.address).toBuffer()),
+    );
 
     const [mintA, mintB] = isFront ? [params.mintA, params.mintB] : [params.mintB, params.mintA];
     const [mintAAmount, mintBAmount] = isFront
@@ -452,7 +467,7 @@ export default class CpmmModule extends ModuleBase {
               new PublicKey(poolInfo.programId),
               this.scope.ownerPubKey,
               new PublicKey(poolKeys.authority),
-              new PublicKey(poolKeys.id), // todo config id
+              new PublicKey(poolKeys.config.id),
               new PublicKey(poolInfo.id),
               _mintATokenAcc!,
               _mintBTokenAcc!,
@@ -471,7 +486,7 @@ export default class CpmmModule extends ModuleBase {
               new PublicKey(poolInfo.programId),
               this.scope.ownerPubKey,
               new PublicKey(poolKeys.authority),
-              new PublicKey(poolKeys.id), // todo config id
+              new PublicKey(poolKeys.config.id),
               new PublicKey(poolInfo.id),
 
               _mintBTokenAcc!,
@@ -506,12 +521,7 @@ export default class CpmmModule extends ModuleBase {
     // anotherToken,
     slippage,
     baseIn,
-  }: {
-    poolInfo: ApiV3PoolInfoStandardItem;
-    amount: string | Decimal;
-    slippage: Percent;
-    baseIn?: boolean;
-  }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
+  }: ComputePairAmountParams): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
     const inputAmount = new BN(new Decimal(amount).mul(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals).toFixed(0));
     const _anotherToken = toToken(poolInfo[baseIn ? "mintB" : "mintA"]);
 

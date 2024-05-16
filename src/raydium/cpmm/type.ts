@@ -1,10 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItem, ApiV3Token } from "@/api/type";
+import { ApiV3PoolInfoStandardItemCpmm, ApiV3Token } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import BN from "bn.js";
 import { ComputeBudgetConfig } from "@/raydium/type";
 import { SwapResult } from "./curve/calculator";
 import { Percent } from "@/module";
+import Decimal from "decimal.js";
 
 export interface CpmmConfigInfoInterface {
   bump: number;
@@ -84,7 +85,7 @@ export interface CreateCpmmPoolAddress {
 }
 
 export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
-  poolInfo: ApiV3PoolInfoStandardItem;
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
   payer?: PublicKey;
   inputAmount: BN;
   baseIn: boolean;
@@ -98,7 +99,7 @@ export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
 }
 
 export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
-  poolInfo: ApiV3PoolInfoStandardItem;
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
   payer?: PublicKey;
   lpAmount: BN;
   slippage: Percent;
@@ -107,7 +108,7 @@ export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
 }
 
 export interface CpmmSwapParams<T = TxVersion.LEGACY> {
-  poolInfo: ApiV3PoolInfoStandardItem;
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
   payer?: PublicKey;
   baseIn: boolean;
   swapResult: SwapResult;
@@ -118,4 +119,11 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   };
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+}
+
+export interface ComputePairAmountParams {
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  amount: string | Decimal;
+  slippage: Percent;
+  baseIn?: boolean;
 }

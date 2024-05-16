@@ -118,12 +118,6 @@ export enum JupTokenType {
   Strict = "strict",
 }
 export type PoolsApiReturn = ApiV3PageIns<ApiV3PoolInfoItem>;
-export interface SearchPoolsApiReturn {
-  hasNextPage: boolean;
-  data: ApiV3PoolInfoItem[];
-  bestUse: "id" | "mint" | null;
-  search: string;
-}
 
 export interface TransferFeeDataBaseType {
   transferFeeConfigAuthority: string;
