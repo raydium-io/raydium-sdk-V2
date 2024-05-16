@@ -138,8 +138,7 @@ export default class Account extends ModuleBase {
     for (const tokenAccount of tokenAccounts) {
       const { publicKey } = tokenAccount;
       if (publicKey) {
-        if (associatedOnly && ata.equals(publicKey)) return publicKey;
-        return publicKey;
+        if (!associatedOnly || (associatedOnly && ata.equals(publicKey))) return publicKey;
       }
     }
   }
