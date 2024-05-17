@@ -464,6 +464,7 @@ export default class Farm extends ModuleBase {
 
       if (!ownerRewardAccount) {
         const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          tokenProgram: itemReward.mint.programId,
           mint: new PublicKey(itemReward.mint.address),
           notUseTokenAccount: rewardUseSOLBalance,
           createInfo: {
@@ -596,6 +597,7 @@ export default class Farm extends ModuleBase {
     let ownerLpTokenAccount = ownerMintToAccount[lpMint.toString()];
     if (!ownerLpTokenAccount) {
       const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: farmKeys.lpMint.programId,
         mint: new PublicKey(lpMint),
         notUseTokenAccount: lpMintUseSOLBalance,
         createInfo: {
@@ -619,6 +621,7 @@ export default class Farm extends ModuleBase {
       let ownerRewardAccount = ownerMintToAccount[itemReward.mint.address];
       if (!ownerRewardAccount) {
         const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          tokenProgram: itemReward.mint.programId,
           mint: new PublicKey(itemReward.mint.address),
           notUseTokenAccount: rewardUseSOLBalance,
           createInfo: {
@@ -811,6 +814,7 @@ export default class Farm extends ModuleBase {
 
       if (!ownerLpTokenAccount) {
         const { account: _ownerLpAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          tokenProgram: farmLpMint.programId,
           mint: new PublicKey(lpMint),
           notUseTokenAccount: lpMintUseSOLBalance,
           createInfo: {
@@ -834,6 +838,7 @@ export default class Farm extends ModuleBase {
         let ownerRewardAccount = ownerMintToAccount[itemReward.mint.address];
         if (!ownerRewardAccount) {
           const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+            tokenProgram: itemReward.mint.programId,
             mint: new PublicKey(itemReward.mint.address),
             notUseTokenAccount: rewardUseSOLBalance,
             createInfo: {

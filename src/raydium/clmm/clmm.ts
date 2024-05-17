@@ -308,7 +308,6 @@ export class Clmm extends ModuleBase {
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
     const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id));
-    console.log(123123444, poolKeys);
 
     const makeOpenPositionInstructions = await ClmmInstrument.openPositionFromLiquidityInstructions({
       poolInfo,
@@ -356,7 +355,6 @@ export class Clmm extends ModuleBase {
 
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toString();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toString();
-
     const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
         tokenProgram: poolInfo.mintA.programId,
@@ -376,9 +374,9 @@ export class Clmm extends ModuleBase {
       });
     if (_ownerTokenAccountA) ownerTokenAccountA = _ownerTokenAccountA;
     txBuilder.addInstruction(_tokenAccountAInstruction || {});
-
     const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: poolInfo.mintB.programId,
         mint: new PublicKey(poolInfo.mintB.address),
         owner: this.scope.ownerPubKey,
 
@@ -414,7 +412,6 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(ins);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
       extInfo: { address: ins.address },
@@ -465,6 +462,7 @@ export class Clmm extends ModuleBase {
 
     const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: poolInfo.mintB.programId,
         mint: new PublicKey(poolInfo.mintB.address),
         owner: this.scope.ownerPubKey,
 

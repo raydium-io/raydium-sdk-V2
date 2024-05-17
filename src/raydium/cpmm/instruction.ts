@@ -98,13 +98,6 @@ export function makeDepositCpmmInInstruction(
   amountMaxA: BN,
   amountMaxB: BN,
 ): TransactionInstruction {
-  logger.info(123123, {
-    mintA: mintA.toBase58(),
-    mintB: mintB.toBase58(),
-    lpAmount: lpAmount.toString(),
-    amountMaxA: amountMaxA.toString(),
-    amountMaxB: amountMaxB.toString(),
-  });
   const dataLayout = struct([u64("lpAmount"), u64("amountMaxA"), u64("amountMaxB")]);
 
   const keys: Array<AccountMeta> = [
