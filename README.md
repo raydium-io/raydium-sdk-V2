@@ -1,7 +1,7 @@
 # Raydium SDK
 
-[npm-image]: https://img.shields.io/npm/v/@raydium-io/raydium-sdk.svg?style=flat
-[npm-url]: https://www.npmjs.com/package/@raydium-io/raydium-sdk
+[npm-image]: https://img.shields.io/npm/v/@raydium-io/raydium-sdk-v2.svg?style=flat
+[npm-url]: https://www.npmjs.com/package/@raydium-io/raydium-sdk-v2
 
 [![npm][npm-image]][npm-url]
 
@@ -12,16 +12,12 @@ An SDK for building applications on top of Raydium.
 ### Installation
 
 ```
-$ yarn add @raydium-io/raydium-sdk
+$ yarn add @raydium-io/raydium-sdk-v2
 ```
 
-### Enable special logger
+## SDK method Demo
 
-```javascript
-import { setLoggerLevel } from "@raydium-io/raydium-sdk";
-
-setLoggerLevel("Common.Api", "debug");
-```
+[SDK V2 Demo Repo](https://github.com/raydium-io/raydium-sdk-V2-demo)
 
 ## Features
 
@@ -31,10 +27,11 @@ setLoggerLevel("Common.Api", "debug");
 import { Raydium } from '@raydium-io/raydium-sdk'
 const raydium = await Raydium.load({
   connection,
-  owner, // key pair or publicKey
+  owner, // key pair or publicKey, if you run a node process, provide keyPair
   signAllTransactions, // optional - provide sign functions provided by @solana/wallet-adapter-react
   tokenAccounts, // optional, if dapp handle it by self can provide to sdk
-  tokenAccountRowInfos // optional, if dapp handle it by self can provide to sdk
+  tokenAccountRowInfos, // optional, if dapp handle it by self can provide to sdk
+  disableLoadToken: false // default is false, if you don't need token info, set to true
 })
 ```
 
@@ -43,15 +40,16 @@ const raydium = await Raydium.load({
 ```
 import { parseTokenAccountResp } from '@raydium-io/raydium-sdk'
 
-const solAccountResp = await connection.getAccountInfo(ownerPubKey);
-const tokenAccountResp = await connection.getTokenAccountsByOwner(
-  ownerPubKey,
-  { programId: TOKEN_PROGRAM_ID },
-);
-
-const { tokenAccounts, tokenAccountRawInfos } = parseTokenAccountResp({
+const solAccountResp = await connection.getAccountInfo(owner.publicKey)
+const tokenAccountResp = await connection.getTokenAccountsByOwner(owner.publicKey, { programId: TOKEN_PROGRAM_ID })
+const token2022Req = await connection.getTokenAccountsByOwner(owner.publicKey, { programId: TOKEN_2022_PROGRAM_ID })
+const tokenAccountData = parseTokenAccountResp({
+  owner: owner.publicKey,
   solAccountResp,
-  tokenAccountResp,
+  tokenAccountResp: {
+    context: tokenAccountResp.context,
+    value: [...tokenAccountResp.value, ...token2022Req.value],
+  },
 })
 ```
 
@@ -59,214 +57,12 @@ const { tokenAccounts, tokenAccountRawInfos } = parseTokenAccountResp({
 
 ```
 # token
-raydium.token.allTokens
-raydium.token.allTokenMap
-raydium.token.tokenMints
-raydium.token.tokenPrices
+raydium.token.tokenList
+raydium.token.tokenMap
+raydium.token.mintGroup
 
-# liquidity pool
-raydium.liquidity.allPools
-raydium.liquidity.allPoolIdSet
-raydium.liquidity.allPoolMap
-raydium.liquidity.allPairs
-raydium.liquidity.allPairsMap
-raydium.liquidity.lpTokenMap
-raydium.liquidity.lpPriceMap
-
-# clmm pool
-raydium.ammv3.pools.data
-raydium.ammv3.pools.dataMap
-raydium.ammv3.pools.sdkParsedData
-raydium.ammv3.pools.sdkParsedDataMap
-raydium.ammv3.pools.hydratedData
-raydium.ammv3.pools.hydratedDataData
-
-# farm pool
-raydium.farm.allFarms
-raydium.farm.allParsedFarms
-raydium.farm.allHydratedFarms
-raydium.farm.allHydratedFarmMap
 
 # token account
 raydium.account.tokenAccounts
 raydium.account.tokenAccountRawInfos
 ```
-
-### Liquidity
-
-```
-import { Raydium, Token, Percent, TokenAmount } from '@raydium-io/raydium-sdk'
-import BN from 'bn.js'
-
-const raydium = await Raydium.load({
-  connection,
-  owner // please provide key pair, if want to handle tx by yourself, just provide publicKey
-  signAllTransactions // optional - provide sign functions provided by @solana/wallet-adapter-react
-})
-
-// Raydium.load call raydium.liquidity.load() automatically, also can call raydium.liquidity.load() manually
-
-// if need trading pair info, call await raydium.liquidity.loadPairs()
-
-const { transaction, signers, execute } = raydium.liquidity.createPool({
-  version: 4,
-  baseMint: new PublicKey(),
-  quoteMint: new PublicKey(),
-  marketId: new PublicKey() // https://docs.projectserum.com/serum-ecosystem/build-on-serum/add-a-market-on-serum-serum-academy
-})
-
-const { transaction, signers, execute } = raydium.liquidity.initPool({
-  version: 4,
-  baseMint: new PublicKey(),
-  quoteMint: new PublicKey(),
-  marketId: new PublicKey(),
-  baseAmount: raydium.mintToTokenAmount({ mint, amount: "10" }),
-  quoteAmount: raydium.mintToTokenAmount({ mint, amount: "20" }),
-})
-const { transaction, signers, execute } = raydium.liquidity.addLiquidity({
-  poolId: new PublicKey(pool),
-  payer: new PublicKey(payer), // optional
-  amountInA: raydium.mintToTokenAmount({ mint, amount: "20" }),
-  amountInB: raydium.mintToTokenAmount({ mint, amount: "30" }),
-  fixedSide: "a", // "a" or "b"
-})
-const { transaction, signers, execute } = raydium.liquidity.removeLiquidity({
-  poolId: new PublicKey(pool),
-  payer: new PublicKey(payer), // optional
-  amountIn: raydium.mintToTokenAmount({ mint, amount: "20" }),
-})
-
-const txId = execute()
-```
-
-### Liquidity
-
-```
-import { Raydium, Token, Percent, TokenAmount } from '@raydium-io/raydium-sdk'
-import BN from 'bn.js'
-
-const raydium = await Raydium.load({
-  connection,
-  owner // please provide key pair, if want to handle tx by yourself, just provide publicKey
-  signAllTransactions // optional - provide sign functions provided by @solana/wallet-adapter-react
-})
-
-await raydium.ammV3.load() // load all clmm pool data
-
-```
-
-### Farm
-
-```
-import { Raydium, Token, Percent, TokenAmount } from '@raydium-io/raydium-sdk'
-import BN from 'bn.js'
-
-const raydium = await Raydium.load({
-  connection,
-  owner // please provide key pair, if want to handle tx by yourself, just provide publicKey
-  signAllTransactions // optional - provide sign functions provided by @solana/wallet-adapter-react
-})
-
-await raydium.farm.load() // default load farms data
-await raydium.farm.loadHydratedFarmInfo // load farms data width apr and detail info
-
-```
-
-#### Farm methods
-
-```
-raydium.farm.create({
-  poolId, // oneOf liquidity pool id in https://api.raydium.io/v2/sdk/liquidity/mainnet.json
-  rewardInfos // reward info array
-})
-const { transaction, signers, execute } = raydium.farm.restartReward({ farmId, rewardInfos })
-const { transaction, signers, execute } = raydium.farm.addNewRewardToken({ poolId, newRewardInfo })
-const { transaction, signers, execute } = raydium.farm.deposit({ farmId, amount })
-const { transaction, signers, execute } = raydium.farm.withdraw({ farmId, amount })
-const { transaction, signers, execute } = raydium.farm.withdraw({ farmId, withdrawMint: new PublicKey(xxx) })
-const txId = execute()
-```
-
-#### Reward info example
-
-```
-const startTime = new BN(new Date("2022-08-20 15:00").getTime() / 1000)
-const endTime = new BN(new Date("2022-08-30 15:00").getTime() / 1000)
-const rewardPerSecond = new BN(totalAmount / (endTime - startTime))
-
-const rewardInfo = {
-  poolId: "13uCPybNakXHGVd2DDVB7o2uwXuf9GqPFkvJMVgKy6UJ",
-  rewardInfos:[{
-    rewardOpenTime: startTime,
-    rewardEndTime: endTime,
-    rewardMint: new PublicKey("So11111111111111111111111111111111111111112"),
-    rewardPerSecond: rewardPerSecond.
-  }]
-}
-```
-
-### Swap
-
-#### direct swap with automatically routes
-
-```
-import { Raydium, Token, Percent, TokenAmount } from '@raydium-io/raydium-sdk'
-import BN from 'bn.js'
-
-const raydium = Raydium.load({
-  connection,
-  owner // please provide key pair, if want to handle tx by yourself, just provide publicKey
-  signAllTransactions // optional - provide sign functions provided by @solana/wallet-adapter-react
-})
-
-const { transaction, signers, execute } = await raydium.trade.directSwap({
-  inputMint: ${rayMint},
-  outputMint: PublicKey.default, // PublicKey as sol mint
-  amountIn: "1.2345",
-  slippage: new Percent(5, 100),
-  fixedSide: "in"
-})
-
-const txId = execute()
-```
-
-#### custom controlled route swap
-
-```
-const { availablePools, best, routedPools } = await raydium.trade.getAvailablePools({
-  inputMint: ${rayMint},
-  outputMint: "sol",
-})
-
-const inputToken = raydium.mintToToken("4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6Rdecimals")
-// or use new Token({ mint: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6Rdecimals: 6, name: "Raydium", symbol: "RAY" })
-const outToken = raydium.mintToToken(PublicKey.default)
-// or use new Token({ mint: PublicKey.default }) <= sdk will generate wsol token automatically
-
-const { amountOut, minAmountOut, routes, routeType } =
-  await raydium.swap.getBestAmountOut({
-  pools: routedPools, // optional, if not passed, will auto choose best route
-  inputToken: inputToken,
-  outputToken: outToken,
-  amountIn: '1.2345', // or new BN("1,2345");
-  slippage: new Percent(10, 100) // 10%
-})
-
-const { transaction, signers, execute } = await raydium.trade.swap({
-  routes,
-  routeType,
-  amountIn: raydium.mintToTokenAmount({ mint: ${rayMint}), amount: "1.2345" }),
-  amountOut: minAmountOut,
-  fixedSide: "in"
-})
-
-const txId = execute()
-```
-
-## Reference
-
-- https://github.com/coral-xyz/anchor/tree/master/ts
-- https://github.com/ethers-io/ethers.js/tree/master/packages/bignumber
-- https://github.com/pancakeswap/pancake-swap-sdk
-- https://github.com/project-serum/serum-ts
-- https://yarnpkg.com/advanced/lifecycle-scripts

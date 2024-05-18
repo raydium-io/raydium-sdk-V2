@@ -531,14 +531,7 @@ export default class CpmmModule extends ModuleBase {
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public computePairAmount({
-    poolInfo,
-    amount,
-    // anotherToken,
-    slippage,
-    epochInfo,
-    baseIn,
-  }: ComputePairAmountParams): {
+  public computePairAmount({ poolInfo, amount, slippage, epochInfo, baseIn }: ComputePairAmountParams): {
     inputAmountFee: GetTransferAmountFee;
     anotherAmount: GetTransferAmountFee;
     maxAnotherAmount: GetTransferAmountFee;
