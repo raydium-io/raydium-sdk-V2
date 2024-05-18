@@ -5,7 +5,7 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } 
 import { SYSTEM_PROGRAM_ID, RENT_PROGRAM_ID, MEMO_PROGRAM_ID2, createLogger } from "@/common";
 
 import { struct, u64 } from "@/marshmallow";
-const logger = createLogger("Raydium_Cpmm_ins");
+const logger = createLogger("Raydium_cpmm");
 const anchorDataBuf = {
   initialize: [175, 175, 109, 31, 13, 152, 155, 237],
   deposit: [242, 35, 198, 137, 82, 225, 242, 182],

@@ -30,6 +30,8 @@ import {
 import BN from "bn.js";
 import { CpmmPoolInfoLayout, CpmmConfigInfoLayout } from "./layout";
 import Decimal from "decimal.js";
+import { getTransferAmountFeeV2 } from "@/common";
+import { GetTransferAmountFee } from "@/raydium/type";
 
 export default class CpmmModule extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -192,7 +194,7 @@ export default class CpmmModule extends ModuleBase {
   }
 
   public async addLiquidity<T extends TxVersion>(params: AddCpmmLiquidityParams<T>): Promise<MakeTxData<T>> {
-    const { poolInfo, inputAmount, baseIn, slippage, computeBudgetConfig, config, txVersion } = params;
+    const { poolInfo, inputAmount, baseIn, slippage, computeResult, computeBudgetConfig, config, txVersion } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
@@ -209,7 +211,12 @@ export default class CpmmModule extends ModuleBase {
       ...config,
     };
     const rpcPoolData = await this.getRpcPoolInfo(poolInfo.id);
-    const { liquidity, anotherAmount: _anotherAmount } = this.computePairAmount({
+    const {
+      liquidity,
+      inputAmountFee,
+      anotherAmount: _anotherAmount,
+    } = computeResult ||
+    this.computePairAmount({
       poolInfo: {
         ...poolInfo,
         mintAmountA: new Decimal(rpcPoolData.baseReserve.toString()).div(10 ** poolInfo.mintA.decimals).toNumber(),
@@ -218,11 +225,13 @@ export default class CpmmModule extends ModuleBase {
       },
       slippage,
       baseIn,
+      epochInfo: await this.scope.fetchEpochInfo(),
       amount: new Decimal(inputAmount.toString()).div(
         10 ** (baseIn ? poolInfo.mintA.decimals : poolInfo.mintB.decimals),
       ),
     });
-    const anotherAmount = _anotherAmount.raw;
+
+    const anotherAmount = _anotherAmount.amount;
     const mintAUseSOLBalance = poolInfo.mintA.address === NATIVE_MINT.toString();
     const mintBUseSOLBalance = poolInfo.mintB.address === NATIVE_MINT.toString();
 
@@ -304,8 +313,8 @@ export default class CpmmModule extends ModuleBase {
           new PublicKey(poolInfo.lpMint.address),
 
           liquidity,
-          baseIn ? inputAmount : anotherAmount,
-          baseIn ? anotherAmount : inputAmount,
+          baseIn ? inputAmountFee.amount : anotherAmount,
+          baseIn ? anotherAmount : inputAmountFee.amount,
         ),
       ],
       instructionTypes: [InstructionType.CpmmAddLiquidity],
@@ -328,6 +337,13 @@ export default class CpmmModule extends ModuleBase {
       _slippage.mul(lpAmount.mul(rpcPoolData.baseReserve).div(rpcPoolData.lpAmount)).quotient,
       _slippage.mul(lpAmount.mul(rpcPoolData.quoteReserve).div(rpcPoolData.lpAmount)).quotient,
     ];
+
+    const epochInfo = await this.scope.fetchEpochInfo();
+    const [mintAAmountFee, mintBAmountFee] = [
+      getTransferAmountFeeV2(amountMintA, poolInfo.mintA.extensions.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amountMintB, poolInfo.mintB.extensions.feeConfig, epochInfo, true),
+    ];
+
     const { account } = this.scope;
     const txBuilder = this.createTxBuilder();
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
@@ -398,8 +414,8 @@ export default class CpmmModule extends ModuleBase {
           new PublicKey(poolInfo.lpMint.address),
 
           lpAmount,
-          amountMintA,
-          amountMintB,
+          amountMintA.sub(mintAAmountFee.fee ?? new BN(0)),
+          amountMintB.sub(mintBAmountFee.fee ?? new BN(0)),
         ),
       ],
       instructionTypes: [InstructionType.CpmmWithdrawLiquidity],
@@ -520,15 +536,34 @@ export default class CpmmModule extends ModuleBase {
     amount,
     // anotherToken,
     slippage,
+    epochInfo,
     baseIn,
-  }: ComputePairAmountParams): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
-    const inputAmount = new BN(new Decimal(amount).mul(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals).toFixed(0));
-    const _anotherToken = toToken(poolInfo[baseIn ? "mintB" : "mintA"]);
+  }: ComputePairAmountParams): {
+    inputAmountFee: GetTransferAmountFee;
+    anotherAmount: GetTransferAmountFee;
+    maxAnotherAmount: GetTransferAmountFee;
+    liquidity: BN;
+  } {
+    const coefficient = 1 - Number(slippage.toSignificant()) / 100;
+    const inputAmount = new BN(
+      new Decimal(amount)
+        .mul(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals)
+        .mul(coefficient)
+        .toFixed(0),
+    );
+    const inputAmountFee = getTransferAmountFeeV2(
+      inputAmount,
+      poolInfo[baseIn ? "mintA" : "mintB"].extensions.feeConfig,
+      epochInfo,
+      false,
+    );
+    const _inputAmountWithoutFee = inputAmount.sub(inputAmountFee.fee ?? new BN(0));
 
     const [baseReserve, quoteReserve] = [
       new BN(new Decimal(poolInfo.mintAmountA).mul(10 ** poolInfo.mintA.decimals).toString()),
       new BN(new Decimal(poolInfo.mintAmountB).mul(10 ** poolInfo.mintB.decimals).toString()),
     ];
+
     const lpAmount = new BN(
       new Decimal(poolInfo.lpAmount).mul(10 ** poolInfo.lpMint.decimals).toFixed(0, Decimal.ROUND_DOWN),
     );
@@ -539,6 +574,8 @@ export default class CpmmModule extends ModuleBase {
       baseIn ? poolInfo.mintA.symbol : poolInfo.mintB.symbol,
       "amountIn:",
       inputAmount.toString(),
+      "amountInFee:",
+      inputAmountFee.fee?.toString() ?? 0,
       "anotherToken:",
       baseIn ? poolInfo.mintB.symbol : poolInfo.mintA.symbol,
       "slippage:",
@@ -549,23 +586,44 @@ export default class CpmmModule extends ModuleBase {
     const input = baseIn ? "base" : "quote";
     this.logDebug("input side:", input);
 
-    const liquidity = inputAmount.mul(lpAmount).div(input === "base" ? baseReserve : quoteReserve);
-
-    let amountRaw = BN_ZERO;
-    if (!inputAmount.isZero()) {
-      amountRaw = lpToAmount(liquidity, baseReserve, quoteReserve, lpAmount)[baseIn ? "amountB" : "amountA"];
+    const liquidity = _inputAmountWithoutFee.mul(lpAmount).div(input === "base" ? baseReserve : quoteReserve);
+    let anotherAmountFee: GetTransferAmountFee = {
+      amount: BN_ZERO,
+      fee: undefined,
+      expirationTime: undefined,
+    };
+    if (!_inputAmountWithoutFee.isZero()) {
+      anotherAmountFee = getTransferAmountFeeV2(
+        lpToAmount(liquidity, baseReserve, quoteReserve, lpAmount)[baseIn ? "amountB" : "amountA"],
+        poolInfo[baseIn ? "mintB" : "mintA"].extensions.feeConfig,
+        epochInfo,
+        true,
+      );
     }
 
     const _slippage = new Percent(new BN(1)).add(slippage);
-    const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
+    const slippageAdjustedAmount = getTransferAmountFeeV2(
+      _slippage.mul(anotherAmountFee.amount.sub(anotherAmountFee.fee ?? new BN(0))).quotient,
+      poolInfo[baseIn ? "mintB" : "mintA"].extensions.feeConfig,
+      epochInfo,
+      true,
+    );
 
-    const _anotherAmount = new TokenAmount(_anotherToken, amountRaw);
-    const _maxAnotherAmount = new TokenAmount(_anotherToken, slippageAdjustedAmount);
-    this.logDebug("anotherAmount:", _anotherAmount.toFixed(), "maxAnotherAmount:", _maxAnotherAmount.toFixed());
+    this.logDebug(
+      "anotherAmount:",
+      anotherAmountFee.amount.toString(),
+      "anotherAmountFee:",
+      anotherAmountFee.fee?.toString() ?? 0,
+      "maxAnotherAmount:",
+      slippageAdjustedAmount.amount.toString(),
+      "maxAnotherAmountFee:",
+      slippageAdjustedAmount.fee?.toString() ?? 0,
+    );
 
     return {
-      anotherAmount: _anotherAmount,
-      maxAnotherAmount: _maxAnotherAmount,
+      inputAmountFee,
+      anotherAmount: anotherAmountFee,
+      maxAnotherAmount: slippageAdjustedAmount,
       liquidity,
     };
   }
