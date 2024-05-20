@@ -31,8 +31,8 @@ import {
 import { ClmmInstrument } from "./instrument";
 import { MakeTransaction } from "../type";
 import { MathUtil } from "./utils/math";
-import { getPdaOperationAccount } from "./utils/pda";
-import { ClmmPositionLayout, OperationLayout } from "./layout";
+import { getPdaOperationAccount, getPdaPersonalPositionAddress } from "./utils/pda";
+import { ClmmPositionLayout, OperationLayout, PositionInfoLayout } from "./layout";
 import BN from "bn.js";
 
 export class Clmm extends ModuleBase {
@@ -1284,6 +1284,28 @@ export class Clmm extends ModuleBase {
     if (!accountInfo) return [];
     const whitelistMintsInfo = OperationLayout.decode(accountInfo.data);
     return whitelistMintsInfo.whitelistMints.filter((i) => !i.equals(PublicKey.default));
+  }
+
+  public async getOwnerPositionInfo({
+    programId,
+  }: {
+    programId: string | PublicKey;
+  }): Promise<ReturnType<typeof PositionInfoLayout.decode>[]> {
+    await this.scope.account.fetchWalletTokenAccounts();
+    const balanceMints = this.scope.account.tokenAccountRawInfos.filter((acc) => acc.accountInfo.amount.eq(new BN(1)));
+    const allPositionKey = balanceMints.map(
+      (acc) => getPdaPersonalPositionAddress(new PublicKey(programId), acc.accountInfo.mint).publicKey,
+    );
+
+    const accountInfo = await this.scope.connection.getMultipleAccountsInfo(allPositionKey);
+    const allPosition: ReturnType<typeof PositionInfoLayout.decode>[] = [];
+    accountInfo.forEach((positionRes) => {
+      if (!positionRes) return;
+      const position = PositionInfoLayout.decode(positionRes.data);
+      allPosition.push(position);
+    });
+
+    return allPosition;
   }
 
   /*

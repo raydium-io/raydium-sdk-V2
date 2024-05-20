@@ -214,7 +214,7 @@ export class Raydium {
       this._chainTime = {
         fetched: Date.now(),
         value: {
-          chainTime: Date.now() - data.offset * 1000,
+          chainTime: Date.now() + data.offset * 1000,
           offset: data.offset * 1000,
         },
       };

@@ -246,7 +246,7 @@ export class TxBuilder {
             signedTx: txs[0],
           };
         }
-        throw new Error("please connect wallet first");
+        throw new Error("please provide owner in keypair format or signAllTransactions function");
       },
       extInfo: extInfo || ({} as O),
     };
@@ -340,7 +340,7 @@ export class TxBuilder {
             };
           }
         }
-        throw new Error("please connect wallet first");
+        throw new Error("please provide owner in keypair format or signAllTransactions function");
       },
       extInfo: extInfo || {},
     };
@@ -427,7 +427,7 @@ export class TxBuilder {
             signedTx: txs[0],
           };
         }
-        throw new Error("please connect wallet first");
+        throw new Error("please provide owner in keypair format or signAllTransactions function");
       },
       extInfo: (extInfo || {}) as O,
     };
@@ -531,7 +531,7 @@ export class TxBuilder {
             return { txIds, signedTxs };
           }
         }
-        throw new Error("please connect wallet first");
+        throw new Error("please provide owner in keypair format or signAllTransactions function");
       },
       extInfo: buildProps || {},
     };
@@ -693,7 +693,7 @@ export class TxBuilder {
             return { txIds, signedTxs };
           }
         }
-        throw new Error("please connect wallet first");
+        throw new Error("please provide owner in keypair format or signAllTransactions function");
       },
       extInfo: extInfo || {},
     };
@@ -899,7 +899,7 @@ export class TxBuilder {
             return { txIds, signedTxs };
           }
         }
-        throw new Error("please connect wallet first");
+        throw new Error("please provide owner in keypair format or signAllTransactions function");
       },
       extInfo: extInfo || {},
     };

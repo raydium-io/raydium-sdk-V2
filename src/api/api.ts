@@ -150,7 +150,8 @@ export class Api {
   }
 
   async getChainTimeOffset(): Promise<{ offset: number }> {
-    return this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME);
+    const res = await this.api.get(this.urlConfigs.CHAIN_TIME || API_URLS.CHAIN_TIME);
+    return res.data;
   }
 
   async getRpcs(): Promise<{
