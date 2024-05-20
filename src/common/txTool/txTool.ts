@@ -11,6 +11,7 @@ import {
 import axios from "axios";
 
 import { SignAllTransactions, ComputeBudgetConfig } from "@/raydium/type";
+import { Cluster } from "@/solana";
 import { TxVersion } from "./txType";
 import { Owner } from "../owner";
 import { getRecentBlockHash, addComputeBudget, checkLegacyTxSize, checkV0TxSize, printSimulate } from "./txUtils";
@@ -35,6 +36,7 @@ type SolanaFeeInfoJson = {
 interface TxBuilderInit {
   connection: Connection;
   feePayer: PublicKey;
+  cluster: Cluster;
   owner?: Owner;
   signAllTransactions?: SignAllTransactions;
 }
@@ -115,6 +117,7 @@ export class TxBuilder {
   private instructionTypes: string[] = [];
   private endInstructionTypes: string[] = [];
   private feePayer: PublicKey;
+  private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
 
   constructor(params: TxBuilderInit) {
@@ -122,6 +125,7 @@ export class TxBuilder {
     this.feePayer = params.feePayer;
     this.signAllTransactions = params.signAllTransactions;
     this.owner = params.owner;
+    this.cluster = params.cluster;
   }
 
   get AllTxData(): {
@@ -375,7 +379,7 @@ export class TxBuilder {
   ): Promise<MakeTxData<TxVersion.V0, O>> {
     const { lookupTableCache = {}, lookupTableAddress = [], forerunCreate, ...extInfo } = props || {};
     const lookupTableAddressAccount = {
-      ...LOOKUP_TABLE_CACHE,
+      ...(this.cluster === "devnet" ? {} : LOOKUP_TABLE_CACHE),
       ...lookupTableCache,
     };
     const allLTA = Array.from(new Set<string>([...lookupTableAddress, ...this.lookupTableAddress]));
@@ -708,7 +712,7 @@ export class TxBuilder {
   ): Promise<MultiTxV0BuildData> {
     const { computeBudgetConfig, lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
     const lookupTableAddressAccount = {
-      ...LOOKUP_TABLE_CACHE,
+      ...(this.cluster === "devnet" ? {} : LOOKUP_TABLE_CACHE),
       ...lookupTableCache,
     };
     const allLTA = Array.from(new Set<string>([...this.lookupTableAddress, ...lookupTableAddress]));

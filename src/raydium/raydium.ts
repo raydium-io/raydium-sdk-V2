@@ -105,7 +105,7 @@ export class Raydium {
     const { connection, cluster, owner, api, defaultChainTime, defaultChainTimeOffset, apiCacheTime } = config;
 
     this._connection = connection;
-    this.cluster = cluster;
+    this.cluster = cluster || "mainnet";
     this._owner = owner ? new Owner(owner) : undefined;
     this._signAllTransactions = config.signAllTransactions;
 

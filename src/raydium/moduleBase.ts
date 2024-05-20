@@ -35,6 +35,7 @@ export default class ModuleBase {
     return new TxBuilder({
       connection: this.scope.connection,
       feePayer: feePayer || this.scope.ownerPubKey,
+      cluster: this.scope.cluster,
       owner: this.scope.owner,
       signAllTransactions: this.scope.signAllTransactions,
     });
