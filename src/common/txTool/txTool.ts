@@ -33,6 +33,11 @@ type SolanaFeeInfoJson = {
   "15": SolanaFeeInfo;
 };
 
+interface ExecuteParams {
+  skipPreflight?: boolean;
+  recentBlockHash?: string;
+}
+
 interface TxBuilderInit {
   connection: Connection;
   feePayer: PublicKey;
@@ -56,7 +61,7 @@ export interface TxBuildData<T = Record<string, any>> {
   transaction: Transaction;
   instructionTypes: string[];
   signers: Signer[];
-  execute: () => Promise<{ txId: string; signedTx: Transaction }>;
+  execute: (params?: ExecuteParams) => Promise<{ txId: string; signedTx: Transaction }>;
   extInfo: T;
 }
 
@@ -67,7 +72,7 @@ export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData
     lookupTableCache?: CacheLTA;
     lookupTableAddress?: string[];
   };
-  execute: () => Promise<{ txId: string; signedTx: VersionedTransaction }>;
+  execute: (params?: ExecuteParams) => Promise<{ txId: string; signedTx: VersionedTransaction }>;
 }
 
 type TxUpdateParams = {
@@ -75,7 +80,7 @@ type TxUpdateParams = {
   status: "success" | "error" | "sent";
   signedTx: Transaction | VersionedTransaction;
 };
-export interface ExecuteParam {
+export interface MultiTxExecuteParam extends ExecuteParams {
   sequentially: boolean;
   onTxUpdate?: (completeTxs: TxUpdateParams[]) => void;
 }
@@ -84,7 +89,7 @@ export interface MultiTxBuildData<T = Record<string, any>> {
   transactions: Transaction[];
   instructionTypes: string[];
   signers: Signer[][];
-  execute: (executeParams?: ExecuteParam) => Promise<{ txIds: string[]; signedTxs: Transaction[] }>;
+  execute: (executeParams?: MultiTxExecuteParam) => Promise<{ txIds: string[]; signedTxs: Transaction[] }>;
   extInfo: T;
 }
 
@@ -96,7 +101,7 @@ export interface MultiTxV0BuildData<T = Record<string, any>>
     lookupTableCache?: CacheLTA;
     lookupTableAddress?: string[];
   };
-  execute: (executeParams?: ExecuteParam) => Promise<{ txIds: string[]; signedTxs: VersionedTransaction[] }>;
+  execute: (executeParams?: MultiTxExecuteParam) => Promise<{ txIds: string[]; signedTxs: VersionedTransaction[] }>;
 }
 
 export type MakeMultiTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extends TxVersion.LEGACY
@@ -226,8 +231,9 @@ export class TxBuilder {
       transaction,
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
-      execute: async () => {
-        const recentBlockHash = await getRecentBlockHash(this.connection);
+      execute: async (params) => {
+        const { recentBlockHash: propBlockHash, skipPreflight = true } = params || {};
+        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection));
         transaction.recentBlockhash = recentBlockHash;
         if (this.signers.length) transaction.sign(...this.signers);
         printSimulate([transaction]);
@@ -239,6 +245,7 @@ export class TxBuilder {
               this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey))
                 ? this.signers
                 : [...this.signers, this.owner.signer!],
+              { skipPreflight },
             ),
             signedTx: transaction,
           };
@@ -246,7 +253,7 @@ export class TxBuilder {
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions([transaction]);
           return {
-            txId: await this.connection.sendRawTransaction(txs[0].serialize(), { skipPreflight: true }),
+            txId: await this.connection.sendRawTransaction(txs[0].serialize(), { skipPreflight }),
             signedTx: txs[0],
           };
         }
@@ -277,9 +284,9 @@ export class TxBuilder {
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: allInstructionTypes,
-      execute: async (executeParams?: ExecuteParam) => {
-        const { sequentially, onTxUpdate } = executeParams || {};
-        const recentBlockHash = await getRecentBlockHash(this.connection);
+      execute: async (executeParams?: MultiTxExecuteParam) => {
+        const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
+        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection));
         if (this.owner?.isKeyPair) {
           return {
             txIds: await await Promise.all(
@@ -291,6 +298,7 @@ export class TxBuilder {
                   allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey))
                     ? allSigners[idx]
                     : [...allSigners[idx], this.owner!.signer!],
+                  { skipPreflight },
                 );
               }),
             ),
@@ -311,7 +319,7 @@ export class TxBuilder {
             const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
-              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight });
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
@@ -335,7 +343,7 @@ export class TxBuilder {
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
-              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight });
               txIds.push(txId);
             }
             return {
@@ -403,12 +411,14 @@ export class TxBuilder {
       transaction,
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
-      execute: async () => {
+      execute: async (params) => {
+        const { recentBlockHash: propBlockHash, skipPreflight = true } = params || {};
+        if (propBlockHash) transaction.message.recentBlockhash = propBlockHash;
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           if (!this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey)))
             transaction.sign([this.owner.signer as Signer]);
-          const txId = await this.connection.sendTransaction(transaction, { skipPreflight: true });
+          const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
           const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
           await this.connection.confirmTransaction(
             {
@@ -427,7 +437,7 @@ export class TxBuilder {
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions<VersionedTransaction>([transaction]);
           return {
-            txId: await this.connection.sendTransaction(txs[0], { skipPreflight: true }),
+            txId: await this.connection.sendTransaction(txs[0], { skipPreflight }),
             signedTx: txs[0],
           };
         }
@@ -469,9 +479,10 @@ export class TxBuilder {
       signers: allSigners,
       instructionTypes: allInstructionTypes,
       buildProps,
-      execute: async (executeParams?: ExecuteParam) => {
+      execute: async (executeParams?: MultiTxExecuteParam) => {
+        const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
+        if (propBlockHash) allTransactions.forEach((tx) => (tx.message.recentBlockhash = propBlockHash));
         printSimulate(allTransactions);
-        const { sequentially, onTxUpdate } = executeParams || {};
         if (this.owner?.isKeyPair) {
           const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
           allTransactions.forEach((tx, idx) => {
@@ -481,7 +492,7 @@ export class TxBuilder {
           return {
             txIds: await Promise.all(
               allTransactions.map(async (tx) => {
-                const txId = await this.connection.sendTransaction(tx);
+                const txId = await this.connection.sendTransaction(tx, { skipPreflight });
                 await this.connection.confirmTransaction(
                   {
                     blockhash,
@@ -505,7 +516,7 @@ export class TxBuilder {
             const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
-              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight });
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
@@ -529,7 +540,7 @@ export class TxBuilder {
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
-              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight });
               txIds.push(txId);
             }
             return { txIds, signedTxs };
@@ -636,9 +647,9 @@ export class TxBuilder {
       transactions: allTransactions,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
-      execute: async (executeParams?: ExecuteParam) => {
-        const { sequentially, onTxUpdate } = executeParams || {};
-        const recentBlockHash = await getRecentBlockHash(this.connection);
+      execute: async (executeParams?: MultiTxExecuteParam) => {
+        const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
+        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection));
         allTransactions.forEach(async (tx, idx) => {
           tx.recentBlockhash = recentBlockHash;
           if (allSigners[idx].length) tx.sign(...allSigners[idx]);
@@ -654,6 +665,7 @@ export class TxBuilder {
                   allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey))
                     ? allSigners[idx]
                     : [...allSigners[idx], this.owner!.signer!],
+                  { skipPreflight },
                 );
               }),
             ),
@@ -667,7 +679,7 @@ export class TxBuilder {
             const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
-              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight });
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
@@ -691,7 +703,7 @@ export class TxBuilder {
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
-              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight: true });
+              const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight });
               txIds.push(txId);
             }
             return { txIds, signedTxs };
@@ -835,10 +847,11 @@ export class TxBuilder {
       buildProps: props,
       signers: allSigners,
       instructionTypes: this.instructionTypes,
-      execute: async (executeParams?: ExecuteParam) => {
-        const { sequentially, onTxUpdate } = executeParams || {};
+      execute: async (executeParams?: MultiTxExecuteParam) => {
+        const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
         allTransactions.map(async (tx, idx) => {
           if (allSigners[idx].length) tx.sign(allSigners[idx]);
+          if (propBlockHash) tx.message.recentBlockhash = propBlockHash;
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
@@ -851,7 +864,7 @@ export class TxBuilder {
           return {
             txIds: await Promise.all(
               allTransactions.map(async (tx) => {
-                const txId = await this.connection.sendTransaction(tx);
+                const txId = await this.connection.sendTransaction(tx, { skipPreflight });
                 await this.connection.confirmTransaction(
                   {
                     blockhash,
@@ -873,7 +886,7 @@ export class TxBuilder {
             const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
-              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight });
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
@@ -897,7 +910,7 @@ export class TxBuilder {
           } else {
             const txIds: string[] = [];
             for (let i = 0; i < signedTxs.length; i += 1) {
-              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight: true });
+              const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight });
               txIds.push(txId);
             }
             return { txIds, signedTxs };
