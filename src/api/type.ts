@@ -240,21 +240,24 @@ export enum PoolFetchType {
   All = "all",
   Standard = "standard",
   Concentrated = "concentrated",
+  AllFarm = "allFarm",
+  StandardFarm = "standardFarm",
+  ConcentratedFarm = "concentratedFarm",
 }
 
 export interface FetchPoolParams {
   type?: PoolFetchType;
   sort?:
     | "liquidity"
-    | "volume_24h"
-    | "volume_7d"
-    | "volume_30d"
-    | "fee_24h"
-    | "fee_7d"
-    | "fee_30d"
-    | "apr_24h"
-    | "apr_7d"
-    | "apr_30d";
+    | "volume24h"
+    | "volume7d"
+    | "volume30d"
+    | "fee24h"
+    | "fee7d"
+    | "fee30d"
+    | "apr24h"
+    | "apr7d"
+    | "apr30d";
   order?: "desc" | "asc";
   pageSize?: number;
   page?: number;

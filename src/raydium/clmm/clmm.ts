@@ -32,7 +32,7 @@ import { ClmmInstrument } from "./instrument";
 import { MakeTransaction } from "../type";
 import { MathUtil } from "./utils/math";
 import { getPdaOperationAccount, getPdaPersonalPositionAddress } from "./utils/pda";
-import { ClmmPositionLayout, OperationLayout, PositionInfoLayout } from "./layout";
+import { ClmmPositionLayout, OperationLayout, PositionInfoLayout, PoolInfoLayout } from "./layout";
 import BN from "bn.js";
 
 export class Clmm extends ModuleBase {
@@ -1306,6 +1306,24 @@ export class Clmm extends ModuleBase {
     });
 
     return allPosition;
+  }
+
+  public async getRpcClmmPoolInfo({
+    poolId,
+  }: {
+    poolId: string | PublicKey;
+  }): Promise<ReturnType<typeof PoolInfoLayout.decode> & { currentPrice: number }> {
+    const account = await this.scope.connection.getAccountInfo(new PublicKey(poolId));
+    const rpc = PoolInfoLayout.decode(account!.data);
+    const currentPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
+      rpc.sqrtPriceX64,
+      rpc.mintDecimalsA,
+      rpc.mintDecimalsB,
+    ).toNumber();
+    return {
+      ...rpc,
+      currentPrice,
+    };
   }
 
   /*

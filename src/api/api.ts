@@ -14,10 +14,12 @@ import {
   FormatFarmInfoOut,
   FormatFarmKeyOut,
   AvailabilityCheckAPI3,
+  PoolFetchType,
 } from "./type";
 import { API_URLS, API_URL_CONFIG } from "./url";
 import { updateReqHistory } from "./utils";
 import { PublicKey } from "@solana/web3.js";
+import { solToWSol } from "../common";
 
 const logger = createLogger("Raydium_Api");
 const poolKeysCache: Map<string, PoolKeys> = new Map();
@@ -219,6 +221,39 @@ export class Api {
     }
 
     return cacheList.concat(data);
+  }
+
+  async fetchPoolByMints(
+    props: {
+      mint1: string | PublicKey;
+      mint2?: string | PublicKey;
+    } & Omit<FetchPoolParams, "pageSize">,
+  ): Promise<ApiV3PoolInfoItem[]> {
+    const {
+      mint1: propMint1,
+      mint2: propMint2,
+      type = PoolFetchType.All,
+      sort = "default",
+      order = "desc",
+      page = 1,
+    } = props;
+
+    const [mint1, mint2] = [
+      propMint1 ? solToWSol(propMint1).toBase58() : propMint1,
+      propMint2 && propMint2 !== "undefined" ? solToWSol(propMint2).toBase58() : "",
+    ];
+    const [baseMint, quoteMint] = mint2 && mint1 > mint2 ? [mint2, mint1] : [mint1, mint2];
+
+    console.log(
+      123123555,
+      `?mint1=${baseMint}&mint2=${quoteMint}&poolType=${type}&poolSortField=${sort}&sortType=${order}&pageSize=100&page=${page}`,
+    );
+
+    const res = await this.api.get(
+      (this.urlConfigs.POOL_SEARCH_MINT || API_URLS.POOL_SEARCH_MINT) +
+        `?mint1=${baseMint}&mint2=${quoteMint}&poolType=${type}&poolSortField=${sort}&sortType=${order}&pageSize=100&page=${page}`,
+    );
+    return res.data;
   }
 
   async fetchFarmInfoById(props: { ids: string }): Promise<FormatFarmInfoOut[]> {
