@@ -97,6 +97,10 @@ export default class LiquidityModule extends ModuleBase {
       baseIn ? poolInfo.mintB.symbol : poolInfo.mintA.symbol,
       "slippage:",
       `${slippage.toSignificant()}%`,
+      "baseReserve",
+      baseReserve.toString(),
+      "quoteReserve",
+      quoteReserve.toString(),
     );
 
     // input is fixed
@@ -112,12 +116,11 @@ export default class LiquidityModule extends ModuleBase {
           : divCeil(inputAmount.mul(baseReserve), quoteReserve);
     }
 
-    const liquidity = divCeil(
-      inputAmount.mul(lpAmount),
-      new BN(input === "base" ? poolInfo.mintAmountA : poolInfo.mintAmountB).mul(
-        new BN(10).pow(new BN(poolInfo[input === "base" ? "mintA" : "mintB"].decimals)),
-      ),
-    );
+    this.logDebug("amountRaw:", amountRaw.toString(), "lpAmount:", lpAmount.toString());
+
+    const liquidity = divCeil(inputAmount.mul(lpAmount), input === "base" ? baseReserve : quoteReserve);
+
+    this.logDebug("liquidity:", liquidity.toString());
 
     const _slippage = new Percent(new BN(1)).add(slippage);
     const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
