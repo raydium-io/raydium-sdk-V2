@@ -194,5 +194,5 @@ export const farm = {
 export function printSimulate(transaction: Transaction) {
   if (!transaction.recentBlockhash) transaction.recentBlockhash = TOKEN_PROGRAM_ID.toBase58()
   if (!transaction.feePayer) transaction.feePayer = Keypair.generate().publicKey
-  console.log('123123 simulate tx string:', transaction.serialize({ verifySignatures: false }).toString('base64'))
+  console.log('simulate tx string:', transaction.serialize({ verifySignatures: false }).toString('base64'))
 }

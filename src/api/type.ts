@@ -155,6 +155,7 @@ export type ApiV3Token = {
 export type ApiV3TokenRes = {
   mintList: ApiV3Token[];
   blacklist: ApiV3Token[];
+  whiteList: string[];
 };
 
 export interface ApiV3PoolInfoCountItem {

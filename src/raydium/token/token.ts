@@ -19,6 +19,7 @@ export default class TokenModule extends ModuleBase {
     jup: new Set(),
     extra: new Set(),
   };
+  private _whiteMap: Set<string> = new Set();
   private _extraTokenList: TokenInfo[] = [];
 
   constructor(params: ModuleBaseProps) {
@@ -28,13 +29,14 @@ export default class TokenModule extends ModuleBase {
   public async load(params?: LoadParams & { type?: JupTokenType }): Promise<void> {
     this.checkDisabled();
     const { forceUpdate = false, type = JupTokenType.Strict } = params || {};
-    const { mintList, blacklist } = await this.scope.fetchV3TokenList(forceUpdate);
+    const { mintList, blacklist, whiteList } = await this.scope.fetchV3TokenList(forceUpdate);
     const jup = await this.scope.fetchJupTokenList(type, forceUpdate);
     // reset all data
     this._tokenList = [];
     this._tokenMap = new Map();
     this._blackTokenMap = new Map();
     this._mintGroup = { official: new Set(), jup: new Set(), extra: new Set() };
+    this._whiteMap = new Set(whiteList);
 
     this._tokenMap.set(SOL_INFO.address, SOL_INFO);
     this._mintGroup.official.add(SOL_INFO.address);
@@ -96,6 +98,9 @@ export default class TokenModule extends ModuleBase {
   }
   get mintGroup(): { official: Set<string>; jup: Set<string> } {
     return this._mintGroup;
+  }
+  get whiteListMap(): Set<string> {
+    return this._whiteMap;
   }
 
   /** === util functions === */

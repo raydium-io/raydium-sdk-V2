@@ -163,7 +163,7 @@ export class Api {
     return this.api.get(this.urlConfigs.RPCS || API_URLS.RPCS);
   }
 
-  async getTokenList(): Promise<{ mintList: ApiV3Token[]; blacklist: ApiV3Token[] }> {
+  async getTokenList(): Promise<{ mintList: ApiV3Token[]; blacklist: ApiV3Token[]; whiteList: string[] }> {
     const res = await this.api.get(this.urlConfigs.TOKEN_LIST || API_URLS.TOKEN_LIST);
     return res.data;
   }
