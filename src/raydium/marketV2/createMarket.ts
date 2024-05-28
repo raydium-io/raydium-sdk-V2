@@ -7,7 +7,7 @@ import { MakeMultiTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txT
 import { generatePubKey } from "../account/util";
 import { BN_ZERO } from "@/common/bignumber";
 import { makeCreateMarketInstruction } from "./instrument";
-import { ComputeBudgetConfig } from "@/raydium/type";
+import { ComputeBudgetConfig, MakeMultiTransaction } from "@/raydium/type";
 
 interface ExtInfo {
   address: {
@@ -105,29 +105,30 @@ export default class MarketV2 extends ModuleBase {
       },
     });
     const txBuilder = this.createTxBuilder();
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    // txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addInstruction({
       instructions: allTxArr[0].transaction.instructions,
       signers: allTxArr[0].signer,
     });
 
-    const extraTxBuildData: any[] = [];
+    // const extraTxBuildData: any[] = [];
 
     for await (const txData of allTxArr.slice(1, allTxArr.length)) {
-      const extraTxBuilder = this.createTxBuilder();
-      extraTxBuilder.addCustomComputeBudget(computeBudgetConfig);
-      extraTxBuilder.addInstruction({
+      // const extraTxBuilder = this.createTxBuilder();
+      // extraTxBuilder.addCustomComputeBudget(computeBudgetConfig);
+      txBuilder.addInstruction({
         instructions: txData.transaction.instructions,
         signers: txData.signer,
         instructionTypes: txData.instructionTypes,
       });
-      const build = await extraTxBuilder.versionBuild({ txVersion });
-      extraTxBuildData.push(build);
+
+      // const build = await extraTxBuilder.versionBuild({ txVersion });
+      // extraTxBuildData.push(build);
     }
 
-    return txBuilder.versionMultiBuild<T, ExtInfo>({
-      extraPreBuildData: extraTxBuildData,
-      extInfo: {
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({
+        computeBudgetConfig,
         address: {
           marketId: market.publicKey,
           requestQueue: requestQueue.publicKey,
@@ -139,8 +140,21 @@ export default class MarketV2 extends ModuleBase {
           baseMint: new PublicKey(baseInfo.mint),
           quoteMin: new PublicKey(quoteInfo.mint),
         },
+      }) as Promise<MakeMultiTxData<T, ExtInfo>>;
+
+    return txBuilder.sizeCheckBuild({
+      computeBudgetConfig,
+      address: {
+        marketId: market.publicKey,
+        requestQueue: requestQueue.publicKey,
+        eventQueue: eventQueue.publicKey,
+        bids: bids.publicKey,
+        asks: asks.publicKey,
+        baseVault: baseVault.publicKey,
+        quoteVault: quoteVault.publicKey,
+        baseMint: new PublicKey(baseInfo.mint),
+        quoteMin: new PublicKey(quoteInfo.mint),
       },
-      txVersion,
     }) as Promise<MakeMultiTxData<T, ExtInfo>>;
   }
 }
