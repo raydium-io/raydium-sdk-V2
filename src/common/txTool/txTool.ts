@@ -288,6 +288,26 @@ export class TxBuilder {
         const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection));
         if (this.owner?.isKeyPair) {
+          if (sequentially) {
+            const txIds: string[] = [];
+            for (const tx of allTransactions) {
+              const txId = await sendAndConfirmTransaction(
+                this.connection,
+                tx,
+                this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey))
+                  ? this.signers
+                  : [...this.signers, this.owner.signer!],
+                { skipPreflight },
+              );
+              txIds.push(txId);
+            }
+
+            return {
+              txIds,
+              signedTxs: allTransactions,
+            };
+          }
+
           return {
             txIds: await await Promise.all(
               allTransactions.map(async (tx, idx) => {
@@ -489,6 +509,26 @@ export class TxBuilder {
             if (!allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey)))
               tx.sign([this.owner!.signer as Signer]);
           });
+
+          if (sequentially) {
+            const txIds: string[] = [];
+            for (const tx of allTransactions) {
+              const txId = await this.connection.sendTransaction(tx, { skipPreflight });
+              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
+              await this.connection.confirmTransaction(
+                {
+                  blockhash,
+                  lastValidBlockHeight,
+                  signature: txId,
+                },
+                "confirmed",
+              );
+              txIds.push(txId);
+            }
+
+            return { txIds, signedTxs: allTransactions };
+          }
+
           return {
             txIds: await Promise.all(
               allTransactions.map(async (tx) => {
@@ -656,6 +696,25 @@ export class TxBuilder {
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
+          if (sequentially) {
+            const txIds: string[] = [];
+            for (const tx of allTransactions) {
+              const txId = await sendAndConfirmTransaction(
+                this.connection,
+                tx,
+                this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey))
+                  ? this.signers
+                  : [...this.signers, this.owner.signer!],
+                { skipPreflight },
+              );
+              txIds.push(txId);
+            }
+
+            return {
+              txIds,
+              signedTxs: allTransactions,
+            };
+          }
           return {
             txIds: await Promise.all(
               allTransactions.map(async (tx, idx) => {
@@ -860,6 +919,25 @@ export class TxBuilder {
             if (!allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey)))
               tx.sign([this.owner!.signer as Signer]);
           });
+
+          if (sequentially) {
+            const txIds: string[] = [];
+            for (const tx of allTransactions) {
+              const txId = await this.connection.sendTransaction(tx, { skipPreflight });
+              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
+              await this.connection.confirmTransaction(
+                {
+                  blockhash,
+                  lastValidBlockHeight,
+                  signature: txId,
+                },
+                "confirmed",
+              );
+              txIds.push(txId);
+            }
+
+            return { txIds, signedTxs: allTransactions };
+          }
 
           return {
             txIds: await Promise.all(

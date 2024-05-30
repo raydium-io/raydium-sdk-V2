@@ -687,8 +687,8 @@ export default class LiquidityModule extends ModuleBase {
     priceImpact: Decimal;
     fee: BN;
   } {
-    if (mintIn !== poolInfo.mintA.address && mintIn !== poolInfo.mintA.address) throw new Error("toke not match");
-    if (mintOut !== poolInfo.mintB.address && mintOut !== poolInfo.mintB.address) throw new Error("toke not match");
+    if (mintIn !== poolInfo.mintA.address && mintIn !== poolInfo.mintB.address) throw new Error("toke not match");
+    if (mintOut !== poolInfo.mintA.address && mintOut !== poolInfo.mintB.address) throw new Error("toke not match");
 
     const { baseReserve, quoteReserve } = poolInfo;
 

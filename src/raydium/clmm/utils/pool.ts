@@ -1076,11 +1076,9 @@ export class PoolUtils {
   }
 
   static async fetchComputeClmmInfo({
-    owner,
     connection,
     poolInfo,
   }: {
-    owner: PublicKey;
     connection: Connection;
     poolInfo: ApiV3PoolInfoConcentratedItem;
   }): Promise<ComputeClmmPoolInfo> {
@@ -1088,7 +1086,7 @@ export class PoolUtils {
     if (!data) throw new Error(`pool not found ${poolInfo.id}`);
     const rpcPool = PoolInfoLayout.decode(data.data);
 
-    const pda = getPdaExBitmapAccount(owner, new PublicKey(poolInfo.id)).publicKey;
+    const pda = getPdaExBitmapAccount(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey;
     const exBitData = await PoolUtils.fetchExBitmaps({
       connection,
       exBitmapAddress: [pda],
