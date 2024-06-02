@@ -1,6 +1,6 @@
 import { PublicKey, TransactionInstruction, SYSVAR_CLOCK_PUBKEY } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { RENT_PROGRAM_ID, CLOCK_PROGRAM_ID } from "@/common/pubKey";
+import { RENT_PROGRAM_ID, CLOCK_PROGRAM_ID, SYSTEM_PROGRAM_ID } from "@/common/pubKey";
 import {
   PurchaseInstructionKeys,
   ClaimInstructionKeysV3,
@@ -20,7 +20,7 @@ export function makePurchaseInstruction({
 }): TransactionInstruction {
   const keys = [
     // system
-    { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false },
+    { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: CLOCK_PROGRAM_ID, isSigner: false, isWritable: false },

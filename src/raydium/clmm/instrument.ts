@@ -2,7 +2,6 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } 
 import {
   PublicKey,
   TransactionInstruction,
-  ComputeBudgetProgram,
   SystemProgram,
   Connection,
   Keypair,

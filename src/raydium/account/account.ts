@@ -112,7 +112,7 @@ export default class Account extends ModuleBase {
     this._accountChangeListenerId = this.scope.connection.onAccountChange(
       this.scope.ownerPubKey,
       () => this.fetchWalletTokenAccounts({ forceUpdate: true }),
-      "confirmed",
+      config?.commitment,
     );
 
     return { tokenAccounts, tokenAccountRawInfos };
@@ -237,60 +237,60 @@ export default class Account extends ModuleBase {
 
       return { account: ata, instructionParams: newTxInstructions };
     } else {
-      if (mint.equals(WSOLMint)) {
-        const txInstruction = await createWSolAccountInstructions({
-          connection: this.scope.connection,
+      // if (mint.equals(WSOLMint)) {
+      //   const txInstruction = await createWSolAccountInstructions({
+      //     connection: this.scope.connection,
+      //     owner: this.scope.ownerPubKey,
+      //     payer: createInfo.payer || this.scope.ownerPubKey,
+      //     amount: createInfo.amount ?? 0,
+      //     skipCloseAccount,
+      //   });
+      //   newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
+      //   newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
+      //   newTxInstructions.signers!.push(...(txInstruction.signers || []));
+      //   newTxInstructions.instructionTypes!.push(...(txInstruction.instructionTypes || []));
+      //   newTxInstructions.endInstructionTypes!.push(...(txInstruction.endInstructionTypes || []));
+
+      //   return { account: txInstruction.addresses.newAccount, instructionParams: newTxInstructions };
+      // } else {
+      const newTokenAccount = generatePubKey({ fromPublicKey: owner, programId: tokenProgram });
+      const balanceNeeded = await this.scope.connection.getMinimumBalanceForRentExemption(AccountLayout.span);
+
+      const createAccountIns = SystemProgram.createAccountWithSeed({
+        fromPubkey: owner,
+        basePubkey: owner,
+        seed: newTokenAccount.seed,
+        newAccountPubkey: newTokenAccount.publicKey,
+        lamports: balanceNeeded,
+        space: AccountLayout.span,
+        programId: tokenProgram,
+      });
+
+      newTxInstructions.instructions!.push(
+        createAccountIns,
+        initTokenAccountInstruction({
+          mint,
+          tokenAccount: newTokenAccount.publicKey,
           owner: this.scope.ownerPubKey,
-          payer: createInfo.payer || this.scope.ownerPubKey,
-          amount: createInfo.amount ?? 0,
-          skipCloseAccount,
-        });
-        newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
-        newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
-        newTxInstructions.signers!.push(...(txInstruction.signers || []));
-        newTxInstructions.instructionTypes!.push(...(txInstruction.instructionTypes || []));
-        newTxInstructions.endInstructionTypes!.push(...(txInstruction.endInstructionTypes || []));
-
-        return { account: txInstruction.addresses.newAccount, instructionParams: newTxInstructions };
-      } else {
-        const newTokenAccount = generatePubKey({ fromPublicKey: owner, programId: tokenProgram });
-        const balanceNeeded = await this.scope.connection.getMinimumBalanceForRentExemption(AccountLayout.span);
-
-        const createAccountIns = SystemProgram.createAccountWithSeed({
-          fromPubkey: owner,
-          basePubkey: owner,
-          seed: newTokenAccount.seed,
-          newAccountPubkey: newTokenAccount.publicKey,
-          lamports: balanceNeeded,
-          space: AccountLayout.span,
           programId: tokenProgram,
-        });
-
-        newTxInstructions.instructions!.push(
-          createAccountIns,
-          initTokenAccountInstruction({
-            mint,
+        }),
+      );
+      newTxInstructions.instructionTypes!.push(InstructionType.CreateAccount);
+      newTxInstructions.instructionTypes!.push(InstructionType.InitAccount);
+      if (!skipCloseAccount) {
+        newTxInstructions.endInstructions!.push(
+          closeAccountInstruction({
+            owner,
+            payer: createInfo.payer || owner,
             tokenAccount: newTokenAccount.publicKey,
-            owner: this.scope.ownerPubKey,
             programId: tokenProgram,
           }),
         );
-        newTxInstructions.instructionTypes!.push(InstructionType.CreateAccount);
-        newTxInstructions.instructionTypes!.push(InstructionType.InitAccount);
-        if (!skipCloseAccount) {
-          newTxInstructions.endInstructions!.push(
-            closeAccountInstruction({
-              owner,
-              payer: createInfo.payer || owner,
-              tokenAccount: newTokenAccount.publicKey,
-              programId: tokenProgram,
-            }),
-          );
-          newTxInstructions.endInstructionTypes!.push(InstructionType.CloseAccount);
-        }
-        return { account: newTokenAccount.publicKey, instructionParams: newTxInstructions };
+        newTxInstructions.endInstructionTypes!.push(InstructionType.CloseAccount);
       }
+      return { account: newTokenAccount.publicKey, instructionParams: newTxInstructions };
     }
+    // }
   }
 
   public async checkOrCreateAta({
