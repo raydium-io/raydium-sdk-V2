@@ -1053,6 +1053,7 @@ export class Clmm extends ModuleBase {
     amountIn,
     amountOutMin,
     priceLimit,
+    observationId,
     ownerInfo,
     remainingAccounts,
     associatedOnly = true,
@@ -1064,6 +1065,7 @@ export class Clmm extends ModuleBase {
     amountIn: BN;
     amountOutMin: BN;
     priceLimit?: Decimal;
+    observationId: PublicKey;
     ownerInfo: {
       useSOLBalance?: boolean;
       feePayer?: PublicKey;
@@ -1138,6 +1140,7 @@ export class Clmm extends ModuleBase {
       ClmmInstrument.makeSwapBaseInInstructions({
         poolInfo,
         poolKeys,
+        observationId,
         ownerInfo: {
           wallet: this.scope.ownerPubKey,
           tokenAccountA: ownerTokenAccountA!,

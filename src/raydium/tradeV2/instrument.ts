@@ -421,6 +421,7 @@ export async function makeSwapInstruction({
       return await ClmmInstrument.makeSwapBaseInInstructions({
         poolInfo: _poolKey as any,
         poolKeys: _poolKey as any,
+        observationId: _poolKey.vault.A,
         ownerInfo: {
           wallet: ownerInfo.wallet,
           tokenAccountA: _poolKey.mintA.address.equals(inputMint) ? ownerInfo.sourceToken : ownerInfo.destinationToken,

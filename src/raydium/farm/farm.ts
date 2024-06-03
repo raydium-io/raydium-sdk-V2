@@ -172,10 +172,17 @@ export default class Farm extends ModuleBase {
       });
     }
 
-    const lockUserAccount = await this.scope.account.getCreatedTokenAccount({
-      mint: poolInfo.lockInfo.lockMint,
+    const { account: lockUserAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+      mint: new PublicKey(poolInfo.lockInfo.lockMint),
+      owner: this.scope.ownerPubKey,
+      skipCloseAccount: false,
+      createInfo: {
+        payer: this.scope.ownerPubKey,
+        amount: 0,
+      },
+      associatedOnly: false,
     });
-
+    instructionParams && txBuilder.addInstruction(instructionParams);
     if (!lockUserAccount)
       this.logAndCreateError("cannot found lock vault", "tokenAccounts", this.scope.account.tokenAccounts);
 

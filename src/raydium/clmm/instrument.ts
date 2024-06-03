@@ -1370,6 +1370,7 @@ export class ClmmInstrument {
   static makeSwapBaseInInstructions({
     poolInfo,
     poolKeys,
+    observationId,
     ownerInfo,
     inputMint,
     amountIn,
@@ -1379,7 +1380,7 @@ export class ClmmInstrument {
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
-
+    observationId: PublicKey;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccountA: PublicKey;
@@ -1399,6 +1400,7 @@ export class ClmmInstrument {
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
 
     const isInputMintA = poolInfo.mintA.address === inputMint.toString();
+
     const ins = [
       this.swapInstruction(
         programId,
@@ -1417,8 +1419,7 @@ export class ClmmInstrument {
         isInputMintA ? mintB : mintA,
 
         remainingAccounts,
-        // poolInfo.observationId, // to do get from api
-        mintAVault,
+        observationId, // to do get from api
         amountIn,
         amountOutMin,
         sqrtPriceLimitX64,
