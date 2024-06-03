@@ -261,7 +261,7 @@ export default class Account extends ModuleBase {
         basePubkey: owner,
         seed: newTokenAccount.seed,
         newAccountPubkey: newTokenAccount.publicKey,
-        lamports: balanceNeeded,
+        lamports: balanceNeeded + Number(createInfo.amount?.toString() ?? 0),
         space: AccountLayout.span,
         programId: tokenProgram,
       });
