@@ -411,8 +411,8 @@ export default class LiquidityModule extends ModuleBase {
 
         createInfo: mintBaseUseSOLBalance
           ? {
-            payer: this.scope.ownerPubKey,
-          }
+              payer: this.scope.ownerPubKey,
+            }
           : undefined,
         skipCloseAccount: !mintBaseUseSOLBalance,
         notUseTokenAccount: mintBaseUseSOLBalance,
@@ -429,9 +429,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintQuoteUseSOLBalance
           ? {
-            payer: this.scope.ownerPubKey!,
-            amount: 0,
-          }
+              payer: this.scope.ownerPubKey!,
+              amount: 0,
+            }
           : undefined,
         skipCloseAccount: !mintQuoteUseSOLBalance,
         notUseTokenAccount: mintQuoteUseSOLBalance,
@@ -481,8 +481,8 @@ export default class LiquidityModule extends ModuleBase {
         version === 6
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
-            ? makeWithdrawInstructionV5(insParams)
-            : makeWithdrawInstructionV3(insParams);
+          ? makeWithdrawInstructionV5(insParams)
+          : makeWithdrawInstructionV3(insParams);
       const insType = {
         3: InstructionType.FarmV3Withdraw,
         5: InstructionType.FarmV5Withdraw,
@@ -579,9 +579,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintAUseSOLBalance
           ? {
-            payer: payer!,
-            amount: baseAmount,
-          }
+              payer: payer!,
+              amount: baseAmount,
+            }
           : undefined,
         notUseTokenAccount: mintAUseSOLBalance,
         skipCloseAccount: !mintAUseSOLBalance,
@@ -596,9 +596,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintBUseSOLBalance
           ? {
-            payer: payer!,
-            amount: quoteAmount,
-          }
+              payer: payer!,
+              amount: quoteAmount,
+            }
           : undefined,
 
         notUseTokenAccount: mintBUseSOLBalance,
@@ -854,52 +854,48 @@ export default class LiquidityModule extends ModuleBase {
     }) as Promise<MakeTxData<T>>;
   }
 
-  public async getRpcPoolInfo(
-    poolId: string,
-  ): Promise<
+  public async getRpcPoolInfo(poolId: string): Promise<
     ReturnType<typeof liquidityStateV4Layout.decode> & {
       baseReserve: BN;
       quoteReserve: BN;
       poolPrice: Decimal;
     }
   > {
-    return (await this.getRpcPoolInfos([poolId]))[poolId]
+    return (await this.getRpcPoolInfos([poolId]))[poolId];
   }
 
-  public async getRpcPoolInfos(
-    poolIds: string[],
-  ): Promise<
-    {
-      [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> & {
-        baseReserve: BN;
-        quoteReserve: BN;
-        poolPrice: Decimal;
-      }
-    }
-  > {
-    const accounts = await this.scope.connection.getMultipleAccountsInfo(poolIds.map(i => new PublicKey(i)));
-    const poolInfos: { [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> } = {}
+  public async getRpcPoolInfos(poolIds: string[]): Promise<{
+    [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> & {
+      baseReserve: BN;
+      quoteReserve: BN;
+      poolPrice: Decimal;
+    };
+  }> {
+    const accounts = await this.scope.connection.getMultipleAccountsInfo(poolIds.map((i) => new PublicKey(i)));
+    const poolInfos: { [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> } = {};
 
-    const needFetchVaults: PublicKey[] = []
+    const needFetchVaults: PublicKey[] = [];
 
     for (let i = 0; i < poolIds.length; i++) {
-      const item = accounts[i]
-      if (item === null) throw Error('fetch pool info error: ' + String(poolIds[i]))
+      const item = accounts[i];
+      if (item === null) throw Error("fetch pool info error: " + String(poolIds[i]));
       const rpc = liquidityStateV4Layout.decode(item.data);
       poolInfos[String(poolIds[i])] = rpc;
 
-      needFetchVaults.push(rpc.baseVault, rpc.quoteVault)
+      needFetchVaults.push(rpc.baseVault, rpc.quoteVault);
     }
 
-    const vaultInfo: { [vaultId: string]: BN } = {}
+    const vaultInfo: { [vaultId: string]: BN } = {};
 
-    const vaultAccountInfo = await this.scope.connection.getMultipleAccountsInfo(needFetchVaults.map(i => new PublicKey(i)));
+    const vaultAccountInfo = await this.scope.connection.getMultipleAccountsInfo(
+      needFetchVaults.map((i) => new PublicKey(i)),
+    );
 
     for (let i = 0; i < needFetchVaults.length; i++) {
-      const vaultItemInfo = vaultAccountInfo[i]
-      if (vaultItemInfo === null) throw Error('fetch vault info error: ' + needFetchVaults[i])
+      const vaultItemInfo = vaultAccountInfo[i];
+      if (vaultItemInfo === null) throw Error("fetch vault info error: " + needFetchVaults[i]);
 
-      vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString())
+      vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 
     const returnData: {
@@ -907,21 +903,22 @@ export default class LiquidityModule extends ModuleBase {
         baseReserve: BN;
         quoteReserve: BN;
         poolPrice: Decimal;
-      }
-    } = {}
+      };
+    } = {};
 
     for (const [id, info] of Object.entries(poolInfos)) {
-      const baseReserve = vaultInfo[info.baseVault.toString()].sub(info.baseNeedTakePnl)
-      const quoteReserve = vaultInfo[info.quoteVault.toString()].sub(info.quoteNeedTakePnl)
+      const baseReserve = vaultInfo[info.baseVault.toString()].sub(info.baseNeedTakePnl);
+      const quoteReserve = vaultInfo[info.quoteVault.toString()].sub(info.quoteNeedTakePnl);
       returnData[id] = {
         ...info,
         baseReserve,
         quoteReserve,
-        poolPrice: new Decimal(quoteReserve.toString()).div(new Decimal(10).pow(info.baseDecimal.toString()))
-          .div(new Decimal(baseReserve.toString()).div(new Decimal(10).pow(info.quoteDecimal.toString())))
-      }
+        poolPrice: new Decimal(quoteReserve.toString())
+          .div(new Decimal(10).pow(info.quoteDecimal.toString()))
+          .div(new Decimal(baseReserve.toString()).div(new Decimal(10).pow(info.baseDecimal.toString()))),
+      };
     }
 
-    return returnData
+    return returnData;
   }
 }
