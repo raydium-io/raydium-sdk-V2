@@ -129,6 +129,8 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
 
 export interface ComputePairAmountParams {
   poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  baseReserve: BN;
+  quoteReserve: BN;
   amount: string | Decimal;
   slippage: Percent;
   epochInfo: EpochInfo;
