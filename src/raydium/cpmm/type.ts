@@ -117,6 +117,7 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItemCpmm;
   payer?: PublicKey;
   baseIn: boolean;
+  slippage?: number;
   swapResult: SwapResult;
 
   config?: {

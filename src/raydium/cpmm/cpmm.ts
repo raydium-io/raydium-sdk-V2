@@ -481,7 +481,7 @@ export default class CpmmModule extends ModuleBase {
   }
 
   public async swap<T extends TxVersion>(params: CpmmSwapParams): Promise<MakeTxData<T>> {
-    const { poolInfo, baseIn, swapResult, config, computeBudgetConfig, txVersion } = params;
+    const { poolInfo, baseIn, swapResult, slippage = 0, config, computeBudgetConfig, txVersion } = params;
 
     const { bypassAssociatedCheck, checkCreateATAOwner } = {
       // default
@@ -506,9 +506,14 @@ export default class CpmmModule extends ModuleBase {
       associatedOnly: false,
     });
 
+    swapResult.destinationAmountSwapped = swapResult.destinationAmountSwapped
+      .mul(new BN((1 - slippage) * 10000))
+      .div(new BN(10000));
+
     const { tokenAccount: _mintATokenAcc, ...mintATokenAccInstruction } = await this.scope.account.handleTokenAccount({
       side: baseIn ? "in" : "out",
       amount: baseIn ? swapResult.sourceAmountSwapped : swapResult.destinationAmountSwapped,
+      programId: new PublicKey(poolInfo.mintA.programId),
       mint: mintA,
       tokenAccount: mintATokenAcc,
       bypassAssociatedCheck,
@@ -519,6 +524,7 @@ export default class CpmmModule extends ModuleBase {
     const { tokenAccount: _mintBTokenAcc, ...mintBTokenAccInstruction } = await this.scope.account.handleTokenAccount({
       side: baseIn ? "out" : "in",
       amount: baseIn ? swapResult.destinationAmountSwapped : swapResult.sourceAmountSwapped,
+      programId: new PublicKey(poolInfo.mintB.programId),
       mint: mintB,
       tokenAccount: mintBTokenAcc,
       bypassAssociatedCheck,
