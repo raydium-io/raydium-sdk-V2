@@ -329,7 +329,7 @@ export function makeSwapFixedOutInstruction(
   );
 
   const keys = [
-    accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
     // amm
     accountMeta({ pubkey: poolKeys.id }),
     accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
