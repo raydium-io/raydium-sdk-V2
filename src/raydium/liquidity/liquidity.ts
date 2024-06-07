@@ -38,9 +38,13 @@ import { getAssociatedPoolKeys, getAssociatedConfigId } from "./utils";
 import { createPoolFeeLayout, liquidityStateV4Layout } from "./layout";
 import {
   FARM_PROGRAM_TO_VERSION,
+  FarmLedger,
   makeWithdrawInstructionV3,
   makeWithdrawInstructionV5,
   makeWithdrawInstructionV6,
+  createAssociatedLedgerAccountInstruction,
+  getAssociatedLedgerAccount,
+  getFarmLedgerLayout,
 } from "@/raydium/farm";
 import { StableLayout, getStablePrice, getDyByDxBaseIn, getDxByDyBaseIn } from "./stable";
 import { LIQUIDITY_FEES_NUMERATOR, LIQUIDITY_FEES_DENOMINATOR } from "./constant";
@@ -345,6 +349,7 @@ export default class LiquidityModule extends ModuleBase {
     base,
     computeBudgetConfig,
     payer,
+    userAuxiliaryLedgers,
     tokenProgram = TOKEN_PROGRAM_ID,
     checkCreateATAOwner = true,
     getEphemeralSigners,
@@ -361,6 +366,7 @@ export default class LiquidityModule extends ModuleBase {
     };
     farmInfo?: FormatFarmInfoOutV6;
     userFarmLpAmount?: BN;
+    userAuxiliaryLedgers?: PublicKey[];
     base: "MintA" | "MintB";
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
@@ -445,6 +451,30 @@ export default class LiquidityModule extends ModuleBase {
     mintToAccount[poolInfo.mintB.address] = quoteTokenAccount;
 
     if (farmInfo !== undefined && !userFarmLpAmount?.isZero()) {
+      const farmVersion = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
+      const ledger = getAssociatedLedgerAccount({
+        programId: new PublicKey(farmInfo.programId),
+        poolId: new PublicKey(farmInfo.id),
+        owner: this.scope.ownerPubKey,
+        version: farmVersion,
+      });
+      let ledgerInfo: FarmLedger | undefined = undefined;
+      const ledgerData = await this.scope.connection.getAccountInfo(ledger);
+      if (ledgerData) {
+        const ledgerLayout = getFarmLedgerLayout(farmVersion)!;
+        ledgerInfo = ledgerLayout.decode(ledgerData.data);
+      }
+      if (farmVersion !== 6 && !ledgerInfo) {
+        const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
+          id: new PublicKey(farmInfo.id),
+          programId: new PublicKey(farmInfo.programId),
+          version: farmVersion,
+          ledger,
+          owner: this.scope.ownerPubKey,
+        });
+        txBuilder.addInstruction({ instructions: [instruction], instructionTypes: [instructionType] });
+      }
+
       const rewardTokenAccounts: PublicKey[] = [];
       for (const item of farmInfo.rewardInfos) {
         const rewardIsWsol = item.mint.address === Token.WSOL.mint.toString();
@@ -469,6 +499,7 @@ export default class LiquidityModule extends ModuleBase {
       }
       const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
       const insParams = {
+        userAuxiliaryLedgers,
         amount: userFarmLpAmount!,
         owner: this.scope.ownerPubKey,
         farmInfo,

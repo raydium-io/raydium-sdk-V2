@@ -141,7 +141,7 @@ export class Api {
       id: string;
       jsonrpc: string;
       result: { numSlots: number; numTransactions: number; samplePeriodSecs: number; slot: number }[];
-    } = await this.api.post(endpointUrl, {
+    } = await axios.post(endpointUrl, {
       id: "getRecentPerformanceSamples",
       jsonrpc: "2.0",
       method: "getRecentPerformanceSamples",
