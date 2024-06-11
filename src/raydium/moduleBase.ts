@@ -37,6 +37,7 @@ export default class ModuleBase {
       feePayer: feePayer || this.scope.ownerPubKey,
       cluster: this.scope.cluster,
       owner: this.scope.owner,
+      blockhashCommitment: this.scope.blockhashCommitment,
       signAllTransactions: this.scope.signAllTransactions,
     });
   }

@@ -9,6 +9,7 @@ import {
   Keypair,
   EpochInfo,
   VersionedTransaction,
+  Commitment,
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
@@ -43,11 +44,15 @@ export function addComputeBudget(config: ComputeBudgetConfig): {
   };
 }
 
-export async function getRecentBlockHash(connection: Connection): Promise<string> {
+export async function getRecentBlockHash(connection: Connection, propsCommitment?: Commitment): Promise<string> {
+  const commitment = propsCommitment ?? "confirmed";
   try {
-    return (await connection.getLatestBlockhash?.())?.blockhash || (await connection.getRecentBlockhash()).blockhash;
+    return (
+      (await connection.getLatestBlockhash?.({ commitment }))?.blockhash ||
+      (await connection.getRecentBlockhash(commitment)).blockhash
+    );
   } catch {
-    return (await connection.getRecentBlockhash()).blockhash;
+    return (await connection.getRecentBlockhash(commitment)).blockhash;
   }
 }
 

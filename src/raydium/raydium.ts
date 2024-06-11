@@ -1,4 +1,4 @@
-import { Connection, Keypair, PublicKey, EpochInfo } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, EpochInfo, Commitment } from "@solana/web3.js";
 import { merge } from "lodash";
 
 import { Api, API_URL_CONFIG, ApiV3TokenRes, ApiV3Token, JupTokenType, AvailabilityCheckAPI3 } from "../api";
@@ -41,6 +41,7 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   jupTokenType?: JupTokenType;
   disableFeatureCheck?: boolean;
   disableLoadToken?: boolean;
+  blockhashCommitment?: Commitment;
 }
 
 export interface RaydiumApiBatchRequestParams {
@@ -82,6 +83,7 @@ export class Raydium {
   public rawBalances: Map<string, string> = new Map();
   public apiData: ApiData;
   public availability: Partial<AvailabilityCheckAPI3>;
+  public blockhashCommitment: Commitment;
 
   private _connection: Connection;
   private _owner: Owner | undefined;
@@ -102,12 +104,22 @@ export class Raydium {
   };
 
   constructor(config: RaydiumConstructorParams) {
-    const { connection, cluster, owner, api, defaultChainTime, defaultChainTimeOffset, apiCacheTime } = config;
+    const {
+      connection,
+      cluster,
+      owner,
+      api,
+      defaultChainTime,
+      defaultChainTimeOffset,
+      apiCacheTime,
+      blockhashCommitment = "confirmed",
+    } = config;
 
     this._connection = connection;
     this.cluster = cluster || "mainnet";
     this._owner = owner ? new Owner(owner) : undefined;
     this._signAllTransactions = config.signAllTransactions;
+    this.blockhashCommitment = blockhashCommitment;
 
     this.api = api;
     this._apiCacheTime = apiCacheTime || 5 * 60 * 1000;

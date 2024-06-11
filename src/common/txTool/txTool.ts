@@ -7,6 +7,7 @@ import {
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
+  Commitment,
 } from "@solana/web3.js";
 import axios from "axios";
 
@@ -43,6 +44,7 @@ interface TxBuilderInit {
   feePayer: PublicKey;
   cluster: Cluster;
   owner?: Owner;
+  blockhashCommitment?: Commitment;
   signAllTransactions?: SignAllTransactions;
 }
 
@@ -124,6 +126,7 @@ export class TxBuilder {
   private feePayer: PublicKey;
   private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
+  private blockhashCommitment?: Commitment;
 
   constructor(params: TxBuilderInit) {
     this.connection = params.connection;
@@ -131,6 +134,7 @@ export class TxBuilder {
     this.signAllTransactions = params.signAllTransactions;
     this.owner = params.owner;
     this.cluster = params.cluster;
+    this.blockhashCommitment = params.blockhashCommitment;
   }
 
   get AllTxData(): {
@@ -233,7 +237,7 @@ export class TxBuilder {
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { recentBlockHash: propBlockHash, skipPreflight = true } = params || {};
-        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection));
+        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
         transaction.recentBlockhash = recentBlockHash;
         if (this.signers.length) transaction.sign(...this.signers);
         printSimulate([transaction]);
@@ -286,7 +290,7 @@ export class TxBuilder {
       instructionTypes: allInstructionTypes,
       execute: async (executeParams?: MultiTxExecuteParam) => {
         const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
-        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection));
+        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
         if (this.owner?.isKeyPair) {
           if (sequentially) {
             const txIds: string[] = [];
@@ -420,7 +424,9 @@ export class TxBuilder {
 
     const messageV0 = new TransactionMessage({
       payerKey: this.feePayer,
-      recentBlockhash: forerunCreate ? PublicKey.default.toBase58() : await getRecentBlockHash(this.connection),
+      recentBlockhash: forerunCreate
+        ? PublicKey.default.toBase58()
+        : await getRecentBlockHash(this.connection, this.blockhashCommitment),
       instructions: [...this.allInstructions],
     }).compileToV0Message(Object.values(lookupTableAddressAccount));
     const transaction = new VersionedTransaction(messageV0);
@@ -439,7 +445,9 @@ export class TxBuilder {
           if (!this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey)))
             transaction.sign([this.owner.signer as Signer]);
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
-          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
+          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
+            commitment: this.blockhashCommitment,
+          });
           await this.connection.confirmTransaction(
             {
               blockhash,
@@ -504,7 +512,9 @@ export class TxBuilder {
         if (propBlockHash) allTransactions.forEach((tx) => (tx.message.recentBlockhash = propBlockHash));
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
-          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
+          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
+            commitment: this.blockhashCommitment,
+          });
           allTransactions.forEach((tx, idx) => {
             if (!allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey)))
               tx.sign([this.owner!.signer as Signer]);
@@ -514,7 +524,9 @@ export class TxBuilder {
             const txIds: string[] = [];
             for (const tx of allTransactions) {
               const txId = await this.connection.sendTransaction(tx, { skipPreflight });
-              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
+              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
+                commitment: this.blockhashCommitment,
+              });
               await this.connection.confirmTransaction(
                 {
                   blockhash,
@@ -689,7 +701,7 @@ export class TxBuilder {
       instructionTypes: this.instructionTypes,
       execute: async (executeParams?: MultiTxExecuteParam) => {
         const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
-        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection));
+        const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
         allTransactions.forEach(async (tx, idx) => {
           tx.recentBlockhash = recentBlockHash;
           if (allSigners[idx].length) tx.sign(...allSigners[idx]);
@@ -802,7 +814,7 @@ export class TxBuilder {
             instructionTypes: [],
           };
 
-    const blockHash = await getRecentBlockHash(this.connection);
+    const blockHash = await getRecentBlockHash(this.connection, this.blockhashCommitment);
 
     const signerKey: { [key: string]: Signer } = this.signers.reduce(
       (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
@@ -914,7 +926,9 @@ export class TxBuilder {
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
-          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
+          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
+            commitment: this.blockhashCommitment,
+          });
           allTransactions.forEach((tx, idx) => {
             if (!allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey)))
               tx.sign([this.owner!.signer as Signer]);
@@ -924,7 +938,9 @@ export class TxBuilder {
             const txIds: string[] = [];
             for (const tx of allTransactions) {
               const txId = await this.connection.sendTransaction(tx, { skipPreflight });
-              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash();
+              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
+                commitment: this.blockhashCommitment,
+              });
               await this.connection.confirmTransaction(
                 {
                   blockhash,

@@ -1,18 +1,9 @@
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
-import { createTransferInstruction } from "@solana/spl-token";
-import { forecastTransactionSize, solToWSol, TxBuilder, BN_ZERO, SOLMint, WSOLMint, addComputeBudget } from "@/common";
-import { Token } from "@/module";
-import { StableLayout } from "../liquidity/stable";
+import { PublicKey } from "@solana/web3.js";
+import { BN_ZERO, WSOLMint } from "@/common";
+import { TxVersion } from "@/common/txTool/txType";
+import { MakeTxData } from "@/common/txTool/txTool";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import {
-  ComputeAmountOutLayout,
-  ComputeAmountOutRouteLayout,
-  PoolAccountInfoV4,
-  ReturnTypeGetAddLiquidityDefaultPool,
-} from "./type";
-import { makeSwapInstruction } from "./instrument";
-import { MakeMultiTransaction, MakeTransaction } from "../type";
-import { InstructionType } from "@/common/txTool/txType";
+import { PoolAccountInfoV4, ReturnTypeGetAddLiquidityDefaultPool } from "./type";
 import { BigNumberish, parseBigNumberish } from "@/common/bignumber";
 import {
   createWSolAccountInstructions,
@@ -77,12 +68,13 @@ export default class TradeV2 extends ModuleBase {
     return tokenAccounts;
   }
 
-  public async unWrapWSol(props: {
+  public async unWrapWSol<T extends TxVersion>(props: {
     amount: BigNumberish;
     computeBudgetConfig?: ComputeBudgetConfig;
     tokenProgram?: PublicKey;
-  }): Promise<MakeTransaction> {
-    const { amount, tokenProgram } = props;
+    txVersion?: T;
+  }): Promise<MakeTxData<T>> {
+    const { amount, tokenProgram, txVersion = TxVersion.LEGACY } = props;
     const tokenAccounts = await this.getWSolAccounts();
     const txBuilder = this.createTxBuilder();
     txBuilder.addCustomComputeBudget(props.computeBudgetConfig);
@@ -129,10 +121,14 @@ export default class TradeV2 extends ModuleBase {
       }
     }
 
-    return txBuilder.build();
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async wrapWSol(amount: BigNumberish, tokenProgram?: PublicKey): Promise<MakeTransaction> {
+  public async wrapWSol<T extends TxVersion>(
+    amount: BigNumberish,
+    tokenProgram?: PublicKey,
+    txVersion?: T,
+  ): Promise<MakeTxData<T>> {
     const tokenAccounts = await this.getWSolAccounts();
 
     const txBuilder = this.createTxBuilder();
@@ -168,6 +164,6 @@ export default class TradeV2 extends ModuleBase {
         ],
       });
     }
-    return txBuilder.build();
+    return txBuilder.versionBuild({ txVersion: txVersion ?? TxVersion.LEGACY }) as Promise<MakeTxData<T>>;
   }
 }
