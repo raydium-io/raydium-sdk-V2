@@ -1,21 +1,22 @@
 import { PublicKey, Keypair, Signer, TransactionInstruction, Transaction } from "@solana/web3.js";
 import BN from "bn.js";
-import { TokenAmount, Price, Percent, Token } from "../../module";
-import { ClmmPoolInfo } from "../clmm";
+import { TokenAmount, Token } from "@/module";
 import { TransferAmountFee } from "../type";
-import { PoolKeys, ApiV3PoolInfoItem } from "../../api/type";
+import { ApiV3PoolInfoItem, PoolKeys } from "@/api/type";
+import { ComputeAmountOutParam } from "@/raydium/liquidity/type";
+import { ComputeClmmPoolInfo } from "@/raydium/clmm/type";
+import Decimal from "decimal.js";
 
 export interface ComputeAmountOutAmmLayout {
   amountIn: TransferAmountFee;
   amountOut: TransferAmountFee;
   minAmountOut: TransferAmountFee;
-  currentPrice: Price | undefined;
-  executionPrice: Price | null;
-  priceImpact: Percent;
+  currentPrice: Decimal | undefined;
+  executionPrice: Decimal | null;
+  priceImpact: Decimal;
   fee: TokenAmount[];
   routeType: "amm";
-  poolInfo: ApiV3PoolInfoItem[];
-  poolKey: PoolKeys[];
+  poolInfoList: ComputePoolType[];
   remainingAccounts: PublicKey[][];
   poolReady: boolean;
   poolType: "CLMM" | "STABLE" | undefined;
@@ -26,18 +27,21 @@ export interface ComputeAmountOutAmmLayout {
   };
 
   expirationTime: number | undefined;
+
+  allTrade: boolean;
+  slippage: number;
+  clmmExPriceX64: (BN | undefined)[];
 }
 export interface ComputeAmountOutRouteLayout {
   amountIn: TransferAmountFee;
   amountOut: TransferAmountFee;
   minAmountOut: TransferAmountFee;
-  currentPrice: Price | undefined;
-  executionPrice: Price | null;
-  priceImpact: Percent;
+  currentPrice: Decimal | undefined;
+  executionPrice: Decimal | null;
+  priceImpact: Decimal;
   fee: TokenAmount[];
   routeType: "route";
-  poolInfo: ApiV3PoolInfoItem[];
-  poolKey: PoolKeys[];
+  poolInfoList: ComputePoolType[];
   remainingAccounts: (PublicKey[] | undefined)[];
   minMiddleAmountFee: TokenAmount | undefined;
   middleToken: Token;
@@ -50,6 +54,9 @@ export interface ComputeAmountOutRouteLayout {
   };
 
   expirationTime: number | undefined;
+  allTrade: boolean;
+  slippage: number;
+  clmmExPriceX64: (BN | undefined)[];
 }
 
 export type ComputeAmountOutLayout = ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;
@@ -69,7 +76,16 @@ export type MakeSwapInstructionParam = {
   inputMint: PublicKey;
   routeProgram: PublicKey;
 
-  swapInfo: ComputeAmountOutLayout;
+  // ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;
+  swapInfo:
+    | (Omit<ComputeAmountOutAmmLayout, "poolKey"> & {
+        poolKey: PoolKeys[];
+        poolInfo: ComputePoolType[];
+      })
+    | (Omit<ComputeAmountOutRouteLayout, "poolKey"> & {
+        poolKey: PoolKeys[];
+        poolInfo: ComputePoolType[];
+      });
 };
 
 export interface PoolAccountInfoV4 {
@@ -85,7 +101,7 @@ export interface PoolAccountInfoV4 {
 }
 
 export interface ReturnTypeFetchMultipleInfo {
-  [ammId: string]: PoolAccountInfoV4;
+  [ammId: string]: ComputeAmountOutParam["poolInfo"];
 }
 export type ReturnTypeGetAddLiquidityDefaultPool = ApiV3PoolInfoItem | undefined;
 export interface ReturnTypeMakeSwapInstruction {
@@ -105,18 +121,45 @@ export interface ReturnTypeMakeSwapTransaction {
 
 export type RoutePathType = {
   [routeMint: string]: {
+    skipMintCheck?: boolean;
     mintProgram: PublicKey;
-    in: PoolKeys[];
-    out: PoolKeys[];
+    in: PoolType[];
+    out: PoolType[];
     mDecimals: number;
   };
 };
 
+export type AmmPool = {
+  id: PublicKey;
+  version: number;
+  mintA: PublicKey;
+  mintB: PublicKey;
+};
+
+export type ClmmPool = {
+  id: PublicKey;
+  version: number;
+  mintA: PublicKey;
+  mintB: PublicKey;
+};
+
+export type PoolType = AmmPool | ClmmPool;
+
 export interface ReturnTypeGetAllRoute {
-  directPath: PoolKeys[];
-  addLiquidityPools: ApiV3PoolInfoItem[];
+  directPath: PoolType[];
+  addLiquidityPools: AmmPool[];
   routePathDict: RoutePathType;
-  needSimulate: ApiV3PoolInfoItem[];
-  needTickArray: ClmmPoolInfo[];
-  needCheckToken: string[];
+  needSimulate: AmmPool[];
+  needTickArray: ClmmPool[];
 }
+
+export type ComputePoolType = ComputeAmountOutParam["poolInfo"] | ComputeClmmPoolInfo;
+export type ComputeRoutePathType = {
+  [routeMint: string]: {
+    skipMintCheck?: boolean;
+    mintProgram: PublicKey;
+    in: ComputePoolType[];
+    out: ComputePoolType[];
+    mDecimals: number;
+  };
+};

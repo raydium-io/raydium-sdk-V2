@@ -5,6 +5,8 @@ import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
 import { ComputeBudgetConfig } from "@/raydium/type";
 import { TokenAmount } from "@/module/amount";
+import { liquidityStateV4Layout } from "./layout";
+import Decimal from "decimal.js";
 
 export type LiquiditySide = "a" | "b";
 export type AmountSide = "base" | "quote";
@@ -189,6 +191,8 @@ export interface ComputeAmountOutParam {
   poolInfo: ApiV3PoolInfoStandardItem & {
     baseReserve: BN;
     quoteReserve: BN;
+    version: 4 | 5;
+    status: number;
   };
   mintIn: string | PublicKey;
   mintOut: string | PublicKey;
@@ -206,3 +210,10 @@ export interface SwapParam<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
+
+export type AmmRpcData = ReturnType<typeof liquidityStateV4Layout.decode> & {
+  baseReserve: BN;
+  quoteReserve: BN;
+  poolPrice: Decimal;
+  programId: PublicKey;
+};

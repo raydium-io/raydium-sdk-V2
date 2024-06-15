@@ -15,6 +15,7 @@ import { getATAAddress } from "@/common/pda";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { BNDivCeil } from "@/common/transfer";
+import { getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
@@ -25,6 +26,7 @@ import {
   CreatePoolAddress,
   ComputeAmountOutParam,
   SwapParam,
+  AmmRpcData,
 } from "./type";
 import {
   makeAddLiquidityInstruction,
@@ -710,7 +712,13 @@ export default class LiquidityModule extends ModuleBase {
     return createPoolFeeLayout.decode(account.data).fee;
   }
 
-  public computeAmountOut({ poolInfo, amountIn, mintIn, mintOut, slippage }: ComputeAmountOutParam): {
+  public computeAmountOut({
+    poolInfo,
+    amountIn,
+    mintIn: propMintIn,
+    mintOut: propMintOut,
+    slippage,
+  }: ComputeAmountOutParam): {
     amountOut: BN;
     minAmountOut: BN;
     currentPrice: Decimal;
@@ -718,6 +726,7 @@ export default class LiquidityModule extends ModuleBase {
     priceImpact: Decimal;
     fee: BN;
   } {
+    const [mintIn, mintOut] = [propMintIn.toString(), propMintOut.toString()];
     if (mintIn !== poolInfo.mintA.address && mintIn !== poolInfo.mintB.address) throw new Error("toke not match");
     if (mintOut !== poolInfo.mintA.address && mintOut !== poolInfo.mintB.address) throw new Error("toke not match");
 
@@ -885,45 +894,47 @@ export default class LiquidityModule extends ModuleBase {
     }) as Promise<MakeTxData<T>>;
   }
 
-  public async getRpcPoolInfo(poolId: string): Promise<
-    ReturnType<typeof liquidityStateV4Layout.decode> & {
-      baseReserve: BN;
-      quoteReserve: BN;
-      poolPrice: Decimal;
-    }
-  > {
+  public async getRpcPoolInfo(poolId: string): Promise<AmmRpcData> {
     return (await this.getRpcPoolInfos([poolId]))[poolId];
   }
 
-  public async getRpcPoolInfos(poolIds: string[]): Promise<{
-    [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> & {
-      baseReserve: BN;
-      quoteReserve: BN;
-      poolPrice: Decimal;
-    };
+  public async getRpcPoolInfos(
+    poolIds: (string | PublicKey)[],
+    config?: { batchRequest?: boolean; chunkCount?: number },
+  ): Promise<{
+    [poolId: string]: AmmRpcData;
   }> {
-    const accounts = await this.scope.connection.getMultipleAccountsInfo(poolIds.map((i) => new PublicKey(i)));
-    const poolInfos: { [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> } = {};
+    const accounts = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      poolIds.map((i) => ({ pubkey: new PublicKey(i) })),
+      config,
+    );
+    const poolInfos: { [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> & { programId: PublicKey } } =
+      {};
 
     const needFetchVaults: PublicKey[] = [];
 
     for (let i = 0; i < poolIds.length; i++) {
       const item = accounts[i];
-      if (item === null) throw Error("fetch pool info error: " + String(poolIds[i]));
-      const rpc = liquidityStateV4Layout.decode(item.data);
-      poolInfos[String(poolIds[i])] = rpc;
+      if (item === null || !item.accountInfo) throw Error("fetch pool info error: " + String(poolIds[i]));
+      const rpc = liquidityStateV4Layout.decode(item.accountInfo.data);
+      poolInfos[String(poolIds[i])] = {
+        ...rpc,
+        programId: item.accountInfo.owner,
+      };
 
       needFetchVaults.push(rpc.baseVault, rpc.quoteVault);
     }
 
     const vaultInfo: { [vaultId: string]: BN } = {};
-
-    const vaultAccountInfo = await this.scope.connection.getMultipleAccountsInfo(
-      needFetchVaults.map((i) => new PublicKey(i)),
+    const vaultAccountInfo = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      needFetchVaults.map((i) => ({ pubkey: new PublicKey(i) })),
+      config,
     );
 
     for (let i = 0; i < needFetchVaults.length; i++) {
-      const vaultItemInfo = vaultAccountInfo[i];
+      const vaultItemInfo = vaultAccountInfo[i].accountInfo;
       if (vaultItemInfo === null) throw Error("fetch vault info error: " + needFetchVaults[i]);
 
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
@@ -934,6 +945,7 @@ export default class LiquidityModule extends ModuleBase {
         baseReserve: BN;
         quoteReserve: BN;
         poolPrice: Decimal;
+        programId: PublicKey;
       };
     } = {};
 

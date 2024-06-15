@@ -1,11 +1,12 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { MintLayout, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { MintLayout, RawMint, TOKEN_PROGRAM_ID, TransferFeeConfig } from "@solana/spl-token";
 import { Token, TokenAmount } from "@/module";
 import { BigNumberish } from "@/common/bignumber";
 import { TokenInfo } from "./type";
 import { SOL_INFO, TOKEN_WSOL } from "./constant";
 
 import { ApiV3Token } from "@/api";
+import { solToWSol } from "@/common";
 
 export const parseTokenInfo = async ({
   connection,
@@ -68,7 +69,7 @@ export const toTokenAmount = ({
 }): TokenAmount =>
   new TokenAmount(
     new Token({
-      mint: props.address,
+      mint: solToWSol(props.address).toBase58(),
       decimals: props.decimals,
       symbol: props.symbol,
       name,
@@ -87,3 +88,45 @@ export function wSolToSolToken<T extends ApiV3Token | TokenInfo>(token: T): T {
   if (token.address === TOKEN_WSOL.address) return SOL_INFO as T;
   return token;
 }
+
+export const toApiV3Token = ({
+  address,
+  programId,
+  decimals,
+  ...props
+}: {
+  address: string;
+  programId: string;
+  decimals: number;
+} & Partial<ApiV3Token>): ApiV3Token => ({
+  chainId: 101,
+  address: solToWSol(address).toBase58(),
+  programId,
+  logoURI: "",
+  symbol: "",
+  name: "",
+  decimals,
+  tags: [],
+  extensions: props.extensions || {},
+  ...props,
+});
+
+export const toFeeConfig = (config?: TransferFeeConfig): ApiV3Token["extensions"]["feeConfig"] | undefined =>
+  config
+    ? {
+        ...config,
+        transferFeeConfigAuthority: config.transferFeeConfigAuthority.toBase58(),
+        withdrawWithheldAuthority: config.withdrawWithheldAuthority.toBase58(),
+        withheldAmount: config.withheldAmount.toString(),
+        olderTransferFee: {
+          ...config.olderTransferFee,
+          epoch: config.olderTransferFee.epoch.toString(),
+          maximumFee: config.olderTransferFee.maximumFee.toString(),
+        },
+        newerTransferFee: {
+          ...config.newerTransferFee,
+          epoch: config.newerTransferFee.epoch.toString(),
+          maximumFee: config.newerTransferFee.maximumFee.toString(),
+        },
+      }
+    : undefined;

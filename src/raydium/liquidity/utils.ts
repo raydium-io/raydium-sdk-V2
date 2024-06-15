@@ -1,5 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AmmV4Keys, AmmV5Keys } from "@/api/type";
+import { toApiV3Token } from "@/raydium/token/utils";
 import {
   findProgramAddress,
   simulateMultipleInstruction,
@@ -7,10 +9,12 @@ import {
   parseSimulateValue,
 } from "@/common/txTool/txUtils";
 import { getSerumAssociatedAuthority } from "./serum";
-import { LiquidityPoolKeys } from "./type";
+import { LiquidityPoolKeys, ComputeAmountOutParam } from "./type";
 import { StableLayout } from "./stable";
 import { makeSimulatePoolInfoInstruction } from "./instruction";
+import { liquidityStateV4Layout } from "./layout";
 import BN from "bn.js";
+import Decimal from "decimal.js";
 
 type AssociatedName =
   | "amm_associated_seed"
@@ -192,3 +196,80 @@ export async function fetchMultipleInfo({
 
   return poolsInfo;
 }
+
+const mockRewardData = {
+  volume: 0,
+  volumeQuote: 0,
+  volumeFee: 0,
+  apr: 0,
+  feeApr: 0,
+  priceMin: 0,
+  priceMax: 0,
+  rewardApr: [],
+};
+
+export const toAmmComputePoolInfo = (
+  poolData: Record<
+    string,
+    ReturnType<typeof liquidityStateV4Layout.decode> & {
+      baseReserve: BN;
+      quoteReserve: BN;
+      poolPrice: Decimal;
+      programId: PublicKey;
+    }
+  >,
+): Record<string, ComputeAmountOutParam["poolInfo"]> => {
+  const data: Record<string, ComputeAmountOutParam["poolInfo"]> = {};
+  const tokenProgramStr = TOKEN_PROGRAM_ID.toBase58();
+
+  Object.keys(poolData).map((poolId) => {
+    const poolInfo = poolData[poolId];
+    const [mintA, mintB] = [poolInfo.baseMint.toBase58(), poolInfo.quoteMint.toBase58()];
+    data[poolId] = {
+      id: poolId,
+      version: 4,
+      status: poolInfo.status.toNumber(),
+      programId: poolInfo.programId.toBase58(), // needed
+      mintA: toApiV3Token({
+        address: mintA, // needed
+        programId: tokenProgramStr,
+        decimals: poolInfo.baseDecimal.toNumber(),
+      }),
+      mintB: toApiV3Token({
+        address: mintB, // needed
+        programId: tokenProgramStr,
+        decimals: poolInfo.quoteDecimal.toNumber(),
+      }),
+      rewardDefaultInfos: [],
+      rewardDefaultPoolInfos: "Ecosystem",
+      price: poolInfo.poolPrice.toNumber(),
+      mintAmountA: new Decimal(poolInfo.baseReserve.toString()).div(10 ** poolInfo.baseDecimal.toNumber()).toNumber(),
+      mintAmountB: new Decimal(poolInfo.quoteReserve.toString()).div(10 ** poolInfo.quoteDecimal.toNumber()).toNumber(),
+      baseReserve: poolInfo.baseReserve, // needed
+      quoteReserve: poolInfo.quoteReserve, // needed
+      feeRate: new Decimal(poolInfo.tradeFeeNumerator.toString())
+        .div(poolInfo.tradeFeeDenominator.toString())
+        .toNumber(),
+      openTime: poolInfo.poolOpenTime.toString(),
+      tvl: 0,
+      day: mockRewardData,
+      week: mockRewardData,
+      month: mockRewardData,
+      pooltype: [],
+      farmUpcomingCount: 0,
+      farmOngoingCount: 0,
+      farmFinishedCount: 0,
+      type: "Standard",
+      marketId: poolInfo.marketId.toBase58(),
+      configId: PublicKey.default.toBase58(),
+      lpPrice: 0,
+      lpAmount: 0,
+      lpMint: toApiV3Token({
+        address: poolInfo.lpMint.toBase58(),
+        programId: tokenProgramStr,
+        decimals: Math.min(poolInfo.baseDecimal.toNumber(), poolInfo.quoteDecimal.toNumber()),
+      }),
+    };
+  });
+  return data;
+};

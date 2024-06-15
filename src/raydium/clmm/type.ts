@@ -9,7 +9,7 @@ import { TxVersion } from "@/common/txTool/txType";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 import { ComputeBudgetConfig } from "@/raydium/type";
 
-import { ClmmPositionLayout } from "./layout";
+import { ClmmPositionLayout, PoolInfoLayout } from "./layout";
 
 export { ApiClmmConfigInfo };
 
@@ -145,6 +145,7 @@ export interface ClmmPoolInfo {
 
 export interface ComputeClmmPoolInfo {
   id: PublicKey;
+  version: 6;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
 
@@ -251,6 +252,7 @@ export interface ReturnTypeGetAmountsFromLiquidity {
   amountSlippageB: BN;
 }
 export interface ReturnTypeComputeAmountOutFormat {
+  allTrade: boolean;
   realAmountIn: TransferAmountFee;
   amountOut: TransferAmountFee;
   minAmountOut: TransferAmountFee;
@@ -260,8 +262,10 @@ export interface ReturnTypeComputeAmountOutFormat {
   priceImpact: Percent;
   fee: TokenAmount;
   remainingAccounts: PublicKey[];
+  executionPriceX64: BN;
 }
 export interface ReturnTypeComputeAmountOut {
+  allTrade: boolean;
   realAmountIn: GetTransferAmountFee;
   amountOut: GetTransferAmountFee;
   minAmountOut: GetTransferAmountFee;
@@ -271,6 +275,7 @@ export interface ReturnTypeComputeAmountOut {
   priceImpact: Percent;
   fee: BN;
   remainingAccounts: PublicKey[];
+  executionPriceX64: BN;
 }
 
 export interface ReturnTypeFetchMultiplePoolTickArrays {
@@ -574,3 +579,5 @@ export interface InitRewardExtInfo {
     operationId: PublicKey;
   };
 }
+
+export type ClmmRpcData = ReturnType<typeof PoolInfoLayout.decode> & { currentPrice: number; programId: PublicKey };

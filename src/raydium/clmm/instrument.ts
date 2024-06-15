@@ -1,12 +1,5 @@
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import {
-  PublicKey,
-  TransactionInstruction,
-  SystemProgram,
-  Connection,
-  Keypair,
-  Signer,
-} from "@solana/web3.js";
+import { PublicKey, TransactionInstruction, SystemProgram, Connection, Keypair, Signer } from "@solana/web3.js";
 import BN from "bn.js";
 import {
   createLogger,
@@ -1377,7 +1370,7 @@ export class ClmmInstrument {
     sqrtPriceLimitX64,
     remainingAccounts,
   }: {
-    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolInfo: Pick<ApiV3PoolInfoConcentratedItem, "id" | "programId" | "mintA" | "mintB" | "config">;
     poolKeys: ClmmKeys;
     observationId: PublicKey;
     ownerInfo: {

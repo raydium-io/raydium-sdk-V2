@@ -527,7 +527,10 @@ export abstract class SwapMath {
     amountSpecified: BN,
     lastSavedTickArrayStartIndex: number,
     sqrtPriceLimitX64?: BN,
+    catchLiquidityInsufficient = false,
   ): {
+    allTrade: boolean;
+    amountSpecifiedRemaining: BN;
     amountCalculated: BN;
     feeAmount: BN;
     sqrtPriceX64: BN;
@@ -582,7 +585,7 @@ export abstract class SwapMath {
       // state.tick > MIN_TICK
     ) {
       if (loopCount > 10) {
-        throw Error("liquidity limit");
+        // throw Error('liquidity limit')
       }
       const step: Partial<StepComputations> = {};
       step.sqrtPriceStartX64 = state.sqrtPriceX64;
@@ -590,7 +593,7 @@ export abstract class SwapMath {
       const tickState: Tick | null = TickUtils.nextInitTick(tickArrayCurrent, state.tick, tickSpacing, zeroForOne, t);
 
       let nextInitTick: Tick | null = tickState ? tickState : null; // TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne)
-      let tickArrayAddress: PublicKey | null = null;
+      let tickArrayAddress: null | PublicKey = null;
 
       if (!nextInitTick?.liquidityGross.gtn(0)) {
         const nextInitTickArrayIndex = PoolUtils.nextInitializedTickArrayStartIndex(
@@ -604,6 +607,18 @@ export abstract class SwapMath {
           zeroForOne,
         );
         if (!nextInitTickArrayIndex.isExist) {
+          if (catchLiquidityInsufficient) {
+            return {
+              allTrade: false,
+              amountSpecifiedRemaining: state.amountSpecifiedRemaining,
+              amountCalculated: state.amountCalculated,
+              feeAmount: state.feeAmount,
+              sqrtPriceX64: state.sqrtPriceX64,
+              liquidity: state.liquidity,
+              tickCurrent: state.tick,
+              accounts: state.accounts,
+            };
+          }
           throw Error("swapCompute LiquidityInsufficient");
         }
         tickAarrayStartIndex = nextInitTickArrayIndex.nextStartIndex;
@@ -616,7 +631,11 @@ export abstract class SwapMath {
         tickArrayAddress = expectedNextTickArrayAddress;
         tickArrayCurrent = tickArrayCache[tickAarrayStartIndex];
 
-        nextInitTick = TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne);
+        try {
+          nextInitTick = TickUtils.firstInitializedTick(tickArrayCurrent, zeroForOne);
+        } catch (e) {
+          throw Error("not found next tick info");
+        }
       }
 
       step.tickNext = nextInitTick.tick;
@@ -664,8 +683,9 @@ export abstract class SwapMath {
           if (zeroForOne) liquidityNet = liquidityNet.mul(NEGATIVE_ONE);
           state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
         }
+
         t = step.tickNext != state.tick && !zeroForOne && tickArrayCurrent.startTickIndex === step.tickNext;
-        state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
+        state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext; //
       } else if (state.sqrtPriceX64 != step.sqrtPriceStartX64) {
         const _T = SqrtPriceMath.getTickFromSqrtPriceX64(state.sqrtPriceX64);
         t = _T != state.tick && !zeroForOne && tickArrayCurrent.startTickIndex === _T;
@@ -691,6 +711,8 @@ export abstract class SwapMath {
     }
 
     return {
+      allTrade: true,
+      amountSpecifiedRemaining: ZERO,
       amountCalculated: state.amountCalculated,
       feeAmount: state.feeAmount,
       sqrtPriceX64: state.sqrtPriceX64,

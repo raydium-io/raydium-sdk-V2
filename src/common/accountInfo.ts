@@ -1,6 +1,6 @@
 import { AccountInfo, Commitment, Connection, PublicKey } from "@solana/web3.js";
-import { getTransferFeeConfig, unpackMint } from "@solana/spl-token";
-import { chunkArray } from "./";
+import { MINT_SIZE, TOKEN_PROGRAM_ID, getTransferFeeConfig, unpackMint } from "@solana/spl-token";
+import { WSOLMint, chunkArray, solToWSol } from "./";
 import { createLogger } from "./logger";
 import { ReturnTypeFetchMultipleMintInfos } from "../raydium/type";
 
@@ -20,6 +20,7 @@ interface MultipleAccountsJsonRpcResponse {
 export interface GetMultipleAccountsInfoConfig {
   batchRequest?: boolean;
   commitment?: Commitment;
+  chunkCount?: number;
 }
 
 const logger = createLogger("Raydium_accountInfo_util");
@@ -29,12 +30,16 @@ export async function getMultipleAccountsInfo(
   publicKeys: PublicKey[],
   config?: GetMultipleAccountsInfoConfig,
 ): Promise<(AccountInfo<Buffer> | null)[]> {
-  const { batchRequest, commitment = "confirmed" } = {
+  const {
+    batchRequest,
+    commitment = "confirmed",
+    chunkCount = 100,
+  } = {
     batchRequest: false,
     ...config,
   };
 
-  const chunkedKeys = chunkArray(publicKeys, 100);
+  const chunkedKeys = chunkArray(publicKeys, chunkCount);
   let results: (AccountInfo<Buffer> | null)[][] = new Array(chunkedKeys.length).fill([]);
 
   if (batchRequest) {
@@ -111,24 +116,33 @@ export const ACCOUNT_TYPE_SIZE = 1;
 export async function fetchMultipleMintInfos({
   connection,
   mints,
+  config,
 }: {
   connection: Connection;
   mints: PublicKey[];
+  config?: { batchRequest?: boolean };
 }): Promise<ReturnTypeFetchMultipleMintInfos> {
   if (mints.length === 0) return {};
   const mintInfos = await getMultipleAccountsInfoWithCustomFlags(
     connection,
-    mints.map((i) => ({ pubkey: i })),
+    mints.map((i) => ({ pubkey: solToWSol(i) })),
+    config,
   );
 
   const mintK: ReturnTypeFetchMultipleMintInfos = {};
   for (const i of mintInfos) {
+    if (!i.accountInfo || i.accountInfo.data.length < MINT_SIZE) {
+      console.log("invalid mint account", i.pubkey.toBase58());
+      continue;
+    }
     const t = unpackMint(i.pubkey, i.accountInfo, i.accountInfo?.owner);
     mintK[i.pubkey.toString()] = {
       ...t,
+      programId: i.accountInfo?.owner || TOKEN_PROGRAM_ID,
       feeConfig: getTransferFeeConfig(t) ?? undefined,
     };
   }
+  mintK[PublicKey.default.toBase58()] = mintK[WSOLMint.toBase58()];
 
   return mintK;
 }

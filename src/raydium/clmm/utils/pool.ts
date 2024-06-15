@@ -30,7 +30,7 @@ import {
   getTransferAmountFeeV2,
   minExpirationTime,
   solToWSol,
-} from "../../../common";
+} from "@/common";
 import { TokenAccountRaw } from "../../account/types";
 import { Price, Percent, TokenAmount, Token } from "../../../module";
 import { PositionUtils } from "./position";
@@ -44,7 +44,9 @@ export class PoolUtils {
     inputTokenMint: PublicKey,
     inputAmount: BN,
     sqrtPriceLimitX64?: BN,
+    catchLiquidityInsufficient = false,
   ): {
+    allTrade: boolean;
     expectedAmountOut: BN;
     remainingAccounts: PublicKey[];
     executionPrice: BN;
@@ -74,6 +76,7 @@ export class PoolUtils {
 
     allNeededAccounts.push(nextAccountMeta);
     const {
+      allTrade,
       amountCalculated: outputAmount,
       accounts: reaminAccounts,
       sqrtPriceX64: executionPrice,
@@ -93,9 +96,11 @@ export class PoolUtils {
       inputAmount,
       firstTickArrayStartIndex,
       sqrtPriceLimitX64,
+      catchLiquidityInsufficient,
     );
     allNeededAccounts.push(...reaminAccounts);
     return {
+      allTrade,
       expectedAmountOut: outputAmount.mul(NEGATIVE_ONE),
       remainingAccounts: allNeededAccounts,
       executionPrice,
@@ -408,7 +413,7 @@ export class PoolUtils {
     batchRequest,
   }: {
     connection: Connection;
-    poolKeys: ComputeClmmPoolInfo[];
+    poolKeys: Omit<ComputeClmmPoolInfo, "ammConfig">[];
     batchRequest?: boolean;
   }): Promise<ReturnTypeFetchMultiplePoolTickArrays> {
     const tickArraysToPoolId: { [key: string]: PublicKey } = {};
@@ -618,6 +623,7 @@ export class PoolUtils {
     amountIn,
     slippage,
     priceLimit = new Decimal(0),
+    catchLiquidityInsufficient = false,
   }: {
     poolInfo: ComputeClmmPoolInfo;
     tickArrayCache: { [key: string]: TickArray };
@@ -628,6 +634,7 @@ export class PoolUtils {
     amountIn: BN;
     slippage: number;
     priceLimit?: Decimal;
+    catchLiquidityInsufficient: boolean;
   }): ReturnTypeComputeAmountOut {
     let sqrtPriceLimitX64: BN;
     const isBaseIn = baseMint.toBase58() === poolInfo.mintA.address;
@@ -648,6 +655,7 @@ export class PoolUtils {
     const realAmountIn = getTransferAmountFeeV2(amountIn, baseFeeConfig, epochInfo, false);
 
     const {
+      allTrade,
       expectedAmountOut: _expectedAmountOut,
       remainingAccounts,
       executionPrice: _executionPriceX64,
@@ -658,6 +666,7 @@ export class PoolUtils {
       baseMint,
       realAmountIn.amount.sub(realAmountIn.fee ?? ZERO),
       sqrtPriceLimitX64,
+      catchLiquidityInsufficient,
     );
 
     const amountOut = getTransferAmountFeeV2(_expectedAmountOut, outFeeConfig, epochInfo, false);
@@ -684,6 +693,7 @@ export class PoolUtils {
     );
 
     return {
+      allTrade,
       realAmountIn,
       amountOut,
       minAmountOut,
@@ -692,18 +702,19 @@ export class PoolUtils {
       executionPrice,
       priceImpact,
       fee: feeAmount,
-
       remainingAccounts,
+      executionPriceX64: _executionPriceX64,
     };
   }
 
-  static async computeAmountOutFormat({
+  static computeAmountOutFormat({
     poolInfo,
     tickArrayCache,
     amountIn,
     tokenOut: _tokenOut,
     slippage,
     epochInfo,
+    catchLiquidityInsufficient = false,
   }: {
     poolInfo: ComputeClmmPoolInfo;
     tickArrayCache: { [key: string]: TickArray };
@@ -711,7 +722,8 @@ export class PoolUtils {
     tokenOut: ApiV3Token;
     slippage: number;
     epochInfo: EpochInfo;
-  }): Promise<ReturnTypeComputeAmountOutFormat> {
+    catchLiquidityInsufficient?: boolean;
+  }): ReturnTypeComputeAmountOutFormat {
     const baseIn = _tokenOut.address === poolInfo.mintB.address;
     const [inputMint, outMint] = baseIn ? [poolInfo.mintA, poolInfo.mintB] : [poolInfo.mintB, poolInfo.mintA];
     const [baseToken, outToken] = [
@@ -728,6 +740,7 @@ export class PoolUtils {
     ];
 
     const {
+      allTrade,
       realAmountIn: _realAmountIn,
       amountOut: _amountOut,
       minAmountOut: _minAmountOut,
@@ -737,13 +750,15 @@ export class PoolUtils {
       priceImpact,
       fee,
       remainingAccounts,
-    } = await PoolUtils.computeAmountOut({
+      executionPriceX64,
+    } = PoolUtils.computeAmountOut({
       poolInfo,
       tickArrayCache,
       baseMint: new PublicKey(inputMint.address),
       amountIn,
       slippage,
       epochInfo,
+      catchLiquidityInsufficient,
     });
 
     const realAmountIn = {
@@ -778,6 +793,7 @@ export class PoolUtils {
     const _fee = new TokenAmount(baseToken, fee);
 
     return {
+      allTrade,
       realAmountIn,
       amountOut,
       minAmountOut,
@@ -787,6 +803,7 @@ export class PoolUtils {
       priceImpact,
       fee: _fee,
       remainingAccounts,
+      executionPriceX64,
     };
   }
 
@@ -1075,39 +1092,73 @@ export class PoolUtils {
     };
   }
 
-  static async fetchComputeClmmInfo({
+  static async fetchComputeMultipleClmmInfo({
     connection,
-    poolInfo,
+    poolList,
+    rpcDataMap = {},
   }: {
+    rpcDataMap?: Record<string, ReturnType<typeof PoolInfoLayout.decode>>;
     connection: Connection;
-    poolInfo: ApiV3PoolInfoConcentratedItem;
-  }): Promise<ComputeClmmPoolInfo> {
-    const data = await connection.getAccountInfo(new PublicKey(poolInfo.id));
-    if (!data) throw new Error(`pool not found ${poolInfo.id}`);
-    const rpcPool = PoolInfoLayout.decode(data.data);
+    poolList: Pick<ApiV3PoolInfoConcentratedItem, "id" | "programId" | "mintA" | "mintB" | "config" | "price">[];
+  }): Promise<Record<string, ComputeClmmPoolInfo>> {
+    const fetchRpcList = poolList.filter((p) => !rpcDataMap[p.id]).map((p) => new PublicKey(p.id));
+    const rpcRes = await getMultipleAccountsInfo(connection, fetchRpcList);
+    rpcRes.forEach((r, idx) => {
+      if (!r) return;
+      rpcDataMap[fetchRpcList[idx].toBase58()] = PoolInfoLayout.decode(r.data);
+    });
 
-    const pda = getPdaExBitmapAccount(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey;
+    const pdaList = poolList.map(
+      (poolInfo) => getPdaExBitmapAccount(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
+    );
+
     const exBitData = await PoolUtils.fetchExBitmaps({
       connection,
-      exBitmapAddress: [pda],
+      exBitmapAddress: pdaList,
       batchRequest: false,
     });
 
-    return {
-      ...rpcPool,
-      id: new PublicKey(poolInfo.id),
-      programId: new PublicKey(poolInfo.programId),
-      mintA: poolInfo.mintA,
-      mintB: poolInfo.mintB,
-      ammConfig: {
-        ...poolInfo.config,
-        id: new PublicKey(poolInfo.config.id),
-        fundOwner: "",
-      },
-      currentPrice: new Decimal(poolInfo.price),
-      exBitmapInfo: exBitData[pda.toBase58()],
-      startTime: rpcPool.startTime.toNumber(),
-    };
+    return poolList.reduce(
+      (acc, cur) => ({
+        ...acc,
+        [cur.id]: {
+          ...rpcDataMap[cur.id],
+          id: new PublicKey(cur.id),
+          version: 6,
+          programId: new PublicKey(cur.programId),
+          mintA: cur.mintA,
+          mintB: cur.mintB,
+          ammConfig: {
+            ...cur.config,
+            id: new PublicKey(cur.config.id),
+            fundOwner: "",
+          },
+          currentPrice: new Decimal(cur.price),
+          exBitmapInfo:
+            exBitData[getPdaExBitmapAccount(new PublicKey(cur.programId), new PublicKey(cur.id)).publicKey.toBase58()],
+          startTime: rpcDataMap[cur.id].startTime.toNumber(),
+        },
+      }),
+      {} as Record<string, ComputeClmmPoolInfo>,
+    );
+  }
+
+  static async fetchComputeClmmInfo({
+    connection,
+    poolInfo,
+    rpcData,
+  }: {
+    connection: Connection;
+    poolInfo: Pick<ApiV3PoolInfoConcentratedItem, "id" | "programId" | "mintA" | "mintB" | "config" | "price">;
+    rpcData?: ReturnType<typeof PoolInfoLayout.decode>;
+  }): Promise<ComputeClmmPoolInfo> {
+    return (
+      await this.fetchComputeMultipleClmmInfo({
+        connection,
+        rpcDataMap: rpcData ? { [poolInfo.id]: rpcData } : undefined,
+        poolList: [poolInfo],
+      })
+    )[poolInfo.id];
   }
 }
 

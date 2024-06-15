@@ -2,13 +2,20 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { ClmmInstrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64, getPdaExBitmapAccount } from "../clmm";
+import {
+  ClmmInstrument,
+  ONE,
+  MIN_SQRT_PRICE_X64,
+  MAX_SQRT_PRICE_X64,
+  getPdaExBitmapAccount,
+  ComputeClmmPoolInfo,
+} from "../clmm";
 import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "@/common";
 import { struct, u64, u8 } from "@/marshmallow";
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
 
 import { ApiV3PoolInfoItem, ApiV3PoolInfoConcentratedItem, PoolKeys, ClmmKeys, AmmV4Keys, AmmV5Keys } from "@/api/type";
-import { ComputeAmountOutLayout, ReturnTypeMakeSwapInstruction } from "./type";
+import { ComputePoolType, MakeSwapInstructionParam, ReturnTypeMakeSwapInstruction } from "./type";
 
 export function route1Instruction(
   programId: PublicKey,
@@ -244,14 +251,14 @@ export function route2Instruction(
 }
 
 function makeInnerInsKey(
-  itemPool: ApiV3PoolInfoItem,
+  itemPool: ComputePoolType,
   itemPoolKey: PoolKeys,
   inMint: string,
   userInAccount: PublicKey,
   userOutAccount: PublicKey,
   remainingAccount: PublicKey[] | undefined,
 ): AccountMeta[] {
-  if (itemPool.pooltype.includes("StablePool")) {
+  if (itemPool.version === 4 && itemPool.pooltype.includes("StablePool")) {
     const poolKey = jsonInfo2PoolKeys(itemPoolKey as AmmV5Keys);
 
     return [
@@ -274,8 +281,8 @@ function makeInnerInsKey(
       { pubkey: poolKey.id, isSigner: false, isWritable: true },
       { pubkey: poolKey.id, isSigner: false, isWritable: true },
     ];
-  } else if (itemPool.type === "Concentrated") {
-    const pool = itemPool as ApiV3PoolInfoConcentratedItem;
+  } else if (itemPool.version === 6) {
+    const pool = itemPool;
     const poolKey = jsonInfo2PoolKeys(itemPoolKey as ClmmKeys);
     const baseIn = pool.mintA.address === inMint;
     return [
@@ -347,8 +354,8 @@ export function routeInstruction(
   inputMint: string,
   routeMint: string,
 
-  poolInfoA: ApiV3PoolInfoItem,
-  poolInfoB: ApiV3PoolInfoItem,
+  poolInfoA: ComputePoolType,
+  poolInfoB: ComputePoolType,
 
   poolKeyA: PoolKeys,
   poolKeyB: PoolKeys,
@@ -388,40 +395,24 @@ export function routeInstruction(
   });
 }
 
-type MakeSwapInstructionParam = {
-  ownerInfo: {
-    wallet: PublicKey;
-    // tokenAccountA: PublicKey
-    // tokenAccountB: PublicKey
-
-    sourceToken: PublicKey;
-    routeToken?: PublicKey;
-    destinationToken: PublicKey;
-  };
-
-  inputMint: PublicKey;
-  routeProgram: PublicKey;
-
-  swapInfo: ComputeAmountOutLayout;
-};
-
-export async function makeSwapInstruction({
+export function makeSwapInstruction({
   routeProgram,
   ownerInfo,
   inputMint,
   swapInfo,
-}: MakeSwapInstructionParam): Promise<ReturnTypeMakeSwapInstruction> {
+}: MakeSwapInstructionParam): ReturnTypeMakeSwapInstruction {
   if (swapInfo.routeType === "amm") {
-    if (swapInfo.poolInfo[0].type === "Concentrated") {
-      const _poolKey = jsonInfo2PoolKeys(swapInfo.poolKey[0] as ClmmKeys);
+    if (swapInfo.poolInfo[0].version === 6) {
+      const poolKeys = swapInfo.poolKey[0] as ClmmKeys;
+      const _poolKey = jsonInfo2PoolKeys(poolKeys);
       const sqrtPriceLimitX64 = inputMint.equals(_poolKey.mintA.address)
         ? MIN_SQRT_PRICE_X64.add(ONE)
         : MAX_SQRT_PRICE_X64.sub(ONE);
 
-      return await ClmmInstrument.makeSwapBaseInInstructions({
-        poolInfo: _poolKey as any,
-        poolKeys: _poolKey as any,
-        observationId: _poolKey.vault.A,
+      return ClmmInstrument.makeSwapBaseInInstructions({
+        poolInfo: poolKeys,
+        poolKeys,
+        observationId: swapInfo.poolInfo[0].observationId,
         ownerInfo: {
           wallet: ownerInfo.wallet,
           tokenAccountA: _poolKey.mintA.address.equals(inputMint) ? ownerInfo.sourceToken : ownerInfo.destinationToken,
@@ -431,7 +422,7 @@ export async function makeSwapInstruction({
         amountIn: swapInfo.amountIn.amount.raw,
         amountOutMin: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
         sqrtPriceLimitX64,
-        remainingAccounts: swapInfo.remainingAccounts[0],
+        remainingAccounts: swapInfo.remainingAccounts[0] ?? [],
       });
     } else {
       const _poolKey = swapInfo.poolKey[0] as AmmV4Keys | AmmV5Keys;
@@ -480,7 +471,7 @@ export async function makeSwapInstruction({
           ownerInfo.destinationToken,
 
           inputMint.toString(),
-          swapInfo.minMiddleAmountFee!.token.mint.toString(),
+          swapInfo.middleToken.mint.toString(),
 
           poolInfo1,
           poolInfo2,

@@ -3,7 +3,7 @@ import { blob, bool, i128, publicKey, s32, seq, struct, u128, u16, u32, u64, u8 
 import { TICK_ARRAY_SIZE } from "./utils/tick";
 import { EXTENSION_TICKARRAY_BITMAP_SIZE } from "./utils/tickarrayBitmap";
 
-export const AmmConfigLayout = struct([
+export const ClmmConfigLayout = struct([
   blob(8),
   u8("bump"),
   u16("index"),

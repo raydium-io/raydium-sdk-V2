@@ -65,7 +65,7 @@ export interface GetTransferAmountFee {
 
 export type ReturnTypeFetchMultipleMintInfo = Mint & { feeConfig: TransferFeeConfig | undefined };
 export interface ReturnTypeFetchMultipleMintInfos {
-  [mint: string]: ReturnTypeFetchMultipleMintInfo;
+  [mint: string]: ReturnTypeFetchMultipleMintInfo & { programId: PublicKey };
 }
 
 type Primitive = boolean | number | string | null | undefined | PublicKey;

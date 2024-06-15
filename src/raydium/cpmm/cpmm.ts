@@ -512,7 +512,7 @@ export default class CpmmModule extends ModuleBase {
 
     const { tokenAccount: _mintATokenAcc, ...mintATokenAccInstruction } = await this.scope.account.handleTokenAccount({
       side: baseIn ? "in" : "out",
-      amount: baseIn ? swapResult.sourceAmountSwapped : swapResult.destinationAmountSwapped,
+      amount: baseIn ? swapResult.sourceAmountSwapped : 0,
       programId: new PublicKey(poolInfo.mintA.programId),
       mint: mintA,
       tokenAccount: mintATokenAcc,
@@ -523,7 +523,7 @@ export default class CpmmModule extends ModuleBase {
 
     const { tokenAccount: _mintBTokenAcc, ...mintBTokenAccInstruction } = await this.scope.account.handleTokenAccount({
       side: baseIn ? "out" : "in",
-      amount: baseIn ? swapResult.destinationAmountSwapped : swapResult.sourceAmountSwapped,
+      amount: baseIn ? 0 : swapResult.sourceAmountSwapped,
       programId: new PublicKey(poolInfo.mintB.programId),
       mint: mintB,
       tokenAccount: mintBTokenAcc,
