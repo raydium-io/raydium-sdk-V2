@@ -258,8 +258,38 @@ function makeInnerInsKey(
   userOutAccount: PublicKey,
   remainingAccount: PublicKey[] | undefined,
 ): AccountMeta[] {
-  if (itemPool.version === 4 && itemPool.pooltype.includes("StablePool")) {
-    const poolKey = jsonInfo2PoolKeys(itemPoolKey as AmmV5Keys);
+  if (itemPool.version === 4) {
+    const poolKey = jsonInfo2PoolKeys(itemPoolKey as AmmV4Keys);
+
+    return [
+      { pubkey: poolKey.programId, isSigner: false, isWritable: false },
+      { pubkey: userInAccount, isSigner: false, isWritable: true },
+      { pubkey: userOutAccount, isSigner: false, isWritable: true },
+
+      { pubkey: poolKey.id, isSigner: false, isWritable: true },
+      { pubkey: poolKey.authority, isSigner: false, isWritable: false },
+      { pubkey: poolKey.marketProgramId, isSigner: false, isWritable: false },
+      { pubkey: poolKey.marketAuthority, isSigner: false, isWritable: true },
+
+      { pubkey: poolKey.openOrders, isSigner: false, isWritable: true },
+      { pubkey: poolKey.vault.A, isSigner: false, isWritable: true },
+      { pubkey: poolKey.vault.B, isSigner: false, isWritable: true },
+      { pubkey: poolKey.marketId, isSigner: false, isWritable: true },
+      { pubkey: poolKey.marketBids, isSigner: false, isWritable: true },
+      { pubkey: poolKey.marketAsks, isSigner: false, isWritable: true },
+      { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
+      ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
+        ? [
+            { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
+            { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+          ]
+        : [
+            { pubkey: poolKey.id, isSigner: false, isWritable: true },
+            { pubkey: poolKey.id, isSigner: false, isWritable: true },
+          ]),
+    ];
+  } else if (itemPool.version === 5) {
+    const poolKey = jsonInfo2PoolKeys(itemPoolKey as AmmV4Keys);
 
     return [
       { pubkey: poolKey.programId, isSigner: false, isWritable: false },
@@ -293,8 +323,7 @@ function makeInnerInsKey(
       { pubkey: poolKey.id, isSigner: false, isWritable: true },
       { pubkey: baseIn ? poolKey.vault.A : poolKey.vault.B, isSigner: false, isWritable: true },
       { pubkey: baseIn ? poolKey.vault.B : poolKey.vault.A, isSigner: false, isWritable: true },
-      // { pubkey: itemPool.observationId, isSigner: false, isWritable: true }, // to do
-      { pubkey: poolKey.id, isSigner: false, isWritable: true },
+      { pubkey: itemPool.observationId, isSigner: false, isWritable: true },
       ...(poolKey.mintA.programId.equals(TOKEN_2022_PROGRAM_ID) || poolKey.mintB.programId.equals(TOKEN_2022_PROGRAM_ID)
         ? [
             { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
@@ -311,35 +340,7 @@ function makeInnerInsKey(
       },
     ];
   } else {
-    const poolKey = jsonInfo2PoolKeys(itemPoolKey as AmmV4Keys);
-
-    return [
-      { pubkey: poolKey.programId, isSigner: false, isWritable: false },
-      { pubkey: userInAccount, isSigner: false, isWritable: true },
-      { pubkey: userOutAccount, isSigner: false, isWritable: true },
-
-      { pubkey: poolKey.id, isSigner: false, isWritable: true },
-      { pubkey: poolKey.authority, isSigner: false, isWritable: false },
-      { pubkey: poolKey.marketProgramId, isSigner: false, isWritable: false },
-      { pubkey: poolKey.marketAuthority, isSigner: false, isWritable: false },
-
-      { pubkey: poolKey.openOrders, isSigner: false, isWritable: true },
-      { pubkey: poolKey.vault.A, isSigner: false, isWritable: true },
-      { pubkey: poolKey.vault.B, isSigner: false, isWritable: true },
-      { pubkey: poolKey.marketId, isSigner: false, isWritable: true },
-      { pubkey: poolKey.marketBids, isSigner: false, isWritable: true },
-      { pubkey: poolKey.marketAsks, isSigner: false, isWritable: true },
-      { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
-      ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
-        ? [
-            { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
-            { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
-          ]
-        : [
-            { pubkey: poolKey.id, isSigner: false, isWritable: true },
-            { pubkey: poolKey.id, isSigner: false, isWritable: true },
-          ]),
-    ];
+    throw Error("make swap ins error");
   }
 }
 
