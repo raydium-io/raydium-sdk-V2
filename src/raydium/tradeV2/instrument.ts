@@ -2,20 +2,14 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@solana/web3.js";
 import BN from "bn.js";
 
-import {
-  ClmmInstrument,
-  ONE,
-  MIN_SQRT_PRICE_X64,
-  MAX_SQRT_PRICE_X64,
-  getPdaExBitmapAccount,
-  ComputeClmmPoolInfo,
-} from "../clmm";
+import { ClmmInstrument, ONE, MIN_SQRT_PRICE_X64, MAX_SQRT_PRICE_X64, getPdaExBitmapAccount } from "../clmm";
 import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "@/common";
 import { struct, u64, u8 } from "@/marshmallow";
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
 
-import { ApiV3PoolInfoItem, ApiV3PoolInfoConcentratedItem, PoolKeys, ClmmKeys, AmmV4Keys, AmmV5Keys } from "@/api/type";
+import { ApiV3PoolInfoItem, PoolKeys, ClmmKeys, AmmV4Keys, AmmV5Keys, CpmmKeys } from "@/api/type";
 import { ComputePoolType, MakeSwapInstructionParam, ReturnTypeMakeSwapInstruction } from "./type";
+import { makeSwapCpmmBaseInInInstruction, makeSwapCpmmBaseOutInInstruction } from "@/raydium/cpmm";
 
 export function route1Instruction(
   programId: PublicKey,
@@ -339,6 +333,34 @@ function makeInnerInsKey(
         isWritable: true,
       },
     ];
+  } else if (itemPool.version === 7) {
+    const pool = itemPool;
+    const poolKey = jsonInfo2PoolKeys(itemPoolKey as CpmmKeys);
+    const baseIn = pool.mintA.address === inMint;
+    return [
+      { pubkey: new PublicKey(String(itemPool.programId)), isSigner: false, isWritable: false },
+      { pubkey: userInAccount, isSigner: false, isWritable: true },
+      { pubkey: userOutAccount, isSigner: false, isWritable: true },
+      { pubkey: poolKey.config.id, isSigner: false, isWritable: false },
+      { pubkey: poolKey.id, isSigner: false, isWritable: true },
+      { pubkey: baseIn ? poolKey.vault.A : poolKey.vault.B, isSigner: false, isWritable: true },
+      { pubkey: baseIn ? poolKey.vault.B : poolKey.vault.A, isSigner: false, isWritable: true },
+      { pubkey: itemPool.observationId, isSigner: false, isWritable: true },
+      ...(poolKey.mintA.programId.equals(TOKEN_2022_PROGRAM_ID) || poolKey.mintB.programId.equals(TOKEN_2022_PROGRAM_ID)
+        ? [
+            { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: baseIn ? poolKey.mintA.address : poolKey.mintB.address, isSigner: false, isWritable: false },
+            { pubkey: baseIn ? poolKey.mintB.address : poolKey.mintA.address, isSigner: false, isWritable: false },
+          ]
+        : []),
+      ...(remainingAccount ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+      {
+        pubkey: getPdaExBitmapAccount(new PublicKey(String(itemPool.programId)), new PublicKey(itemPool.id)).publicKey,
+        isSigner: false,
+        isWritable: true,
+      },
+    ];
   } else {
     throw Error("make swap ins error");
   }
@@ -425,6 +447,62 @@ export function makeSwapInstruction({
         sqrtPriceLimitX64,
         remainingAccounts: swapInfo.remainingAccounts[0] ?? [],
       });
+    } else if (swapInfo.poolInfo[0].version === 7) {
+      const poolInfo = swapInfo.poolInfo[0];
+      const baseIn = inputMint.toString() === swapInfo.poolInfo[0].mintA.address;
+
+      return {
+        signers: [],
+        instructions: [
+          baseIn
+            ? makeSwapCpmmBaseInInInstruction(
+                poolInfo.programId,
+                ownerInfo.wallet,
+                poolInfo.authority,
+                poolInfo.configId,
+                poolInfo.id,
+                ownerInfo.sourceToken!,
+                ownerInfo.destinationToken!,
+                poolInfo.vaultA,
+                poolInfo.vaultB,
+                poolInfo.mintProgramA,
+                poolInfo.mintProgramA,
+                new PublicKey(poolInfo.mintA.address),
+                new PublicKey(poolInfo.mintB.address),
+                poolInfo.observationId,
+
+                swapInfo.amountIn.amount.raw,
+                swapInfo.minAmountOut.amount.raw,
+              )
+            : makeSwapCpmmBaseOutInInstruction(
+                poolInfo.programId,
+                ownerInfo.wallet,
+                poolInfo.authority,
+                poolInfo.configId,
+                poolInfo.id,
+
+                ownerInfo.destinationToken!,
+                ownerInfo.sourceToken!,
+
+                poolInfo.vaultB,
+                poolInfo.vaultA,
+
+                poolInfo.mintProgramB,
+                poolInfo.mintProgramA,
+
+                new PublicKey(poolInfo.mintB.address),
+                new PublicKey(poolInfo.mintA.address),
+
+                poolInfo.observationId,
+
+                swapInfo.amountIn.amount.raw,
+                swapInfo.minAmountOut.amount.raw,
+              ),
+        ],
+        lookupTableAddress: [],
+        instructionTypes: [baseIn ? InstructionType.CpmmSwapBaseIn : InstructionType.CpmmSwapBaseOut],
+        address: {},
+      };
     } else {
       const _poolKey = swapInfo.poolKey[0] as AmmV4Keys | AmmV5Keys;
 
