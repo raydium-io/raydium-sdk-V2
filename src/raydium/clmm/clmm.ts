@@ -1089,16 +1089,14 @@ export class Clmm extends ModuleBase {
     txVersion?: T;
   }): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder();
+    const baseIn = inputMint.toString() === poolInfo.mintA.address;
 
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toBase58();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toBase58();
 
     let sqrtPriceLimitX64: BN;
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
-      sqrtPriceLimitX64 =
-        inputMint.toString() === poolInfo.mintA.address
-          ? MIN_SQRT_PRICE_X64.add(new BN(1))
-          : MAX_SQRT_PRICE_X64.sub(new BN(1));
+      sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
       sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
         priceLimit,
@@ -1115,10 +1113,13 @@ export class Clmm extends ModuleBase {
         notUseTokenAccount: mintAUseSOLBalance,
         owner: this.scope.ownerPubKey,
         skipCloseAccount: !mintAUseSOLBalance,
-        createInfo: {
-          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
-          amount: 0,
-        },
+        createInfo:
+          mintAUseSOLBalance || !baseIn
+            ? {
+                payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+                amount: mintAUseSOLBalance ? amountIn : 0,
+              }
+            : undefined,
         associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
         checkCreateATAOwner,
       });
@@ -1134,10 +1135,13 @@ export class Clmm extends ModuleBase {
         notUseTokenAccount: mintBUseSOLBalance,
         owner: this.scope.ownerPubKey,
         skipCloseAccount: !mintBUseSOLBalance,
-        createInfo: {
-          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
-          amount: 0,
-        },
+        createInfo:
+          mintBUseSOLBalance || baseIn
+            ? {
+                payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+                amount: baseIn ? 0 : amountIn,
+              }
+            : undefined,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
         checkCreateATAOwner,
       });
