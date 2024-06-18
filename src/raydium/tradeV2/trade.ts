@@ -191,15 +191,12 @@ export default class TradeV2 extends ModuleBase {
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
     const useSolBalance = amountIn.amount.token.mint.equals(WSOLMint);
-    const outSolBalance = amountOut.amount.token.mint.equals(WSOLMint);
     const inputMint = amountIn.amount.token.mint;
-    const inputProgramId = amountIn.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
     const outputMint = amountOut.amount.token.mint;
-    const outputProgramId = amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
 
     const { account: sourceAcc, instructionParams: sourceAccInsParams } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: inputProgramId,
+        tokenProgram: amountIn.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
         mint: inputMint,
         notUseTokenAccount: useSolBalance,
         owner: this.scope.ownerPubKey,
@@ -220,41 +217,18 @@ export default class TradeV2 extends ModuleBase {
       throw Error("input account check error");
     }
 
-    const { account: destinationAcc, instructionParams: destinationAccInsParams } =
-      await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: outputProgramId,
-        mint: outputMint,
-        notUseTokenAccount: outSolBalance,
-        owner: this.scope.ownerPubKey,
-        skipCloseAccount: !outSolBalance,
-        createInfo: {
-          payer: this.scope.ownerPubKey,
-          amount: 0,
-        },
-        associatedOnly: outSolBalance ? false : ownerInfo.associatedOnly,
-        checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
-      });
-
-    destinationAccInsParams && txBuilder.addInstruction(destinationAccInsParams);
+    const destinationAcc = this.scope.account.getAssociatedTokenAccount(
+      outputMint,
+      amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+    );
 
     let routeTokenAcc: PublicKey | undefined = undefined;
     if (swapInfo.routeType === "route") {
       const middleMint = swapInfo.middleToken;
-
-      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: middleMint.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
-        mint: middleMint.mint,
-        owner: this.scope.ownerPubKey,
-        skipCloseAccount: false,
-        createInfo: {
-          payer: this.scope.ownerPubKey,
-          amount: 0,
-        },
-        associatedOnly: false,
-        checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
-      });
-      routeTokenAcc = account;
-      instructionParams && txBuilder.addInstruction(instructionParams);
+      routeTokenAcc = this.scope.account.getAssociatedTokenAccount(
+        middleMint.mint,
+        middleMint.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+      );
     }
 
     const poolKeys = swapPoolKeys ? swapPoolKeys : await this.computePoolToPoolKeys({ pools: swapInfo.poolInfoList });
