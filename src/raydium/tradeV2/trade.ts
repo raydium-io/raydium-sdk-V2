@@ -265,6 +265,7 @@ export default class TradeV2 extends ModuleBase {
         ...swapInfo,
         poolInfo: [...swapInfo.poolInfoList],
         poolKey: poolKeys,
+        outputMint,
       },
       ownerInfo: {
         wallet: this.scope.ownerPubKey,
@@ -273,8 +274,10 @@ export default class TradeV2 extends ModuleBase {
         destinationToken: destinationAcc!,
       },
     });
+
     if (swapInfo.feeConfig !== undefined) {
-      txBuilder.addInstruction({
+      const checkTxBuilder = this.createTxBuilder();
+      checkTxBuilder.addInstruction({
         instructions: [
           createTransferInstruction(
             sourceAcc,
@@ -285,6 +288,23 @@ export default class TradeV2 extends ModuleBase {
         ],
         instructionTypes: [InstructionType.TransferAmount],
       });
+      checkTxBuilder.addInstruction(swapIns);
+
+      const { transactions } =
+        txVersion === TxVersion.V0 ? await checkTxBuilder.sizeCheckBuildV0() : await checkTxBuilder.sizeCheckBuild();
+      if (transactions.length < 2) {
+        txBuilder.addInstruction({
+          instructions: [
+            createTransferInstruction(
+              sourceAcc,
+              swapInfo.feeConfig.feeAccount,
+              this.scope.ownerPubKey,
+              swapInfo.feeConfig.feeAmount.toNumber(),
+            ),
+          ],
+          instructionTypes: [InstructionType.TransferAmount],
+        });
+      }
     }
     txBuilder.addInstruction(swapIns);
 
@@ -709,7 +729,6 @@ export default class TradeV2 extends ModuleBase {
 
     // update route pool mint info
     const routePathDict = Object.keys(routes.routePathDict).reduce((acc, cur) => {
-      if (!mintInfos[cur]) console.log(22222, cur);
       return {
         ...acc,
         [cur]: {
