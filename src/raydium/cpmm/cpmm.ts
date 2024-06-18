@@ -483,9 +483,9 @@ export default class CpmmModule extends ModuleBase {
   public async swap<T extends TxVersion>(params: CpmmSwapParams): Promise<MakeTxData<T>> {
     const { poolInfo, baseIn, swapResult, slippage = 0, config, computeBudgetConfig, txVersion } = params;
 
-    const { bypassAssociatedCheck, checkCreateATAOwner } = {
+    const { bypassAssociatedCheck, checkCreateATAOwner, associatedOnly } = {
       // default
-      ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false },
+      ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false, associatedOnly: true },
       // custom
       ...config,
     };
@@ -494,45 +494,81 @@ export default class CpmmModule extends ModuleBase {
 
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
 
-    const mintATokenAcc = await this.scope.account.getCreatedTokenAccount({
-      programId: new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
-      mint: mintA,
-      associatedOnly: false,
-    });
+    // const mintATokenAcc = await this.scope.account.getCreatedTokenAccount({
+    //   programId: new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
+    //   mint: mintA,
+    //   associatedOnly: false,
+    // });
 
-    const mintBTokenAcc = await this.scope.account.getCreatedTokenAccount({
-      programId: new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
-      mint: mintB,
-      associatedOnly: false,
-    });
+    // const mintBTokenAcc = await this.scope.account.getCreatedTokenAccount({
+    //   programId: new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
+    //   mint: mintB,
+    //   associatedOnly: false,
+    // });
 
     swapResult.destinationAmountSwapped = swapResult.destinationAmountSwapped
       .mul(new BN((1 - slippage) * 10000))
       .div(new BN(10000));
 
-    const { tokenAccount: _mintATokenAcc, ...mintATokenAccInstruction } = await this.scope.account.handleTokenAccount({
-      side: baseIn ? "in" : "out",
-      amount: baseIn ? swapResult.sourceAmountSwapped : 0,
-      programId: new PublicKey(poolInfo.mintA.programId),
-      mint: mintA,
-      tokenAccount: mintATokenAcc,
-      bypassAssociatedCheck,
-      checkCreateATAOwner,
-    });
-    txBuilder.addInstruction(mintATokenAccInstruction);
+    // const { tokenAccount: _mintATokenAcc, ...mintATokenAccInstruction } = await this.scope.account.handleTokenAccount({
+    //   side: baseIn ? "in" : "out",
+    //   amount: baseIn ? swapResult.sourceAmountSwapped : 0,
+    //   programId: new PublicKey(poolInfo.mintA.programId),
+    //   mint: mintA,
+    //   tokenAccount: mintATokenAcc,
+    //   bypassAssociatedCheck,
+    //   checkCreateATAOwner,
+    // });
+    const mintAUseSOLBalance = poolInfo.mintA.address === WSOLMint.toBase58();
+    const mintBUseSOLBalance = poolInfo.mintB.address === WSOLMint.toBase58();
+    const { account: mintATokenAcc, instructionParams: mintATokenAccInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: mintA,
+        tokenProgram: new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
+        owner: this.scope.ownerPubKey,
+        createInfo:
+          mintAUseSOLBalance || !baseIn
+            ? {
+                payer: this.scope.ownerPubKey,
+                amount: baseIn ? swapResult.sourceAmountSwapped : 0,
+              }
+            : undefined,
+        notUseTokenAccount: mintAUseSOLBalance,
+        skipCloseAccount: !mintAUseSOLBalance,
+        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    mintATokenAccInstruction && txBuilder.addInstruction(mintATokenAccInstruction);
 
-    const { tokenAccount: _mintBTokenAcc, ...mintBTokenAccInstruction } = await this.scope.account.handleTokenAccount({
-      side: baseIn ? "out" : "in",
-      amount: baseIn ? 0 : swapResult.sourceAmountSwapped,
-      programId: new PublicKey(poolInfo.mintB.programId),
-      mint: mintB,
-      tokenAccount: mintBTokenAcc,
-      bypassAssociatedCheck,
-      checkCreateATAOwner,
-    });
-    txBuilder.addInstruction(mintBTokenAccInstruction);
+    // const { tokenAccount: _mintBTokenAcc, ...mintBTokenAccInstruction } = await this.scope.account.handleTokenAccount({
+    //   side: baseIn ? "out" : "in",
+    //   amount: baseIn ? 0 : swapResult.sourceAmountSwapped,
+    //   programId: new PublicKey(poolInfo.mintB.programId),
+    //   mint: mintB,
+    //   tokenAccount: mintBTokenAcc,
+    //   bypassAssociatedCheck,
+    //   checkCreateATAOwner,
+    // });
+    const { account: mintBTokenAcc, instructionParams: mintBTokenAccInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: mintB,
+        tokenProgram: new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
+        owner: this.scope.ownerPubKey,
+        createInfo:
+          mintBUseSOLBalance || baseIn
+            ? {
+                payer: this.scope.ownerPubKey,
+                amount: baseIn ? 0 : swapResult.sourceAmountSwapped,
+              }
+            : undefined,
+        notUseTokenAccount: mintBUseSOLBalance,
+        skipCloseAccount: !mintBUseSOLBalance,
+        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    mintBTokenAccInstruction && txBuilder.addInstruction(mintBTokenAccInstruction);
 
-    if (!_mintATokenAcc && !_mintBTokenAcc)
+    if (!mintATokenAcc && !mintBTokenAcc)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
     const poolKeys = await this.getCpmmPoolKeys(poolInfo.id);
@@ -546,8 +582,8 @@ export default class CpmmModule extends ModuleBase {
               new PublicKey(poolKeys.authority),
               new PublicKey(poolKeys.config.id),
               new PublicKey(poolInfo.id),
-              _mintATokenAcc!,
-              _mintBTokenAcc!,
+              mintATokenAcc!,
+              mintBTokenAcc!,
               new PublicKey(poolKeys.vault.A),
               new PublicKey(poolKeys.vault.B),
               new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
@@ -566,8 +602,8 @@ export default class CpmmModule extends ModuleBase {
               new PublicKey(poolKeys.config.id),
               new PublicKey(poolInfo.id),
 
-              _mintBTokenAcc!,
-              _mintATokenAcc!,
+              mintBTokenAcc!,
+              mintATokenAcc!,
 
               new PublicKey(poolKeys.vault.B),
               new PublicKey(poolKeys.vault.A),

@@ -123,6 +123,7 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   config?: {
     bypassAssociatedCheck?: boolean;
     checkCreateATAOwner?: boolean;
+    associatedOnly?: boolean;
   };
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
