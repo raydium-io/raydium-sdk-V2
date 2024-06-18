@@ -1089,7 +1089,6 @@ export class Clmm extends ModuleBase {
     txVersion?: T;
   }): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder();
-
     const baseIn = inputMint.toString() === poolInfo.mintA.address;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toBase58();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toBase58();
