@@ -28,7 +28,7 @@ import {
   toAmmComputePoolInfo,
 } from "@/raydium/liquidity";
 import { PoolInfoLayout } from "@/raydium/clmm/layout";
-import { CpmmPoolInfoLayout, CpmmRpcData, CurveCalculator, getPdaPoolAuthority } from "@/raydium/cpmm";
+import { CpmmPoolInfoLayout, getPdaPoolAuthority } from "@/raydium/cpmm";
 import { ReturnTypeFetchMultiplePoolTickArrays, PoolUtils, ClmmRpcData, ComputeClmmPoolInfo } from "@/raydium/clmm";
 import { struct, publicKey } from "@/marshmallow";
 import {
@@ -191,6 +191,7 @@ export default class TradeV2 extends ModuleBase {
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
     const useSolBalance = amountIn.amount.token.mint.equals(WSOLMint);
+    const isOutputSol = amountOut.amount.token.mint.equals(WSOLMint);
     const inputMint = amountIn.amount.token.mint;
     const outputMint = amountOut.amount.token.mint;
 
@@ -221,6 +222,20 @@ export default class TradeV2 extends ModuleBase {
       outputMint,
       amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
     );
+
+    if (isOutputSol) {
+      txBuilder.addInstruction({
+        endInstructions: [
+          closeAccountInstruction({
+            owner: this.scope.ownerPubKey,
+            payer: this.scope.ownerPubKey,
+            tokenAccount: destinationAcc,
+            programId: TOKEN_PROGRAM_ID,
+          }),
+        ],
+        endInstructionTypes: [InstructionType.CloseAccount],
+      });
+    }
 
     let routeTokenAcc: PublicKey | undefined = undefined;
     if (swapInfo.routeType === "route") {
