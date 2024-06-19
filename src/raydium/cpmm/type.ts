@@ -5,6 +5,7 @@ import BN from "bn.js";
 import { ComputeBudgetConfig, GetTransferAmountFee } from "@/raydium/type";
 import { SwapResult } from "./curve/calculator";
 import { Percent } from "@/module";
+import { CpmmPoolInfoLayout } from "./layout";
 import Decimal from "decimal.js";
 
 export interface CpmmConfigInfoInterface {
@@ -138,3 +139,20 @@ export interface ComputePairAmountParams {
   epochInfo: EpochInfo;
   baseIn?: boolean;
 }
+
+export type CpmmRpcData = ReturnType<typeof CpmmPoolInfoLayout.decode> & {
+  baseReserve: BN;
+  quoteReserve: BN;
+  configInfo?: CpmmConfigInfoInterface;
+  poolPrice: Decimal;
+  programId: PublicKey;
+};
+
+export type CpmmComputeData = {
+  id: PublicKey;
+  version: 7;
+  configInfo: CpmmConfigInfoInterface;
+  mintA: ApiV3Token;
+  mintB: ApiV3Token;
+  authority: PublicKey;
+} & Omit<CpmmRpcData, "configInfo" | "mintA" | "mintB">;

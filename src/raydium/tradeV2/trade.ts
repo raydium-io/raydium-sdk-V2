@@ -4,6 +4,7 @@ import {
   WSOLMint,
   AMM_V4,
   CLMM_PROGRAM_ID,
+  CREATE_CPMM_POOL_PROGRAM,
   minExpirationTime,
   getMultipleAccountsInfoWithCustomFlags,
   solToWSol,
@@ -27,13 +28,12 @@ import {
   toAmmComputePoolInfo,
 } from "@/raydium/liquidity";
 import { PoolInfoLayout } from "@/raydium/clmm/layout";
+import { CpmmPoolInfoLayout, CpmmRpcData, CurveCalculator, getPdaPoolAuthority } from "@/raydium/cpmm";
 import { ReturnTypeFetchMultiplePoolTickArrays, PoolUtils, ClmmRpcData, ComputeClmmPoolInfo } from "@/raydium/clmm";
 import { struct, publicKey } from "@/marshmallow";
 import {
   ReturnTypeGetAllRoute,
-  AmmPool as AmmPoolInfo,
-  ClmmPool as ClmmPoolInfo,
-  PoolType,
+  BasicPoolInfo,
   RoutePathType,
   ReturnTypeFetchMultipleInfo,
   ComputeAmountOutLayout,
@@ -44,11 +44,12 @@ import {
 import { TokenAmount, Price } from "@/module";
 import BN from "bn.js";
 import { AmmV4Keys, ApiV3Token, ClmmKeys, PoolKeys } from "@/api";
-import { toToken, toTokenAmount } from "../token";
+import { toApiV3Token, toToken, toTokenAmount } from "../token";
 import Decimal from "decimal.js";
 import { makeSwapInstruction } from "./instrument";
 import { AmmRpcData } from "../liquidity";
 import { MARKET_STATE_LAYOUT_V3, Market } from "../serum";
+import { CpmmComputeData } from "../cpmm";
 
 const ZERO = new BN(0);
 export default class TradeV2 extends ModuleBase {
@@ -167,9 +168,132 @@ export default class TradeV2 extends ModuleBase {
     return txBuilder.versionBuild({ txVersion: txVersion ?? TxVersion.LEGACY }) as Promise<MakeTxData<T>>;
   }
 
+  public async swap<T extends TxVersion>({
+    swapInfo,
+    swapPoolKeys,
+    ownerInfo,
+    computeBudgetConfig,
+    routeProgram,
+    txVersion,
+  }: {
+    txVersion: T;
+    swapInfo: ComputeAmountOutLayout;
+    swapPoolKeys?: PoolKeys[];
+    ownerInfo: {
+      associatedOnly: boolean;
+      checkCreateATAOwner: boolean;
+    };
+    routeProgram: PublicKey;
+    computeBudgetConfig?: ComputeBudgetConfig;
+  }): Promise<MakeMultiTxData<T>> {
+    const txBuilder = this.createTxBuilder();
+
+    const amountIn = swapInfo.amountIn;
+    const amountOut = swapInfo.amountOut;
+    const useSolBalance = amountIn.amount.token.mint.equals(WSOLMint);
+    const inputMint = amountIn.amount.token.mint;
+    const outputMint = amountOut.amount.token.mint;
+
+    const { account: sourceAcc, instructionParams: sourceAccInsParams } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: amountIn.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+        mint: inputMint,
+        notUseTokenAccount: useSolBalance,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !useSolBalance,
+        createInfo: useSolBalance
+          ? {
+              payer: this.scope.ownerPubKey,
+              amount: amountIn.amount.raw,
+            }
+          : undefined,
+        associatedOnly: useSolBalance ? false : ownerInfo.associatedOnly,
+        checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
+      });
+
+    sourceAccInsParams && txBuilder.addInstruction(sourceAccInsParams);
+
+    if (sourceAcc === undefined) {
+      throw Error("input account check error");
+    }
+
+    const destinationAcc = this.scope.account.getAssociatedTokenAccount(
+      outputMint,
+      amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+    );
+
+    let routeTokenAcc: PublicKey | undefined = undefined;
+    if (swapInfo.routeType === "route") {
+      const middleMint = swapInfo.middleToken;
+      routeTokenAcc = this.scope.account.getAssociatedTokenAccount(
+        middleMint.mint,
+        middleMint.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+      );
+    }
+
+    const poolKeys = swapPoolKeys ? swapPoolKeys : await this.computePoolToPoolKeys({ pools: swapInfo.poolInfoList });
+    const swapIns = makeSwapInstruction({
+      routeProgram,
+      inputMint,
+      swapInfo: {
+        ...swapInfo,
+        poolInfo: [...swapInfo.poolInfoList],
+        poolKey: poolKeys,
+        outputMint,
+      },
+      ownerInfo: {
+        wallet: this.scope.ownerPubKey,
+        sourceToken: sourceAcc,
+        routeToken: routeTokenAcc,
+        destinationToken: destinationAcc!,
+      },
+    });
+
+    if (swapInfo.feeConfig !== undefined) {
+      const checkTxBuilder = this.createTxBuilder();
+      checkTxBuilder.addInstruction({
+        instructions: [
+          createTransferInstruction(
+            sourceAcc,
+            swapInfo.feeConfig.feeAccount,
+            this.scope.ownerPubKey,
+            swapInfo.feeConfig.feeAmount.toNumber(),
+          ),
+        ],
+        instructionTypes: [InstructionType.TransferAmount],
+      });
+      checkTxBuilder.addInstruction(swapIns);
+
+      const { transactions } =
+        txVersion === TxVersion.V0 ? await checkTxBuilder.sizeCheckBuildV0() : await checkTxBuilder.sizeCheckBuild();
+      if (transactions.length < 2) {
+        txBuilder.addInstruction({
+          instructions: [
+            createTransferInstruction(
+              sourceAcc,
+              swapInfo.feeConfig.feeAccount,
+              this.scope.ownerPubKey,
+              swapInfo.feeConfig.feeAmount.toNumber(),
+            ),
+          ],
+          instructionTypes: [InstructionType.TransferAmount],
+        });
+      }
+    }
+    txBuilder.addInstruction(swapIns);
+
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig, address: swapIns.address }) as Promise<
+        MakeMultiTxData<T>
+      >;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig, address: swapIns.address }) as Promise<MakeMultiTxData<T>>;
+  }
+
+  // get all amm/clmm/cpmm pools data only with id and mint
   public async fetchRoutePoolBasicInfo(): Promise<{
-    clmmPools: ClmmPoolInfo[];
-    ammPools: AmmPoolInfo[];
+    clmmPools: BasicPoolInfo[];
+    ammPools: BasicPoolInfo[];
+    cpmmPools: BasicPoolInfo[];
   }> {
     const ammPoolsData = await this.scope.connection.getProgramAccounts(AMM_V4, {
       dataSlice: { offset: liquidityStateV4Layout.offsetOf("baseMint"), length: 64 },
@@ -183,14 +307,14 @@ export default class TradeV2 extends ModuleBase {
       mintB: layoutAmm.decode(data.account.data).quoteMint,
     }));
 
-    const layoutClmm = struct([publicKey("mintA"), publicKey("mintB")]);
+    const layout = struct([publicKey("mintA"), publicKey("mintB")]);
     const clmmPoolsData = await this.scope.connection.getProgramAccounts(CLMM_PROGRAM_ID, {
       filters: [{ dataSize: PoolInfoLayout.span }],
       dataSlice: { offset: PoolInfoLayout.offsetOf("mintA"), length: 64 },
     });
 
     const clmmData = clmmPoolsData.map((data) => {
-      const clmm = layoutClmm.decode(data.account.data);
+      const clmm = layout.decode(data.account.data);
       return {
         id: data.pubkey,
         version: 6,
@@ -199,30 +323,49 @@ export default class TradeV2 extends ModuleBase {
       };
     });
 
+    const cpmmPools = await this.scope.connection.getProgramAccounts(CREATE_CPMM_POOL_PROGRAM, {
+      dataSlice: { offset: CpmmPoolInfoLayout.offsetOf("mintA"), length: 64 },
+    });
+
+    const cpmmData = cpmmPools.map((data) => {
+      const clmm = layout.decode(data.account.data);
+      return {
+        id: data.pubkey,
+        version: 7,
+        mintA: clmm.mintA,
+        mintB: clmm.mintB,
+      };
+    });
+
     return {
       clmmPools: clmmData,
       ammPools: ammData,
+      cpmmPools: cpmmData,
     };
   }
 
+  // get pools with in routes
   public getAllRoute({
     inputMint,
     outputMint,
     clmmPools,
     ammPools,
+    cpmmPools,
   }: {
     inputMint: PublicKey;
     outputMint: PublicKey;
-    clmmPools: ClmmPoolInfo[];
-    ammPools: AmmPoolInfo[];
+    clmmPools: BasicPoolInfo[];
+    ammPools: BasicPoolInfo[];
+    cpmmPools: BasicPoolInfo[];
   }): ReturnTypeGetAllRoute {
     inputMint = inputMint.toString() === PublicKey.default.toString() ? WSOLMint : inputMint;
     outputMint = outputMint.toString() === PublicKey.default.toString() ? WSOLMint : outputMint;
 
-    const needSimulate: { [poolKey: string]: AmmPoolInfo } = {};
-    const needTickArray: { [poolKey: string]: ClmmPoolInfo } = {};
+    const needSimulate: { [poolKey: string]: BasicPoolInfo } = {};
+    const needTickArray: { [poolKey: string]: BasicPoolInfo } = {};
+    const cpmmPoolList: { [poolKey: string]: BasicPoolInfo } = {};
 
-    const directPath: PoolType[] = [];
+    const directPath: BasicPoolInfo[] = [];
 
     const routePathDict: RoutePathType = {}; // {[route mint: string]: {in: [] , out: []}}
 
@@ -281,7 +424,7 @@ export default class TradeV2 extends ModuleBase {
       }
     }
 
-    const addLiquidityPools: AmmPoolInfo[] = [];
+    const addLiquidityPools: BasicPoolInfo[] = [];
 
     for (const itemAmmPool of ammPools) {
       if (
@@ -295,7 +438,6 @@ export default class TradeV2 extends ModuleBase {
       if (itemAmmPool.mintA.equals(inputMint)) {
         if (routePathDict[itemAmmPool.mintB.toBase58()] === undefined)
           routePathDict[itemAmmPool.mintB.toBase58()] = {
-            skipMintCheck: true,
             mintProgram: TOKEN_PROGRAM_ID,
             in: [],
             out: [],
@@ -306,7 +448,6 @@ export default class TradeV2 extends ModuleBase {
       if (itemAmmPool.mintB.equals(inputMint)) {
         if (routePathDict[itemAmmPool.mintA.toBase58()] === undefined)
           routePathDict[itemAmmPool.mintA.toBase58()] = {
-            skipMintCheck: true,
             mintProgram: TOKEN_PROGRAM_ID,
             in: [],
             out: [],
@@ -317,7 +458,6 @@ export default class TradeV2 extends ModuleBase {
       if (itemAmmPool.mintA.equals(outputMint)) {
         if (routePathDict[itemAmmPool.mintB.toBase58()] === undefined)
           routePathDict[itemAmmPool.mintB.toBase58()] = {
-            skipMintCheck: true,
             mintProgram: TOKEN_PROGRAM_ID,
             in: [],
             out: [],
@@ -328,13 +468,62 @@ export default class TradeV2 extends ModuleBase {
       if (itemAmmPool.mintB.equals(outputMint)) {
         if (routePathDict[itemAmmPool.mintA.toBase58()] === undefined)
           routePathDict[itemAmmPool.mintA.toBase58()] = {
-            skipMintCheck: true,
             mintProgram: TOKEN_PROGRAM_ID,
             in: [],
             out: [],
             mDecimals: 0, // to fetch later
           };
         routePathDict[itemAmmPool.mintA.toBase58()].out.push(itemAmmPool);
+      }
+    }
+
+    for (const itemCpmmPool of cpmmPools) {
+      if (
+        (itemCpmmPool.mintA.equals(inputMint) && itemCpmmPool.mintB.equals(outputMint)) ||
+        (itemCpmmPool.mintA.equals(outputMint) && itemCpmmPool.mintB.equals(inputMint))
+      ) {
+        directPath.push(itemCpmmPool);
+        cpmmPoolList[itemCpmmPool.id.toBase58()] = itemCpmmPool;
+      }
+      if (itemCpmmPool.mintA.equals(inputMint)) {
+        if (routePathDict[itemCpmmPool.mintB.toBase58()] === undefined)
+          routePathDict[itemCpmmPool.mintB.toBase58()] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: 0, // to fetch later
+          };
+        routePathDict[itemCpmmPool.mintB.toBase58()].in.push(itemCpmmPool);
+      }
+      if (itemCpmmPool.mintB.equals(inputMint)) {
+        if (routePathDict[itemCpmmPool.mintA.toBase58()] === undefined)
+          routePathDict[itemCpmmPool.mintA.toBase58()] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: 0, // to fetch later
+          };
+        routePathDict[itemCpmmPool.mintA.toBase58()].in.push(itemCpmmPool);
+      }
+      if (itemCpmmPool.mintA.equals(outputMint)) {
+        if (routePathDict[itemCpmmPool.mintB.toBase58()] === undefined)
+          routePathDict[itemCpmmPool.mintB.toBase58()] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: 0, // to fetch later
+          };
+        routePathDict[itemCpmmPool.mintB.toBase58()].out.push(itemCpmmPool);
+      }
+      if (itemCpmmPool.mintB.equals(outputMint)) {
+        if (routePathDict[itemCpmmPool.mintA.toBase58()] === undefined)
+          routePathDict[itemCpmmPool.mintA.toBase58()] = {
+            mintProgram: TOKEN_PROGRAM_ID,
+            in: [],
+            out: [],
+            mDecimals: 0, // to fetch later
+          };
+        routePathDict[itemCpmmPool.mintA.toBase58()].out.push(itemCpmmPool);
       }
     }
 
@@ -357,14 +546,24 @@ export default class TradeV2 extends ModuleBase {
       for (const infoIn of info.in) {
         for (const infoOut of info.out) {
           if (infoIn.version === 6 && needTickArray[infoIn.id.toString()] === undefined) {
-            needTickArray[infoIn.id.toString()] = infoIn as ClmmPoolInfo;
-          } else if (infoIn.version !== 6 && needSimulate[infoIn.id.toString()] === undefined) {
-            needSimulate[infoIn.id.toString()] = infoIn as AmmPoolInfo;
+            needTickArray[infoIn.id.toString()] = infoIn;
+          } else if (infoIn.version === 7 && cpmmPools[infoIn.id.toString()] === undefined) {
+            cpmmPoolList[infoIn.id.toString()] = infoIn;
+          } else if (
+            (infoIn.version === 4 || infoIn.version === 5) &&
+            needSimulate[infoIn.id.toString()] === undefined
+          ) {
+            needSimulate[infoIn.id.toString()] = infoIn;
           }
           if (infoOut.version === 6 && needTickArray[infoOut.id.toString()] === undefined) {
-            needTickArray[infoOut.id.toString()] = infoOut as ClmmPoolInfo;
-          } else if (infoOut.version !== 6 && needSimulate[infoOut.id.toString()] === undefined) {
-            needSimulate[infoOut.id.toString()] = infoOut as AmmPoolInfo;
+            needTickArray[infoOut.id.toString()] = infoOut;
+          } else if (infoOut.version === 7 && cpmmPools[infoOut.id.toString()] === undefined) {
+            cpmmPoolList[infoOut.id.toString()] = infoOut;
+          } else if (
+            (infoOut.version === 4 || infoOut.version === 5) &&
+            needSimulate[infoOut.id.toString()] === undefined
+          ) {
+            needSimulate[infoOut.id.toString()] = infoOut;
           }
         }
       }
@@ -376,113 +575,173 @@ export default class TradeV2 extends ModuleBase {
       routePathDict,
       needSimulate: Object.values(needSimulate),
       needTickArray: Object.values(needTickArray),
+      cpmmPoolList: Object.values(cpmmPoolList),
     };
   }
 
-  private computeAmountOut({
-    itemPool,
-    tickCache,
-    simulateCache,
-    chainTime,
-    epochInfo,
-    slippage,
-    outputToken,
-    amountIn,
+  // fetch pools detail info in route
+  public async fetchSwapRoutesData({
+    routes,
+    inputMint,
+    outputMint,
   }: {
-    itemPool: ComputePoolType;
-    tickCache: ReturnTypeFetchMultiplePoolTickArrays;
-    simulateCache: ReturnTypeFetchMultipleInfo;
-    chainTime: number;
-    epochInfo: EpochInfo;
-    amountIn: TokenAmount;
-    outputToken: ApiV3Token;
-    slippage: number;
-  }): ComputeAmountOutAmmLayout {
-    if (itemPool.version === 6) {
-      const {
-        allTrade,
-        realAmountIn,
-        amountOut,
-        minAmountOut,
-        expirationTime,
-        currentPrice,
-        executionPrice,
-        priceImpact,
-        fee,
-        remainingAccounts,
-        executionPriceX64,
-      } = PoolUtils.computeAmountOutFormat({
-        poolInfo: itemPool,
-        tickArrayCache: tickCache[itemPool.id.toString()],
-        amountIn: amountIn.raw,
-        tokenOut: outputToken,
-        slippage,
-        epochInfo,
-        catchLiquidityInsufficient: true,
-      });
-      return {
-        allTrade,
-        amountIn: realAmountIn,
-        amountOut,
-        minAmountOut,
-        currentPrice: new Decimal(currentPrice.toFixed()),
-        executionPrice: new Decimal(executionPrice.toFixed()),
-        priceImpact: new Decimal(priceImpact.toFixed()),
-        fee: [fee],
-        remainingAccounts: [remainingAccounts],
-        routeType: "amm",
-        poolInfoList: [itemPool],
-        poolReady: itemPool.startTime < chainTime,
-        poolType: "CLMM",
-        slippage,
-        clmmExPriceX64: [executionPriceX64],
-        expirationTime: minExpirationTime(realAmountIn.expirationTime, expirationTime),
+    inputMint: string | PublicKey;
+    outputMint: string | PublicKey;
+    routes: ReturnTypeGetAllRoute;
+  }): Promise<{
+    mintInfos: ReturnTypeFetchMultipleMintInfos;
+    ammPoolsRpcInfo: Record<string, AmmRpcData>;
+    ammSimulateCache: Record<string, ComputeAmountOutParam["poolInfo"]>;
+    clmmPoolsRpcInfo: Record<string, ClmmRpcData>;
+    computeClmmPoolInfo: Record<string, ComputeClmmPoolInfo>;
+    computePoolTickData: ReturnTypeFetchMultiplePoolTickArrays;
+    computeCpmmData: Record<string, CpmmComputeData>;
+    routePathDict: ComputeRoutePathType;
+  }> {
+    const mintSet = new Set([
+      ...routes.needTickArray.map((p) => [p.mintA.toBase58(), p.mintB.toBase58()]).flat(),
+      inputMint.toString(),
+      outputMint.toString(),
+    ]);
+
+    console.log("fetching amm pools info, total: ", routes.needSimulate.length);
+    const ammPoolsRpcInfo = await this.scope.liquidity.getRpcPoolInfos(routes.needSimulate.map((p) => p.id));
+    const ammSimulateCache = toAmmComputePoolInfo(ammPoolsRpcInfo);
+
+    let mintInfos: ReturnTypeFetchMultipleMintInfos = {};
+    // amm doesn't support token2022 yet, so don't need to fetch mint info
+    Object.values(ammSimulateCache).forEach((p) => {
+      mintSet.delete(p.mintA.address);
+      mintInfos[p.mintA.address] = {
+        address: new PublicKey(p.mintA.address),
+        programId: TOKEN_PROGRAM_ID,
+        mintAuthority: null,
+        supply: BigInt(0),
+        decimals: p.mintA.decimals,
+        isInitialized: true,
+        freezeAuthority: null,
+        tlvData: Buffer.from("0", "hex"),
+        feeConfig: undefined,
       };
-    } else {
-      if (![1, 6, 7].includes(simulateCache[itemPool.id.toString()].status)) throw Error("swap error");
-      const { amountOut, minAmountOut, currentPrice, executionPrice, priceImpact, fee } =
-        this.scope.liquidity.computeAmountOut({
-          poolInfo: simulateCache[itemPool.id.toString()],
-          amountIn: amountIn.raw,
-          mintIn: amountIn.token.mint,
-          mintOut: outputToken.address,
-          slippage,
-        });
-      return {
-        amountIn: { amount: amountIn, fee: undefined, expirationTime: undefined },
-        amountOut: {
-          amount: toTokenAmount({
-            ...outputToken,
-            amount: amountOut,
-          }),
-          fee: undefined,
-          expirationTime: undefined,
-        },
-        minAmountOut: {
-          amount: toTokenAmount({
-            ...outputToken,
-            amount: minAmountOut,
-          }),
-          fee: undefined,
-          expirationTime: undefined,
-        },
-        currentPrice,
-        executionPrice,
-        priceImpact,
-        fee: [new TokenAmount(amountIn.token, fee)],
-        routeType: "amm",
-        poolInfoList: [itemPool],
-        remainingAccounts: [],
-        poolReady: Number(simulateCache[itemPool.id as string].openTime) < chainTime,
-        poolType: itemPool.version === 5 ? "STABLE" : undefined,
-        expirationTime: undefined,
-        allTrade: true,
-        slippage,
-        clmmExPriceX64: [undefined],
+
+      mintSet.delete(p.mintB.address);
+      mintInfos[p.mintB.address] = {
+        address: new PublicKey(p.mintB.address),
+        programId: TOKEN_PROGRAM_ID,
+        mintAuthority: null,
+        supply: BigInt(0),
+        decimals: p.mintB.decimals,
+        isInitialized: true,
+        freezeAuthority: null,
+        tlvData: Buffer.from("0", "hex"),
+        feeConfig: undefined,
       };
-    }
+    });
+
+    console.log("fetching cpmm pools info, total: ", routes.cpmmPoolList.length);
+    const cpmmPoolsRpcInfo = await this.scope.cpmm.getRpcPoolInfos(
+      routes.cpmmPoolList.map((p) => p.id.toBase58()),
+      true,
+    );
+
+    Object.values(cpmmPoolsRpcInfo).forEach((p) => {
+      const [mintA, mintB] = [p.mintA.toBase58(), p.mintB.toBase58()];
+      if (p.mintProgramA.equals(TOKEN_PROGRAM_ID)) {
+        mintSet.delete(mintA);
+        mintInfos[mintA] = {
+          address: p.mintA,
+          programId: p.mintProgramA,
+          mintAuthority: null,
+          supply: BigInt(0),
+          decimals: p.mintDecimalA,
+          isInitialized: true,
+          freezeAuthority: null,
+          tlvData: Buffer.from("0", "hex"),
+          feeConfig: undefined,
+        };
+      } else mintSet.add(mintA); // 2022, need to fetch fee config
+      if (p.mintProgramB.equals(TOKEN_PROGRAM_ID)) {
+        mintSet.delete(mintB);
+        mintInfos[mintB] = {
+          address: p.mintB,
+          programId: p.mintProgramB,
+          mintAuthority: null,
+          supply: BigInt(0),
+          decimals: p.mintDecimalB,
+          isInitialized: true,
+          freezeAuthority: null,
+          tlvData: Buffer.from("0", "hex"),
+          feeConfig: undefined,
+        };
+      } else mintSet.add(mintB); // 2022, need to fetch fee config
+    });
+
+    console.log("fetching mints info, total: ", mintSet.size);
+    const fetchMintInfoRes = await fetchMultipleMintInfos({
+      connection: this.scope.connection,
+      mints: Array.from(mintSet).map((m) => new PublicKey(m)),
+    });
+
+    mintInfos = {
+      ...mintInfos,
+      ...fetchMintInfoRes,
+    };
+
+    const computeCpmmData = this.scope.cpmm.toComputePoolInfos({
+      pools: cpmmPoolsRpcInfo,
+      mintInfos,
+    });
+
+    console.log("fetching clmm pools info, total:", routes.needTickArray.length);
+    const clmmPoolsRpcInfo = await this.scope.clmm.getRpcClmmPoolInfos({
+      poolIds: routes.needTickArray.map((p) => p.id),
+    });
+    const { computeClmmPoolInfo, computePoolTickData } = await this.scope.clmm.getComputeClmmPoolInfos({
+      clmmPoolsRpcInfo,
+      mintInfos,
+    });
+
+    // update route pool mint info
+    const routePathDict = Object.keys(routes.routePathDict).reduce((acc, cur) => {
+      return {
+        ...acc,
+        [cur]: {
+          ...routes.routePathDict[cur],
+          mintProgram: mintInfos[cur].programId,
+          mDecimals: mintInfos[cur].decimals,
+          in: routes.routePathDict[cur].in.map(
+            (p) =>
+              ammSimulateCache[p.id.toBase58()] ||
+              computeClmmPoolInfo[p.id.toBase58()] ||
+              computeCpmmData[p.id.toBase58()],
+          ),
+          out: routes.routePathDict[cur].out.map(
+            (p) =>
+              ammSimulateCache[p.id.toBase58()] ||
+              computeClmmPoolInfo[p.id.toBase58()] ||
+              computeCpmmData[p.id.toBase58()],
+          ),
+        },
+      };
+    }, {} as ComputeRoutePathType);
+
+    return {
+      mintInfos,
+
+      ammPoolsRpcInfo,
+      ammSimulateCache,
+
+      clmmPoolsRpcInfo,
+      computeClmmPoolInfo,
+      computePoolTickData,
+
+      computeCpmmData,
+
+      routePathDict,
+    };
   }
 
+  // compute amount from routes
   public getAllRouteComputeAmountOut({
     inputTokenAmount,
     outputToken: propOutputToken,
@@ -652,240 +911,152 @@ export default class TradeV2 extends ModuleBase {
       .sort((a, b) => (a.amountOut.amount.raw.sub(b.amountOut.amount.raw).gt(ZERO) ? -1 : 1));
   }
 
-  public async swap<T extends TxVersion>({
-    swapInfo,
-    swapPoolKeys,
-    ownerInfo,
-    computeBudgetConfig,
-    routeProgram,
-    txVersion,
-  }: {
-    txVersion: T;
-    swapInfo: ComputeAmountOutLayout;
-    swapPoolKeys?: PoolKeys[];
-    ownerInfo: {
-      associatedOnly: boolean;
-      checkCreateATAOwner: boolean;
-    };
-    routeProgram: PublicKey;
-    computeBudgetConfig?: ComputeBudgetConfig;
-  }): Promise<MakeMultiTxData<T>> {
-    const txBuilder = this.createTxBuilder();
-
-    const amountIn = swapInfo.amountIn;
-    const amountOut = swapInfo.amountOut;
-    const useSolBalance = amountIn.amount.token.mint.equals(WSOLMint);
-    const outSolBalance = amountOut.amount.token.mint.equals(WSOLMint);
-    const inputMint = amountIn.amount.token.mint;
-    const inputProgramId = amountIn.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
-    const outputMint = amountOut.amount.token.mint;
-    const outputProgramId = amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
-
-    const { account: sourceAcc, instructionParams: sourceAccInsParams } =
-      await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: inputProgramId,
-        mint: inputMint,
-        notUseTokenAccount: useSolBalance,
-        owner: this.scope.ownerPubKey,
-        skipCloseAccount: !useSolBalance,
-        createInfo: useSolBalance
-          ? {
-              payer: this.scope.ownerPubKey,
-              amount: amountIn.amount.raw,
-            }
-          : undefined,
-        associatedOnly: useSolBalance ? false : ownerInfo.associatedOnly,
-        checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
-      });
-
-    sourceAccInsParams && txBuilder.addInstruction(sourceAccInsParams);
-
-    if (sourceAcc === undefined) {
-      throw Error("input account check error");
-    }
-
-    const { account: destinationAcc, instructionParams: destinationAccInsParams } =
-      await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: outputProgramId,
-        mint: outputMint,
-        notUseTokenAccount: outSolBalance,
-        owner: this.scope.ownerPubKey,
-        skipCloseAccount: !outSolBalance,
-        createInfo: {
-          payer: this.scope.ownerPubKey,
-          amount: 0,
-        },
-        associatedOnly: outSolBalance ? false : ownerInfo.associatedOnly,
-        checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
-      });
-
-    destinationAccInsParams && txBuilder.addInstruction(destinationAccInsParams);
-
-    let routeTokenAcc: PublicKey | undefined = undefined;
-    if (swapInfo.routeType === "route") {
-      const middleMint = swapInfo.middleToken;
-
-      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: middleMint.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
-        mint: middleMint.mint,
-        owner: this.scope.ownerPubKey,
-        skipCloseAccount: false,
-        createInfo: {
-          payer: this.scope.ownerPubKey,
-          amount: 0,
-        },
-        associatedOnly: false,
-        checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
-      });
-      routeTokenAcc = account;
-      instructionParams && txBuilder.addInstruction(instructionParams);
-    }
-
-    const poolKeys = swapPoolKeys ? swapPoolKeys : await this.computePoolToPoolKeys({ pools: swapInfo.poolInfoList });
-    const swapIns = makeSwapInstruction({
-      routeProgram,
-      inputMint,
-      swapInfo: {
-        ...swapInfo,
-        poolInfo: [...swapInfo.poolInfoList],
-        poolKey: poolKeys,
-      },
-      ownerInfo: {
-        wallet: this.scope.ownerPubKey,
-        sourceToken: sourceAcc,
-        routeToken: routeTokenAcc,
-        destinationToken: destinationAcc!,
-      },
-    });
-    if (swapInfo.feeConfig !== undefined) {
-      txBuilder.addInstruction({
-        instructions: [
-          createTransferInstruction(
-            sourceAcc,
-            swapInfo.feeConfig.feeAccount,
-            this.scope.ownerPubKey,
-            swapInfo.feeConfig.feeAmount.toNumber(),
-          ),
-        ],
-        instructionTypes: [InstructionType.TransferAmount],
-      });
-    }
-    txBuilder.addInstruction(swapIns);
-
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig, address: swapIns.address }) as Promise<
-        MakeMultiTxData<T>
-      >;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig, address: swapIns.address }) as Promise<MakeMultiTxData<T>>;
-  }
-
   /** trade related utils */
 
-  public async fetchSwapRoutesData({
-    routes,
-    inputMint,
-    outputMint,
+  private computeAmountOut({
+    itemPool,
+    tickCache,
+    simulateCache,
+    chainTime,
+    epochInfo,
+    slippage,
+    outputToken,
+    amountIn,
   }: {
-    inputMint: string | PublicKey;
-    outputMint: string | PublicKey;
-    routes: ReturnTypeGetAllRoute;
-  }): Promise<{
-    mintInfos: ReturnTypeFetchMultipleMintInfos;
-    ammPoolsRpcInfo: Record<string, AmmRpcData>;
-    ammSimulateCache: Record<string, ComputeAmountOutParam["poolInfo"]>;
-    clmmPoolsRpcInfo: Record<string, ClmmRpcData>;
-    computeClmmPoolInfo: Record<string, ComputeClmmPoolInfo>;
-    computePoolTickData: ReturnTypeFetchMultiplePoolTickArrays;
-    routePathDict: ComputeRoutePathType;
-  }> {
-    const mintSet = new Set([
-      ...routes.needTickArray.map((p) => [p.mintA.toBase58(), p.mintB.toBase58()]).flat(),
-      inputMint.toString(),
-      outputMint.toString(),
-    ]);
-
-    console.log("fetching amm pools info, total: ", routes.needSimulate.length);
-    const ammPoolsRpcInfo = await this.scope.liquidity.getRpcPoolInfos(routes.needSimulate.map((p) => p.id));
-    const ammSimulateCache = toAmmComputePoolInfo(ammPoolsRpcInfo);
-
-    // amm doesn't support token2022 yet, so don't need to fetch mint info
-    Object.values(ammSimulateCache).forEach((p) => {
-      mintSet.delete(p.mintA.address);
-      mintSet.delete(p.mintB.address);
-    });
-
-    console.log("fetching mints info, total: ", mintSet.size);
-    const mintInfos = await fetchMultipleMintInfos({
-      connection: this.scope.connection,
-      mints: Array.from(mintSet).map((m) => new PublicKey(m)),
-    });
-
-    // set amm mint data to mintInfo
-    Object.values(ammSimulateCache).forEach((p) => {
-      mintInfos[p.mintA.address] = {
-        address: new PublicKey(p.mintA.address),
-        programId: TOKEN_PROGRAM_ID,
-        mintAuthority: null,
-        supply: BigInt(0),
-        decimals: p.mintA.decimals,
-        isInitialized: true,
-        freezeAuthority: null,
-        tlvData: Buffer.from("0", "hex"),
-        feeConfig: undefined,
+    itemPool: ComputePoolType;
+    tickCache: ReturnTypeFetchMultiplePoolTickArrays;
+    simulateCache: ReturnTypeFetchMultipleInfo;
+    chainTime: number;
+    epochInfo: EpochInfo;
+    amountIn: TokenAmount;
+    outputToken: ApiV3Token;
+    slippage: number;
+  }): ComputeAmountOutAmmLayout {
+    if (itemPool.version === 6) {
+      const {
+        allTrade,
+        realAmountIn,
+        amountOut,
+        minAmountOut,
+        expirationTime,
+        currentPrice,
+        executionPrice,
+        priceImpact,
+        fee,
+        remainingAccounts,
+        executionPriceX64,
+      } = PoolUtils.computeAmountOutFormat({
+        poolInfo: itemPool,
+        tickArrayCache: tickCache[itemPool.id.toString()],
+        amountIn: amountIn.raw,
+        tokenOut: outputToken,
+        slippage,
+        epochInfo,
+        catchLiquidityInsufficient: true,
+      });
+      return {
+        allTrade,
+        amountIn: realAmountIn,
+        amountOut,
+        minAmountOut,
+        currentPrice: new Decimal(currentPrice.toFixed()),
+        executionPrice: new Decimal(executionPrice.toFixed()),
+        priceImpact: new Decimal(priceImpact.toFixed()),
+        fee: [fee],
+        remainingAccounts: [remainingAccounts],
+        routeType: "amm",
+        poolInfoList: [itemPool],
+        poolReady: itemPool.startTime < chainTime,
+        poolType: "CLMM",
+        slippage,
+        clmmExPriceX64: [executionPriceX64],
+        expirationTime: minExpirationTime(realAmountIn.expirationTime, expirationTime),
       };
-      mintInfos[p.mintB.address] = {
-        address: new PublicKey(p.mintB.address),
-        programId: TOKEN_PROGRAM_ID,
-        mintAuthority: null,
-        supply: BigInt(0),
-        decimals: p.mintB.decimals,
-        isInitialized: true,
-        freezeAuthority: null,
-        tlvData: Buffer.from("0", "hex"),
-        feeConfig: undefined,
-      };
-    });
-
-    console.log("fetching clmm pools info, total:", routes.needTickArray.length);
-    const clmmPoolsRpcInfo = await this.scope.clmm.getRpcClmmPoolInfos({
-      poolIds: routes.needTickArray.map((p) => p.id),
-    });
-    const { computeClmmPoolInfo, computePoolTickData } = await this.scope.clmm.getComputeClmmPoolInfos({
-      clmmPoolsRpcInfo,
-      mintInfos,
-    });
-
-    // update route pool mint info
-    const routePathDict = Object.keys(routes.routePathDict).reduce(
-      (acc, cur) => ({
-        ...acc,
-        [cur]: {
-          ...routes.routePathDict[cur],
-          mintProgram: mintInfos[cur].programId,
-          mDecimals: mintInfos[cur].decimals,
-          in: routes.routePathDict[cur].in.map(
-            (p) => ammSimulateCache[p.id.toBase58()] || computeClmmPoolInfo[p.id.toBase58()],
-          ),
-          out: routes.routePathDict[cur].out.map(
-            (p) => ammSimulateCache[p.id.toBase58()] || computeClmmPoolInfo[p.id.toBase58()],
-          ),
+    } else if (itemPool.version === 7) {
+      const { allTrade, executionPrice, amountOut, minAmountOut, priceImpact, fee } = this.scope.cpmm.computeSwapAmount(
+        {
+          pool: itemPool,
+          outputMint: outputToken.address,
+          amountIn: amountIn.raw,
+          slippage,
         },
-      }),
-      {} as ComputeRoutePathType,
-    );
+      );
 
-    return {
-      mintInfos,
-
-      ammPoolsRpcInfo,
-      ammSimulateCache,
-
-      clmmPoolsRpcInfo,
-      computeClmmPoolInfo,
-      computePoolTickData,
-
-      routePathDict,
-    };
+      return {
+        allTrade,
+        amountIn: { amount: amountIn, fee: undefined, expirationTime: undefined },
+        amountOut: {
+          amount: toTokenAmount({
+            ...outputToken,
+            amount: amountOut,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        minAmountOut: {
+          amount: toTokenAmount({
+            ...outputToken,
+            amount: minAmountOut,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        currentPrice: itemPool.poolPrice,
+        executionPrice,
+        priceImpact,
+        fee: [new TokenAmount(amountIn.token, fee)],
+        remainingAccounts: [],
+        routeType: "amm",
+        poolInfoList: [itemPool],
+        poolReady: itemPool.openTime.toNumber() < chainTime,
+        poolType: "CPMM",
+        slippage,
+        clmmExPriceX64: [undefined],
+        expirationTime: undefined,
+      };
+    } else {
+      if (![1, 6, 7].includes(simulateCache[itemPool.id.toString()].status)) throw Error("swap error");
+      const { amountOut, minAmountOut, currentPrice, executionPrice, priceImpact, fee } =
+        this.scope.liquidity.computeAmountOut({
+          poolInfo: simulateCache[itemPool.id.toString()],
+          amountIn: amountIn.raw,
+          mintIn: amountIn.token.mint,
+          mintOut: outputToken.address,
+          slippage,
+        });
+      return {
+        amountIn: { amount: amountIn, fee: undefined, expirationTime: undefined },
+        amountOut: {
+          amount: toTokenAmount({
+            ...outputToken,
+            amount: amountOut,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        minAmountOut: {
+          amount: toTokenAmount({
+            ...outputToken,
+            amount: minAmountOut,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        currentPrice,
+        executionPrice,
+        priceImpact,
+        fee: [new TokenAmount(amountIn.token, fee)],
+        routeType: "amm",
+        poolInfoList: [itemPool],
+        remainingAccounts: [],
+        poolReady: Number(simulateCache[itemPool.id as string].openTime) < chainTime,
+        poolType: itemPool.version === 5 ? "STABLE" : undefined,
+        expirationTime: undefined,
+        allTrade: true,
+        slippage,
+        clmmExPriceX64: [undefined],
+      };
+    }
   }
 
   public async computePoolToPoolKeys({
@@ -980,7 +1151,7 @@ export default class TradeV2 extends ModuleBase {
           rewardInfos: [],
         };
         poolKeys.push(clmmKeys);
-      } else {
+      } else if (pool.version === 4) {
         const rpcInfo = ammRpcData[pool.id.toString()];
         const ammKeys: AmmV4Keys = {
           programId: pool.programId,
@@ -999,6 +1170,32 @@ export default class TradeV2 extends ModuleBase {
           ...marketData[pool.marketId],
         };
         poolKeys.push(ammKeys);
+      } else if (pool.version === 7) {
+        poolKeys.push({
+          programId: pool.programId.toBase58(),
+          id: pool.id.toBase58(),
+          mintA: pool.mintA,
+          mintB: pool.mintB,
+          openTime: String(pool.openTime),
+          authority: getPdaPoolAuthority(pool.programId).publicKey.toBase58(),
+          vault: {
+            A: pool.vaultA.toBase58(),
+            B: pool.vaultB.toBase58(),
+          },
+          mintLp: toApiV3Token({
+            address: pool.mintLp.toBase58(),
+            programId: TOKEN_PROGRAM_ID.toBase58(),
+            decimals: pool.lpDecimals,
+          }),
+          config: {
+            id: pool.configId.toBase58(),
+            ...pool.configInfo,
+            protocolFeeRate: pool.configInfo.protocolFeeRate.toNumber(),
+            tradeFeeRate: pool.configInfo.tradeFeeRate.toNumber(),
+            fundFeeRate: pool.configInfo.fundFeeRate.toNumber(),
+            createPoolFee: pool.configInfo.createPoolFee.toString(),
+          },
+        });
       }
     });
     return poolKeys;

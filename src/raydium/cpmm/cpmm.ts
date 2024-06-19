@@ -7,6 +7,7 @@ import { getATAAddress } from "@/common/pda";
 import { WSOLMint } from "@/common/pubKey";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { MakeTxData } from "@/common/txTool/txTool";
+import { CurveCalculator } from "./curve/calculator";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
@@ -16,7 +17,8 @@ import {
   WithdrawCpmmLiquidityParams,
   CpmmSwapParams,
   ComputePairAmountParams,
-  CpmmConfigInfoInterface,
+  CpmmRpcData,
+  CpmmComputeData,
 } from "./type";
 import { getCreatePoolKeys, getPdaObservationId } from "./pda";
 import {
@@ -29,8 +31,10 @@ import {
 import BN from "bn.js";
 import { CpmmPoolInfoLayout, CpmmConfigInfoLayout } from "./layout";
 import Decimal from "decimal.js";
-import { getTransferAmountFeeV2 } from "@/common";
-import { GetTransferAmountFee } from "@/raydium/type";
+import { getMultipleAccountsInfoWithCustomFlags, getTransferAmountFeeV2 } from "@/common";
+import { GetTransferAmountFee, ReturnTypeFetchMultipleMintInfos } from "@/raydium/type";
+import { toApiV3Token, toFeeConfig } from "../token";
+import { getPdaPoolAuthority } from "./pda";
 
 export default class CpmmModule extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -45,17 +49,7 @@ export default class CpmmModule extends ModuleBase {
     return ((await this.scope.api.fetchPoolKeysById({ idList: [poolId] })) as CpmmKeys[])[0];
   }
 
-  public async getRpcPoolInfo(
-    poolId: string,
-    fetchConfigInfo?: boolean,
-  ): Promise<
-    ReturnType<typeof CpmmPoolInfoLayout.decode> & {
-      baseReserve: BN;
-      quoteReserve: BN;
-      configInfo?: CpmmConfigInfoInterface;
-      poolPrice: Decimal;
-    }
-  > {
+  public async getRpcPoolInfo(poolId: string, fetchConfigInfo?: boolean): Promise<CpmmRpcData> {
     return (await this.getRpcPoolInfos([poolId], fetchConfigInfo))[poolId];
   }
 
@@ -63,24 +57,25 @@ export default class CpmmModule extends ModuleBase {
     poolIds: string[],
     fetchConfigInfo?: boolean,
   ): Promise<{
-    [poolId: string]: ReturnType<typeof CpmmPoolInfoLayout.decode> & {
-      baseReserve: BN;
-      quoteReserve: BN;
-      configInfo?: CpmmConfigInfoInterface;
-      poolPrice: Decimal;
-    };
+    [poolId: string]: CpmmRpcData;
   }> {
-    const accounts = await this.scope.connection.getMultipleAccountsInfo(poolIds.map((i) => new PublicKey(i)));
-    const poolInfos: { [poolId: string]: ReturnType<typeof CpmmPoolInfoLayout.decode> } = {};
+    const accounts = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      poolIds.map((i) => ({ pubkey: new PublicKey(i) })),
+    );
+    const poolInfos: { [poolId: string]: ReturnType<typeof CpmmPoolInfoLayout.decode> & { programId: PublicKey } } = {};
 
     const needFetchConfigId = new Set<string>();
     const needFetchVaults: PublicKey[] = [];
 
     for (let i = 0; i < poolIds.length; i++) {
       const item = accounts[i];
-      if (item === null) throw Error("fetch pool info error: " + String(poolIds[i]));
-      const rpc = CpmmPoolInfoLayout.decode(item.data);
-      poolInfos[String(poolIds[i])] = rpc;
+      if (item.accountInfo === null) throw Error("fetch pool info error: " + String(poolIds[i]));
+      const rpc = CpmmPoolInfoLayout.decode(item.accountInfo.data);
+      poolInfos[String(poolIds[i])] = {
+        ...rpc,
+        programId: item.accountInfo.owner,
+      };
       needFetchConfigId.add(String(rpc.configId));
 
       needFetchVaults.push(rpc.vaultA, rpc.vaultB);
@@ -90,10 +85,13 @@ export default class CpmmModule extends ModuleBase {
 
     if (fetchConfigInfo) {
       const configIds = [...needFetchConfigId];
-      const configState = await this.scope.connection.getMultipleAccountsInfo(configIds.map((i) => new PublicKey(i)));
+      const configState = await getMultipleAccountsInfoWithCustomFlags(
+        this.scope.connection,
+        configIds.map((i) => ({ pubkey: new PublicKey(i) })),
+      );
 
       for (let i = 0; i < configIds.length; i++) {
-        const configItemInfo = configState[i];
+        const configItemInfo = configState[i].accountInfo;
         if (configItemInfo === null) throw Error("fetch pool config error: " + configIds[i]);
         configInfo[configIds[i]] = CpmmConfigInfoLayout.decode(configItemInfo.data);
       }
@@ -101,25 +99,19 @@ export default class CpmmModule extends ModuleBase {
 
     const vaultInfo: { [vaultId: string]: BN } = {};
 
-    const vaultAccountInfo = await this.scope.connection.getMultipleAccountsInfo(
-      needFetchVaults.map((i) => new PublicKey(i)),
+    const vaultAccountInfo = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      needFetchVaults.map((i) => ({ pubkey: new PublicKey(i) })),
     );
 
     for (let i = 0; i < needFetchVaults.length; i++) {
-      const vaultItemInfo = vaultAccountInfo[i];
+      const vaultItemInfo = vaultAccountInfo[i].accountInfo;
       if (vaultItemInfo === null) throw Error("fetch vault info error: " + needFetchVaults[i]);
 
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 
-    const returnData: {
-      [poolId: string]: ReturnType<typeof CpmmPoolInfoLayout.decode> & {
-        baseReserve: BN;
-        quoteReserve: BN;
-        configInfo?: CpmmConfigInfoInterface;
-        poolPrice: Decimal;
-      };
-    } = {};
+    const returnData: { [poolId: string]: CpmmRpcData } = {};
 
     for (const [id, info] of Object.entries(poolInfos)) {
       const baseReserve = vaultInfo[info.vaultA.toString()].sub(info.protocolFeesMintA).sub(info.fundFeesMintA);
@@ -136,6 +128,46 @@ export default class CpmmModule extends ModuleBase {
     }
 
     return returnData;
+  }
+
+  public toComputePoolInfos({
+    pools,
+    mintInfos,
+  }: {
+    pools: Record<string, CpmmRpcData>;
+    mintInfos: ReturnTypeFetchMultipleMintInfos;
+  }): Record<string, CpmmComputeData> {
+    return Object.keys(pools).reduce((acc, cur) => {
+      const pool = pools[cur];
+      const [mintA, mintB] = [pool.mintA.toBase58(), pool.mintB.toBase58()];
+
+      return {
+        ...acc,
+        [cur]: {
+          ...pool,
+          id: new PublicKey(cur),
+          configInfo: pool.configInfo!,
+          version: 7 as const,
+          authority: getPdaPoolAuthority(pool.programId).publicKey,
+          mintA: toApiV3Token({
+            address: mintA,
+            decimals: pool.mintDecimalA,
+            programId: pool.mintProgramA.toBase58(),
+            extensions: {
+              feeConfig: mintInfos[mintA]?.feeConfig ? toFeeConfig(mintInfos[mintA]?.feeConfig) : undefined,
+            },
+          }),
+          mintB: toApiV3Token({
+            address: mintB,
+            decimals: pool.mintDecimalB,
+            programId: pool.mintProgramB.toBase58(),
+            extensions: {
+              feeConfig: mintInfos[mintB]?.feeConfig ? toFeeConfig(mintInfos[mintB]?.feeConfig) : undefined,
+            },
+          }),
+        },
+      };
+    }, {} as Record<string, CpmmComputeData>);
   }
 
   public async createPool<T extends TxVersion>({
@@ -626,6 +658,51 @@ export default class CpmmModule extends ModuleBase {
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
+  }
+
+  public computeSwapAmount({
+    pool,
+    amountIn,
+    outputMint,
+    slippage,
+  }: {
+    pool: CpmmComputeData;
+    amountIn: BN;
+    outputMint: string | PublicKey;
+    slippage: number;
+  }): {
+    allTrade: boolean;
+    amountIn: BN;
+    amountOut: BN;
+    minAmountOut: BN;
+    fee: BN;
+    executionPrice: Decimal;
+    priceImpact: any;
+  } {
+    const isBaseIn = outputMint.toString() === pool.mintB.address;
+
+    const swapResult = CurveCalculator.swap(
+      amountIn,
+      isBaseIn ? pool.baseReserve : pool.quoteReserve,
+      isBaseIn ? pool.quoteReserve : pool.baseReserve,
+      pool.configInfo.tradeFeeRate,
+    );
+
+    const executionPrice = new Decimal(swapResult.destinationAmountSwapped.toString()).div(
+      swapResult.sourceAmountSwapped.toString(),
+    );
+
+    const minAmountOut = swapResult.destinationAmountSwapped.mul(new BN((1 - slippage) * 10000)).div(new BN(10000));
+
+    return {
+      allTrade: swapResult.sourceAmountSwapped.eq(amountIn),
+      amountIn,
+      amountOut: swapResult.destinationAmountSwapped,
+      minAmountOut,
+      executionPrice,
+      fee: swapResult.tradeFee,
+      priceImpact: pool.poolPrice.sub(executionPrice).div(pool.poolPrice),
+    };
   }
 
   public computePairAmount({

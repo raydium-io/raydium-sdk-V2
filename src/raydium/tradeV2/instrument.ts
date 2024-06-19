@@ -1,5 +1,5 @@
-import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { PublicKey, TransactionInstruction, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
 
 import {
@@ -7,15 +7,24 @@ import {
   ONE,
   MIN_SQRT_PRICE_X64,
   MAX_SQRT_PRICE_X64,
+  MIN_SQRT_PRICE_X64_ADD_ONE,
+  MAX_SQRT_PRICE_X64_SUB_ONE,
   getPdaExBitmapAccount,
-  ComputeClmmPoolInfo,
 } from "../clmm";
-import { InstructionType, jsonInfo2PoolKeys, MEMO_PROGRAM_ID } from "@/common";
-import { struct, u64, u8 } from "@/marshmallow";
+import {
+  InstructionType,
+  jsonInfo2PoolKeys,
+  MEMO_PROGRAM_ID,
+  MEMO_PROGRAM_ID2,
+  LIQUIDITY_POOL_PROGRAM_ID_V5_MODEL,
+  accountMeta,
+} from "@/common";
+import { struct, u64, u8, seq, u128 } from "@/marshmallow";
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
 
-import { ApiV3PoolInfoItem, ApiV3PoolInfoConcentratedItem, PoolKeys, ClmmKeys, AmmV4Keys, AmmV5Keys } from "@/api/type";
+import { ApiV3PoolInfoItem, PoolKeys, ClmmKeys, AmmV4Keys, AmmV5Keys, CpmmKeys } from "@/api/type";
 import { ComputePoolType, MakeSwapInstructionParam, ReturnTypeMakeSwapInstruction } from "./type";
+import { makeSwapCpmmBaseInInInstruction, makeSwapCpmmBaseOutInInstruction } from "@/raydium/cpmm";
 
 export function route1Instruction(
   programId: PublicKey,
@@ -250,6 +259,7 @@ export function route2Instruction(
   });
 }
 
+/*
 function makeInnerInsKey(
   itemPool: ComputePoolType,
   itemPoolKey: PoolKeys,
@@ -339,10 +349,39 @@ function makeInnerInsKey(
         isWritable: true,
       },
     ];
+  } else if (itemPool.version === 7) {
+    const pool = itemPool;
+    const poolKey = jsonInfo2PoolKeys(itemPoolKey as CpmmKeys);
+    const baseIn = pool.mintA.address === inMint;
+    return [
+      { pubkey: new PublicKey(String(itemPool.programId)), isSigner: false, isWritable: false },
+      { pubkey: userInAccount, isSigner: false, isWritable: true },
+      { pubkey: userOutAccount, isSigner: false, isWritable: true },
+      { pubkey: poolKey.config.id, isSigner: false, isWritable: false },
+      { pubkey: poolKey.id, isSigner: false, isWritable: true },
+      { pubkey: baseIn ? poolKey.vault.A : poolKey.vault.B, isSigner: false, isWritable: true },
+      { pubkey: baseIn ? poolKey.vault.B : poolKey.vault.A, isSigner: false, isWritable: true },
+      { pubkey: itemPool.observationId, isSigner: false, isWritable: true },
+      ...(poolKey.mintA.programId.equals(TOKEN_2022_PROGRAM_ID) || poolKey.mintB.programId.equals(TOKEN_2022_PROGRAM_ID)
+        ? [
+            { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: baseIn ? poolKey.mintA.address : poolKey.mintB.address, isSigner: false, isWritable: false },
+            { pubkey: baseIn ? poolKey.mintB.address : poolKey.mintA.address, isSigner: false, isWritable: false },
+          ]
+        : []),
+      ...(remainingAccount ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+      {
+        pubkey: getPdaExBitmapAccount(new PublicKey(String(itemPool.programId)), new PublicKey(itemPool.id)).publicKey,
+        isSigner: false,
+        isWritable: true,
+      },
+    ];
   } else {
     throw Error("make swap ins error");
   }
 }
+*/
 
 export function routeInstruction(
   programId: PublicKey,
@@ -354,6 +393,7 @@ export function routeInstruction(
 
   inputMint: string,
   routeMint: string,
+  outputMint: string,
 
   poolInfoA: ComputePoolType,
   poolInfoB: ComputePoolType,
@@ -366,34 +406,135 @@ export function routeInstruction(
 
   remainingAccounts: (PublicKey[] | undefined)[],
 ): TransactionInstruction {
-  const dataLayout = struct([u8("instruction"), u64("amountIn"), u64("amountOut")]);
-
-  const keys: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [
-    { pubkey: wallet, isSigner: true, isWritable: false },
-    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+  const clmmPriceLimit: BN[] = [];
+  const keys = [
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_2022_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
+    accountMeta({ pubkey: wallet, isSigner: true }),
   ];
 
-  keys.push(...makeInnerInsKey(poolInfoA, poolKeyA, inputMint, userSourceToken, userRouteToken, remainingAccounts[0]));
+  keys.push(accountMeta({ pubkey: userSourceToken }));
+  keys.push(accountMeta({ pubkey: userDestinationToken }));
 
-  keys.push(
-    ...makeInnerInsKey(poolInfoB, poolKeyB, routeMint, userRouteToken, userDestinationToken, remainingAccounts[1]),
-  );
+  const poolInfos = [poolInfoA, poolInfoB];
+  const poolKeys = [poolKeyA, poolKeyB];
+  const routeMints = [inputMint, routeMint, outputMint];
 
+  for (let index = 0; index < poolInfos.length; index++) {
+    const _poolInfo = poolInfos[index];
+    const inputIsA = routeMints[index] === _poolInfo.mintA.address;
+    keys.push(accountMeta({ pubkey: new PublicKey(_poolInfo.programId), isWritable: false }));
+    if (index === poolInfos.length - 1) {
+      keys.push(accountMeta({ pubkey: userDestinationToken }));
+    } else {
+      keys.push(accountMeta({ pubkey: userRouteToken }));
+    }
+    keys.push(accountMeta({ pubkey: new PublicKey(routeMints[index]) }));
+    keys.push(accountMeta({ pubkey: new PublicKey(routeMints[index + 1]) }));
+    if (_poolInfo.version === 6) {
+      const _poolKey = poolKeys[index] as ClmmKeys;
+
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.config.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? _poolKey.vault.A : _poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? _poolKey.vault.B : _poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolInfo.observationId) })); //todo
+      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID2 }));
+      keys.push(
+        accountMeta({
+          pubkey: getPdaExBitmapAccount(new PublicKey(_poolInfo.programId), new PublicKey(_poolInfo.id)).publicKey,
+        }),
+      );
+      clmmPriceLimit.push(clmmPriceLimitX64InsData(_poolInfo.sqrtPriceX64.toString(), inputIsA));
+      for (const item of remainingAccounts[index] ?? []) {
+        keys.push(accountMeta({ pubkey: new PublicKey(item) }));
+      }
+    } else if (_poolInfo.version === 5) {
+      const _poolKey = poolKeys[index] as AmmV5Keys;
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.authority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketProgramId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAuthority) }));
+      keys.push(accountMeta({ pubkey: LIQUIDITY_POOL_PROGRAM_ID_V5_MODEL, isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.openOrders) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketBids) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAsks) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketEventQueue) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketBaseVault) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketQuoteVault) }));
+    } else if (_poolInfo.version === 4) {
+      const _poolKey = poolKeys[index] as AmmV4Keys;
+      const isSupportIdOnly = _poolInfo.status !== 1;
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.authority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketProgramId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketAuthority) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.openOrders) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketBids) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketAsks) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketEventQueue) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketBaseVault) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketQuoteVault) }));
+    } else if (_poolInfo.version === 7) {
+      const _poolKey = poolKeys[index] as CpmmKeys;
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.authority) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.config.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? _poolKey.vault.A : _poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? _poolKey.vault.B : _poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolInfo.observationId) }));
+    } else throw Error("pool type error");
+  }
+
+  const dataLayout = struct([
+    u8("insId"),
+    u64("amountIn"),
+    u64("amountOut"),
+    seq(u128(), clmmPriceLimit.length, "clmmPriceLimit"),
+  ]);
   const data = Buffer.alloc(dataLayout.span);
   dataLayout.encode(
     {
-      instruction: 8,
+      insId: 0,
       amountIn,
       amountOut,
+      clmmPriceLimit,
     },
     data,
   );
-
   return new TransactionInstruction({
     keys,
     programId,
     data,
   });
+}
+
+function clmmPriceLimitX64InsData(x64Price: string | undefined, inputIsA: boolean): BN {
+  if (x64Price) {
+    if (inputIsA) {
+      const _m = new BN(x64Price).div(new BN(25));
+      return _m.gt(MIN_SQRT_PRICE_X64_ADD_ONE) ? _m : MIN_SQRT_PRICE_X64_ADD_ONE;
+    } else {
+      const _m = new BN(x64Price).mul(new BN(25));
+      return _m.lt(MAX_SQRT_PRICE_X64_SUB_ONE) ? _m : MAX_SQRT_PRICE_X64_SUB_ONE;
+    }
+  } else {
+    return inputIsA ? MIN_SQRT_PRICE_X64_ADD_ONE : MAX_SQRT_PRICE_X64_SUB_ONE;
+  }
 }
 
 export function makeSwapInstruction({
@@ -425,6 +566,62 @@ export function makeSwapInstruction({
         sqrtPriceLimitX64,
         remainingAccounts: swapInfo.remainingAccounts[0] ?? [],
       });
+    } else if (swapInfo.poolInfo[0].version === 7) {
+      const poolInfo = swapInfo.poolInfo[0];
+      const baseIn = inputMint.toString() === swapInfo.poolInfo[0].mintA.address;
+
+      return {
+        signers: [],
+        instructions: [
+          baseIn
+            ? makeSwapCpmmBaseInInInstruction(
+                poolInfo.programId,
+                ownerInfo.wallet,
+                poolInfo.authority,
+                poolInfo.configId,
+                poolInfo.id,
+                ownerInfo.sourceToken!,
+                ownerInfo.destinationToken!,
+                poolInfo.vaultA,
+                poolInfo.vaultB,
+                poolInfo.mintProgramA,
+                poolInfo.mintProgramA,
+                new PublicKey(poolInfo.mintA.address),
+                new PublicKey(poolInfo.mintB.address),
+                poolInfo.observationId,
+
+                swapInfo.amountIn.amount.raw,
+                swapInfo.minAmountOut.amount.raw,
+              )
+            : makeSwapCpmmBaseOutInInstruction(
+                poolInfo.programId,
+                ownerInfo.wallet,
+                poolInfo.authority,
+                poolInfo.configId,
+                poolInfo.id,
+
+                ownerInfo.destinationToken!,
+                ownerInfo.sourceToken!,
+
+                poolInfo.vaultB,
+                poolInfo.vaultA,
+
+                poolInfo.mintProgramB,
+                poolInfo.mintProgramA,
+
+                new PublicKey(poolInfo.mintB.address),
+                new PublicKey(poolInfo.mintA.address),
+
+                poolInfo.observationId,
+
+                swapInfo.amountIn.amount.raw,
+                swapInfo.minAmountOut.amount.raw,
+              ),
+        ],
+        lookupTableAddress: [],
+        instructionTypes: [baseIn ? InstructionType.CpmmSwapBaseIn : InstructionType.CpmmSwapBaseOut],
+        address: {},
+      };
     } else {
       const _poolKey = swapInfo.poolKey[0] as AmmV4Keys | AmmV5Keys;
 
@@ -473,6 +670,7 @@ export function makeSwapInstruction({
 
           inputMint.toString(),
           swapInfo.middleToken.mint.toString(),
+          swapInfo.outputMint.toString(),
 
           poolInfo1,
           poolInfo2,

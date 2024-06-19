@@ -6,6 +6,7 @@ import { ApiV3PoolInfoItem, PoolKeys } from "@/api/type";
 import { ComputeAmountOutParam } from "@/raydium/liquidity/type";
 import { ComputeClmmPoolInfo } from "@/raydium/clmm/type";
 import Decimal from "decimal.js";
+import { CpmmComputeData } from "../cpmm";
 
 export interface ComputeAmountOutAmmLayout {
   amountIn: TransferAmountFee;
@@ -19,7 +20,7 @@ export interface ComputeAmountOutAmmLayout {
   poolInfoList: ComputePoolType[];
   remainingAccounts: PublicKey[][];
   poolReady: boolean;
-  poolType: "CLMM" | "STABLE" | undefined;
+  poolType: "CLMM" | "CPMM" | "STABLE" | undefined;
 
   feeConfig?: {
     feeAmount: BN;
@@ -78,14 +79,18 @@ export type MakeSwapInstructionParam = {
 
   // ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;
   swapInfo:
-    | (Omit<ComputeAmountOutAmmLayout, "poolKey"> & {
-        poolKey: PoolKeys[];
-        poolInfo: ComputePoolType[];
-      })
-    | (Omit<ComputeAmountOutRouteLayout, "poolKey"> & {
-        poolKey: PoolKeys[];
-        poolInfo: ComputePoolType[];
-      });
+    | (
+        | (Omit<ComputeAmountOutAmmLayout, "poolKey"> & {
+            poolKey: PoolKeys[];
+            poolInfo: ComputePoolType[];
+          })
+        | (Omit<ComputeAmountOutRouteLayout, "poolKey"> & {
+            poolKey: PoolKeys[];
+            poolInfo: ComputePoolType[];
+          })
+      ) & {
+        outputMint: PublicKey;
+      };
 };
 
 export interface PoolAccountInfoV4 {
@@ -119,41 +124,33 @@ export interface ReturnTypeMakeSwapTransaction {
   address: { [key: string]: PublicKey };
 }
 
+export type BasicPoolInfo = {
+  id: PublicKey;
+  version: number;
+  mintA: PublicKey;
+  mintB: PublicKey;
+};
+
 export type RoutePathType = {
   [routeMint: string]: {
     skipMintCheck?: boolean;
     mintProgram: PublicKey;
-    in: PoolType[];
-    out: PoolType[];
+    in: BasicPoolInfo[];
+    out: BasicPoolInfo[];
     mDecimals: number;
   };
 };
 
-export type AmmPool = {
-  id: PublicKey;
-  version: number;
-  mintA: PublicKey;
-  mintB: PublicKey;
-};
-
-export type ClmmPool = {
-  id: PublicKey;
-  version: number;
-  mintA: PublicKey;
-  mintB: PublicKey;
-};
-
-export type PoolType = AmmPool | ClmmPool;
-
 export interface ReturnTypeGetAllRoute {
-  directPath: PoolType[];
-  addLiquidityPools: AmmPool[];
+  directPath: BasicPoolInfo[];
+  addLiquidityPools: BasicPoolInfo[];
   routePathDict: RoutePathType;
-  needSimulate: AmmPool[];
-  needTickArray: ClmmPool[];
+  needSimulate: BasicPoolInfo[];
+  needTickArray: BasicPoolInfo[];
+  cpmmPoolList: BasicPoolInfo[];
 }
 
-export type ComputePoolType = ComputeAmountOutParam["poolInfo"] | ComputeClmmPoolInfo;
+export type ComputePoolType = ComputeAmountOutParam["poolInfo"] | ComputeClmmPoolInfo | CpmmComputeData;
 export type ComputeRoutePathType = {
   [routeMint: string]: {
     skipMintCheck?: boolean;
