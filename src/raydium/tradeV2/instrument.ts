@@ -424,7 +424,6 @@ export function routeInstruction(
 
   for (let index = 0; index < poolInfos.length; index++) {
     const _poolInfo = poolInfos[index];
-    // const inputIsA = inputToken === _routeInfo.mintA.address;
     const inputIsA = routeMints[index] === _poolInfo.mintA.address;
     keys.push(accountMeta({ pubkey: new PublicKey(_poolInfo.programId), isWritable: false }));
     if (index === poolInfos.length - 1) {
@@ -434,8 +433,6 @@ export function routeInstruction(
     }
     keys.push(accountMeta({ pubkey: new PublicKey(routeMints[index]) }));
     keys.push(accountMeta({ pubkey: new PublicKey(routeMints[index + 1]) }));
-    // keys.push(AccountMeta({ pubkey: new PublicKey(_routeInfo.inputMint) }))
-    // keys.push(AccountMeta({ pubkey: new PublicKey(_routeInfo.outputMint) }))
     if (_poolInfo.version === 6) {
       const _poolKey = poolKeys[index] as ClmmKeys;
 
@@ -458,12 +455,18 @@ export function routeInstruction(
       const _poolKey = poolKeys[index] as AmmV5Keys;
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.authority), isWritable: false }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketProgramId), isWritable: false }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAuthority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketProgramId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAuthority) }));
       keys.push(accountMeta({ pubkey: LIQUIDITY_POOL_PROGRAM_ID_V5_MODEL, isWritable: false }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.openOrders) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.A) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketId) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketBids) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAsks) }));
@@ -472,19 +475,20 @@ export function routeInstruction(
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketQuoteVault) }));
     } else if (_poolInfo.version === 4) {
       const _poolKey = poolKeys[index] as AmmV4Keys;
+      const isSupportIdOnly = _poolInfo.status !== 1;
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.id) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.authority), isWritable: false }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketProgramId), isWritable: false }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAuthority), isWritable: false }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.openOrders) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketProgramId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketAuthority) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.openOrders) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.A) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.vault.B) }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketId) }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketBids) }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAsks) }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketEventQueue) }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketBaseVault) }));
-      keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketQuoteVault) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketBids) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketAsks) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketEventQueue) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketBaseVault) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(isSupportIdOnly ? _poolKey.id : _poolKey.marketQuoteVault) }));
     } else if (_poolInfo.version === 7) {
       const _poolKey = poolKeys[index] as CpmmKeys;
       keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.authority) }));
