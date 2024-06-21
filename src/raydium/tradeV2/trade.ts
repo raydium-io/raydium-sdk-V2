@@ -305,12 +305,13 @@ export default class TradeV2 extends ModuleBase {
   }
 
   // get all amm/clmm/cpmm pools data only with id and mint
-  public async fetchRoutePoolBasicInfo(): Promise<{
-    clmmPools: BasicPoolInfo[];
+  public async fetchRoutePoolBasicInfo(programIds?: { amm: PublicKey; clmm: PublicKey; cpmm: PublicKey }): Promise<{
     ammPools: BasicPoolInfo[];
+    clmmPools: BasicPoolInfo[];
     cpmmPools: BasicPoolInfo[];
   }> {
-    const ammPoolsData = await this.scope.connection.getProgramAccounts(AMM_V4, {
+    const { amm = AMM_V4, clmm = CLMM_PROGRAM_ID, cpmm = CREATE_CPMM_POOL_PROGRAM } = programIds || {};
+    const ammPoolsData = await this.scope.connection.getProgramAccounts(amm, {
       dataSlice: { offset: liquidityStateV4Layout.offsetOf("baseMint"), length: 64 },
     });
 
@@ -323,7 +324,7 @@ export default class TradeV2 extends ModuleBase {
     }));
 
     const layout = struct([publicKey("mintA"), publicKey("mintB")]);
-    const clmmPoolsData = await this.scope.connection.getProgramAccounts(CLMM_PROGRAM_ID, {
+    const clmmPoolsData = await this.scope.connection.getProgramAccounts(clmm, {
       filters: [{ dataSize: PoolInfoLayout.span }],
       dataSlice: { offset: PoolInfoLayout.offsetOf("mintA"), length: 64 },
     });
@@ -338,7 +339,7 @@ export default class TradeV2 extends ModuleBase {
       };
     });
 
-    const cpmmPools = await this.scope.connection.getProgramAccounts(CREATE_CPMM_POOL_PROGRAM, {
+    const cpmmPools = await this.scope.connection.getProgramAccounts(cpmm, {
       dataSlice: { offset: CpmmPoolInfoLayout.offsetOf("mintA"), length: 64 },
     });
 
