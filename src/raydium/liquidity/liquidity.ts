@@ -55,7 +55,7 @@ import BN from "bn.js";
 import Decimal from "decimal.js";
 
 export default class LiquidityModule extends ModuleBase {
-  private stableLayout: StableLayout;
+  public stableLayout: StableLayout;
 
   constructor(params: ModuleBaseProps) {
     super(params);
@@ -741,7 +741,7 @@ export default class LiquidityModule extends ModuleBase {
     }
 
     const [reserveIn, reserveOut] = reserves;
-    const isVersion4 = poolInfo.programId === AMM_V4.toBase58();
+    const isVersion4 = poolInfo.version === 4;
     let currentPrice: Decimal;
     if (isVersion4) {
       currentPrice = new Decimal(reserveOut.toString()).div(reserveIn.toString());
@@ -823,6 +823,7 @@ export default class LiquidityModule extends ModuleBase {
 
   public async swap<T extends TxVersion>({
     poolInfo,
+    poolKeys: propPoolKeys,
     amountIn,
     amountOut,
     inputMint,
@@ -865,7 +866,7 @@ export default class LiquidityModule extends ModuleBase {
     });
     txBuilder.addInstruction(accountOutIns);
 
-    const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
+    const poolKeys = propPoolKeys || (await this.getAmmPoolKeys(poolInfo.id));
     let version = 4;
     if (poolInfo.pooltype.includes("StablePool")) version = 5;
 
