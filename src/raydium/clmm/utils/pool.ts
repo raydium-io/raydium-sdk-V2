@@ -853,7 +853,7 @@ export class PoolUtils {
 
     return {
       feeApr: aprInfo.feeApr * p,
-      rewardsApr: [aprInfo.rewardApr[0] ?? 0 * p, aprInfo.rewardApr[1] ?? 0 * p, aprInfo.rewardApr[2] ?? 0 * p],
+      rewardsApr: [(aprInfo.rewardApr[0] ?? 0) * p, (aprInfo.rewardApr[1] ?? 0) * p, (aprInfo.rewardApr[2] ?? 0) * p],
       apr: aprInfo.apr * p,
     };
   }
