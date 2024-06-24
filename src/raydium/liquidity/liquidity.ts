@@ -9,14 +9,12 @@ import {
 } from "@/api/type";
 import { Token, TokenAmount, Percent } from "@/module";
 import { toToken } from "../token";
-import { AMM_V4 } from "@/common/programId";
 import { BN_ZERO, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { BNDivCeil } from "@/common/transfer";
 import { getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
-
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
   AmountSide,
@@ -36,7 +34,7 @@ import {
 } from "./instruction";
 import { ComputeBudgetConfig } from "../type";
 import { ClmmInstrument } from "../clmm/instrument";
-import { getAssociatedPoolKeys, getAssociatedConfigId } from "./utils";
+import { getAssociatedPoolKeys, getAssociatedConfigId, toAmmComputePoolInfo } from "./utils";
 import { createPoolFeeLayout, liquidityStateV4Layout } from "./layout";
 import {
   FARM_PROGRAM_TO_VERSION,
@@ -147,7 +145,16 @@ export default class LiquidityModule extends ModuleBase {
   }
 
   public async addLiquidity<T extends TxVersion>(params: AddLiquidityParams<T>): Promise<MakeTxData<T>> {
-    const { poolInfo, amountInA, amountInB, fixedSide, config, txVersion, computeBudgetConfig } = params;
+    const {
+      poolInfo,
+      poolKeys: propPoolKeys,
+      amountInA,
+      amountInB,
+      fixedSide,
+      config,
+      txVersion,
+      computeBudgetConfig,
+    } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
@@ -202,7 +209,7 @@ export default class LiquidityModule extends ModuleBase {
     const [baseTokenAccount, quoteTokenAccount] = _tokenAccounts;
     const [baseAmountRaw, quoteAmountRaw] = rawAmounts;
 
-    const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
+    const poolKeys = propPoolKeys ?? (await this.getAmmPoolKeys(poolInfo.id));
 
     const txBuilder = this.createTxBuilder();
 
@@ -264,8 +271,8 @@ export default class LiquidityModule extends ModuleBase {
   public async removeLiquidity<T extends TxVersion>(params: RemoveParams<T>): Promise<Promise<MakeTxData<T>>> {
     if (this.scope.availability.removeStandardPosition === false)
       this.logAndCreateError("remove liquidity feature disabled in your region");
-    const { poolInfo, amountIn, config, txVersion, computeBudgetConfig } = params;
-    const poolKeys = await this.getAmmPoolKeys(poolInfo.id);
+    const { poolInfo, poolKeys: propPoolKeys, amountIn, config, txVersion, computeBudgetConfig } = params;
+    const poolKeys = propPoolKeys ?? (await this.getAmmPoolKeys(poolInfo.id));
     const [baseMint, quoteMint, lpMint] = [
       new PublicKey(poolInfo.mintA.address),
       new PublicKey(poolInfo.mintB.address),
@@ -964,5 +971,24 @@ export default class LiquidityModule extends ModuleBase {
     }
 
     return returnData;
+  }
+
+  public async getPoolInfoFromRpc({ poolId }: { poolId: string }): Promise<{
+    poolRpcData: AmmRpcData;
+    poolInfo: ComputeAmountOutParam["poolInfo"];
+    poolKeys: AmmV4Keys | AmmV5Keys;
+  }> {
+    const rpcData = await this.getRpcPoolInfo(poolId);
+    const computeData = toAmmComputePoolInfo({ [poolId]: rpcData });
+    const poolInfo = computeData[poolId];
+    const allKeys = await this.scope.tradeV2.computePoolToPoolKeys({
+      pools: [computeData[poolId]],
+      ammRpcData: { [poolId]: rpcData },
+    });
+    return {
+      poolRpcData: rpcData,
+      poolInfo,
+      poolKeys: allKeys[0] as AmmV4Keys | AmmV5Keys,
+    };
   }
 }

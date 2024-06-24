@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "@/api/type";
+import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys, PoolKeys } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
@@ -13,6 +13,7 @@ export type AmountSide = "base" | "quote";
 
 export interface AddLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
+  poolKeys?: AmmV4Keys | AmmV5Keys;
   payer?: PublicKey;
   amountInA: TokenAmount;
   amountInB: TokenAmount;
@@ -27,6 +28,7 @@ export interface AddLiquidityParams<T = TxVersion.LEGACY> {
 
 export interface RemoveParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
+  poolKeys?: AmmV4Keys | AmmV5Keys;
   payer?: PublicKey;
   amountIn: BN;
   config?: {

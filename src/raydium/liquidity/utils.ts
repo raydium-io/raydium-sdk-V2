@@ -261,7 +261,7 @@ export const toAmmComputePoolInfo = (
       farmFinishedCount: 0,
       type: "Standard",
       marketId: poolInfo.marketId.toBase58(),
-      configId: PublicKey.default.toBase58(),
+      configId: getAssociatedConfigId({ programId: poolInfo.programId }).toBase58(),
       lpPrice: 0,
       lpAmount: 0,
       lpMint: toApiV3Token({
