@@ -1217,3 +1217,46 @@ export function getLiquidityFromAmounts({
     amountAddFee: !amountHasFee,
   });
 }
+
+const mockRewardData = {
+  volume: 0,
+  volumeQuote: 0,
+  volumeFee: 0,
+  apr: 0,
+  feeApr: 0,
+  priceMin: 0,
+  priceMax: 0,
+  rewardApr: [],
+};
+
+export function clmmComputeInfoToApiInfo(pool: ComputeClmmPoolInfo): ApiV3PoolInfoConcentratedItem {
+  return {
+    ...pool,
+    type: "Concentrated",
+    programId: pool.programId.toString(),
+    id: pool.id.toString(),
+    rewardDefaultInfos: [],
+    rewardDefaultPoolInfos: "Clmm",
+    price: pool.currentPrice.toNumber(),
+    mintAmountA: 0,
+    mintAmountB: 0,
+    feeRate: pool.ammConfig.tradeFeeRate,
+    openTime: pool.startTime.toString(),
+    tvl: 0,
+
+    day: mockRewardData,
+    week: mockRewardData,
+    month: mockRewardData,
+    pooltype: [],
+
+    farmUpcomingCount: 0,
+    farmOngoingCount: 0,
+    farmFinishedCount: 0,
+    config: {
+      ...pool.ammConfig,
+      id: pool.ammConfig.id.toString(),
+      defaultRange: 0,
+      defaultRangePoint: [],
+    },
+  };
+}

@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import { InstructionType, WSOLMint, getMultipleAccountsInfoWithCustomFlags } from "@/common";
+import { InstructionType, WSOLMint, fetchMultipleMintInfos, getMultipleAccountsInfoWithCustomFlags } from "@/common";
 import { ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
 import { MakeTxData, MakeMultiTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
@@ -36,11 +36,12 @@ import {
 import { ClmmInstrument } from "./instrument";
 import { MakeTransaction } from "../type";
 import { MathUtil } from "./utils/math";
-import { PoolUtils } from "./utils/pool";
+import { PoolUtils, clmmComputeInfoToApiInfo } from "./utils/pool";
 import { getPdaOperationAccount, getPdaPersonalPositionAddress } from "./utils/pda";
 import { ClmmPositionLayout, OperationLayout, PositionInfoLayout, PoolInfoLayout, ClmmConfigLayout } from "./layout";
 import BN from "bn.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { AccountLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { fetchMultipleInfo } from "../liquidity";
 
 export class Clmm extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -217,7 +218,10 @@ export class Clmm extends ModuleBase {
     txBuilder.addInstruction(_tokenAccountBInstruction || {});
 
     if (!ownerTokenAccountA || !ownerTokenAccountB)
-      this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
+      this.logAndCreateError("cannot found target token accounts", "tokenAccounts", {
+        ownerTokenAccountA: ownerTokenAccountA?.toBase58(),
+        ownerTokenAccountB: ownerTokenAccountB?.toBase58(),
+      });
 
     const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id));
     const insInfo = await ClmmInstrument.openPositionFromBaseInstructions({
@@ -347,6 +351,7 @@ export class Clmm extends ModuleBase {
   ): Promise<MakeTxData<T, ManipulateLiquidityExtInfo>> {
     const {
       poolInfo,
+      poolKeys: propPoolKeys,
       ownerPosition,
       amountMaxA,
       amountMaxB,
@@ -407,7 +412,7 @@ export class Clmm extends ModuleBase {
 
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
-    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
+    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
     const ins = ClmmInstrument.increasePositionFromLiquidityInstructions({
       poolInfo,
       poolKeys,
@@ -523,6 +528,7 @@ export class Clmm extends ModuleBase {
   ): Promise<MakeTxData<T, ManipulateLiquidityExtInfo & Partial<ClosePositionExtInfo>>> {
     const {
       poolInfo,
+      poolKeys: propPoolKeys,
       ownerPosition,
       ownerInfo,
       amountMinA,
@@ -613,7 +619,7 @@ export class Clmm extends ModuleBase {
         this.scope.account.tokenAccountRawInfos,
       );
 
-    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
+    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
 
     const decreaseInsInfo = await ClmmInstrument.decreaseLiquidityInstructions({
       poolInfo,
@@ -659,17 +665,19 @@ export class Clmm extends ModuleBase {
 
   public async closePosition<T extends TxVersion>({
     poolInfo,
+    poolKeys: propPoolKeys,
     ownerPosition,
     txVersion,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys?: ClmmKeys;
     ownerPosition: ClmmPositionLayout;
     txVersion: T;
   }): Promise<MakeTxData<T, ClosePositionExtInfo>> {
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");
     const txBuilder = this.createTxBuilder();
-    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
+    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
     const ins = ClmmInstrument.closePositionInstructions({
       poolInfo,
       poolKeys,
@@ -751,6 +759,7 @@ export class Clmm extends ModuleBase {
 
   public async initRewards<T extends TxVersion>({
     poolInfo,
+    poolKeys: propPoolKeys,
     ownerInfo,
     rewardInfos,
     associatedOnly = true,
@@ -795,7 +804,7 @@ export class Clmm extends ModuleBase {
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
 
-      const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
+      const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
       const insInfo = ClmmInstrument.initRewardInstructions({
         poolInfo,
         poolKeys,
@@ -892,6 +901,7 @@ export class Clmm extends ModuleBase {
 
   public async setRewards<T extends TxVersion>({
     poolInfo,
+    poolKeys: propPoolKeys,
     ownerInfo,
     rewardInfos,
     associatedOnly = true,
@@ -933,7 +943,7 @@ export class Clmm extends ModuleBase {
       ownerRewardIns && txBuilder.addInstruction(ownerRewardIns);
       if (!ownerRewardAccount)
         this.logAndCreateError("no money", "ownerRewardAccount", this.scope.account.tokenAccountRawInfos);
-      const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
+      const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
       const insInfo = ClmmInstrument.setRewardInstructions({
         poolInfo,
         poolKeys,
@@ -1062,6 +1072,7 @@ export class Clmm extends ModuleBase {
   // currently only support
   public async swap<T extends TxVersion>({
     poolInfo,
+    poolKeys: propPoolKeys,
     inputMint,
     amountIn,
     amountOutMin,
@@ -1074,6 +1085,7 @@ export class Clmm extends ModuleBase {
     txVersion,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolKeys?: ClmmKeys;
     inputMint: string | PublicKey;
     amountIn: BN;
     amountOutMin: BN;
@@ -1151,7 +1163,7 @@ export class Clmm extends ModuleBase {
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("user do not have token account", this.scope.account.tokenAccountRawInfos);
 
-    const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
+    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
     txBuilder.addInstruction(
       ClmmInstrument.makeSwapBaseInInstructions({
         poolInfo,
@@ -1439,88 +1451,48 @@ export class Clmm extends ModuleBase {
     };
   }
 
-  /*
-  public async computeAmountIn({
-    poolInfo,
-    tickArrayCache,
-    baseMint,
-    token2022Infos,
-    amountOut,
-    slippage,
-    priceLimit = new Decimal(0),
-  }: {
+  public async getPoolInfoFromRpc(poolId: string): Promise<{
     poolInfo: ApiV3PoolInfoConcentratedItem;
-    tickArrayCache: { [key: string]: TickArray };
-    baseMint: PublicKey;
-    token2022Infos: ReturnTypeFetchMultipleMintInfos;
-    amountOut: BN;
-    slippage: number;
-    priceLimit?: Decimal;
-  }): Promise<ReturnTypeComputeAmountOutBaseOut> {
-    const epochInfo = await this.scope.fetchEpochInfo();
+    poolKeys: ClmmKeys;
+    computePoolInfo: ComputeClmmPoolInfo;
+    tickData: ReturnTypeFetchMultiplePoolTickArrays;
+  }> {
+    const rpcData = await this.getRpcClmmPoolInfo({ poolId });
 
-    let sqrtPriceLimitX64: BN;
-    if (priceLimit.equals(new Decimal(0))) {
-      sqrtPriceLimitX64 =
-        baseMint.toString() === poolInfo.mintB.address ? MIN_SQRT_PRICE_X64.add(ONE) : MAX_SQRT_PRICE_X64.sub(ONE);
-    } else {
-      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
-        priceLimit,
-        poolInfo.mintA.decimals,
-        poolInfo.mintB.decimals,
-      );
-    }
+    const mintSet = new Set([rpcData.mintA.toBase58(), rpcData.mintB.toBase58()]);
 
-    const realAmountOut = getTransferAmountFee(
-      amountOut,
-      token2022Infos[baseMint.toString()]?.feeConfig,
-      epochInfo,
-      true,
-    );
+    const mintInfos = await fetchMultipleMintInfos({
+      connection: this.scope.connection,
+      mints: Array.from(mintSet).map((m) => new PublicKey(m)),
+    });
 
-    const {
-      expectedAmountIn,
-      remainingAccounts,
-      executionPrice: _executionPriceX64,
-      feeAmount,
-    } = PoolUtils.getInputAmountAndRemainAccounts(
-      poolInfo as any, // todo
-      tickArrayCache,
-      baseMint,
-      realAmountOut.amount.sub(realAmountOut.fee || new BN(0)),
-      sqrtPriceLimitX64,
-    );
+    const { computeClmmPoolInfo, computePoolTickData } = await this.scope.clmm.getComputeClmmPoolInfos({
+      clmmPoolsRpcInfo: { [poolId]: rpcData },
+      mintInfos,
+    });
+    const vaultData = await getMultipleAccountsInfoWithCustomFlags(this.scope.connection, [
+      { pubkey: rpcData.vaultA },
+      { pubkey: rpcData.vaultB },
+    ]);
 
-    const _executionPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
-      _executionPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
-    const executionPrice =
-      baseMint.toString() === poolInfo.mintA.address ? _executionPrice : new Decimal(1).div(_executionPrice);
+    const poolInfo = clmmComputeInfoToApiInfo(computeClmmPoolInfo[poolId]);
 
-    const maxAmountIn = expectedAmountIn.mul(new BN(Math.floor((1 + slippage) * 10000000000))).div(new BN(10000000000));
+    if (!vaultData[0].accountInfo || !vaultData[1].accountInfo) throw new Error("pool vault data not found");
+    poolInfo.mintAmountA = Number(AccountLayout.decode(vaultData[0].accountInfo.data).amount.toString());
+    poolInfo.mintAmountB = Number(AccountLayout.decode(vaultData[1].accountInfo?.data).amount.toString());
 
-    const poolPrice =
-      poolInfo.mintA.address === baseMint.toString() ? poolInfo.price : new Decimal(1).div(poolInfo.price);
-
-    const _numerator = new Decimal(executionPrice).sub(poolPrice).abs();
-    const _denominator = poolPrice;
-    const priceImpact = new Percent(
-      new Decimal(_numerator).mul(10 ** 15).toFixed(0),
-      new Decimal(_denominator).mul(10 ** 15).toFixed(0),
-    );
-
-    return {
-      amountIn: expectedAmountIn,
-      maxAmountIn,
-      currentPrice: new Decimal(poolInfo.price),
-      executionPrice,
-      priceImpact,
-      fee: feeAmount,
-
-      remainingAccounts,
+    const poolKeys: ClmmKeys = {
+      ...computeClmmPoolInfo[poolId],
+      id: poolId,
+      programId: rpcData.programId.toBase58(),
+      openTime: rpcData.startTime.toString(),
+      vault: {
+        A: rpcData.vaultA.toBase58(),
+        B: rpcData.vaultB.toBase58(),
+      },
+      rewardInfos: [],
+      config: poolInfo.config,
     };
+    return { poolInfo, poolKeys, computePoolInfo: computeClmmPoolInfo[poolId], tickData: computePoolTickData };
   }
-  */
 }

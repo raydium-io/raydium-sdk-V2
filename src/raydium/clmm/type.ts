@@ -329,6 +329,7 @@ export interface UserPositionAccount {
 
 export interface IncreasePositionFromLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolKeys?: ClmmKeys;
   ownerPosition: ClmmPositionLayout;
   ownerInfo: {
     useSOLBalance?: boolean;
@@ -361,6 +362,7 @@ export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
 
 export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolKeys?: ClmmKeys;
   ownerPosition: ClmmPositionLayout;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint
@@ -463,6 +465,7 @@ export interface GetAmountParams {
 
 export interface InitRewardParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolKeys?: ClmmKeys;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean; // if has WSOL mint
@@ -490,6 +493,7 @@ export interface InitRewardsParams<T = TxVersion.LEGACY> extends Omit<InitReward
 
 export interface SetRewardParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolKeys?: ClmmKeys;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean; // if has WSOL mint
