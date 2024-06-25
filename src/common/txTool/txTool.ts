@@ -229,6 +229,8 @@ export class TxBuilder {
     const transaction = new Transaction();
     if (this.allInstructions.length) transaction.add(...this.allInstructions);
     transaction.feePayer = this.feePayer;
+    if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
+      this.signers.push(this.owner.signer);
 
     return {
       builder: this,
@@ -240,17 +242,11 @@ export class TxBuilder {
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
         transaction.recentBlockhash = recentBlockHash;
         if (this.signers.length) transaction.sign(...this.signers);
+
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           return {
-            txId: await sendAndConfirmTransaction(
-              this.connection,
-              transaction,
-              this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey))
-                ? this.signers
-                : [...this.signers, this.owner.signer!],
-              { skipPreflight },
-            ),
+            txId: await this.connection.sendRawTransaction(transaction.serialize(), { skipPreflight }),
             signedTx: transaction,
           };
         }
@@ -282,6 +278,12 @@ export class TxBuilder {
       ...this.instructionTypes,
       ...filterExtraBuildData.map((data) => data.instructionTypes).flat(),
     ];
+
+    if (this.owner?.signer) {
+      allSigners.forEach((signers) => {
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) this.signers.push(this.owner!.signer!);
+      });
+    }
 
     return {
       builder: this,
@@ -316,14 +318,7 @@ export class TxBuilder {
             txIds: await await Promise.all(
               allTransactions.map(async (tx, idx) => {
                 tx.recentBlockhash = recentBlockHash;
-                return await sendAndConfirmTransaction(
-                  this.connection,
-                  tx,
-                  allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey))
-                    ? allSigners[idx]
-                    : [...allSigners[idx], this.owner!.signer!],
-                  { skipPreflight },
-                );
+                return await this.connection.sendRawTransaction(tx.serialize(), { skipPreflight });
               }),
             ),
             signedTxs: allTransactions,
@@ -429,6 +424,9 @@ export class TxBuilder {
         : await getRecentBlockHash(this.connection, this.blockhashCommitment),
       instructions: [...this.allInstructions],
     }).compileToV0Message(Object.values(lookupTableAddressAccount));
+
+    if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
+      this.signers.push(this.owner.signer);
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign(this.signers);
 
@@ -442,21 +440,7 @@ export class TxBuilder {
         if (propBlockHash) transaction.message.recentBlockhash = propBlockHash;
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
-          if (!this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey)))
-            transaction.sign([this.owner.signer as Signer]);
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
-          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
-            commitment: this.blockhashCommitment,
-          });
-          await this.connection.confirmTransaction(
-            {
-              blockhash,
-              lastValidBlockHeight,
-              signature: txId,
-            },
-            "confirmed",
-          );
-
           return {
             txId,
             signedTx: transaction,
@@ -497,6 +481,12 @@ export class TxBuilder {
       ...filterExtraBuildData.map((data) => data.instructionTypes).flat(),
     ];
 
+    if (this.owner?.signer) {
+      allSigners.forEach((signers) => {
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) this.signers.push(this.owner!.signer!);
+      });
+    }
+
     allTransactions.forEach(async (tx, idx) => {
       tx.sign(allSigners[idx]);
     });
@@ -512,14 +502,6 @@ export class TxBuilder {
         if (propBlockHash) allTransactions.forEach((tx) => (tx.message.recentBlockhash = propBlockHash));
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
-          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
-            commitment: this.blockhashCommitment,
-          });
-          allTransactions.forEach((tx, idx) => {
-            if (!allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey)))
-              tx.sign([this.owner!.signer as Signer]);
-          });
-
           if (sequentially) {
             const txIds: string[] = [];
             for (const tx of allTransactions) {
@@ -544,16 +526,7 @@ export class TxBuilder {
           return {
             txIds: await Promise.all(
               allTransactions.map(async (tx) => {
-                const txId = await this.connection.sendTransaction(tx, { skipPreflight });
-                await this.connection.confirmTransaction(
-                  {
-                    blockhash,
-                    lastValidBlockHeight,
-                    signature: txId,
-                  },
-                  "confirmed",
-                );
-                return txId;
+                return await this.connection.sendTransaction(tx, { skipPreflight });
               }),
             ),
             signedTxs: allTransactions,
@@ -694,6 +667,12 @@ export class TxBuilder {
     }
     allTransactions.forEach((tx) => (tx.feePayer = this.feePayer));
 
+    if (this.owner?.signer) {
+      allSigners.forEach((signers) => {
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) this.signers.push(this.owner!.signer!);
+      });
+    }
+
     return {
       builder: this,
       transactions: allTransactions,
@@ -730,14 +709,7 @@ export class TxBuilder {
           return {
             txIds: await Promise.all(
               allTransactions.map(async (tx, idx) => {
-                return await sendAndConfirmTransaction(
-                  this.connection,
-                  tx,
-                  allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey))
-                    ? allSigners[idx]
-                    : [...allSigners[idx], this.owner!.signer!],
-                  { skipPreflight },
-                );
+                return await this.connection.sendRawTransaction(tx.serialize(), { skipPreflight });
               }),
             ),
             signedTxs: allTransactions,
@@ -912,6 +884,12 @@ export class TxBuilder {
       allSigners.push(_signers);
     }
 
+    if (this.owner?.signer) {
+      allSigners.forEach((signers) => {
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) this.signers.push(this.owner!.signer!);
+      });
+    }
+
     return {
       builder: this,
       transactions: allTransactions,
@@ -926,14 +904,6 @@ export class TxBuilder {
         });
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
-          const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
-            commitment: this.blockhashCommitment,
-          });
-          allTransactions.forEach((tx, idx) => {
-            if (!allSigners[idx].find((s) => s.publicKey.equals(this.owner!.publicKey)))
-              tx.sign([this.owner!.signer as Signer]);
-          });
-
           if (sequentially) {
             const txIds: string[] = [];
             for (const tx of allTransactions) {
@@ -958,16 +928,7 @@ export class TxBuilder {
           return {
             txIds: await Promise.all(
               allTransactions.map(async (tx) => {
-                const txId = await this.connection.sendTransaction(tx, { skipPreflight });
-                await this.connection.confirmTransaction(
-                  {
-                    blockhash,
-                    lastValidBlockHeight,
-                    signature: txId,
-                  },
-                  "confirmed",
-                );
-                return txId;
+                return await this.connection.sendTransaction(tx, { skipPreflight });
               }),
             ),
             signedTxs: allTransactions,
