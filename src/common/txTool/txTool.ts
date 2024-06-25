@@ -37,6 +37,7 @@ type SolanaFeeInfoJson = {
 interface ExecuteParams {
   skipPreflight?: boolean;
   recentBlockHash?: string;
+  sendAndConfirm?: boolean;
 }
 
 interface TxBuilderInit {
@@ -238,15 +239,26 @@ export class TxBuilder {
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
-        const { recentBlockHash: propBlockHash, skipPreflight = true } = params || {};
+        const { recentBlockHash: propBlockHash, skipPreflight = true, sendAndConfirm } = params || {};
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
         transaction.recentBlockhash = recentBlockHash;
         if (this.signers.length) transaction.sign(...this.signers);
 
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
+          const txId = sendAndConfirm
+            ? await sendAndConfirmTransaction(
+                this.connection,
+                transaction,
+                this.signers.find((s) => s.publicKey.equals(this.owner!.publicKey))
+                  ? this.signers
+                  : [...this.signers, this.owner.signer!],
+                { skipPreflight },
+              )
+            : await this.connection.sendRawTransaction(transaction.serialize(), { skipPreflight });
+
           return {
-            txId: await this.connection.sendRawTransaction(transaction.serialize(), { skipPreflight }),
+            txId,
             signedTx: transaction,
           };
         }
@@ -436,11 +448,25 @@ export class TxBuilder {
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
-        const { recentBlockHash: propBlockHash, skipPreflight = true } = params || {};
+        const { recentBlockHash: propBlockHash, skipPreflight = true, sendAndConfirm } = params || {};
         if (propBlockHash) transaction.message.recentBlockhash = propBlockHash;
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
+          if (sendAndConfirm) {
+            const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
+              commitment: this.blockhashCommitment,
+            });
+            await this.connection.confirmTransaction(
+              {
+                blockhash,
+                lastValidBlockHeight,
+                signature: txId,
+              },
+              "confirmed",
+            );
+          }
+
           return {
             txId,
             signedTx: transaction,
@@ -708,7 +734,7 @@ export class TxBuilder {
           }
           return {
             txIds: await Promise.all(
-              allTransactions.map(async (tx, idx) => {
+              allTransactions.map(async (tx) => {
                 return await this.connection.sendRawTransaction(tx.serialize(), { skipPreflight });
               }),
             ),
