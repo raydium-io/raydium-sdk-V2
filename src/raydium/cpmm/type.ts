@@ -1,5 +1,5 @@
 import { EpochInfo, PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItemCpmm, ApiV3Token } from "@/api/type";
+import { ApiV3PoolInfoStandardItemCpmm, ApiV3Token, CpmmKeys } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import BN from "bn.js";
 import { ComputeBudgetConfig, GetTransferAmountFee } from "@/raydium/type";
@@ -87,6 +87,7 @@ export interface CreateCpmmPoolAddress {
 
 export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  poolKeys?: CpmmKeys;
   payer?: PublicKey;
   inputAmount: BN;
   baseIn: boolean;
@@ -107,6 +108,7 @@ export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
 
 export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  poolKeys?: CpmmKeys;
   payer?: PublicKey;
   lpAmount: BN;
   slippage: Percent;
@@ -116,6 +118,7 @@ export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
 
 export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  poolKeys?: CpmmKeys;
   payer?: PublicKey;
   baseIn: boolean;
   slippage?: number;
@@ -143,6 +146,8 @@ export interface ComputePairAmountParams {
 export type CpmmRpcData = ReturnType<typeof CpmmPoolInfoLayout.decode> & {
   baseReserve: BN;
   quoteReserve: BN;
+  vaultAAmount: BN;
+  vaultBAmount: BN;
   configInfo?: CpmmConfigInfoInterface;
   poolPrice: Decimal;
   programId: PublicKey;

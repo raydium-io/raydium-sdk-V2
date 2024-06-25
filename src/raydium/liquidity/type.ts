@@ -217,6 +217,8 @@ export interface SwapParam<T = TxVersion.LEGACY> {
 export type AmmRpcData = ReturnType<typeof liquidityStateV4Layout.decode> & {
   baseReserve: BN;
   quoteReserve: BN;
+  mintAAmount: BN;
+  mintBAmount: BN;
   poolPrice: Decimal;
   programId: PublicKey;
 };

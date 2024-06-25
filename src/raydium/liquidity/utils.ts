@@ -9,7 +9,7 @@ import {
   parseSimulateValue,
 } from "@/common/txTool/txUtils";
 import { getSerumAssociatedAuthority } from "./serum";
-import { LiquidityPoolKeys, ComputeAmountOutParam } from "./type";
+import { LiquidityPoolKeys, ComputeAmountOutParam, AmmRpcData } from "./type";
 import { StableLayout } from "./stable";
 import { makeSimulatePoolInfoInstruction } from "./instruction";
 import { liquidityStateV4Layout } from "./layout";
@@ -209,15 +209,7 @@ const mockRewardData = {
 };
 
 export const toAmmComputePoolInfo = (
-  poolData: Record<
-    string,
-    ReturnType<typeof liquidityStateV4Layout.decode> & {
-      baseReserve: BN;
-      quoteReserve: BN;
-      poolPrice: Decimal;
-      programId: PublicKey;
-    }
-  >,
+  poolData: Record<string, AmmRpcData>,
 ): Record<string, ComputeAmountOutParam["poolInfo"]> => {
   const data: Record<string, ComputeAmountOutParam["poolInfo"]> = {};
   const tokenProgramStr = TOKEN_PROGRAM_ID.toBase58();
@@ -243,8 +235,8 @@ export const toAmmComputePoolInfo = (
       rewardDefaultInfos: [],
       rewardDefaultPoolInfos: "Ecosystem",
       price: poolInfo.poolPrice.toNumber(),
-      mintAmountA: new Decimal(poolInfo.baseReserve.toString()).div(10 ** poolInfo.baseDecimal.toNumber()).toNumber(),
-      mintAmountB: new Decimal(poolInfo.quoteReserve.toString()).div(10 ** poolInfo.quoteDecimal.toNumber()).toNumber(),
+      mintAmountA: new Decimal(poolInfo.mintAAmount.toString()).div(10 ** poolInfo.baseDecimal.toNumber()).toNumber(),
+      mintAmountB: new Decimal(poolInfo.mintBAmount.toString()).div(10 ** poolInfo.quoteDecimal.toNumber()).toNumber(),
       baseReserve: poolInfo.baseReserve, // needed
       quoteReserve: poolInfo.quoteReserve, // needed
       feeRate: new Decimal(poolInfo.tradeFeeNumerator.toString())

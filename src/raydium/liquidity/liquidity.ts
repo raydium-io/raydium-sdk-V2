@@ -948,14 +948,7 @@ export default class LiquidityModule extends ModuleBase {
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 
-    const returnData: {
-      [poolId: string]: ReturnType<typeof liquidityStateV4Layout.decode> & {
-        baseReserve: BN;
-        quoteReserve: BN;
-        poolPrice: Decimal;
-        programId: PublicKey;
-      };
-    } = {};
+    const returnData: { [poolId: string]: AmmRpcData } = {};
 
     for (const [id, info] of Object.entries(poolInfos)) {
       const baseReserve = vaultInfo[info.baseVault.toString()].sub(info.baseNeedTakePnl);
@@ -963,6 +956,8 @@ export default class LiquidityModule extends ModuleBase {
       returnData[id] = {
         ...info,
         baseReserve,
+        mintAAmount: vaultInfo[info.baseVault.toString()],
+        mintBAmount: vaultInfo[info.quoteVault.toString()],
         quoteReserve,
         poolPrice: new Decimal(quoteReserve.toString())
           .div(new Decimal(10).pow(info.quoteDecimal.toString()))
