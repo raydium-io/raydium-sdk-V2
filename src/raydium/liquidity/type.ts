@@ -205,11 +205,15 @@ export interface ComputeAmountOutParam {
 export interface SwapParam<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   poolKeys?: AmmV4Keys | AmmV5Keys;
-  associatedOnly: boolean;
   amountIn: BN;
   amountOut: BN;
   inputMint: string;
   fixedSide: SwapSide;
+  config?: {
+    associatedOnly?: boolean;
+    inputUseSolBalance?: boolean;
+    outputUseSolBalance?: boolean;
+  };
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }

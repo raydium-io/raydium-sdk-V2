@@ -51,6 +51,7 @@ import { LIQUIDITY_FEES_NUMERATOR, LIQUIDITY_FEES_DENOMINATOR } from "./constant
 
 import BN from "bn.js";
 import Decimal from "decimal.js";
+import { WSOLMint } from "@/common";
 
 export default class LiquidityModule extends ModuleBase {
   public stableLayout: StableLayout;
@@ -836,42 +837,55 @@ export default class LiquidityModule extends ModuleBase {
     inputMint,
     fixedSide,
     txVersion,
+    config,
     computeBudgetConfig,
   }: SwapParam<T>): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder();
+    const { associatedOnly = false, inputUseSolBalance = true, outputUseSolBalance = true } = config || {};
+
     const [tokenIn, tokenOut] =
       inputMint === poolInfo.mintA.address ? [poolInfo.mintA, poolInfo.mintB] : [poolInfo.mintB, poolInfo.mintA];
-    const tokenAccountIn = await this.scope.account.getCreatedTokenAccount({
-      mint: new PublicKey(tokenIn.address),
-      programId: new PublicKey(tokenIn.programId),
-      associatedOnly: false,
-    });
 
-    const tokenAccountOut = await this.scope.account.getCreatedTokenAccount({
-      mint: new PublicKey(tokenOut.address),
-      programId: new PublicKey(tokenOut.programId),
-      associatedOnly: false,
-    });
+    const inputTokenUseSolBalance = inputUseSolBalance && tokenIn.address === WSOLMint.toBase58();
+    const outputTokenUseSolBalance = outputUseSolBalance && tokenOut.address === WSOLMint.toBase58();
 
-    const { tokenAccount: _tokenAccountIn, ...accountInIns } = await this.scope.account.handleTokenAccount({
-      side: "in",
-      amount: amountIn,
-      mint: new PublicKey(tokenIn.address),
-      tokenAccount: tokenAccountIn,
-      bypassAssociatedCheck: false,
-      checkCreateATAOwner: false,
-    });
-    txBuilder.addInstruction(accountInIns);
+    const { account: _tokenAccountIn, instructionParams: ownerTokenAccountBaseInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: TOKEN_PROGRAM_ID,
+        mint: new PublicKey(tokenIn.address),
+        owner: this.scope.ownerPubKey,
 
-    const { tokenAccount: _tokenAccountOut, ...accountOutIns } = await this.scope.account.handleTokenAccount({
-      side: "out",
-      amount: 0,
-      mint: new PublicKey(tokenOut.address),
-      tokenAccount: tokenAccountOut,
-      bypassAssociatedCheck: false,
-      checkCreateATAOwner: false,
-    });
-    txBuilder.addInstruction(accountOutIns);
+        createInfo: inputTokenUseSolBalance
+          ? {
+              payer: this.scope.ownerPubKey,
+              amount: amountIn,
+            }
+          : undefined,
+        skipCloseAccount: !inputTokenUseSolBalance,
+        notUseTokenAccount: inputTokenUseSolBalance,
+        associatedOnly,
+      });
+    txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
+
+    if (!_tokenAccountIn) this.logAndCreateError("input token account not found", tokenIn.address);
+
+    const { account: _tokenAccountOut, instructionParams: ownerTokenAccountQuoteInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: TOKEN_PROGRAM_ID,
+        mint: new PublicKey(tokenOut.address),
+        owner: this.scope.ownerPubKey,
+        createInfo: outputTokenUseSolBalance
+          ? {
+              payer: this.scope.ownerPubKey!,
+              amount: 0,
+            }
+          : undefined,
+        skipCloseAccount: !outputTokenUseSolBalance,
+        notUseTokenAccount: outputTokenUseSolBalance,
+        associatedOnly,
+      });
+    txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
+    if (_tokenAccountOut === undefined) throw new Error("output token account not found");
 
     const poolKeys = propPoolKeys || (await this.getAmmPoolKeys(poolInfo.id));
     let version = 4;
@@ -883,8 +897,8 @@ export default class LiquidityModule extends ModuleBase {
           version,
           poolKeys,
           userKeys: {
-            tokenAccountIn: _tokenAccountIn,
-            tokenAccountOut: _tokenAccountOut,
+            tokenAccountIn: _tokenAccountIn!,
+            tokenAccountOut: _tokenAccountOut!,
             owner: this.scope.ownerPubKey,
           },
           amountIn,
