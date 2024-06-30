@@ -1,7 +1,4 @@
 import { get, set } from "lodash";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-dayjs.extend(utc);
 
 export type ModuleName = "Common.Api";
 
@@ -23,7 +20,7 @@ export class Logger {
     this.logLevel = logLevel;
   }
   get time(): string {
-    return dayjs().utc().format("YYYY/MM/DD HH:mm:ss UTC");
+    return Date.now().toString();
   }
   get moduleName(): string {
     return this.name;
