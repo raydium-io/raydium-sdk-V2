@@ -841,7 +841,7 @@ export default class LiquidityModule extends ModuleBase {
     computeBudgetConfig,
   }: SwapParam<T>): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder();
-    const { associatedOnly = false, inputUseSolBalance = true, outputUseSolBalance = true } = config || {};
+    const { associatedOnly = true, inputUseSolBalance = true, outputUseSolBalance = true } = config || {};
 
     const [tokenIn, tokenOut] =
       inputMint === poolInfo.mintA.address ? [poolInfo.mintA, poolInfo.mintB] : [poolInfo.mintB, poolInfo.mintA];
@@ -867,25 +867,35 @@ export default class LiquidityModule extends ModuleBase {
       });
     txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
 
-    if (!_tokenAccountIn) this.logAndCreateError("input token account not found", tokenIn.address);
+    if (!_tokenAccountIn)
+      this.logAndCreateError("input token account not found", {
+        token: tokenIn.symbol || tokenIn.address,
+        tokenAccountIn: _tokenAccountIn,
+        inputTokenUseSolBalance,
+        associatedOnly,
+      });
 
     const { account: _tokenAccountOut, instructionParams: ownerTokenAccountQuoteInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
         tokenProgram: TOKEN_PROGRAM_ID,
         mint: new PublicKey(tokenOut.address),
         owner: this.scope.ownerPubKey,
-        createInfo: outputTokenUseSolBalance
-          ? {
-              payer: this.scope.ownerPubKey!,
-              amount: 0,
-            }
-          : undefined,
+        createInfo: {
+          payer: this.scope.ownerPubKey!,
+          amount: 0,
+        },
         skipCloseAccount: !outputTokenUseSolBalance,
         notUseTokenAccount: outputTokenUseSolBalance,
-        associatedOnly,
+        associatedOnly: outputTokenUseSolBalance ? false : associatedOnly,
       });
     txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
-    if (_tokenAccountOut === undefined) throw new Error("output token account not found");
+    if (_tokenAccountOut === undefined)
+      this.logAndCreateError("output token account not found", {
+        token: tokenOut.symbol || tokenOut.address,
+        tokenAccountOut: _tokenAccountOut,
+        outputTokenUseSolBalance,
+        associatedOnly,
+      });
 
     const poolKeys = propPoolKeys || (await this.getAmmPoolKeys(poolInfo.id));
     let version = 4;

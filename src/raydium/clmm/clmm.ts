@@ -1128,7 +1128,7 @@ export class Clmm extends ModuleBase {
           mintAUseSOLBalance || !baseIn
             ? {
                 payer: ownerInfo.feePayer || this.scope.ownerPubKey,
-                amount: mintAUseSOLBalance ? amountIn : 0,
+                amount: baseIn ? amountIn : 0,
               }
             : undefined,
         associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
@@ -1161,7 +1161,15 @@ export class Clmm extends ModuleBase {
     }
 
     if (!ownerTokenAccountA || !ownerTokenAccountB)
-      this.logAndCreateError("user do not have token account", this.scope.account.tokenAccountRawInfos);
+      this.logAndCreateError("user do not have token account", {
+        tokenA: poolInfo.mintA.symbol || poolInfo.mintA.address,
+        tokenB: poolInfo.mintB.symbol || poolInfo.mintB.address,
+        ownerTokenAccountA,
+        ownerTokenAccountB,
+        mintAUseSOLBalance,
+        mintBUseSOLBalance,
+        associatedOnly,
+      });
 
     const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
     txBuilder.addInstruction(

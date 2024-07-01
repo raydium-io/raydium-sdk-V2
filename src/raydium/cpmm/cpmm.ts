@@ -692,8 +692,16 @@ export default class CpmmModule extends ModuleBase {
       });
     mintBTokenAccInstruction && txBuilder.addInstruction(mintBTokenAccInstruction);
 
-    if (!mintATokenAcc && !mintBTokenAcc)
-      this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
+    if (!mintATokenAcc || !mintBTokenAcc)
+      this.logAndCreateError("user do not have token account", {
+        mintA: poolInfo.mintA.symbol || poolInfo.mintA.address,
+        mintB: poolInfo.mintB.symbol || poolInfo.mintB.address,
+        mintATokenAcc,
+        mintBTokenAcc,
+        mintAUseSOLBalance,
+        mintBUseSOLBalance,
+        associatedOnly,
+      });
 
     const poolKeys = propPoolKeys ?? (await this.getCpmmPoolKeys(poolInfo.id));
 
