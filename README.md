@@ -53,6 +53,22 @@ const tokenAccountData = parseTokenAccountResp({
 })
 ```
 
+#### how to get pool info
+
+```
+import { Api, PoolFetchType } from '@raydium-io/raydium-sdk-v2'
+
+const api = new Api(connection);
+const poolList = await api.fetchPoolByMints({
+    mint1: 'So11111111111111111111111111111111111111112', // required
+    mint2: 'any other mint or don't use this arg', // optional
+    type: PoolFetchType.All, // optional
+    sort: 'liquidity', // optional
+    order: 'desc', // optional
+    page: 1, // optional
+});
+```
+
 #### data after initialization
 
 ```
