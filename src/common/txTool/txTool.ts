@@ -8,8 +8,6 @@ import {
   TransactionMessage,
   VersionedTransaction,
   Commitment,
-  SystemProgram,
-  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import axios from "axios";
 
@@ -18,17 +16,9 @@ import { Api } from "@/api";
 import { Cluster } from "@/solana";
 import { TxVersion } from "./txType";
 import { Owner } from "../owner";
-import {
-  getRecentBlockHash,
-  addComputeBudget,
-  checkLegacyTxSize,
-  checkV0TxSize,
-  printSimulate,
-  transformTxToBase64,
-} from "./txUtils";
+import { getRecentBlockHash, addComputeBudget, checkLegacyTxSize, checkV0TxSize, printSimulate } from "./txUtils";
 import { CacheLTA, getMultipleLookupTableInfo, LOOKUP_TABLE_CACHE } from "./lookupTable";
 
-export const JITO_TIP_ACCOUNT = new PublicKey("3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT");
 interface SolanaFeeInfo {
   min: number;
   max: number;
@@ -57,7 +47,6 @@ interface TxBuilderInit {
   cluster: Cluster;
   owner?: Owner;
   blockhashCommitment?: Commitment;
-  enableJito?: boolean;
   api?: Api;
   signAllTransactions?: SignAllTransactions;
 }
@@ -141,7 +130,6 @@ export class TxBuilder {
   private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
   private blockhashCommitment?: Commitment;
-  private enableJito: boolean;
   private api?: Api;
 
   constructor(params: TxBuilderInit) {
@@ -151,7 +139,6 @@ export class TxBuilder {
     this.owner = params.owner;
     this.cluster = params.cluster;
     this.blockhashCommitment = params.blockhashCommitment;
-    this.enableJito = !!params.enableJito;
     this.api = params.api;
   }
 
@@ -215,26 +202,6 @@ export class TxBuilder {
     }
   }
 
-  private addJitoInstruction(config?: { fee?: number; bundle?: boolean }): void {
-    const { fee, bundle } = config || {};
-    if (!this.owner) return;
-    const transferIns = SystemProgram.transfer({
-      fromPubkey: this.owner.publicKey,
-      toPubkey: JITO_TIP_ACCOUNT,
-      lamports: fee ? fee * LAMPORTS_PER_SOL : 10000,
-    });
-
-    if (bundle) this.instructions.unshift(transferIns);
-    else this.instructions.push(transferIns);
-  }
-
-  public async sendTxToJito(txList: (Transaction | VersionedTransaction)[]): Promise<string | undefined> {
-    if (!this.api) return;
-    const data = txList.map((tx) => transformTxToBase64(tx));
-    const res = await this.api.sendTxToJito(data);
-    return res.result;
-  }
-
   public addInstruction({
     instructions = [],
     endInstructions = [],
@@ -264,8 +231,6 @@ export class TxBuilder {
   }
 
   public build<O = Record<string, any>>(extInfo?: O): MakeTxData<TxVersion.LEGACY, O> {
-    if (this.enableJito) this.addJitoInstruction();
-
     const transaction = new Transaction();
     if (this.allInstructions.length) transaction.add(...this.allInstructions);
     transaction.feePayer = this.feePayer;
@@ -303,7 +268,6 @@ export class TxBuilder {
         }
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions([transaction]);
-          if (this.enableJito) this.sendTxToJito(txs);
           return {
             txId: await this.connection.sendRawTransaction(txs[0].serialize(), { skipPreflight }),
             signedTx: txs[0],
@@ -389,7 +353,6 @@ export class TxBuilder {
             const processedTxs: TxUpdateParams[] = [];
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
-              if (this.enableJito) this.sendTxToJito([signedTxs[i]]);
               const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight });
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
@@ -417,7 +380,6 @@ export class TxBuilder {
               const txId = await this.connection.sendRawTransaction(signedTxs[i].serialize(), { skipPreflight });
               txIds.push(txId);
             }
-            if (this.enableJito) this.sendTxToJito(signedTxs);
             return {
               txIds,
               signedTxs,
@@ -462,7 +424,6 @@ export class TxBuilder {
       ...(this.cluster === "devnet" ? {} : LOOKUP_TABLE_CACHE),
       ...lookupTableCache,
     };
-    if (this.enableJito) this.addJitoInstruction();
     const allLTA = Array.from(new Set<string>([...lookupTableAddress, ...this.lookupTableAddress]));
     const needCacheLTA: PublicKey[] = [];
     for (const item of allLTA) {
@@ -516,7 +477,6 @@ export class TxBuilder {
         }
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions<VersionedTransaction>([transaction]);
-          if (this.enableJito) this.sendTxToJito(txs);
           return {
             txId: await this.connection.sendTransaction(txs[0], { skipPreflight }),
             signedTx: txs[0],
@@ -611,7 +571,6 @@ export class TxBuilder {
             const checkSendTx = async (): Promise<void> => {
               if (!signedTxs[i]) return;
               const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight });
-              if (this.enableJito) this.sendTxToJito([signedTxs[i]]);
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
@@ -638,7 +597,6 @@ export class TxBuilder {
               const txId = await this.connection.sendTransaction(signedTxs[i], { skipPreflight });
               txIds.push(txId);
             }
-            if (this.enableJito) this.sendTxToJito(signedTxs);
             return { txIds, signedTxs };
           }
         }
@@ -664,8 +622,6 @@ export class TxBuilder {
       (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
       {},
     );
-
-    if (this.enableJito) this.addJitoInstruction({ bundle: true });
 
     const allTransactions: Transaction[] = [];
     const allSigners: Signer[][] = [];
@@ -838,7 +794,6 @@ export class TxBuilder {
     },
   ): Promise<MultiTxV0BuildData> {
     const { computeBudgetConfig, lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
-    if (this.enableJito) this.addJitoInstruction();
     const lookupTableAddressAccount = {
       ...(this.cluster === "devnet" ? {} : LOOKUP_TABLE_CACHE),
       ...lookupTableCache,
@@ -865,7 +820,6 @@ export class TxBuilder {
       (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
       {},
     );
-    if (this.enableJito) this.addJitoInstruction({ bundle: true });
     const allTransactions: VersionedTransaction[] = [];
     const allSigners: Signer[][] = [];
 

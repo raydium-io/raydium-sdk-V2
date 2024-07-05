@@ -38,7 +38,6 @@ export default class ModuleBase {
       cluster: this.scope.cluster,
       owner: this.scope.owner,
       blockhashCommitment: this.scope.blockhashCommitment,
-      enableJito: this.scope.enableJito,
       api: this.scope.api,
       signAllTransactions: this.scope.signAllTransactions,
     });

@@ -42,7 +42,6 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   disableFeatureCheck?: boolean;
   disableLoadToken?: boolean;
   blockhashCommitment?: Commitment;
-  enableJitoRpc?: boolean;
 }
 
 export interface RaydiumApiBatchRequestParams {
@@ -85,7 +84,6 @@ export class Raydium {
   public apiData: ApiData;
   public availability: Partial<AvailabilityCheckAPI3>;
   public blockhashCommitment: Commitment;
-  public enableJito: boolean;
 
   private _connection: Connection;
   private _owner: Owner | undefined;
@@ -115,7 +113,6 @@ export class Raydium {
       defaultChainTimeOffset,
       apiCacheTime,
       blockhashCommitment = "confirmed",
-      enableJitoRpc,
     } = config;
 
     this._connection = connection;
@@ -123,7 +120,6 @@ export class Raydium {
     this._owner = owner ? new Owner(owner) : undefined;
     this._signAllTransactions = config.signAllTransactions;
     this.blockhashCommitment = blockhashCommitment;
-    this.enableJito = !!enableJitoRpc;
 
     this.api = api;
     this._apiCacheTime = apiCacheTime || 5 * 60 * 1000;
