@@ -315,3 +315,9 @@ export function printSimulate(transactions: Transaction[] | VersionedTransaction
 
   return allBase64;
 }
+
+export function transformTxToBase64(tx: Transaction | VersionedTransaction): string {
+  let serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+  if (tx instanceof VersionedTransaction) serialized = toBuffer(serialized);
+  return serialized.toString("base64");
+}

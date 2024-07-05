@@ -590,10 +590,25 @@ export default class Farm extends ModuleBase {
         version,
       });
       const ledgerData = await this.scope.connection.getAccountInfo(ledger);
-      if (!ledgerData) this.logAndCreateError("no lp data", { farmId: farmInfo.id, version, ledgerData });
-      const ledgerLayout = getFarmLedgerLayout(version)!;
-      const ledgerInfo = ledgerLayout.decode(ledgerData!.data);
-      if (ledgerInfo.deposited.isZero()) this.logAndCreateError("no deposited lp", { farmId: farmInfo.id });
+      if (!ledgerData) {
+        // user has old not ata farm vault and don't have ata vault
+        if (version !== 6 && (userAuxiliaryLedgers || []).length > 0) {
+          const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
+            id: new PublicKey(farmKeys.id),
+            programId: new PublicKey(farmKeys.programId),
+            version,
+            ledger,
+            owner: this.scope.ownerPubKey,
+          });
+          txBuilder.addInstruction({ instructions: [instruction], instructionTypes: [instructionType] });
+        } else {
+          this.logAndCreateError("no lp data", { farmId: farmInfo.id, version, ledgerData });
+        }
+      } else {
+        const ledgerLayout = getFarmLedgerLayout(version)!;
+        const ledgerInfo = ledgerLayout.decode(ledgerData!.data);
+        if (ledgerInfo.deposited.isZero()) this.logAndCreateError("no deposited lp", { farmId: farmInfo.id });
+      }
     } else {
       if (deposited.isZero()) this.logAndCreateError("no deposited lp", { farmId: farmInfo.id });
     }

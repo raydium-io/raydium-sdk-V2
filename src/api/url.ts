@@ -66,6 +66,9 @@ export const API_URLS = {
   MINT_PRICE: "/mint/price",
   MIGRATE_CONFIG: "/main/migrate-lp",
   PRIORITY_FEE: "/main/auto-fee",
+  JITO: "https://mainnet.block-engine.jito.wtf",
+  JITO_TRANSACTION: "/api/v1/transactions",
+  JITO_BUNDLE: "/api/v1/bundles",
 };
 
 export const DEV_API_URLS = {

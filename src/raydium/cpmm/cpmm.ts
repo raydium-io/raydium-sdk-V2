@@ -307,9 +307,9 @@ export default class CpmmModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintAUseSOLBalance
           ? {
-              payer: payer!,
-              amount: mintAAmount,
-            }
+            payer: payer!,
+            amount: mintAAmount,
+          }
           : undefined,
         notUseTokenAccount: mintAUseSOLBalance,
         skipCloseAccount: !mintAUseSOLBalance,
@@ -324,9 +324,9 @@ export default class CpmmModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintBUseSOLBalance
           ? {
-              payer: payer!,
-              amount: mintBAmount,
-            }
+            payer: payer!,
+            amount: mintBAmount,
+          }
           : undefined,
 
         notUseTokenAccount: mintBUseSOLBalance,
@@ -416,20 +416,20 @@ export default class CpmmModule extends ModuleBase {
       inputAmountFee,
       anotherAmount: _anotherAmount,
     } = computeResult ||
-    this.computePairAmount({
-      poolInfo: {
-        ...poolInfo,
-        lpAmount: new Decimal(rpcPoolData!.lpAmount.toString()).div(10 ** poolInfo.lpMint.decimals).toNumber(),
-      },
-      baseReserve: rpcPoolData!.baseReserve,
-      quoteReserve: rpcPoolData!.quoteReserve,
-      slippage: new Percent(0),
-      baseIn,
-      epochInfo: await this.scope.fetchEpochInfo(),
-      amount: new Decimal(inputAmount.toString()).div(
-        10 ** (baseIn ? poolInfo.mintA.decimals : poolInfo.mintB.decimals),
-      ),
-    });
+      this.computePairAmount({
+        poolInfo: {
+          ...poolInfo,
+          lpAmount: new Decimal(rpcPoolData!.lpAmount.toString()).div(10 ** poolInfo.lpMint.decimals).toNumber(),
+        },
+        baseReserve: rpcPoolData!.baseReserve,
+        quoteReserve: rpcPoolData!.quoteReserve,
+        slippage: new Percent(0),
+        baseIn,
+        epochInfo: await this.scope.fetchEpochInfo(),
+        amount: new Decimal(inputAmount.toString()).div(
+          10 ** (baseIn ? poolInfo.mintA.decimals : poolInfo.mintB.decimals),
+        ),
+      });
 
     const anotherAmount = _anotherAmount.amount;
     const mintAUseSOLBalance = poolInfo.mintA.address === NATIVE_MINT.toString();
@@ -447,9 +447,9 @@ export default class CpmmModule extends ModuleBase {
         createInfo:
           mintAUseSOLBalance || (baseIn ? inputAmount : anotherAmount).isZero()
             ? {
-                payer: this.scope.ownerPubKey,
-                amount: baseIn ? inputAmount : anotherAmount,
-              }
+              payer: this.scope.ownerPubKey,
+              amount: baseIn ? inputAmount : anotherAmount,
+            }
             : undefined,
         skipCloseAccount: !mintAUseSOLBalance,
         notUseTokenAccount: mintAUseSOLBalance,
@@ -468,9 +468,9 @@ export default class CpmmModule extends ModuleBase {
         createInfo:
           mintBUseSOLBalance || (baseIn ? anotherAmount : inputAmount).isZero()
             ? {
-                payer: this.scope.ownerPubKey,
-                amount: baseIn ? anotherAmount : inputAmount,
-              }
+              payer: this.scope.ownerPubKey,
+              amount: baseIn ? anotherAmount : inputAmount,
+            }
             : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
         notUseTokenAccount: mintBUseSOLBalance,
@@ -541,8 +541,8 @@ export default class CpmmModule extends ModuleBase {
 
     const epochInfo = await this.scope.fetchEpochInfo();
     const [mintAAmountFee, mintBAmountFee] = [
-      getTransferAmountFeeV2(amountMintA, poolInfo.mintA.extensions.feeConfig, epochInfo, true),
-      getTransferAmountFeeV2(amountMintB, poolInfo.mintB.extensions.feeConfig, epochInfo, true),
+      getTransferAmountFeeV2(amountMintA, poolInfo.mintA.extensions.feeConfig, epochInfo, false),
+      getTransferAmountFeeV2(amountMintB, poolInfo.mintB.extensions.feeConfig, epochInfo, false),
     ];
 
     const { account } = this.scope;
@@ -662,9 +662,9 @@ export default class CpmmModule extends ModuleBase {
         createInfo:
           mintAUseSOLBalance || !baseIn
             ? {
-                payer: this.scope.ownerPubKey,
-                amount: baseIn ? swapResult.sourceAmountSwapped : 0,
-              }
+              payer: this.scope.ownerPubKey,
+              amount: baseIn ? swapResult.sourceAmountSwapped : 0,
+            }
             : undefined,
         notUseTokenAccount: mintAUseSOLBalance,
         skipCloseAccount: !mintAUseSOLBalance,
@@ -681,9 +681,9 @@ export default class CpmmModule extends ModuleBase {
         createInfo:
           mintBUseSOLBalance || baseIn
             ? {
-                payer: this.scope.ownerPubKey,
-                amount: baseIn ? 0 : swapResult.sourceAmountSwapped,
-              }
+              payer: this.scope.ownerPubKey,
+              amount: baseIn ? 0 : swapResult.sourceAmountSwapped,
+            }
             : undefined,
         notUseTokenAccount: mintBUseSOLBalance,
         skipCloseAccount: !mintBUseSOLBalance,
@@ -709,48 +709,48 @@ export default class CpmmModule extends ModuleBase {
       instructions: [
         baseIn
           ? makeSwapCpmmBaseInInInstruction(
-              new PublicKey(poolInfo.programId),
-              this.scope.ownerPubKey,
-              new PublicKey(poolKeys.authority),
-              new PublicKey(poolKeys.config.id),
-              new PublicKey(poolInfo.id),
-              mintATokenAcc!,
-              mintBTokenAcc!,
-              new PublicKey(poolKeys.vault.A),
-              new PublicKey(poolKeys.vault.B),
-              new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
-              new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
-              mintA,
-              mintB,
-              getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
+            new PublicKey(poolInfo.programId),
+            this.scope.ownerPubKey,
+            new PublicKey(poolKeys.authority),
+            new PublicKey(poolKeys.config.id),
+            new PublicKey(poolInfo.id),
+            mintATokenAcc!,
+            mintBTokenAcc!,
+            new PublicKey(poolKeys.vault.A),
+            new PublicKey(poolKeys.vault.B),
+            new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
+            new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
+            mintA,
+            mintB,
+            getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
 
-              swapResult.sourceAmountSwapped,
-              swapResult.destinationAmountSwapped,
-            )
+            swapResult.sourceAmountSwapped,
+            swapResult.destinationAmountSwapped,
+          )
           : makeSwapCpmmBaseOutInInstruction(
-              new PublicKey(poolInfo.programId),
-              this.scope.ownerPubKey,
-              new PublicKey(poolKeys.authority),
-              new PublicKey(poolKeys.config.id),
-              new PublicKey(poolInfo.id),
+            new PublicKey(poolInfo.programId),
+            this.scope.ownerPubKey,
+            new PublicKey(poolKeys.authority),
+            new PublicKey(poolKeys.config.id),
+            new PublicKey(poolInfo.id),
 
-              mintBTokenAcc!,
-              mintATokenAcc!,
+            mintBTokenAcc!,
+            mintATokenAcc!,
 
-              new PublicKey(poolKeys.vault.B),
-              new PublicKey(poolKeys.vault.A),
+            new PublicKey(poolKeys.vault.B),
+            new PublicKey(poolKeys.vault.A),
 
-              new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
-              new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
+            new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
+            new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
 
-              mintB,
-              mintA,
+            mintB,
+            mintA,
 
-              getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
+            getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
 
-              swapResult.sourceAmountSwapped,
-              swapResult.destinationAmountSwapped,
-            ),
+            swapResult.sourceAmountSwapped,
+            swapResult.destinationAmountSwapped,
+          ),
       ],
       instructionTypes: [baseIn ? InstructionType.CpmmSwapBaseIn : InstructionType.CpmmSwapBaseOut],
     });

@@ -12,6 +12,7 @@ import {
 import axios from "axios";
 
 import { SignAllTransactions, ComputeBudgetConfig } from "@/raydium/type";
+import { Api } from "@/api";
 import { Cluster } from "@/solana";
 import { TxVersion } from "./txType";
 import { Owner } from "../owner";
@@ -46,6 +47,7 @@ interface TxBuilderInit {
   cluster: Cluster;
   owner?: Owner;
   blockhashCommitment?: Commitment;
+  api?: Api;
   signAllTransactions?: SignAllTransactions;
 }
 
@@ -128,6 +130,7 @@ export class TxBuilder {
   private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
   private blockhashCommitment?: Commitment;
+  private api?: Api;
 
   constructor(params: TxBuilderInit) {
     this.connection = params.connection;
@@ -136,6 +139,7 @@ export class TxBuilder {
     this.owner = params.owner;
     this.cluster = params.cluster;
     this.blockhashCommitment = params.blockhashCommitment;
+    this.api = params.api;
   }
 
   get AllTxData(): {
@@ -325,10 +329,9 @@ export class TxBuilder {
               signedTxs: allTransactions,
             };
           }
-
           return {
             txIds: await await Promise.all(
-              allTransactions.map(async (tx, idx) => {
+              allTransactions.map(async (tx) => {
                 tx.recentBlockhash = recentBlockHash;
                 return await this.connection.sendRawTransaction(tx.serialize(), { skipPreflight });
               }),
@@ -607,7 +610,6 @@ export class TxBuilder {
     props?: Record<string, any> & { computeBudgetConfig?: ComputeBudgetConfig },
   ): Promise<MultiTxBuildData> {
     const { computeBudgetConfig, ...extInfo } = props || {};
-
     const computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } =
       computeBudgetConfig
         ? addComputeBudget(computeBudgetConfig)
@@ -818,7 +820,6 @@ export class TxBuilder {
       (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
       {},
     );
-
     const allTransactions: VersionedTransaction[] = [];
     const allSigners: Signer[][] = [];
 

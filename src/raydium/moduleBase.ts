@@ -38,6 +38,7 @@ export default class ModuleBase {
       cluster: this.scope.cluster,
       owner: this.scope.owner,
       blockhashCommitment: this.scope.blockhashCommitment,
+      api: this.scope.api,
       signAllTransactions: this.scope.signAllTransactions,
     });
   }
