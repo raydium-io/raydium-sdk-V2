@@ -238,29 +238,43 @@ export class Raydium {
   public async fetchV3TokenList(forceUpdate?: boolean): Promise<ApiV3TokenRes> {
     if (this.apiData.tokenList && !this.isCacheInvalidate(this.apiData.tokenList.fetched) && !forceUpdate)
       return this.apiData.tokenList.data;
-    const raydiumList = await this.api.getTokenList();
-    const dataObject = {
-      fetched: Date.now(),
-      data: raydiumList,
-    };
-    this.apiData.tokenList = dataObject;
+    try {
+      const raydiumList = await this.api.getTokenList();
+      const dataObject = {
+        fetched: Date.now(),
+        data: raydiumList,
+      };
+      this.apiData.tokenList = dataObject;
 
-    return dataObject.data;
+      return dataObject.data;
+    } catch (e) {
+      console.error(e);
+      return {
+        mintList: [],
+        blacklist: [],
+        whiteList: [],
+      };
+    }
   }
 
   public async fetchJupTokenList(type: JupTokenType, forceUpdate?: boolean): Promise<ApiV3Token[]> {
     const prevFetched = this.apiData.jupTokenList?.[type];
     if (prevFetched && !this.isCacheInvalidate(prevFetched.fetched) && !forceUpdate) return prevFetched.data;
-    const jupList = await this.api.getJupTokenList(type);
-    this.apiData.jupTokenList = {
-      ...this.apiData.jupTokenList,
-      [type]: {
-        fetched: Date.now(),
-        data: jupList,
-      },
-    };
+    try {
+      const jupList = await this.api.getJupTokenList(type);
+      this.apiData.jupTokenList = {
+        ...this.apiData.jupTokenList,
+        [type]: {
+          fetched: Date.now(),
+          data: jupList,
+        },
+      };
 
-    return this.apiData.jupTokenList[type]!.data;
+      return this.apiData.jupTokenList[type]!.data;
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   }
 
   get chainTimeData(): { offset: number; chainTime: number } | undefined {
