@@ -21,7 +21,7 @@ export const API_URLS = {
   TOKEN_LIST: "/mint/list",
   MINT_INFO_ID: "/mint/ids",
 
-  JUP_TOKEN_LIST: "https://token.jup.ag/{type}",
+  JUP_TOKEN_LIST: "https://tokens.jup.ag/tokens?tags=lst,community",
   /**
    * poolType: {all, concentrated, standard, allFarm, concentratedFarm, standardFarm}
    * poolSortField: {liquidity | volume_24h / 7d / 30d | fee_24h / 7d / 30d | apr_24h / 7d / 30d}

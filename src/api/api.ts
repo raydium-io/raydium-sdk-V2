@@ -168,9 +168,9 @@ export class Api {
     return res.data;
   }
 
-  async getJupTokenList(type?: JupTokenType): Promise<ApiV3Token[]> {
+  async getJupTokenList(): Promise<ApiV3Token[]> {
     return this.api.get("", {
-      baseURL: (this.urlConfigs.JUP_TOKEN_LIST || API_URLS.JUP_TOKEN_LIST).replace("{type}", type || JupTokenType.ALL),
+      baseURL: this.urlConfigs.JUP_TOKEN_LIST || API_URLS.JUP_TOKEN_LIST,
     });
   }
 
@@ -185,7 +185,7 @@ export class Api {
     const { type = "all", sort = "liquidity", order = "desc", page = 0, pageSize = 100 } = props;
     const res = await this.api.get<PoolsApiReturn>(
       (this.urlConfigs.POOL_LIST || API_URLS.POOL_LIST) +
-      `?poolType=${type}&poolSortField=${sort}&sortType=${order}&page=${page}&pageSize=${pageSize}`,
+        `?poolType=${type}&poolSortField=${sort}&sortType=${order}&page=${page}&pageSize=${pageSize}`,
     );
     return res.data;
   }
@@ -246,7 +246,7 @@ export class Api {
 
     const res = await this.api.get(
       (this.urlConfigs.POOL_SEARCH_MINT || API_URLS.POOL_SEARCH_MINT) +
-      `?mint1=${baseMint}&mint2=${quoteMint}&poolType=${type}&poolSortField=${sort}&sortType=${order}&pageSize=100&page=${page}`,
+        `?mint1=${baseMint}&mint2=${quoteMint}&poolType=${type}&poolSortField=${sort}&sortType=${order}&pageSize=100&page=${page}`,
     );
     return res.data;
   }

@@ -62,10 +62,7 @@ interface ApiData {
 
   // v3 data
   tokenList?: DataBase<ApiV3TokenRes>;
-  jupTokenList?: {
-    [JupTokenType.ALL]?: DataBase<ApiV3Token[]>;
-    [JupTokenType.Strict]?: DataBase<ApiV3Token[]>;
-  };
+  jupTokenList?: DataBase<ApiV3Token[]>;
 }
 
 export class Raydium {
@@ -257,20 +254,17 @@ export class Raydium {
     }
   }
 
-  public async fetchJupTokenList(type: JupTokenType, forceUpdate?: boolean): Promise<ApiV3Token[]> {
-    const prevFetched = this.apiData.jupTokenList?.[type];
+  public async fetchJupTokenList(forceUpdate?: boolean): Promise<ApiV3Token[]> {
+    const prevFetched = this.apiData.jupTokenList;
     if (prevFetched && !this.isCacheInvalidate(prevFetched.fetched) && !forceUpdate) return prevFetched.data;
     try {
-      const jupList = await this.api.getJupTokenList(type);
+      const jupList = await this.api.getJupTokenList();
       this.apiData.jupTokenList = {
-        ...this.apiData.jupTokenList,
-        [type]: {
-          fetched: Date.now(),
-          data: jupList,
-        },
+        fetched: Date.now(),
+        data: jupList,
       };
 
-      return this.apiData.jupTokenList[type]!.data;
+      return this.apiData.jupTokenList.data;
     } catch (e) {
       console.error(e);
       return [];

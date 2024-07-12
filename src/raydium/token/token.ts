@@ -28,7 +28,7 @@ export default class TokenModule extends ModuleBase {
     this.checkDisabled();
     const { forceUpdate = false, type = JupTokenType.Strict } = params || {};
     const { mintList, blacklist, whiteList } = await this.scope.fetchV3TokenList(forceUpdate);
-    const jup = await this.scope.fetchJupTokenList(type, forceUpdate);
+    const jup = await this.scope.fetchJupTokenList(forceUpdate);
     // reset all data
     this._tokenList = [];
     this._tokenMap = new Map();
