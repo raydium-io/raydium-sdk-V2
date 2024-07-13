@@ -697,7 +697,7 @@ export class TxBuilder {
 
     if (this.owner?.signer) {
       allSigners.forEach((signers) => {
-        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) this.signers.push(this.owner!.signer!);
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) signers.push(this.owner!.signer!);
       });
     }
 
@@ -913,7 +913,7 @@ export class TxBuilder {
 
     if (this.owner?.signer) {
       allSigners.forEach((signers) => {
-        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) this.signers.push(this.owner!.signer!);
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) signers.push(this.owner!.signer!);
       });
     }
 
