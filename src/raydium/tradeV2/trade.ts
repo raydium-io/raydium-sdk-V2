@@ -218,10 +218,33 @@ export default class TradeV2 extends ModuleBase {
       throw Error("input account check error");
     }
 
-    const destinationAcc = this.scope.account.getAssociatedTokenAccount(
-      outputMint,
-      amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
-    );
+    let destinationAcc: PublicKey;
+    if (swapInfo.routeType === "route") {
+      destinationAcc = this.scope.account.getAssociatedTokenAccount(
+        outputMint,
+        amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+      );
+    } else {
+      const baseIn = swapInfo.poolInfoList[0].mintA.address === inputMint.toBase58();
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+        mint: outputMint,
+        notUseTokenAccount: isOutputSol,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: true,
+        createInfo:
+          isOutputSol || baseIn
+            ? {
+                payer: this.scope.ownerPubKey,
+                amount: baseIn ? 0 : amountIn.amount.raw,
+              }
+            : undefined,
+        associatedOnly: isOutputSol ? false : ownerInfo.associatedOnly,
+        checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
+      });
+      destinationAcc = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    }
 
     if (isOutputSol) {
       txBuilder.addInstruction({
