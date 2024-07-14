@@ -573,50 +573,25 @@ export function makeSwapInstruction({
       return {
         signers: [],
         instructions: [
-          baseIn
-            ? makeSwapCpmmBaseInInInstruction(
-                poolInfo.programId,
-                ownerInfo.wallet,
-                poolInfo.authority,
-                poolInfo.configId,
-                poolInfo.id,
-                ownerInfo.sourceToken!,
-                ownerInfo.destinationToken!,
-                poolInfo.vaultA,
-                poolInfo.vaultB,
-                poolInfo.mintProgramA,
-                poolInfo.mintProgramA,
-                new PublicKey(poolInfo.mintA.address),
-                new PublicKey(poolInfo.mintB.address),
-                poolInfo.observationId,
+          makeSwapCpmmBaseInInInstruction(
+            poolInfo.programId,
+            ownerInfo.wallet,
+            poolInfo.authority,
+            poolInfo.configId,
+            poolInfo.id,
+            ownerInfo.sourceToken!,
+            ownerInfo.destinationToken!,
+            baseIn ? poolInfo.vaultA : poolInfo.vaultB,
+            baseIn ? poolInfo.vaultB : poolInfo.vaultA,
+            baseIn ? poolInfo.mintProgramA : poolInfo.mintProgramB,
+            baseIn ? poolInfo.mintProgramB : poolInfo.mintProgramA,
+            new PublicKey(poolInfo[baseIn ? "mintA" : "mintB"].address),
+            new PublicKey(poolInfo[baseIn ? "mintB" : "mintA"].address),
+            poolInfo.observationId,
 
-                swapInfo.amountIn.amount.raw,
-                swapInfo.minAmountOut.amount.raw,
-              )
-            : makeSwapCpmmBaseOutInInstruction(
-                poolInfo.programId,
-                ownerInfo.wallet,
-                poolInfo.authority,
-                poolInfo.configId,
-                poolInfo.id,
-
-                ownerInfo.destinationToken!,
-                ownerInfo.sourceToken!,
-
-                poolInfo.vaultB,
-                poolInfo.vaultA,
-
-                poolInfo.mintProgramB,
-                poolInfo.mintProgramA,
-
-                new PublicKey(poolInfo.mintB.address),
-                new PublicKey(poolInfo.mintA.address),
-
-                poolInfo.observationId,
-
-                swapInfo.amountIn.amount.raw,
-                swapInfo.minAmountOut.amount.raw,
-              ),
+            swapInfo.amountIn.amount.raw,
+            swapInfo.minAmountOut.amount.raw,
+          ),
         ],
         lookupTableAddress: [],
         instructionTypes: [baseIn ? InstructionType.CpmmSwapBaseIn : InstructionType.CpmmSwapBaseOut],

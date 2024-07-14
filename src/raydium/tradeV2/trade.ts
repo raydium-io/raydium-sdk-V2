@@ -946,7 +946,11 @@ export default class TradeV2 extends ModuleBase {
     }
 
     return outRoute
-      .filter((i) => i.allTrade)
+      .filter((i) => {
+        if (!i.allTrade)
+          this.logDebug(`pool ${i.poolInfoList.map((p) => p.id.toString()).join(",")} filter out since not all trade`);
+        return i.allTrade;
+      })
       .sort((a, b) => (a.amountOut.amount.raw.sub(b.amountOut.amount.raw).gt(ZERO) ? -1 : 1));
   }
 
