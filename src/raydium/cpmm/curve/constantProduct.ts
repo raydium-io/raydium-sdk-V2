@@ -20,7 +20,7 @@ function checkedCeilDiv(dividend: BN, rhs: BN): BN[] {
   if (remainder.gt(ZERO)) {
     quotient = quotient.add(new BN(1));
 
-    let rhs = dividend.div(quotient);
+    rhs = dividend.div(quotient);
     remainder = checkedRem(dividend, quotient);
     if (remainder.gt(ZERO)) {
       rhs = rhs.add(new BN(1));

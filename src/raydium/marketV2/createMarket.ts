@@ -3,11 +3,11 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import ModuleBase from "../moduleBase";
 import { TxVersion } from "@/common/txTool/txType";
-import { MakeMultiTxData, TxBuildData, TxV0BuildData } from "@/common/txTool/txTool";
+import { MakeMultiTxData } from "@/common/txTool/txTool";
 import { generatePubKey } from "../account/util";
 import { BN_ZERO } from "@/common/bignumber";
 import { makeCreateMarketInstruction } from "./instrument";
-import { ComputeBudgetConfig, MakeMultiTransaction } from "@/raydium/type";
+import { ComputeBudgetConfig } from "@/raydium/type";
 
 interface ExtInfo {
   address: {

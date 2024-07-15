@@ -631,6 +631,7 @@ export default class CpmmModule extends ModuleBase {
       poolInfo,
       poolKeys: propPoolKeys,
       baseIn,
+      inputAmount,
       swapResult,
       slippage = 0,
       config,
@@ -723,7 +724,7 @@ export default class CpmmModule extends ModuleBase {
           baseIn ? mintB : mintA,
           getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
 
-          swapResult.sourceAmountSwapped,
+          inputAmount,
           swapResult.destinationAmountSwapped,
         ),
         // baseIn

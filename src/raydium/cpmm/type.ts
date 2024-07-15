@@ -123,6 +123,7 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   baseIn: boolean;
   slippage?: number;
   swapResult: SwapResult;
+  inputAmount: BN;
 
   config?: {
     bypassAssociatedCheck?: boolean;

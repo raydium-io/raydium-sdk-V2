@@ -582,7 +582,7 @@ export default class TradeV2 extends ModuleBase {
         for (const infoOut of info.out) {
           if (infoIn.version === 6 && needTickArray[infoIn.id.toString()] === undefined) {
             needTickArray[infoIn.id.toString()] = infoIn;
-          } else if (infoIn.version === 7 && cpmmPools[infoIn.id.toString()] === undefined) {
+          } else if (infoIn.version === 7 && cpmmPoolList[infoIn.id.toString()] === undefined) {
             cpmmPoolList[infoIn.id.toString()] = infoIn;
           } else if (
             (infoIn.version === 4 || infoIn.version === 5) &&
@@ -592,7 +592,7 @@ export default class TradeV2 extends ModuleBase {
           }
           if (infoOut.version === 6 && needTickArray[infoOut.id.toString()] === undefined) {
             needTickArray[infoOut.id.toString()] = infoOut;
-          } else if (infoOut.version === 7 && cpmmPools[infoOut.id.toString()] === undefined) {
+          } else if (infoOut.version === 7 && cpmmPoolList[infoOut.id.toString()] === undefined) {
             cpmmPoolList[infoOut.id.toString()] = infoOut;
           } else if (
             (infoOut.version === 4 || infoOut.version === 5) &&
@@ -1111,7 +1111,7 @@ export default class TradeV2 extends ModuleBase {
       pools.filter((p) => p.version === 6 && !clmmRpcData[p.id.toString()]).map((p) => p.id.toString()),
     );
     if (clmmFetchKeys.size > 0) {
-      const clmmData = this.scope.clmm.getRpcClmmPoolInfos({ poolIds: Array.from(clmmFetchKeys) });
+      const clmmData = await this.scope.clmm.getRpcClmmPoolInfos({ poolIds: Array.from(clmmFetchKeys) });
       Object.keys(clmmData).forEach((poolId) => {
         clmmRpcData[poolId] = clmmData[poolId];
       });
@@ -1121,7 +1121,7 @@ export default class TradeV2 extends ModuleBase {
       pools.filter((p) => p.version === 4 && !ammRpcData[p.id.toString()]).map((p) => p.id.toString()),
     );
     if (ammFetchKeys.size > 0) {
-      const ammData = this.scope.liquidity.getRpcPoolInfos(Array.from(clmmFetchKeys));
+      const ammData = await this.scope.liquidity.getRpcPoolInfos(Array.from(clmmFetchKeys));
       Object.keys(ammData).forEach((poolId) => {
         ammRpcData[poolId] = ammData[poolId];
       });
