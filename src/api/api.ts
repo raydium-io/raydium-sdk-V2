@@ -228,7 +228,7 @@ export class Api {
       mint1: string | PublicKey;
       mint2?: string | PublicKey;
     } & Omit<FetchPoolParams, "pageSize">,
-  ): Promise<ApiV3PoolInfoItem[]> {
+  ): Promise<PoolsApiReturn> {
     const {
       mint1: propMint1,
       mint2: propMint2,
