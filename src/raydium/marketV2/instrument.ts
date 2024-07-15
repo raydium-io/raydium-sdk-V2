@@ -120,6 +120,10 @@ export async function makeCreateMarketInstruction({
 
     baseLotSize: BN;
     quoteLotSize: BN;
+
+    requestQueueSpace?: number;
+    eventQueueSpace?: number;
+    orderbookQueueSpace?: number;
   };
 }): Promise<Transactions> {
   const tx1 = new Transaction();
@@ -163,8 +167,8 @@ export async function makeCreateMarketInstruction({
       basePubkey: wallet,
       seed: marketInfo.requestQueue.seed,
       newAccountPubkey: marketInfo.requestQueue.publicKey,
-      lamports: await connection.getMinimumBalanceForRentExemption(5120 + 12),
-      space: 5120 + 12,
+      lamports: await connection.getMinimumBalanceForRentExemption(marketInfo.requestQueueSpace ?? 5120 + 12),
+      space: marketInfo.requestQueueSpace ?? 5120 + 12,
       programId: marketInfo.programId,
     }),
     SystemProgram.createAccountWithSeed({
@@ -172,8 +176,8 @@ export async function makeCreateMarketInstruction({
       basePubkey: wallet,
       seed: marketInfo.eventQueue.seed,
       newAccountPubkey: marketInfo.eventQueue.publicKey,
-      lamports: await connection.getMinimumBalanceForRentExemption(262144 + 12),
-      space: 262144 + 12,
+      lamports: await connection.getMinimumBalanceForRentExemption(marketInfo.eventQueueSpace ?? 262144 + 12),
+      space: marketInfo.eventQueueSpace ?? 262144 + 12,
       programId: marketInfo.programId,
     }),
     SystemProgram.createAccountWithSeed({
@@ -181,8 +185,8 @@ export async function makeCreateMarketInstruction({
       basePubkey: wallet,
       seed: marketInfo.bids.seed,
       newAccountPubkey: marketInfo.bids.publicKey,
-      lamports: await connection.getMinimumBalanceForRentExemption(65536 + 12),
-      space: 65536 + 12,
+      lamports: await connection.getMinimumBalanceForRentExemption(marketInfo.orderbookQueueSpace ?? 65536 + 12),
+      space: marketInfo.orderbookQueueSpace ?? 65536 + 12,
       programId: marketInfo.programId,
     }),
     SystemProgram.createAccountWithSeed({
@@ -190,8 +194,8 @@ export async function makeCreateMarketInstruction({
       basePubkey: wallet,
       seed: marketInfo.asks.seed,
       newAccountPubkey: marketInfo.asks.publicKey,
-      lamports: await connection.getMinimumBalanceForRentExemption(65536 + 12),
-      space: 65536 + 12,
+      lamports: await connection.getMinimumBalanceForRentExemption(marketInfo.orderbookQueueSpace ?? 65536 + 12),
+      space: marketInfo.orderbookQueueSpace ?? 65536 + 12,
       programId: marketInfo.programId,
     }),
     initializeMarket({

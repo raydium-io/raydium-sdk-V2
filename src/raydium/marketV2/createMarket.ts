@@ -30,6 +30,9 @@ export default class MarketV2 extends ModuleBase {
     lotSize, // 1
     tickSize, // 0.01
     dexProgramId,
+    requestQueueSpace,
+    eventQueueSpace,
+    orderbookQueueSpace,
     txVersion,
     computeBudgetConfig,
   }: {
@@ -46,6 +49,9 @@ export default class MarketV2 extends ModuleBase {
     dexProgramId: PublicKey;
     eventQueue?: PublicKey;
     requestQueue?: PublicKey;
+    requestQueueSpace?: number;
+    eventQueueSpace?: number;
+    orderbookQueueSpace?: number;
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
   }): Promise<MakeMultiTxData<T, ExtInfo>> {
@@ -102,6 +108,10 @@ export default class MarketV2 extends ModuleBase {
         vaultSignerNonce,
         baseLotSize,
         quoteLotSize,
+
+        requestQueueSpace,
+        eventQueueSpace,
+        orderbookQueueSpace,
       },
     });
     const txBuilder = this.createTxBuilder();

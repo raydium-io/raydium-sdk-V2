@@ -225,20 +225,16 @@ export default class TradeV2 extends ModuleBase {
         amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
       );
     } else {
-      const baseIn = swapInfo.poolInfoList[0].mintA.address === inputMint.toBase58();
       const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
         tokenProgram: amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
         mint: outputMint,
         notUseTokenAccount: isOutputSol,
         owner: this.scope.ownerPubKey,
         skipCloseAccount: true,
-        createInfo:
-          isOutputSol || baseIn
-            ? {
-                payer: this.scope.ownerPubKey,
-                amount: baseIn ? 0 : amountIn.amount.raw,
-              }
-            : undefined,
+        createInfo: {
+          payer: this.scope.ownerPubKey,
+          amount: 0,
+        },
         associatedOnly: isOutputSol ? false : ownerInfo.associatedOnly,
         checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
       });
