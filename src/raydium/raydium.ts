@@ -188,6 +188,7 @@ export class Raydium {
   }
   public setOwner(owner?: PublicKey | Keypair): Raydium {
     this._owner = owner ? new Owner(owner) : undefined;
+    this.account.resetTokenAccounts();
     return this;
   }
   get connection(): Connection {

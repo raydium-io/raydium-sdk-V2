@@ -28,6 +28,7 @@ export default class Account extends ModuleBase {
   private _accountChangeListenerId?: number;
   private _accountListener: ((data: TokenAccountDataProp) => void)[] = [];
   private _clientOwnedToken = false;
+  private _accountFetchTime = 0;
 
   constructor(params: TokenAccountDataProp & ModuleBaseProps) {
     super(params);
@@ -67,11 +68,20 @@ export default class Account extends ModuleBase {
     return getATAAddress(this.scope.ownerPubKey, mint, programId).publicKey;
   }
 
+  public resetTokenAccounts(): void {
+    if (this._clientOwnedToken) return;
+    this._tokenAccounts = [];
+    this._tokenAccountRawInfos = [];
+  }
+
   public async fetchWalletTokenAccounts(config?: { forceUpdate?: boolean; commitment?: Commitment }): Promise<{
     tokenAccounts: TokenAccount[];
     tokenAccountRawInfos: TokenAccountRaw[];
   }> {
-    if (this._clientOwnedToken || (!config?.forceUpdate && this._tokenAccounts.length)) {
+    if (
+      this._clientOwnedToken ||
+      (!config?.forceUpdate && this._tokenAccounts.length && Date.now() - this._accountFetchTime < 1000 * 60 * 3)
+    ) {
       return {
         tokenAccounts: this._tokenAccounts,
         tokenAccountRawInfos: this._tokenAccountRawInfos,
@@ -107,6 +117,8 @@ export default class Account extends ModuleBase {
 
     this._tokenAccounts = tokenAccounts;
     this._tokenAccountRawInfos = tokenAccountRawInfos;
+
+    this._accountFetchTime = Date.now();
 
     this._accountChangeListenerId && this.scope.connection.removeAccountChangeListener(this._accountChangeListenerId);
     this._accountChangeListenerId = this.scope.connection.onAccountChange(
