@@ -5,11 +5,11 @@ import { Cluster } from "../solana";
 
 import {
   ApiClmmConfigInfo,
+  ApiCpmmConfigInfo,
   ApiV3Token,
   FetchPoolParams,
   PoolsApiReturn,
   ApiV3PoolInfoItem,
-  JupTokenType,
   PoolKeys,
   FormatFarmInfoOut,
   FormatFarmKeyOut,
@@ -125,6 +125,11 @@ export class Api {
 
   async getClmmConfigs(): Promise<ApiClmmConfigInfo[]> {
     const res = await this.api.get(this.urlConfigs.CLMM_CONFIG || API_URLS.CLMM_CONFIG);
+    return res.data;
+  }
+
+  async getCpmmConfigs(): Promise<ApiCpmmConfigInfo[]> {
+    const res = await this.api.get(this.urlConfigs.CPMM_CONFIG || API_URLS.CPMM_CONFIG);
     return res.data;
   }
 

@@ -1,5 +1,5 @@
 import { EpochInfo, PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItemCpmm, ApiV3Token, CpmmKeys } from "@/api/type";
+import { ApiCpmmConfigInfo, ApiV3PoolInfoStandardItemCpmm, ApiV3Token, CpmmKeys } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import BN from "bn.js";
 import { ComputeBudgetConfig, GetTransferAmountFee } from "@/raydium/type";
@@ -59,6 +59,7 @@ export interface CreateCpmmPoolParam<T> {
   mintAAmount: BN;
   mintBAmount: BN;
   startTime: BN;
+  feeConfig: ApiCpmmConfigInfo;
 
   associatedOnly: boolean;
   checkCreateATAOwner?: boolean;
@@ -83,6 +84,7 @@ export interface CreateCpmmPoolAddress {
   mintB: ApiV3Token;
   programId: PublicKey;
   poolFeeAccount: PublicKey;
+  feeConfig: ApiCpmmConfigInfo;
 }
 
 export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {

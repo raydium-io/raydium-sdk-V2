@@ -8,6 +8,7 @@ export const API_URLS = {
   FARM_ARP_LINE: "/main/farm-apr-tv",
 
   CLMM_CONFIG: "/main/clmm-config",
+  CPMM_CONFIG: "/main/cpmm-config",
 
   VERSION: "/main/version",
 

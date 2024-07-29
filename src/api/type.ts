@@ -65,9 +65,17 @@ export interface ApiClmmConfigInfo {
   tradeFeeRate: number;
   tickSpacing: number;
   fundFeeRate: number;
-  description: string;
   defaultRange: number;
   defaultRangePoint: number[];
+}
+
+export interface ApiCpmmConfigInfo {
+  id: string;
+  index: number;
+  protocolFeeRate: number;
+  tradeFeeRate: number;
+  fundFeeRate: number;
+  createPoolFee: string;
 }
 
 export interface ApiClmmPoolsItemStatistics {

@@ -282,6 +282,7 @@ export default class CpmmModule extends ModuleBase {
     associatedOnly = false,
     checkCreateATAOwner = false,
     txVersion,
+    feeConfig,
     computeBudgetConfig,
     ...params
   }: CreateCpmmPoolParam<T>): Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>> {
@@ -340,6 +341,7 @@ export default class CpmmModule extends ModuleBase {
 
     const poolKeys = getCreatePoolKeys({
       programId,
+      configId: new PublicKey(feeConfig.id),
       mintA: mintAPubkey,
       mintB: mintBPubkey,
     });
@@ -349,7 +351,7 @@ export default class CpmmModule extends ModuleBase {
         makeCreateCpmmPoolInInstruction(
           programId,
           this.scope.ownerPubKey,
-          poolKeys.configId,
+          new PublicKey(feeConfig.id),
           poolKeys.authority,
           poolKeys.poolId,
           mintAPubkey,
@@ -377,7 +379,7 @@ export default class CpmmModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
       extInfo: {
-        address: { ...poolKeys, mintA, mintB, programId, poolFeeAccount },
+        address: { ...poolKeys, mintA, mintB, programId, poolFeeAccount, feeConfig },
       },
     }) as Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>>;
   }
