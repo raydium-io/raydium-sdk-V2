@@ -417,9 +417,16 @@ export class TxBuilder {
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
       forerunCreate?: boolean;
+      recentBlockhash?: string;
     },
   ): Promise<MakeTxData<TxVersion.V0, O>> {
-    const { lookupTableCache = {}, lookupTableAddress = [], forerunCreate, ...extInfo } = props || {};
+    const {
+      lookupTableCache = {},
+      lookupTableAddress = [],
+      forerunCreate,
+      recentBlockhash: propRecentBlockhash,
+      ...extInfo
+    } = props || {};
     const lookupTableAddressAccount = {
       ...(this.cluster === "devnet" ? {} : LOOKUP_TABLE_CACHE),
       ...lookupTableCache,
@@ -432,11 +439,13 @@ export class TxBuilder {
     const newCacheLTA = await getMultipleLookupTableInfo({ connection: this.connection, address: needCacheLTA });
     for (const [key, value] of Object.entries(newCacheLTA)) lookupTableAddressAccount[key] = value;
 
+    const recentBlockhash = forerunCreate
+      ? PublicKey.default.toBase58()
+      : propRecentBlockhash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
+
     const messageV0 = new TransactionMessage({
       payerKey: this.feePayer,
-      recentBlockhash: forerunCreate
-        ? PublicKey.default.toBase58()
-        : await getRecentBlockHash(this.connection, this.blockhashCommitment),
+      recentBlockhash,
       instructions: [...this.allInstructions],
     }).compileToV0Message(Object.values(lookupTableAddressAccount));
 
@@ -444,15 +453,13 @@ export class TxBuilder {
       this.signers.push(this.owner.signer);
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign(this.signers);
-
     return {
       builder: this,
       transaction,
       signers: this.signers,
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
-        const { recentBlockHash: propBlockHash, skipPreflight = true, sendAndConfirm } = params || {};
-        if (propBlockHash) transaction.message.recentBlockhash = propBlockHash;
+        const { skipPreflight = true, sendAndConfirm } = params || {};
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
@@ -493,6 +500,8 @@ export class TxBuilder {
     buildProps?: T & {
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
+      forerunCreate?: boolean;
+      recentBlockhash?: string;
     };
   }): Promise<MultiTxV0BuildData> {
     const { extraPreBuildData = [], buildProps } = params;

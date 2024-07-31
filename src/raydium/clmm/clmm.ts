@@ -41,7 +41,6 @@ import { getPdaOperationAccount, getPdaPersonalPositionAddress } from "./utils/p
 import { ClmmPositionLayout, OperationLayout, PositionInfoLayout, PoolInfoLayout, ClmmConfigLayout } from "./layout";
 import BN from "bn.js";
 import { AccountLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { fetchMultipleInfo } from "../liquidity";
 
 export class Clmm extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -245,9 +244,10 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addInstruction(insInfo);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-    return txBuilder.versionBuild<OpenPositionFromBaseExtInfo>({ txVersion, extInfo: insInfo.address }) as Promise<
-      MakeTxData<T, OpenPositionFromBaseExtInfo>
-    >;
+    return txBuilder.versionBuild<OpenPositionFromBaseExtInfo>({
+      txVersion,
+      extInfo: { ...insInfo.address },
+    }) as Promise<MakeTxData<T, OpenPositionFromBaseExtInfo>>;
   }
 
   public async openPositionFromLiquidity<T extends TxVersion>({
