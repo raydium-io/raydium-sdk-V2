@@ -292,6 +292,7 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   startTime: BN;
   computeBudgetConfig?: ComputeBudgetConfig;
   forerunCreate?: boolean;
+  getObserveState?: boolean;
   txVersion?: T;
 }
 

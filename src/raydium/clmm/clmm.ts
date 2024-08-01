@@ -64,6 +64,7 @@ export class Clmm extends ModuleBase {
       startTime,
       computeBudgetConfig,
       forerunCreate,
+      getObserveState,
       txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
@@ -84,7 +85,7 @@ export class Clmm extends ModuleBase {
       ammConfigId: ammConfig.id,
       initialPriceX64,
       startTime,
-      forerunCreate,
+      forerunCreate: !getObserveState && forerunCreate,
     });
 
     txBuilder.addInstruction(insInfo);
