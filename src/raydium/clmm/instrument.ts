@@ -1,41 +1,41 @@
-import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey, TransactionInstruction, SystemProgram, Connection, Keypair, Signer } from "@solana/web3.js";
-import BN from "bn.js";
+import { ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "@/api/type";
 import {
-  createLogger,
-  parseBigNumberish,
-  RENT_PROGRAM_ID,
-  METADATA_PROGRAM_ID,
   InstructionType,
-  getATAAddress,
   MEMO_PROGRAM_ID,
+  METADATA_PROGRAM_ID,
+  RENT_PROGRAM_ID,
+  createLogger,
+  getATAAddress,
+  parseBigNumberish,
 } from "@/common";
 import { bool, s32, struct, u128, u64, u8 } from "@/marshmallow";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import BN from "bn.js";
+import { ClmmPositionLayout } from "./layout";
 import {
-  ReturnTypeMakeInstructions,
   ClmmPoolPersonalPosition,
-  OpenPositionFromLiquidityExtInfo,
-  ManipulateLiquidityExtInfo,
   ClosePositionExtInfo,
   InitRewardExtInfo,
+  ManipulateLiquidityExtInfo,
   OpenPositionFromBaseExtInfo,
+  OpenPositionFromLiquidityExtInfo,
+  ReturnTypeMakeInstructions,
 } from "./type";
-import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
 import {
-  getPdaPoolId,
-  getPdaPoolVaultId,
-  getPdaTickArrayAddress,
-  getPdaMetadataKey,
-  getPdaProtocolPositionAddress,
-  getPdaPersonalPositionAddress,
-  getPdaOperationAccount,
   getPdaExBitmapAccount,
+  getPdaMetadataKey,
+  getPdaObservationAccount,
+  getPdaOperationAccount,
+  getPdaPersonalPositionAddress,
+  getPdaPoolId,
   getPdaPoolRewardVaulId,
+  getPdaPoolVaultId,
+  getPdaProtocolPositionAddress,
+  getPdaTickArrayAddress,
 } from "./utils/pda";
-import { TickUtils } from "./utils/tick";
 import { PoolUtils } from "./utils/pool";
-import { generatePubKey } from "../account/util";
-import { ApiV3Token, ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
+import { TickUtils } from "./utils/tick";
 
 const logger = createLogger("Raydium_Clmm");
 
@@ -123,33 +123,22 @@ export class ClmmInstrument {
       mintBVault: PublicKey;
     }>
   > {
-    const { connection, programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime, forerunCreate } =
+    const { programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } =
       props;
-    const observationId = generatePubKey({ fromPublicKey: owner, programId });
     const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
-    const ins = [
-      SystemProgram.createAccountWithSeed({
-        fromPubkey: owner,
-        basePubkey: owner,
-        seed: observationId.seed,
-        newAccountPubkey: observationId.publicKey,
-        lamports: forerunCreate ? 0 : await connection.getMinimumBalanceForRentExemption(ObservationInfoLayout.span),
-        space: ObservationInfoLayout.span,
-        programId,
-      }),
-    ];
 
     const { publicKey: poolId } = getPdaPoolId(programId, ammConfigId, mintAAddress, mintBAddress);
+    const { publicKey: observationId } = getPdaObservationAccount(programId, poolId);
     const { publicKey: mintAVault } = getPdaPoolVaultId(programId, poolId, mintAAddress);
     const { publicKey: mintBVault } = getPdaPoolVaultId(programId, poolId, mintBAddress);
 
-    ins.push(
+    const ins = [
       this.createPoolInstruction(
         programId,
         poolId,
         owner,
         ammConfigId,
-        observationId.publicKey,
+        observationId,
         mintAAddress,
         mintAVault,
         new PublicKey(mintA.programId || TOKEN_PROGRAM_ID),
@@ -160,13 +149,13 @@ export class ClmmInstrument {
         initialPriceX64,
         startTime,
       ),
-    );
+    ];
 
     return {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.CreateAccount, InstructionType.ClmmCreatePool],
-      address: { poolId, observationId: observationId.publicKey, mintAVault, mintBVault },
+      address: { poolId, observationId, mintAVault, mintBVault },
       lookupTableAddress: [],
     };
   }

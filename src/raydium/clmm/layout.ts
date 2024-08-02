@@ -1,4 +1,4 @@
-import { blob, bool, i128, publicKey, s32, seq, struct, u128, u16, u32, u64, u8 } from "@/marshmallow";
+import { blob, bool, i128, i64, publicKey, s32, seq, struct, u128, u16, u32, u64, u8 } from "@/marshmallow";
 
 import { TICK_ARRAY_SIZE } from "./utils/tick";
 import { EXTENSION_TICKARRAY_BITMAP_SIZE } from "./utils/tickarrayBitmap";
@@ -16,16 +16,17 @@ export const ClmmConfigLayout = struct([
 
 export const ObservationLayout = struct([
   u32("blockTimestamp"),
-  u128("sqrtPriceX64"),
-  u128("cumulativeTimePriceX64"),
-  seq(u128(), 1, ""),
+  i64("tickCumulative"),
+  seq(u64(), 4),
 ]);
 export const ObservationInfoLayout = struct([
   blob(8),
   bool("initialized"),
+  u64('recentEpoch'),
+  u16('observationIndex'),
   publicKey("poolId"),
-  seq(ObservationLayout, 1000, "observations"),
-  seq(u128(), 5, ""),
+  seq(ObservationLayout, 100, "observations"),
+  seq(u64(), 4),
 ]);
 
 export const RewardInfo = struct([
@@ -57,8 +58,7 @@ export const PoolInfoLayout = struct([
   u128("liquidity"),
   u128("sqrtPriceX64"),
   s32("tickCurrent"),
-  u16("observationIndex"),
-  u16("observationUpdateDuration"),
+  u32(),
   u128("feeGrowthGlobalX64A"),
   u128("feeGrowthGlobalX64B"),
   u64("protocolFeesTokenA"),

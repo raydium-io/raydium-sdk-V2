@@ -47,8 +47,6 @@ export const mockCreatePoolInfo = {
   version: 6,
   liquidity: ZERO,
   tickCurrent: 0,
-  observationIndex: 0,
-  observationUpdateDuration: 0,
   feeGrowthGlobalX64A: ZERO,
   feeGrowthGlobalX64B: ZERO,
   protocolFeesTokenA: ZERO,

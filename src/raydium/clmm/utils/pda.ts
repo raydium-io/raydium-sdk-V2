@@ -12,6 +12,7 @@ export const POSITION_SEED = Buffer.from("position", "utf8");
 export const TICK_ARRAY_SEED = Buffer.from("tick_array", "utf8");
 export const OPERATION_SEED = Buffer.from("operation", "utf8");
 export const POOL_TICK_ARRAY_BITMAP_SEED = Buffer.from("pool_tick_array_bitmap_extension", "utf8");
+export const OBSERVATION_SEED = Buffer.from("observation", "utf8");
 
 export function getPdaAmmConfigId(
   programId: PublicKey,
@@ -118,4 +119,14 @@ export function getPdaExBitmapAccount(
   nonce: number;
 } {
   return findProgramAddress([POOL_TICK_ARRAY_BITMAP_SEED, poolId.toBuffer()], programId);
+}
+
+export function getPdaObservationAccount(
+  programId: PublicKey,
+  poolId: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress([OBSERVATION_SEED, poolId.toBuffer()], programId);
 }

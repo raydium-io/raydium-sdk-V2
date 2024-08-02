@@ -76,8 +76,6 @@ export interface ClmmPoolInfo {
   sqrtPriceX64: BN;
   currentPrice: Decimal;
   tickCurrent: number;
-  observationIndex: number;
-  observationUpdateDuration: number;
   feeGrowthGlobalX64A: BN;
   feeGrowthGlobalX64B: BN;
   protocolFeesTokenA: BN;
@@ -160,8 +158,6 @@ export interface ComputeClmmPoolInfo {
   sqrtPriceX64: BN;
   currentPrice: Decimal;
   tickCurrent: number;
-  observationIndex: number;
-  observationUpdateDuration: number;
   feeGrowthGlobalX64A: BN;
   feeGrowthGlobalX64B: BN;
   protocolFeesTokenA: BN;
