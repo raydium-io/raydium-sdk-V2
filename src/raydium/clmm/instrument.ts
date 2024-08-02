@@ -91,7 +91,7 @@ export class ClmmInstrument {
       { pubkey: mintB, isSigner: false, isWritable: false },
       { pubkey: mintVaultA, isSigner: false, isWritable: true },
       { pubkey: mintVaultB, isSigner: false, isWritable: true },
-      { pubkey: observationId, isSigner: false, isWritable: false },
+      { pubkey: observationId, isSigner: false, isWritable: true },
       { pubkey: exTickArrayBitmap, isSigner: false, isWritable: true },
       { pubkey: mintProgramIdA, isSigner: false, isWritable: false },
       { pubkey: mintProgramIdB, isSigner: false, isWritable: false },
