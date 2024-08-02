@@ -12,7 +12,7 @@ import { bool, s32, struct, u128, u64, u8 } from "@/marshmallow";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-import { ClmmPositionLayout } from "./layout";
+import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
 import {
   ClmmPoolPersonalPosition,
   ClosePositionExtInfo,
@@ -36,6 +36,7 @@ import {
 } from "./utils/pda";
 import { PoolUtils } from "./utils/pool";
 import { TickUtils } from "./utils/tick";
+ObservationInfoLayout.span; // do not delete this line
 
 const logger = createLogger("Raydium_Clmm");
 
@@ -123,8 +124,7 @@ export class ClmmInstrument {
       mintBVault: PublicKey;
     }>
   > {
-    const { programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } =
-      props;
+    const { programId, owner, mintA, mintB, ammConfigId, initialPriceX64, startTime } = props;
     const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
 
     const { publicKey: poolId } = getPdaPoolId(programId, ammConfigId, mintAAddress, mintBAddress);
