@@ -274,6 +274,18 @@ export interface ReturnTypeComputeAmountOut {
   executionPriceX64: BN;
 }
 
+export interface ReturnTypeComputeAmountOutBaseOut {
+  amountIn: GetTransferAmountFee;
+  maxAmountIn: GetTransferAmountFee;
+  realAmountOut: GetTransferAmountFee;
+  expirationTime: number | undefined;
+  currentPrice: Decimal;
+  executionPrice: Decimal;
+  priceImpact: Percent;
+  fee: BN;
+  remainingAccounts: PublicKey[];
+}
+
 export interface ReturnTypeFetchMultiplePoolTickArrays {
   [poolId: string]: { [key: string]: TickArray };
 }
@@ -545,16 +557,6 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
-}
-
-export interface ReturnTypeComputeAmountOutBaseOut {
-  amountIn: BN;
-  maxAmountIn: BN;
-  currentPrice: Decimal;
-  executionPrice: Decimal;
-  priceImpact: Percent;
-  fee: BN;
-  remainingAccounts: PublicKey[];
 }
 
 export interface TickArrayBitmapExtensionType {

@@ -123,8 +123,9 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   poolKeys?: CpmmKeys;
   payer?: PublicKey;
   baseIn: boolean;
+  fixedOut?: boolean;
   slippage?: number;
-  swapResult: SwapResult;
+  swapResult: Pick<SwapResult, "sourceAmountSwapped" | "destinationAmountSwapped">;
   inputAmount: BN;
 
   config?: {

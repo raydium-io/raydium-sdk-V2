@@ -1400,7 +1400,7 @@ export class ClmmInstrument {
         isInputMintA ? mintB : mintA,
 
         remainingAccounts,
-        observationId, // to do get from api
+        observationId,
         amountIn,
         amountOutMin,
         sqrtPriceLimitX64,
@@ -1412,6 +1412,74 @@ export class ClmmInstrument {
       signers: [],
       instructions: ins,
       instructionTypes: [InstructionType.ClmmSwapBaseIn],
+      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
+      address: {},
+    };
+  }
+
+  static makeSwapBaseOutInstructions({
+    poolInfo,
+    poolKeys,
+    observationId,
+    ownerInfo,
+    outputMint,
+    amountOut,
+    amountInMax,
+    sqrtPriceLimitX64,
+    remainingAccounts,
+  }: {
+    poolInfo: Pick<ApiV3PoolInfoConcentratedItem, "id" | "programId" | "mintA" | "mintB" | "config">;
+    poolKeys: ClmmKeys;
+    observationId: PublicKey;
+
+    ownerInfo: {
+      wallet: PublicKey;
+      tokenAccountA: PublicKey;
+      tokenAccountB: PublicKey;
+    };
+
+    outputMint: PublicKey;
+
+    amountOut: BN;
+    amountInMax: BN;
+    sqrtPriceLimitX64: BN;
+
+    remainingAccounts: PublicKey[];
+  }): ReturnTypeMakeInstructions {
+    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
+    const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
+    const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
+    const isInputMintA = poolInfo.mintA.address === outputMint.toBase58();
+    const ins = [
+      this.swapInstruction(
+        programId,
+        ownerInfo.wallet,
+
+        id,
+        new PublicKey(poolInfo.config.id),
+
+        isInputMintA ? ownerInfo.tokenAccountB : ownerInfo.tokenAccountA,
+        isInputMintA ? ownerInfo.tokenAccountA : ownerInfo.tokenAccountB,
+
+        isInputMintA ? mintBVault : mintAVault,
+        isInputMintA ? mintAVault : mintBVault,
+
+        isInputMintA ? mintB : mintA,
+        isInputMintA ? mintA : mintB,
+
+        remainingAccounts,
+        observationId,
+        amountOut,
+        amountInMax,
+        sqrtPriceLimitX64,
+        false,
+        getPdaExBitmapAccount(programId, id).publicKey,
+      ),
+    ];
+    return {
+      signers: [],
+      instructions: ins,
+      instructionTypes: [InstructionType.ClmmSwapBaseOut],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
       address: {},
     };
@@ -1720,72 +1788,6 @@ export class ClmmInstrument {
       instructions: ins,
       instructionTypes: [InstructionType.ClmmCollectReward],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
-    };
-  }
-
-  static swapBaseOutInstructions({
-    poolInfo,
-    poolKeys,
-    ownerInfo,
-    outputMint,
-    amountOut,
-    amountInMax,
-    sqrtPriceLimitX64,
-    remainingAccounts,
-  }: {
-    poolInfo: ApiV3PoolInfoConcentratedItem;
-    poolKeys: ClmmKeys;
-
-    ownerInfo: {
-      wallet: PublicKey;
-      tokenAccountA: PublicKey;
-      tokenAccountB: PublicKey;
-    };
-
-    outputMint: PublicKey;
-
-    amountOut: BN;
-    amountInMax: BN;
-    sqrtPriceLimitX64: BN;
-
-    remainingAccounts: PublicKey[];
-  }): ReturnTypeMakeInstructions {
-    const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
-    const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
-    const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
-    const isInputMintA = poolInfo.mintA.address === outputMint.toString();
-    const ins = [
-      this.swapInstruction(
-        programId,
-        ownerInfo.wallet,
-
-        id,
-        new PublicKey(poolInfo.config.id),
-
-        isInputMintA ? ownerInfo.tokenAccountB : ownerInfo.tokenAccountA,
-        isInputMintA ? ownerInfo.tokenAccountA : ownerInfo.tokenAccountB,
-
-        isInputMintA ? mintBVault : mintAVault,
-        isInputMintA ? mintAVault : mintBVault,
-
-        isInputMintA ? mintA : mintB,
-        isInputMintA ? mintB : mintA,
-
-        remainingAccounts,
-        // poolInfo.observationId, // to do
-        mintAVault,
-        amountOut,
-        amountInMax,
-        sqrtPriceLimitX64,
-        false,
-      ),
-    ];
-    return {
-      signers: [],
-      instructions: ins,
-      instructionTypes: [InstructionType.ClmmSwapBaseOut],
-      lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
-      address: {},
     };
   }
 }

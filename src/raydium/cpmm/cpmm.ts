@@ -628,11 +628,12 @@ export default class CpmmModule extends ModuleBase {
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
-  public async swap<T extends TxVersion>(params: CpmmSwapParams): Promise<MakeTxData<T>> {
+  public async swap<T extends TxVersion>(params: CpmmSwapParams<T>): Promise<MakeTxData<T>> {
     const {
       poolInfo,
       poolKeys: propPoolKeys,
       baseIn,
+      fixedOut,
       inputAmount,
       swapResult,
       slippage = 0,
@@ -651,9 +652,16 @@ export default class CpmmModule extends ModuleBase {
     const txBuilder = this.createTxBuilder();
 
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
-    swapResult.destinationAmountSwapped = swapResult.destinationAmountSwapped
-      .mul(new BN((1 - slippage) * 10000))
-      .div(new BN(10000));
+
+    if (!fixedOut) {
+      swapResult.destinationAmountSwapped = swapResult.destinationAmountSwapped
+        .mul(new BN((1 - slippage) * 10000))
+        .div(new BN(10000));
+    } else {
+      swapResult.sourceAmountSwapped = swapResult.sourceAmountSwapped
+        .mul(new BN((1 + slippage) * 10000))
+        .div(new BN(10000));
+    }
 
     const mintAUseSOLBalance = poolInfo.mintA.address === WSOLMint.toBase58();
     const mintBUseSOLBalance = poolInfo.mintB.address === WSOLMint.toBase58();
@@ -710,71 +718,50 @@ export default class CpmmModule extends ModuleBase {
 
     txBuilder.addInstruction({
       instructions: [
-        makeSwapCpmmBaseInInInstruction(
-          new PublicKey(poolInfo.programId),
-          this.scope.ownerPubKey,
-          new PublicKey(poolKeys.authority),
-          new PublicKey(poolKeys.config.id),
-          new PublicKey(poolInfo.id),
-          baseIn ? mintATokenAcc! : mintBTokenAcc!,
-          baseIn ? mintBTokenAcc! : mintATokenAcc!,
-          new PublicKey(poolKeys.vault[baseIn ? "A" : "B"]),
-          new PublicKey(poolKeys.vault[baseIn ? "B" : "A"]),
-          new PublicKey(poolInfo[baseIn ? "mintA" : "mintB"].programId ?? TOKEN_PROGRAM_ID),
-          new PublicKey(poolInfo[baseIn ? "mintB" : "mintA"].programId ?? TOKEN_PROGRAM_ID),
-          baseIn ? mintA : mintB,
-          baseIn ? mintB : mintA,
-          getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
+        !fixedOut
+          ? makeSwapCpmmBaseInInInstruction(
+              new PublicKey(poolInfo.programId),
+              this.scope.ownerPubKey,
+              new PublicKey(poolKeys.authority),
+              new PublicKey(poolKeys.config.id),
+              new PublicKey(poolInfo.id),
+              baseIn ? mintATokenAcc! : mintBTokenAcc!,
+              baseIn ? mintBTokenAcc! : mintATokenAcc!,
+              new PublicKey(poolKeys.vault[baseIn ? "A" : "B"]),
+              new PublicKey(poolKeys.vault[baseIn ? "B" : "A"]),
+              new PublicKey(poolInfo[baseIn ? "mintA" : "mintB"].programId ?? TOKEN_PROGRAM_ID),
+              new PublicKey(poolInfo[baseIn ? "mintB" : "mintA"].programId ?? TOKEN_PROGRAM_ID),
+              baseIn ? mintA : mintB,
+              baseIn ? mintB : mintA,
+              getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
 
-          inputAmount,
-          swapResult.destinationAmountSwapped,
-        ),
-        // baseIn
-        //   ? makeSwapCpmmBaseInInInstruction(
-        //       new PublicKey(poolInfo.programId),
-        //       this.scope.ownerPubKey,
-        //       new PublicKey(poolKeys.authority),
-        //       new PublicKey(poolKeys.config.id),
-        //       new PublicKey(poolInfo.id),
-        //       mintATokenAcc!,
-        //       mintBTokenAcc!,
-        //       new PublicKey(poolKeys.vault.A),
-        //       new PublicKey(poolKeys.vault.B),
-        //       new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
-        //       new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
-        //       mintA,
-        //       mintB,
-        //       getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
+              inputAmount,
+              swapResult.destinationAmountSwapped,
+            )
+          : makeSwapCpmmBaseOutInInstruction(
+              new PublicKey(poolInfo.programId),
+              this.scope.ownerPubKey,
+              new PublicKey(poolKeys.authority),
+              new PublicKey(poolKeys.config.id),
+              new PublicKey(poolInfo.id),
 
-        //       swapResult.sourceAmountSwapped,
-        //       swapResult.destinationAmountSwapped,
-        //     )
-        //   : makeSwapCpmmBaseOutInInstruction(
-        //       new PublicKey(poolInfo.programId),
-        //       this.scope.ownerPubKey,
-        //       new PublicKey(poolKeys.authority),
-        //       new PublicKey(poolKeys.config.id),
-        //       new PublicKey(poolInfo.id),
+              baseIn ? mintATokenAcc! : mintBTokenAcc!,
+              baseIn ? mintBTokenAcc! : mintATokenAcc!,
 
-        //       mintBTokenAcc!,
-        //       mintATokenAcc!,
+              new PublicKey(poolKeys.vault[baseIn ? "A" : "B"]),
+              new PublicKey(poolKeys.vault[baseIn ? "B" : "A"]),
+              new PublicKey(poolInfo[baseIn ? "mintA" : "mintB"].programId ?? TOKEN_PROGRAM_ID),
+              new PublicKey(poolInfo[baseIn ? "mintB" : "mintA"].programId ?? TOKEN_PROGRAM_ID),
+              baseIn ? mintA : mintB,
+              baseIn ? mintB : mintA,
 
-        //       new PublicKey(poolKeys.vault.B),
-        //       new PublicKey(poolKeys.vault.A),
+              getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
 
-        //       new PublicKey(poolInfo.mintB.programId ?? TOKEN_PROGRAM_ID),
-        //       new PublicKey(poolInfo.mintA.programId ?? TOKEN_PROGRAM_ID),
-
-        //       mintB,
-        //       mintA,
-
-        //       getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
-
-        //       swapResult.sourceAmountSwapped,
-        //       swapResult.destinationAmountSwapped,
-        //     ),
+              swapResult.sourceAmountSwapped,
+              swapResult.destinationAmountSwapped,
+            ),
       ],
-      instructionTypes: [baseIn ? InstructionType.CpmmSwapBaseIn : InstructionType.CpmmSwapBaseOut],
+      instructionTypes: [fixedOut ? InstructionType.CpmmSwapBaseOut : InstructionType.ClmmSwapBaseIn],
     });
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);

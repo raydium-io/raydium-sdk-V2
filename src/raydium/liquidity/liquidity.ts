@@ -23,6 +23,7 @@ import {
   CreatePoolParam,
   CreatePoolAddress,
   ComputeAmountOutParam,
+  ComputeAmountInParam,
   SwapParam,
   AmmRpcData,
 } from "./type";
@@ -752,7 +753,9 @@ export default class LiquidityModule extends ModuleBase {
     const isVersion4 = poolInfo.version === 4;
     let currentPrice: Decimal;
     if (isVersion4) {
-      currentPrice = new Decimal(reserveOut.toString()).div(reserveIn.toString());
+      currentPrice = new Decimal(reserveOut.toString())
+        .div(10 ** poolInfo.mintB.decimals)
+        .div(new Decimal(reserveIn.toString()).div(10 ** poolInfo.mintA.decimals));
     } else {
       const p = getStablePrice(
         this.stableLayout.stableModelData,
@@ -800,7 +803,7 @@ export default class LiquidityModule extends ModuleBase {
       }
     }
 
-    const minAmountOutRaw = new BN(new Decimal(amountOutRaw.toString()).mul(1 - slippage).toFixed(0));
+    const minAmountOutRaw = new BN(new Decimal(amountOutRaw.toString()).mul(1 + slippage).toFixed(0));
 
     const amountOut = amountOutRaw;
     const minAmountOut = minAmountOutRaw;
@@ -809,13 +812,10 @@ export default class LiquidityModule extends ModuleBase {
       new Decimal(amountInRaw.sub(feeRaw).toString()).toFixed(0),
     );
     if (!amountInRaw.isZero() && !amountOutRaw.isZero()) {
-      // executionPrice = new Price(currencyIn, amountInRaw.sub(feeRaw), currencyOut, amountOutRaw);
       executionPrice = new Decimal(amountOutRaw.toString()).div(amountInRaw.sub(feeRaw).toString());
     }
 
     const priceImpact = currentPrice.sub(executionPrice).div(currentPrice).mul(100);
-
-    // logger.debug("priceImpact:", `${priceImpact.toSignificant()}%`);
 
     const fee = feeRaw;
 
@@ -826,6 +826,128 @@ export default class LiquidityModule extends ModuleBase {
       executionPrice,
       priceImpact,
       fee,
+    };
+  }
+
+  public computeAmountIn({ poolInfo, amountOut, mintIn, mintOut, slippage }: ComputeAmountInParam): {
+    amountIn: BN;
+    maxAmountIn: BN;
+    currentPrice: Decimal;
+    executionPrice: Decimal | null;
+    priceImpact: Decimal;
+  } {
+    const { baseReserve, quoteReserve } = poolInfo;
+    if (mintIn.toString() !== poolInfo.mintA.address && mintIn.toString() !== poolInfo.mintB.address)
+      this.logAndCreateError("mintIn does not match pool");
+    if (mintOut.toString() !== poolInfo.mintA.address && mintOut.toString() !== poolInfo.mintB.address)
+      this.logAndCreateError("mintOut does not match pool");
+    this.logDebug("baseReserve:", baseReserve.toString());
+    this.logDebug("quoteReserve:", quoteReserve.toString());
+
+    const baseIn = mintIn.toString() === poolInfo.mintA.address;
+    const [tokenIn, tokenOut] = baseIn ? [poolInfo.mintA, poolInfo.mintB] : [poolInfo.mintB, poolInfo.mintA];
+
+    this.logDebug("currencyOut:", tokenOut.symbol || tokenOut.address);
+    this.logDebug(
+      "amountOut:",
+      new Decimal(amountOut.toString())
+        .div(10 ** tokenOut.decimals)
+        .toDecimalPlaces(tokenOut.decimals)
+        .toString(),
+      tokenIn.symbol || tokenIn.address,
+    );
+    this.logDebug("slippage:", `${slippage * 100}%`);
+
+    const reserves = [baseReserve, quoteReserve];
+
+    // output is fixed
+    const output = !baseIn ? "base" : "quote";
+    if (output === "base") {
+      reserves.reverse();
+    }
+    this.logDebug("output side:", output);
+
+    const [reserveIn, reserveOut] = reserves;
+
+    const currentPrice = new Decimal(reserveOut.toString())
+      .div(10 ** poolInfo[baseIn ? "mintB" : "mintA"].decimals)
+      .div(new Decimal(reserveIn.toString()).div(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals));
+    this.logDebug(
+      "currentPrice:",
+      `1 ${tokenIn.symbol || tokenIn.address} ≈ ${currentPrice.toString()} ${tokenOut.symbol || tokenOut.address}`,
+    );
+    this.logDebug(
+      "currentPrice invert:",
+      `1 ${tokenOut.symbol || tokenOut.address} ≈ ${new Decimal(1).div(currentPrice).toString()} ${
+        tokenIn.symbol || tokenIn.address
+      }`,
+    );
+
+    let amountInRaw = new BN(0);
+    let amountOutRaw = amountOut;
+    if (!amountOutRaw.isZero()) {
+      // if out > reserve, out = reserve - 1
+      if (amountOutRaw.gt(reserveOut)) {
+        amountOutRaw = reserveOut.sub(new BN(1));
+      }
+
+      const denominator = reserveOut.sub(amountOutRaw);
+      const amountInWithoutFee = reserveIn.mul(amountOutRaw).div(denominator);
+
+      amountInRaw = amountInWithoutFee
+        .mul(LIQUIDITY_FEES_DENOMINATOR)
+        .div(LIQUIDITY_FEES_DENOMINATOR.sub(LIQUIDITY_FEES_NUMERATOR));
+    }
+
+    const maxAmountInRaw = new BN(new Decimal(amountInRaw.toString()).mul(1 + slippage).toFixed(0));
+
+    const amountIn = amountInRaw;
+    const maxAmountIn = maxAmountInRaw;
+    this.logDebug(
+      "amountIn:",
+      new Decimal(amountIn.toString())
+        .div(10 ** tokenIn.decimals)
+        .toDecimalPlaces(tokenIn.decimals)
+        .toString(),
+    );
+    this.logDebug(
+      "maxAmountIn:",
+      new Decimal(maxAmountIn.toString())
+        .div(10 ** tokenIn.decimals)
+        .toDecimalPlaces(tokenIn.decimals)
+        .toString(),
+    );
+
+    let executionPrice: Decimal | null = null;
+    if (!amountInRaw.isZero() && !amountOutRaw.isZero()) {
+      executionPrice = new Decimal(amountOutRaw.toString())
+        .div(10 ** tokenOut.decimals)
+        .div(new Decimal(amountInRaw.toString()).div(10 ** tokenIn.decimals));
+      this.logDebug(
+        "executionPrice:",
+        `1 ${tokenOut.symbol || tokenOut.address} ≈ ${executionPrice
+          .toDecimalPlaces(Math.max(poolInfo.mintA.decimals, poolInfo.mintB.decimals))
+          .toString()} ${tokenIn.symbol || tokenIn.address}`,
+      );
+      this.logDebug(
+        "executionPrice invert:",
+        `1 ${tokenOut.symbol || tokenOut.address} ≈ ${new Decimal(1)
+          .div(executionPrice)
+          .toDecimalPlaces(Math.max(poolInfo.mintA.decimals, poolInfo.mintB.decimals))
+          .toString()} ${tokenIn.symbol || tokenIn.address}`,
+      );
+    }
+
+    const exactQuote = currentPrice.mul(amountIn.toString());
+    const priceImpact = exactQuote.sub(amountOut.toString()).abs().div(exactQuote);
+    this.logDebug("priceImpact:", `${priceImpact.toString()}%`);
+
+    return {
+      amountIn,
+      maxAmountIn,
+      currentPrice,
+      executionPrice,
+      priceImpact,
     };
   }
 

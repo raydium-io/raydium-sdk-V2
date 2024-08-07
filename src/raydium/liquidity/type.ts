@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys, PoolKeys } from "@/api/type";
+import { ApiV3PoolInfoStandardItem, AmmV4Keys, AmmV5Keys } from "@/api/type";
 import { TxVersion } from "@/common/txTool/txType";
 import { BigNumberish } from "@/common/bignumber";
 import BN from "bn.js";
@@ -199,6 +199,19 @@ export interface ComputeAmountOutParam {
   mintIn: string | PublicKey;
   mintOut: string | PublicKey;
   amountIn: BN;
+  slippage: number;
+}
+
+export interface ComputeAmountInParam {
+  poolInfo: ApiV3PoolInfoStandardItem & {
+    baseReserve: BN;
+    quoteReserve: BN;
+    version: 4 | 5;
+    status: number;
+  };
+  mintIn: string | PublicKey;
+  mintOut: string | PublicKey;
+  amountOut: BN;
   slippage: number;
 }
 

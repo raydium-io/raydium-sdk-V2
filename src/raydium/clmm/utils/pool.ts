@@ -12,6 +12,7 @@ import {
   SDKParsedConcentratedInfo,
   ReturnTypeComputeAmountOut,
   ReturnTypeComputeAmountOutFormat,
+  ReturnTypeComputeAmountOutBaseOut,
   ComputeClmmPoolInfo,
 } from "../type";
 
@@ -804,6 +805,108 @@ export class PoolUtils {
       fee: _fee,
       remainingAccounts,
       executionPriceX64,
+    };
+  }
+
+  static computeAmountIn({
+    poolInfo,
+    tickArrayCache,
+    baseMint,
+    epochInfo,
+    amountOut,
+    slippage,
+    priceLimit = new Decimal(0),
+  }: {
+    poolInfo: ComputeClmmPoolInfo;
+    tickArrayCache: { [key: string]: TickArray };
+    baseMint: PublicKey;
+
+    epochInfo: EpochInfo;
+
+    amountOut: BN;
+    slippage: number;
+    priceLimit?: Decimal;
+  }): ReturnTypeComputeAmountOutBaseOut {
+    const isBaseIn = baseMint.toBase58() === poolInfo.mintA.address;
+    const feeConfigs = {
+      [poolInfo.mintA.address]: poolInfo.mintA.extensions.feeConfig,
+      [poolInfo.mintB.address]: poolInfo.mintB.extensions.feeConfig,
+    };
+
+    let sqrtPriceLimitX64: BN;
+    if (priceLimit.equals(new Decimal(0))) {
+      sqrtPriceLimitX64 = !isBaseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
+    } else {
+      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+        priceLimit,
+        poolInfo.mintA.decimals,
+        poolInfo.mintB.decimals,
+      );
+    }
+
+    const realAmountOut = getTransferAmountFeeV2(amountOut, feeConfigs[baseMint.toString()], epochInfo, true);
+
+    const {
+      expectedAmountIn: _expectedAmountIn,
+      remainingAccounts,
+      executionPrice: _executionPriceX64,
+      feeAmount,
+    } = PoolUtils.getInputAmountAndRemainAccounts(
+      poolInfo,
+      tickArrayCache,
+      baseMint,
+      realAmountOut.amount.sub(realAmountOut.fee ?? ZERO),
+      sqrtPriceLimitX64,
+    );
+
+    const inMint = isBaseIn ? poolInfo.mintB.address : poolInfo.mintA.address;
+
+    const amountIn = getTransferAmountFeeV2(_expectedAmountIn, feeConfigs[inMint], epochInfo, false);
+    // const amountIn = getTransferAmountFee(
+    //   _expectedAmountIn,
+    //   token2022Infos[inMint.toString()]?.feeConfig,
+    //   epochInfo,
+    //   true,
+    // );
+
+    const _executionPrice = SqrtPriceMath.sqrtPriceX64ToPrice(
+      _executionPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+    const executionPrice = isBaseIn ? _executionPrice : new Decimal(1).div(_executionPrice);
+
+    const _maxAmountIn = _expectedAmountIn
+      .mul(new BN(Math.floor((1 + slippage) * 10000000000)))
+      .div(new BN(10000000000));
+    // const maxAmountIn = getTransferAmountFee(
+    //   _maxAmountIn,
+    //   token2022Infos[inMint.toString()]?.feeConfig,
+    //   epochInfo,
+    //   true,
+    // );
+    const maxAmountIn = getTransferAmountFeeV2(_maxAmountIn, feeConfigs[inMint], epochInfo, true);
+
+    const poolPrice = isBaseIn ? poolInfo.currentPrice : new Decimal(1).div(poolInfo.currentPrice);
+
+    const _numerator = new Decimal(executionPrice).sub(poolPrice).abs();
+    const _denominator = poolPrice;
+    const priceImpact = new Percent(
+      new Decimal(_numerator).mul(10 ** 15).toFixed(0),
+      new Decimal(_denominator).mul(10 ** 15).toFixed(0),
+    );
+
+    return {
+      amountIn,
+      maxAmountIn,
+      realAmountOut,
+      expirationTime: minExpirationTime(amountIn.expirationTime, realAmountOut.expirationTime),
+      currentPrice: poolInfo.currentPrice,
+      executionPrice,
+      priceImpact,
+      fee: feeAmount,
+
+      remainingAccounts,
     };
   }
 
