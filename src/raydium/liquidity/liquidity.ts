@@ -812,7 +812,9 @@ export default class LiquidityModule extends ModuleBase {
       new Decimal(amountInRaw.sub(feeRaw).toString()).toFixed(0),
     );
     if (!amountInRaw.isZero() && !amountOutRaw.isZero()) {
-      executionPrice = new Decimal(amountOutRaw.toString()).div(amountInRaw.sub(feeRaw).toString());
+      executionPrice = new Decimal(amountOutRaw.toString())
+        .div(10 ** poolInfo.mintB.decimals)
+        .div(new Decimal(amountInRaw.sub(feeRaw).toString()).div(10 ** poolInfo.mintA.decimals));
     }
 
     const priceImpact = currentPrice.sub(executionPrice).div(currentPrice).mul(100);

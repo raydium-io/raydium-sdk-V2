@@ -2,6 +2,7 @@ export const API_URLS = {
   BASE_HOST: "https://api-v3.raydium.io",
   OWNER_BASE_HOST: "https://owner-v1.raydium.io",
   SERVICE_BASE_HOST: "https://service.raydium.io",
+  MONITOR_BASE_HOST: "https://monitor.raydium.io",
 
   SEND_TRANSACTION: "/send-transaction",
   FARM_ARP: "/main/farm/info",
