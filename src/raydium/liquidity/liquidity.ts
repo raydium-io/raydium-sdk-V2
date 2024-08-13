@@ -742,20 +742,23 @@ export default class LiquidityModule extends ModuleBase {
     const { baseReserve, quoteReserve } = poolInfo;
 
     const reserves = [baseReserve, quoteReserve];
+    const mintDecimals = [poolInfo.mintA.decimals, poolInfo.mintB.decimals];
 
     // input is fixed
     const input = mintIn == poolInfo.mintA.address ? "base" : "quote";
     if (input === "quote") {
       reserves.reverse();
+      mintDecimals.reverse();
     }
 
     const [reserveIn, reserveOut] = reserves;
+    const [mintInDecimals, mintOutDecimals] = mintDecimals;
     const isVersion4 = poolInfo.version === 4;
     let currentPrice: Decimal;
     if (isVersion4) {
       currentPrice = new Decimal(reserveOut.toString())
-        .div(10 ** poolInfo.mintB.decimals)
-        .div(new Decimal(reserveIn.toString()).div(10 ** poolInfo.mintA.decimals));
+        .div(10 ** mintOutDecimals)
+        .div(new Decimal(reserveIn.toString()).div(10 ** mintInDecimals));
     } else {
       const p = getStablePrice(
         this.stableLayout.stableModelData,
@@ -813,8 +816,8 @@ export default class LiquidityModule extends ModuleBase {
     );
     if (!amountInRaw.isZero() && !amountOutRaw.isZero()) {
       executionPrice = new Decimal(amountOutRaw.toString())
-        .div(10 ** poolInfo.mintB.decimals)
-        .div(new Decimal(amountInRaw.sub(feeRaw).toString()).div(10 ** poolInfo.mintA.decimals));
+        .div(10 ** mintOutDecimals)
+        .div(new Decimal(amountInRaw.sub(feeRaw).toString()).div(10 ** mintInDecimals));
     }
 
     const priceImpact = currentPrice.sub(executionPrice).div(currentPrice).mul(100);
