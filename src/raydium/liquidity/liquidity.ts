@@ -806,7 +806,7 @@ export default class LiquidityModule extends ModuleBase {
       }
     }
 
-    const minAmountOutRaw = new BN(new Decimal(amountOutRaw.toString()).mul(1 + slippage).toFixed(0));
+    const minAmountOutRaw = new BN(new Decimal(amountOutRaw.toString()).mul(1 - slippage).toFixed(0));
 
     const amountOut = amountOutRaw;
     const minAmountOut = minAmountOutRaw;
