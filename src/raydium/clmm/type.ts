@@ -449,6 +449,7 @@ export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
   withMetadata?: "create" | "no-create";
   getEphemeralSigners?: (k: number) => any;
   txVersion?: T;
+  computeBudgetConfig;
 }
 
 export interface OpenPositionFromLiquidityExtInfo {

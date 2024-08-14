@@ -264,6 +264,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     withMetadata = "create",
     txVersion,
+    computeBudgetConfig,
     getEphemeralSigners,
   }: OpenPositionFromLiquidity<T>): Promise<MakeTxData<T, OpenPositionFromLiquidityExtInfo>> {
     if (this.scope.availability.createConcentratedPosition === false)
@@ -340,6 +341,7 @@ export class Clmm extends ModuleBase {
       getEphemeralSigners,
     });
     txBuilder.addInstruction(makeOpenPositionInstructions);
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild<OpenPositionFromLiquidityExtInfo>({
       txVersion,
