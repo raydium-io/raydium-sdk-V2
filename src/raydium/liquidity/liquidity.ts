@@ -565,7 +565,7 @@ export default class LiquidityModule extends ModuleBase {
         ? [baseTokenAccount, quoteTokenAccount]
         : [quoteTokenAccount, baseTokenAccount];
 
-    const clmmPoolKeys = await this.scope.clmm.getClmmPoolKeys(poolInfo.id);
+    const clmmPoolKeys = await this.scope.clmm.getClmmPoolKeys(clmmPoolInfo.id);
 
     const createPositionIns = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo: clmmPoolInfo,
