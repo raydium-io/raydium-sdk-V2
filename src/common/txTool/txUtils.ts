@@ -299,6 +299,16 @@ export const toBuffer = (arr: Buffer | Uint8Array | Array<number>): Buffer => {
   }
 };
 
+export const txToBase64 = (transaction: Transaction | VersionedTransaction): string => {
+  let serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+  if (transaction instanceof VersionedTransaction) serialized = toBuffer(serialized);
+  try {
+    return serialized instanceof Buffer ? serialized.toString("base64") : Buffer.from(serialized).toString("base64");
+  } catch {
+    return serialized.toString("base64");
+  }
+};
+
 export function printSimulate(transactions: Transaction[] | VersionedTransaction[]): string[] {
   const allBase64: string[] = [];
   transactions.forEach((transaction) => {
@@ -306,10 +316,7 @@ export function printSimulate(transactions: Transaction[] | VersionedTransaction
       if (!transaction.recentBlockhash) transaction.recentBlockhash = TOKEN_PROGRAM_ID.toBase58();
       if (!transaction.feePayer) transaction.feePayer = Keypair.generate().publicKey;
     }
-    let serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
-    if (transaction instanceof VersionedTransaction) serialized = toBuffer(serialized);
-    const base64 = serialized.toString("base64");
-    allBase64.push(base64);
+    allBase64.push(txToBase64(transaction));
   });
   console.log("simulate tx string:", allBase64);
 
