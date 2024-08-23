@@ -112,13 +112,6 @@ export default class TradeV2 extends ModuleBase {
             }),
           ],
         });
-        makeTransferInstruction({
-          destination: ins.addresses.newAccount,
-          source: tokenAccounts[i].publicKey!,
-          amount: amountBN,
-          owner: this.scope.ownerPubKey,
-          tokenProgram,
-        });
       }
     }
 
@@ -130,9 +123,10 @@ export default class TradeV2 extends ModuleBase {
     tokenProgram?: PublicKey,
     txVersion?: T,
   ): Promise<MakeTxData<T>> {
-    const tokenAccounts = await this.getWSolAccounts();
+    // const tokenAccounts = await this.getWSolAccounts();
 
     const txBuilder = this.createTxBuilder();
+
     const ins = await createWSolAccountInstructions({
       connection: this.scope.connection,
       owner: this.scope.ownerPubKey,
@@ -142,29 +136,28 @@ export default class TradeV2 extends ModuleBase {
     });
     txBuilder.addInstruction(ins);
 
-    if (tokenAccounts.length) {
-      // already have wsol account
-      txBuilder.addInstruction({
-        instructions: [
-          makeTransferInstruction({
-            // destination: ins.signers![0].publicKey,
-            destination: tokenAccounts[0].publicKey!,
-            source: ins.addresses.newAccount,
-            amount,
-            owner: this.scope.ownerPubKey,
-            tokenProgram,
-          }),
-        ],
-        endInstructions: [
-          closeAccountInstruction({
-            tokenAccount: ins.addresses.newAccount,
-            payer: this.scope.ownerPubKey,
-            owner: this.scope.ownerPubKey,
-            programId: tokenProgram,
-          }),
-        ],
-      });
-    }
+    // if (tokenAccounts.length) {
+    //   // already have wsol account
+    //   txBuilder.addInstruction({
+    //     instructions: [
+    //       makeTransferInstruction({
+    //         destination: tokenAccounts[0].publicKey!,
+    //         source: ins.addresses.newAccount,
+    //         amount,
+    //         owner: this.scope.ownerPubKey,
+    //         tokenProgram,
+    //       }),
+    //     ],
+    //     endInstructions: [
+    //       closeAccountInstruction({
+    //         tokenAccount: ins.addresses.newAccount,
+    //         payer: this.scope.ownerPubKey,
+    //         owner: this.scope.ownerPubKey,
+    //         programId: tokenProgram,
+    //       }),
+    //     ],
+    //   });
+    // }
     return txBuilder.versionBuild({ txVersion: txVersion ?? TxVersion.LEGACY }) as Promise<MakeTxData<T>>;
   }
 
