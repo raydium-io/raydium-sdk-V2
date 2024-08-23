@@ -262,7 +262,11 @@ export class Raydium {
       const jupList = await this.api.getJupTokenList();
       this.apiData.jupTokenList = {
         fetched: Date.now(),
-        data: jupList,
+        data: jupList.map((t) => ({
+          ...t,
+          mintAuthority: t.mint_authority || undefined,
+          freezeAuthority: t.freezeAuthority || undefined,
+        })),
       };
 
       return this.apiData.jupTokenList.data;

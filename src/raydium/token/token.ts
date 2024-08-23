@@ -51,6 +51,7 @@ export default class TokenModule extends ModuleBase {
         programId:
           token.programId ??
           (token.tags.includes("token-2022") ? TOKEN_2022_PROGRAM_ID.toBase58() : TOKEN_PROGRAM_ID.toBase58()),
+        tags: token.freezeAuthority ? [...(token.tags || []), "hasFreeze"] : token.tags,
       });
       this._mintGroup.official.add(token.address);
     });
@@ -64,6 +65,7 @@ export default class TokenModule extends ModuleBase {
         programId:
           token.programId ??
           (token.tags.includes("token-2022") ? TOKEN_2022_PROGRAM_ID.toBase58() : TOKEN_PROGRAM_ID.toBase58()),
+        mintAuthority: token.mintAuthority,
       });
       this._mintGroup.jup.add(token.address);
     });

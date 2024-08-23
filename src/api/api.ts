@@ -173,7 +173,13 @@ export class Api {
     return res.data;
   }
 
-  async getJupTokenList(): Promise<ApiV3Token[]> {
+  async getJupTokenList(): Promise<
+    (ApiV3Token & {
+      daily_volume: number;
+      freeze_authority: string | null;
+      mint_authority: string | null;
+    })[]
+  > {
     return this.api.get("", {
       baseURL: this.urlConfigs.JUP_TOKEN_LIST || API_URLS.JUP_TOKEN_LIST,
     });

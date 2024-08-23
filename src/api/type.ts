@@ -158,6 +158,8 @@ export type ApiV3Token = {
   decimals: number;
   tags: string[]; // "hasFreeze" | "hasTransferFee" | "token-2022" | "community" | "unknown" ..etc
   extensions: ExtensionsItem;
+  freezeAuthority?: string;
+  mintAuthority?: string;
 };
 
 export type ApiV3TokenRes = {
