@@ -265,7 +265,7 @@ export class Raydium {
         data: jupList.map((t) => ({
           ...t,
           mintAuthority: t.mint_authority || undefined,
-          freezeAuthority: t.freezeAuthority || undefined,
+          freezeAuthority: t.freeze_authority || undefined,
         })),
       };
 
