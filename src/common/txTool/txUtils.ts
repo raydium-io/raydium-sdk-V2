@@ -46,14 +46,26 @@ export function addComputeBudget(config: ComputeBudgetConfig): {
 
 export async function getRecentBlockHash(connection: Connection, propsCommitment?: Commitment): Promise<string> {
   const commitment = propsCommitment ?? "confirmed";
-  try {
-    return (
-      (await connection.getLatestBlockhash?.({ commitment }))?.blockhash ||
-      (await connection.getRecentBlockhash(commitment)).blockhash
+  return (await connection.getLatestBlockhash?.({ commitment }))?.blockhash;
+}
+
+export async function confirmTransaction(connection: Connection, txId: string): Promise<string> {
+  connection.getSignatureStatuses([txId]);
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(reject, 60 * 1000);
+    connection.onSignature(
+      txId,
+      (signatureResult) => {
+        clearTimeout(id);
+        if (!signatureResult.err) {
+          resolve("");
+          return;
+        }
+        reject(signatureResult.err.toString());
+      },
+      "confirmed",
     );
-  } catch {
-    return (await connection.getRecentBlockhash(commitment)).blockhash;
-  }
+  });
 }
 
 /**

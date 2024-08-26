@@ -16,7 +16,14 @@ import { Api } from "@/api";
 import { Cluster } from "@/solana";
 import { TxVersion } from "./txType";
 import { Owner } from "../owner";
-import { getRecentBlockHash, addComputeBudget, checkLegacyTxSize, checkV0TxSize, printSimulate } from "./txUtils";
+import {
+  getRecentBlockHash,
+  addComputeBudget,
+  checkLegacyTxSize,
+  checkV0TxSize,
+  printSimulate,
+  confirmTransaction,
+} from "./txUtils";
 import { CacheLTA, getMultipleLookupTableInfo, LOOKUP_TABLE_CACHE } from "./lookupTable";
 
 interface SolanaFeeInfo {
@@ -464,17 +471,7 @@ export class TxBuilder {
         if (this.owner?.isKeyPair) {
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
           if (sendAndConfirm) {
-            const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
-              commitment: this.blockhashCommitment,
-            });
-            await this.connection.confirmTransaction(
-              {
-                blockhash,
-                lastValidBlockHeight,
-                signature: txId,
-              },
-              "confirmed",
-            );
+            await confirmTransaction(this.connection, txId);
           }
 
           return {
@@ -544,17 +541,7 @@ export class TxBuilder {
             const txIds: string[] = [];
             for (const tx of allTransactions) {
               const txId = await this.connection.sendTransaction(tx, { skipPreflight });
-              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
-                commitment: this.blockhashCommitment,
-              });
-              await this.connection.confirmTransaction(
-                {
-                  blockhash,
-                  lastValidBlockHeight,
-                  signature: txId,
-                },
-                "confirmed",
-              );
+              await confirmTransaction(this.connection, txId);
               txIds.push(txId);
             }
 
@@ -944,17 +931,7 @@ export class TxBuilder {
             const txIds: string[] = [];
             for (const tx of allTransactions) {
               const txId = await this.connection.sendTransaction(tx, { skipPreflight });
-              const { lastValidBlockHeight, blockhash } = await this.connection.getLatestBlockhash({
-                commitment: this.blockhashCommitment,
-              });
-              await this.connection.confirmTransaction(
-                {
-                  blockhash,
-                  lastValidBlockHeight,
-                  signature: txId,
-                },
-                "confirmed",
-              );
+              await confirmTransaction(this.connection, txId);
               txIds.push(txId);
             }
 
