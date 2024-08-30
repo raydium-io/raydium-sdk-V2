@@ -52,6 +52,7 @@ export interface CpmmPoolInfoInterface {
 }
 
 export interface CreateCpmmPoolParam<T> {
+  poolId?: PublicKey;
   programId: PublicKey;
   poolFeeAccount: PublicKey;
   mintA: Pick<ApiV3Token, "address" | "decimals" | "programId">;

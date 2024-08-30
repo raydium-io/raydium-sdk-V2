@@ -76,11 +76,13 @@ function u16ToBytes(num: number): Uint8Array {
 }
 
 export function getCreatePoolKeys({
+  poolId: propPoolId,
   programId,
   configId,
   mintA,
   mintB,
 }: {
+  poolId?: PublicKey;
   programId: PublicKey;
   configId: PublicKey;
   mintA: PublicKey;
@@ -96,7 +98,7 @@ export function getCreatePoolKeys({
 } {
   // const configId = getCpmmPdaAmmConfigId(programId, 0).publicKey;
   const authority = getPdaPoolAuthority(programId).publicKey;
-  const poolId = getCpmmPdaPoolId(programId, configId, mintA, mintB).publicKey;
+  const poolId = propPoolId || getCpmmPdaPoolId(programId, configId, mintA, mintB).publicKey;
   const lpMint = getPdaLpMint(programId, poolId).publicKey;
   const vaultA = getPdaVault(programId, poolId, mintA).publicKey;
   const vaultB = getPdaVault(programId, poolId, mintB).publicKey;

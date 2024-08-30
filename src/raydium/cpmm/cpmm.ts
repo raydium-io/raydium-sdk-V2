@@ -275,6 +275,7 @@ export default class CpmmModule extends ModuleBase {
   }
 
   public async createPool<T extends TxVersion>({
+    poolId,
     programId,
     poolFeeAccount,
     startTime,
@@ -340,6 +341,7 @@ export default class CpmmModule extends ModuleBase {
     if (userVaultA === undefined || userVaultB === undefined) throw Error("you don't has some token account");
 
     const poolKeys = getCreatePoolKeys({
+      poolId,
       programId,
       configId: new PublicKey(feeConfig.id),
       mintA: mintAPubkey,
