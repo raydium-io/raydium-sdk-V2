@@ -19,7 +19,7 @@ interface ExtInfo {
     baseVault: PublicKey;
     quoteVault: PublicKey;
     baseMint: PublicKey;
-    quoteMin: PublicKey;
+    quoteMint: PublicKey;
   };
 }
 
@@ -148,7 +148,7 @@ export default class MarketV2 extends ModuleBase {
           baseVault: baseVault.publicKey,
           quoteVault: quoteVault.publicKey,
           baseMint: new PublicKey(baseInfo.mint),
-          quoteMin: new PublicKey(quoteInfo.mint),
+          quoteMint: new PublicKey(quoteInfo.mint),
         },
       }) as Promise<MakeMultiTxData<T, ExtInfo>>;
 
@@ -163,7 +163,7 @@ export default class MarketV2 extends ModuleBase {
         baseVault: baseVault.publicKey,
         quoteVault: quoteVault.publicKey,
         baseMint: new PublicKey(baseInfo.mint),
-        quoteMin: new PublicKey(quoteInfo.mint),
+        quoteMint: new PublicKey(quoteInfo.mint),
       },
     }) as Promise<MakeMultiTxData<T, ExtInfo>>;
   }
