@@ -3,6 +3,7 @@ import BN from "bn.js";
 import { AccountMeta, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { SYSTEM_PROGRAM_ID, RENT_PROGRAM_ID, MEMO_PROGRAM_ID2, createLogger } from "@/common";
+import { getCpmmPdaPoolId } from "./pda";
 
 import { struct, u64 } from "@/marshmallow";
 const logger = createLogger("Raydium_cpmm");
@@ -39,11 +40,13 @@ export function makeCreateCpmmPoolInInstruction(
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountMaxA"), u64("amountMaxB"), u64("openTime")]);
 
+  const pdaPoolId = getCpmmPdaPoolId(programId, configId, mintA, mintB).publicKey;
+
   const keys: Array<AccountMeta> = [
     { pubkey: creator, isSigner: true, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: authority, isSigner: false, isWritable: false },
-    { pubkey: poolId, isSigner: false, isWritable: true },
+    { pubkey: poolId, isSigner: !poolId.equals(pdaPoolId), isWritable: true },
     { pubkey: mintA, isSigner: false, isWritable: false },
     { pubkey: mintB, isSigner: false, isWritable: false },
     { pubkey: lpMint, isSigner: false, isWritable: true },
