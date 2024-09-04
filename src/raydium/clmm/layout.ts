@@ -14,16 +14,12 @@ export const ClmmConfigLayout = struct([
   seq(u64(), 8, ""),
 ]);
 
-export const ObservationLayout = struct([
-  u32("blockTimestamp"),
-  i64("tickCumulative"),
-  seq(u64(), 4),
-]);
+export const ObservationLayout = struct([u32("blockTimestamp"), i64("tickCumulative"), seq(u64(), 4)]);
 export const ObservationInfoLayout = struct([
   blob(8),
   bool("initialized"),
-  u64('recentEpoch'),
-  u16('observationIndex'),
+  u64("recentEpoch"),
+  u16("observationIndex"),
   publicKey("poolId"),
   seq(ObservationLayout, 100, "observations"),
   seq(u64(), 4),
@@ -155,4 +151,14 @@ export const TickArrayBitmapExtensionLayout = struct([
   publicKey("poolId"),
   seq(seq(u64(), 8), EXTENSION_TICKARRAY_BITMAP_SIZE, "positiveTickArrayBitmap"),
   seq(seq(u64(), 8), EXTENSION_TICKARRAY_BITMAP_SIZE, "negativeTickArrayBitmap"),
+]);
+
+export const LockPositionLayout = struct([
+  u64(),
+  u8("bump"),
+  publicKey("owner"),
+  publicKey("poolId"),
+  publicKey("positionId"),
+  publicKey("nftAccount"),
+  seq(u64(), 8),
 ]);

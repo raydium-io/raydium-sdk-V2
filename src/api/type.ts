@@ -220,6 +220,8 @@ export interface ApiV3PoolInfoBaseItem {
   farmUpcomingCount: number;
   farmOngoingCount: number;
   farmFinishedCount: number;
+
+  burnPercent: number;
 }
 export type ApiV3PoolInfoConcentratedItem = ApiV3PoolInfoBaseItem & {
   type: "Concentrated";

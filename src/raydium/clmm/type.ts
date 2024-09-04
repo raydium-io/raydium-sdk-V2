@@ -388,6 +388,28 @@ export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   txVersion?: T;
 }
 
+export interface LockPosition<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  authProgramId?: PublicKey;
+  poolProgramId?: PublicKey;
+  ownerPosition: ClmmPositionLayout;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
+export interface HarvestLockPosition<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  authProgramId?: PublicKey;
+  ownerPosition: ClmmPositionLayout;
+  ownerInfo?: {
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
 export interface ClmmPoolRewardLayoutInfo {
   rewardState: number;
   openTime: BN;
@@ -553,6 +575,7 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
     feePayer?: PublicKey;
     useSOLBalance?: boolean;
   };
+  lockInfo?: { [poolId: string]: { [positionNft: string]: { lockId: string | PublicKey } } };
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   programId?: PublicKey;

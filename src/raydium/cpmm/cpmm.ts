@@ -249,6 +249,7 @@ export default class CpmmModule extends ModuleBase {
         feeRate: rpcData.configInfo!.tradeFeeRate.toNumber(),
         openTime: rpcData.openTime.toString(),
         tvl: 0,
+        burnPercent: 0,
 
         day: mockRewardData,
         week: mockRewardData,

@@ -1,6 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import { InstructionType, WSOLMint, fetchMultipleMintInfos, getMultipleAccountsInfoWithCustomFlags } from "@/common";
+import {
+  CLMM_LOCK_AUTH_ID,
+  CLMM_LOCK_PROGRAM_ID,
+  CLMM_PROGRAM_ID,
+  InstructionType,
+  WSOLMint,
+  fetchMultipleMintInfos,
+  getMultipleAccountsInfoWithCustomFlags,
+} from "@/common";
 import { ApiV3PoolInfoConcentratedItem, ClmmKeys } from "@/api/type";
 import { MakeTxData, MakeMultiTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
@@ -32,6 +40,8 @@ import {
   ComputeClmmPoolInfo,
   ReturnTypeFetchMultiplePoolTickArrays,
   ClmmRpcData,
+  LockPosition,
+  HarvestLockPosition,
 } from "./type";
 import { ClmmInstrument } from "./instrument";
 import { MakeTransaction } from "../type";
@@ -140,6 +150,7 @@ export class Clmm extends ModuleBase {
             defaultRange: 0,
             defaultRangePoint: [],
           },
+          burnPercent: 0,
           ...mockV3CreatePoolInfo,
         },
         forerunCreate,
@@ -664,6 +675,140 @@ export class Clmm extends ModuleBase {
       txVersion,
       extInfo: { address: extInfo },
     }) as Promise<MakeTxData<T, ManipulateLiquidityExtInfo>>;
+  }
+
+  public async lockPosition<T extends TxVersion>(props: LockPosition<T>): Promise<MakeTxData<T>> {
+    const {
+      programId = CLMM_LOCK_PROGRAM_ID,
+      authProgramId = CLMM_LOCK_AUTH_ID,
+      poolProgramId = CLMM_PROGRAM_ID,
+      ownerPosition,
+      computeBudgetConfig,
+      txVersion,
+    } = props;
+    const txBuilder = this.createTxBuilder();
+
+    const lockIns = await ClmmInstrument.lockPositionInstruction({
+      programId,
+      authProgramId,
+      poolProgramId,
+      owner: this.scope.ownerPubKey,
+      positionNft: ownerPosition.nftMint,
+    });
+
+    txBuilder.addInstruction({
+      instructions: [lockIns],
+      instructionTypes: [InstructionType.ClmmLockPosition],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
+  }
+
+  public async harvestLockPosition<T extends TxVersion>(props: HarvestLockPosition<T>): Promise<MakeTxData<T>> {
+    const {
+      programId = CLMM_LOCK_PROGRAM_ID,
+      authProgramId = CLMM_LOCK_AUTH_ID,
+      ownerPosition,
+      ownerInfo = { useSOLBalance: true },
+      associatedOnly = true,
+      checkCreateATAOwner = false,
+      computeBudgetConfig,
+      txVersion,
+    } = props;
+
+    const poolKeys = await this.getClmmPoolKeys(ownerPosition.poolId.toString());
+    const txBuilder = this.createTxBuilder();
+
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolKeys.mintA.address === WSOLMint.toString();
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolKeys.mintB.address === WSOLMint.toString();
+
+    let ownerTokenAccountA: PublicKey | undefined = undefined;
+    let ownerTokenAccountB: PublicKey | undefined = undefined;
+    const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: poolKeys.mintA.programId,
+        mint: new PublicKey(poolKeys.mintA.address),
+        notUseTokenAccount: mintAUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo: {
+          payer: this.scope.ownerPubKey,
+          amount: 0,
+        },
+        skipCloseAccount: !mintAUseSOLBalance,
+        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    ownerTokenAccountA = _ownerTokenAccountA;
+    accountAInstructions && txBuilder.addInstruction(accountAInstructions);
+
+    const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
+      await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: poolKeys.mintB.programId,
+        mint: new PublicKey(poolKeys.mintB.address),
+        notUseTokenAccount: mintBUseSOLBalance,
+        owner: this.scope.ownerPubKey,
+        createInfo: {
+          payer: this.scope.ownerPubKey,
+          amount: 0,
+        },
+        skipCloseAccount: !mintBUseSOLBalance,
+        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+        checkCreateATAOwner,
+      });
+    ownerTokenAccountB = _ownerTokenAccountB;
+    accountBInstructions && txBuilder.addInstruction(accountBInstructions);
+
+    const ownerMintToAccount: { [mint: string]: PublicKey } = {};
+    const rewardAccounts: PublicKey[] = [];
+    for (const itemReward of poolKeys.rewardInfos) {
+      const rewardUseSOLBalance = ownerInfo.useSOLBalance && itemReward.mint.address === WSOLMint.toString();
+      let ownerRewardAccount = ownerMintToAccount[itemReward.mint.address];
+      if (!ownerRewardAccount) {
+        const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+          tokenProgram: new PublicKey(itemReward.mint.programId),
+          mint: new PublicKey(itemReward.mint.address),
+          notUseTokenAccount: rewardUseSOLBalance,
+          owner: this.scope.ownerPubKey,
+          skipCloseAccount: !rewardUseSOLBalance,
+          createInfo: {
+            payer: this.scope.ownerPubKey,
+            amount: 0,
+          },
+          associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+        });
+        ownerRewardAccount = account!;
+        instructionParams && txBuilder.addInstruction(instructionParams);
+      }
+
+      ownerMintToAccount[itemReward.mint.address] = ownerRewardAccount;
+      rewardAccounts.push(ownerRewardAccount!);
+    }
+
+    const harvestLockIns = await ClmmInstrument.harvestLockPositionInstruction({
+      programId,
+      authProgramId,
+      poolKeys,
+      ownerPosition,
+      owner: this.scope.ownerPubKey,
+      ownerRewardAccounts: rewardAccounts,
+      userVaultA: ownerTokenAccountA!,
+      userVaultB: ownerTokenAccountB!,
+    });
+
+    txBuilder.addInstruction({
+      instructions: [harvestLockIns],
+      instructionTypes: [InstructionType.ClmmHarvestLockPosition],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
   }
 
   public async closePosition<T extends TxVersion>({
@@ -1332,6 +1477,7 @@ export class Clmm extends ModuleBase {
   public async harvestAllRewards<T extends TxVersion = TxVersion.LEGACY>({
     allPoolInfo,
     allPositions,
+    lockInfo,
     ownerInfo,
     associatedOnly = true,
     checkCreateATAOwner = false,
@@ -1431,21 +1577,39 @@ export class Clmm extends ModuleBase {
       const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
 
       for (const itemPosition of allPositions[itemInfo.id]) {
-        const insData = ClmmInstrument.decreaseLiquidityInstructions({
-          poolInfo,
-          poolKeys,
-          ownerPosition: itemPosition,
-          ownerInfo: {
-            wallet: this.scope.ownerPubKey,
-            tokenAccountA: ownerTokenAccountA,
-            tokenAccountB: ownerTokenAccountB,
-            rewardAccounts,
-          },
-          liquidity: new BN(0),
-          amountMinA: new BN(0),
-          amountMinB: new BN(0),
-        });
-        txBuilder.addInstruction(insData);
+        if (lockInfo && lockInfo[itemInfo.id] && lockInfo[itemInfo.id][itemPosition.nftMint.toBase58()]) {
+          const harvestLockIns = ClmmInstrument.harvestLockPositionInstruction({
+            poolKeys,
+            owner: this.scope.ownerPubKey!,
+            ownerPosition: itemPosition,
+            ownerRewardAccounts: rewardAccounts,
+            programId: CLMM_LOCK_PROGRAM_ID,
+            authProgramId: CLMM_LOCK_AUTH_ID,
+            userVaultA: ownerTokenAccountA,
+            userVaultB: ownerTokenAccountB,
+          });
+          txBuilder.addInstruction({
+            instructions: [harvestLockIns],
+            instructionTypes: [InstructionType.ClmmHarvestLockPosition],
+            lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
+          });
+        } else {
+          const insData = ClmmInstrument.decreaseLiquidityInstructions({
+            poolInfo,
+            poolKeys,
+            ownerPosition: itemPosition,
+            ownerInfo: {
+              wallet: this.scope.ownerPubKey,
+              tokenAccountA: ownerTokenAccountA,
+              tokenAccountB: ownerTokenAccountB,
+              rewardAccounts,
+            },
+            liquidity: new BN(0),
+            amountMinA: new BN(0),
+            amountMinB: new BN(0),
+          });
+          txBuilder.addInstruction(insData);
+        }
       }
     }
 

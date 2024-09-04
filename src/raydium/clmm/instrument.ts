@@ -2,6 +2,7 @@ import { ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "@/api/type"
 import {
   InstructionType,
   MEMO_PROGRAM_ID,
+  MEMO_PROGRAM_ID2,
   METADATA_PROGRAM_ID,
   RENT_PROGRAM_ID,
   createLogger,
@@ -33,6 +34,7 @@ import {
   getPdaPoolVaultId,
   getPdaProtocolPositionAddress,
   getPdaTickArrayAddress,
+  getPdaLockPositionId,
 } from "./utils/pda";
 import { PoolUtils } from "./utils/pool";
 import { TickUtils } from "./utils/tick";
@@ -51,6 +53,9 @@ const anchorDataBuf = {
   swap: [43, 4, 237, 11, 26, 201, 30, 98], // [248, 198, 158, 145, 225, 117, 135, 200],
   collectReward: [18, 237, 166, 197, 34, 16, 213, 144],
 };
+
+const lockInsDataBuf = [188, 37, 179, 131, 82, 150, 84, 73];
+const lockHarvestInsDataBuf = [16, 72, 250, 198, 14, 162, 212, 19];
 
 interface CreatePoolInstruction {
   connection: Connection;
@@ -1179,7 +1184,6 @@ export class ClmmInstrument {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
     ownerPosition: ClmmPositionLayout;
-
     ownerInfo: {
       wallet: PublicKey;
       tokenAccountA: PublicKey;
@@ -1228,35 +1232,34 @@ export class ClmmInstrument {
     }
 
     const ins: TransactionInstruction[] = [];
-    ins.push(
-      this.decreaseLiquidityInstruction(
-        poolProgramId,
-        ownerInfo.wallet,
-        positionNftAccount,
-        personalPosition,
-        id,
-        protocolPosition,
-        tickArrayLower,
-        tickArrayUpper,
-        ownerInfo.tokenAccountA,
-        ownerInfo.tokenAccountB,
-        new PublicKey(poolKeys.vault.A),
-        new PublicKey(poolKeys.vault.B),
-        new PublicKey(poolInfo.mintA.address),
-        new PublicKey(poolInfo.mintB.address),
-        rewardAccounts,
+    const decreaseIns = this.decreaseLiquidityInstruction(
+      poolProgramId,
+      ownerInfo.wallet,
+      positionNftAccount,
+      personalPosition,
+      id,
+      protocolPosition,
+      tickArrayLower,
+      tickArrayUpper,
+      ownerInfo.tokenAccountA,
+      ownerInfo.tokenAccountB,
+      new PublicKey(poolKeys.vault.A),
+      new PublicKey(poolKeys.vault.B),
+      new PublicKey(poolInfo.mintA.address),
+      new PublicKey(poolInfo.mintB.address),
+      rewardAccounts,
 
-        liquidity,
-        amountMinA,
-        amountMinB,
-        PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
-          tickArrayLowerStartIndex,
-          tickArrayUpperStartIndex,
-        ])
-          ? getPdaExBitmapAccount(poolProgramId, id).publicKey
-          : undefined,
-      ),
+      liquidity,
+      amountMinA,
+      amountMinB,
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+      ])
+        ? getPdaExBitmapAccount(poolProgramId, id).publicKey
+        : undefined,
     );
+    ins.push(decreaseIns);
 
     return {
       address: {
@@ -1789,5 +1792,122 @@ export class ClmmInstrument {
       instructionTypes: [InstructionType.ClmmCollectReward],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
+  }
+
+  static lockPositionInstruction({
+    programId,
+    authProgramId,
+    poolProgramId,
+    owner,
+    positionNft,
+  }: {
+    programId: PublicKey;
+    authProgramId: PublicKey;
+    poolProgramId: PublicKey;
+    owner: PublicKey;
+    positionNft: PublicKey;
+  }): TransactionInstruction {
+    const { publicKey: nftAccount } = getATAAddress(owner, positionNft, TOKEN_PROGRAM_ID);
+    const { publicKey: positionId } = getPdaPersonalPositionAddress(poolProgramId, positionNft);
+
+    const keys = [
+      { pubkey: authProgramId, isSigner: false, isWritable: false },
+      { pubkey: owner, isSigner: true, isWritable: false },
+      { pubkey: nftAccount, isSigner: false, isWritable: true },
+      { pubkey: positionId, isSigner: false, isWritable: false },
+      { pubkey: getPdaLockPositionId(programId, positionId).publicKey, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ];
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: Buffer.from(lockInsDataBuf),
+    });
+  }
+
+  static harvestLockPositionInstruction(props: {
+    poolKeys: ClmmKeys;
+    programId: PublicKey;
+    authProgramId: PublicKey;
+    ownerPosition: ClmmPositionLayout;
+    owner: PublicKey;
+    ownerRewardAccounts: PublicKey[];
+    userVaultA: PublicKey;
+    userVaultB: PublicKey;
+  }): TransactionInstruction {
+    const [poolProgramId, poolId] = [new PublicKey(props.poolKeys.programId), new PublicKey(props.poolKeys.id)];
+
+    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
+      props.ownerPosition.tickLower,
+      props.poolKeys.config.tickSpacing,
+    );
+    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
+      props.ownerPosition.tickUpper,
+      props.poolKeys.config.tickSpacing,
+    );
+    const { publicKey: tickArrayLower } = getPdaTickArrayAddress(poolProgramId, poolId, tickArrayLowerStartIndex);
+    const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(poolProgramId, poolId, tickArrayUpperStartIndex);
+    const { publicKey: nftAccount } = getATAAddress(props.owner, props.ownerPosition.nftMint, TOKEN_PROGRAM_ID);
+    const { publicKey: positionId } = getPdaPersonalPositionAddress(poolProgramId, props.ownerPosition.nftMint);
+    const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
+      poolProgramId,
+      poolId,
+      props.ownerPosition.tickLower,
+      props.ownerPosition.tickUpper,
+    );
+
+    const rewardAccounts: {
+      poolRewardVault: PublicKey;
+      ownerRewardVault: PublicKey;
+      rewardMint: PublicKey;
+    }[] = [];
+
+    for (let i = 0; i < props.poolKeys.rewardInfos.length; i++) {
+      rewardAccounts.push({
+        poolRewardVault: new PublicKey(props.poolKeys.rewardInfos[i].vault),
+        ownerRewardVault: props.ownerRewardAccounts[i],
+        rewardMint: new PublicKey(props.poolKeys.rewardInfos[i].mint.address),
+      });
+    }
+
+    const remainingAccounts = [
+      ...rewardAccounts
+        .map((i) => [
+          { pubkey: i.poolRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.ownerRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.rewardMint, isSigner: false, isWritable: false },
+        ])
+        .flat(),
+    ];
+
+    const keys = [
+      { pubkey: props.authProgramId, isSigner: false, isWritable: false },
+      { pubkey: getPdaLockPositionId(props.programId, positionId).publicKey, isSigner: false, isWritable: false },
+      { pubkey: poolProgramId, isSigner: false, isWritable: false },
+      { pubkey: props.owner, isSigner: true, isWritable: false },
+      { pubkey: nftAccount, isSigner: false, isWritable: true },
+      { pubkey: positionId, isSigner: false, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: true },
+      { pubkey: new PublicKey(props.poolKeys.vault.A), isSigner: false, isWritable: true },
+      { pubkey: new PublicKey(props.poolKeys.vault.B), isSigner: false, isWritable: true },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: props.userVaultA, isSigner: false, isWritable: true },
+      { pubkey: props.userVaultB, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID2, isSigner: false, isWritable: false },
+      { pubkey: new PublicKey(props.poolKeys.mintA.address), isSigner: false, isWritable: false },
+      { pubkey: new PublicKey(props.poolKeys.mintB.address), isSigner: false, isWritable: false },
+      ...remainingAccounts,
+    ];
+
+    return new TransactionInstruction({
+      keys,
+      programId: props.programId,
+      data: Buffer.from(lockHarvestInsDataBuf),
+    });
   }
 }

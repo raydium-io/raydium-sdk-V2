@@ -29,6 +29,8 @@ export const InstructionType = {
   ClmmInitReward: "ClmmInitReward",
   ClmmSetReward: "ClmmSetReward",
   ClmmCollectReward: "ClmmCollectReward",
+  ClmmLockPosition: "ClmmLockPosition",
+  ClmmHarvestLockPosition: "ClmmHarvestLockPosition",
 
   AmmV4Swap: "AmmV4Swap",
   AmmV4AddLiquidity: "AmmV4AddLiquidity",

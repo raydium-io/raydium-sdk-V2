@@ -130,3 +130,14 @@ export function getPdaObservationAccount(
 } {
   return findProgramAddress([OBSERVATION_SEED, poolId.toBuffer()], programId);
 }
+
+export const POOL_LOCK_ID_SEED = Buffer.from("locked_position", "utf8");
+export function getPdaLockPositionId(
+  programId: PublicKey,
+  positionId: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress([POOL_LOCK_ID_SEED, positionId.toBuffer()], programId);
+}

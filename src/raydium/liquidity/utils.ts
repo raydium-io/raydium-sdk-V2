@@ -261,6 +261,7 @@ export const toAmmComputePoolInfo = (
         programId: tokenProgramStr,
         decimals: Math.min(poolInfo.baseDecimal.toNumber(), poolInfo.quoteDecimal.toNumber()),
       }),
+      burnPercent: 0,
     };
   });
   return data;

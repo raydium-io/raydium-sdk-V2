@@ -1355,6 +1355,7 @@ export function clmmComputeInfoToApiInfo(pool: ComputeClmmPoolInfo): ApiV3PoolIn
     farmUpcomingCount: 0,
     farmOngoingCount: 0,
     farmFinishedCount: 0,
+    burnPercent: 0,
     config: {
       ...pool.ammConfig,
       id: pool.ammConfig.id.toString(),
