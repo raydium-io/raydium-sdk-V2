@@ -35,7 +35,7 @@ const MAX_SAFE = 0x1fffffffffffff;
 export function parseBigNumberish(value: BigNumberish): BN {
   const logger = createLogger("Raydium_parseBigNumberish");
   // BN
-  if (value instanceof BN) {
+  if (BN.isBN(value)) {
     return value;
   }
 
