@@ -1,12 +1,12 @@
 import { PublicKey } from "@solana/web3.js";
-import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../../common";
 
-import { ApiV3Token, JupTokenType } from "@/api/type";
+import { ApiV3Token, JupTokenType } from "../../api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { LoadParams } from "../type";
 
-import { TokenInfo } from "./type";
 import { SOL_INFO } from "./constant";
+import { TokenInfo } from "./type";
 
 export default class TokenModule extends ModuleBase {
   private _tokenList: TokenInfo[] = [];

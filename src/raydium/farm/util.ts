@@ -1,13 +1,13 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
-import { GetMultipleAccountsInfoConfig, getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
-import { parseBigNumberish } from "@/common/bignumber";
-import { createLogger } from "@/common/logger";
-import { findProgramAddress, ProgramAddress } from "@/common/txTool/txUtils";
-import { DateParam, isDateAfter, isDateBefore } from "@/common/date";
-import { jsonInfo2PoolKeys } from "@/common/utility";
-import { RewardInfoV6 } from "@/api/type";
+import { RewardInfoV6 } from "../../api/type";
+import { parseBigNumberish } from "../../common";
+import { GetMultipleAccountsInfoConfig, getMultipleAccountsInfoWithCustomFlags } from "../../common/accountInfo";
+import { DateParam, isDateAfter, isDateBefore } from "../../common/date";
+import { createLogger } from "../../common/logger";
+import { findProgramAddress, ProgramAddress } from "../../common/txTool/txUtils";
+import { jsonInfo2PoolKeys } from "../../common/utility";
 
 import { splAccountLayout } from "../account/layout";
 import { SplAccount } from "../account/types";
@@ -15,7 +15,7 @@ import { FARM_VERSION_TO_LEDGER_LAYOUT, FARM_VERSION_TO_STATE_LAYOUT, poolTypeV6
 import { FarmLedger, FarmLedgerLayout, FarmState, FarmStateLayout } from "./layout";
 import { FarmRewardInfo, FarmRewardInfoConfig } from "./type";
 
-import { VoterRegistrar, Voter } from "./layout";
+import { Voter, VoterRegistrar } from "./layout";
 
 const logger = createLogger("Raydium.farm.util");
 interface AssociatedLedgerPoolAccount {
@@ -255,8 +255,8 @@ export async function fetchMultipleFarmInfoAndUpdate({
         state.version === 6
           ? state.rewardMultiplier
           : state.rewardInfos.length === 1
-          ? tenBN.pow(new BN(9))
-          : tenBN.pow(new BN(15));
+            ? tenBN.pow(new BN(9))
+            : tenBN.pow(new BN(15));
 
       const pendingRewards = state.rewardInfos.map((rewardInfo, index) => {
         const rewardDebt = ledger.rewardDebts[index];

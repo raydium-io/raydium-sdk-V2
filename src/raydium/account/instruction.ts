@@ -1,16 +1,17 @@
-import {
-  createInitializeAccountInstruction,
-  createCloseAccountInstruction,
-  createTransferInstruction,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
 import { Commitment, Connection, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-import { generatePubKey } from "./util";
-import { BigNumberish, parseBigNumberish } from "@/common";
-import { AddInstructionParam } from "@/common/txTool/txTool";
-import { InstructionType } from "@/common/txTool/txType";
+import {
+  BigNumberish,
+  createCloseAccountInstruction,
+  createInitializeAccountInstruction,
+  createTransferInstruction,
+  parseBigNumberish,
+  TOKEN_PROGRAM_ID,
+} from "../../common";
+import { AddInstructionParam } from "../../common/txTool/txTool";
+import { InstructionType } from "../../common/txTool/txType";
 import { TOKEN_WSOL } from "../token/constant";
+import { generatePubKey } from "./util";
 
 import { splAccountLayout } from "./layout";
 
@@ -82,12 +83,12 @@ export async function createWSolAccountInstructions(params: CreateWSolTokenAccou
     endInstructions: skipCloseAccount
       ? []
       : [
-          closeAccountInstruction({
-            tokenAccount: newAccount.publicKey,
-            payer,
-            owner,
-          }),
-        ],
+        closeAccountInstruction({
+          tokenAccount: newAccount.publicKey,
+          payer,
+          owner,
+        }),
+      ],
   };
 }
 

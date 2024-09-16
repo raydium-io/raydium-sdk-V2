@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
-import { findProgramAddress } from "@/common/txTool/txUtils";
+import { findProgramAddress } from "../../common/txTool/txUtils";
 
 export function getRegistrarAddress(
   programId: PublicKey,

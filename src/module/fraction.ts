@@ -2,9 +2,10 @@ import _Big from "big.js";
 import BN from "bn.js";
 import _Decimal from "decimal.js-light";
 
-import { BigNumberish, parseBigNumberish, Rounding } from "../common/bignumber";
+import { BigNumberish } from "../common/bignumber";
 import { createLogger } from "../common/logger";
 
+import { parseBigNumberish, Rounding } from "../common/constant";
 import toFormat, { WrappedBig } from "./formatter";
 
 const logger = createLogger("module/fraction");

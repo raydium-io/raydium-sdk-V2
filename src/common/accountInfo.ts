@@ -1,8 +1,8 @@
 import { AccountInfo, Commitment, Connection, PublicKey } from "@solana/web3.js";
-import { MINT_SIZE, TOKEN_PROGRAM_ID, getTransferFeeConfig, unpackMint } from "@solana/spl-token";
+import { ReturnTypeFetchMultipleMintInfos } from "../raydium/type";
 import { WSOLMint, chunkArray, solToWSol } from "./";
 import { createLogger } from "./logger";
-import { ReturnTypeFetchMultipleMintInfos } from "../raydium/type";
+import { MINT_SIZE, TOKEN_PROGRAM_ID, getTransferFeeConfig, unpackMint } from "./splTokenProxy";
 
 interface MultipleAccountsJsonRpcResponse {
   jsonrpc: string;

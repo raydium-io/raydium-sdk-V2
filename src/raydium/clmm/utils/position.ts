@@ -1,13 +1,12 @@
 import BN from "bn.js";
 
-import { ClmmPoolInfo, ClmmPoolPersonalPosition, ClmmPoolRewardInfo, SDKParsedConcentratedInfo } from "../type";
-import { minExpirationTime, getTransferAmountFeeV2 } from "@/common";
-import { Q64 } from "./constants";
-import { MathUtil, SqrtPriceMath, LiquidityMath } from "./math";
-import { Tick } from "./tick";
-import { GetAmountParams, ReturnTypeGetLiquidityAmountOut } from "../type";
 import Decimal from "decimal.js";
+import { getTransferAmountFeeV2, minExpirationTime } from "../../../common";
 import { ClmmPositionLayout } from "../layout";
+import { ClmmPoolInfo, ClmmPoolPersonalPosition, ClmmPoolRewardInfo, GetAmountParams, ReturnTypeGetLiquidityAmountOut } from "../type";
+import { Q64 } from "./constants";
+import { LiquidityMath, MathUtil, SqrtPriceMath } from "./math";
+import { Tick } from "./tick";
 
 export class PositionUtils {
   static getfeeGrowthInside(

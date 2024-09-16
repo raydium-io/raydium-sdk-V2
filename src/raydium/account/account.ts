@@ -1,22 +1,25 @@
-import {
-  createAssociatedTokenAccountInstruction,
-  TOKEN_PROGRAM_ID,
-  AccountLayout,
-  TOKEN_2022_PROGRAM_ID,
-} from "@solana/spl-token";
 import { Commitment, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
-import { getATAAddress, BigNumberish, InstructionType, WSOLMint } from "@/common";
-import { AddInstructionParam } from "@/common/txTool/txTool";
+import {
+  AccountLayout,
+  BigNumberish,
+  createAssociatedTokenAccountInstruction,
+  getATAAddress,
+  InstructionType,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  WSOLMint,
+} from "../../common";
+import { AddInstructionParam } from "../../common/txTool/txTool";
 
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import {
   closeAccountInstruction,
   createWSolAccountInstructions,
-  makeTransferInstruction,
   initTokenAccountInstruction,
+  makeTransferInstruction,
 } from "./instruction";
-import { HandleTokenAccountParams, TokenAccount, TokenAccountRaw, GetOrCreateTokenAccountParams } from "./types";
-import { parseTokenAccountResp, generatePubKey } from "./util";
+import { GetOrCreateTokenAccountParams, HandleTokenAccountParams, TokenAccount, TokenAccountRaw } from "./types";
+import { generatePubKey, parseTokenAccountResp } from "./util";
 
 export interface TokenAccountDataProp {
   tokenAccounts?: TokenAccount[];

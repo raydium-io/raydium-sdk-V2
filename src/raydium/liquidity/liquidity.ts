@@ -1,58 +1,58 @@
 import { PublicKey } from "@solana/web3.js";
-import { AccountLayout, NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
-  ApiV3PoolInfoConcentratedItem,
-  ApiV3PoolInfoStandardItem,
   AmmV4Keys,
   AmmV5Keys,
+  ApiV3PoolInfoConcentratedItem,
+  ApiV3PoolInfoStandardItem,
   FormatFarmInfoOutV6,
-} from "@/api/type";
-import { Token, TokenAmount, Percent } from "@/module";
-import { toToken } from "../token";
-import { BN_ZERO, divCeil } from "@/common/bignumber";
-import { getATAAddress } from "@/common/pda";
-import { InstructionType, TxVersion } from "@/common/txTool/txType";
-import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
-import { BNDivCeil } from "@/common/transfer";
-import { getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
-import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import {
-  AmountSide,
-  AddLiquidityParams,
-  RemoveParams,
-  CreatePoolParam,
-  CreatePoolAddress,
-  ComputeAmountOutParam,
-  ComputeAmountInParam,
-  SwapParam,
-  AmmRpcData,
-} from "./type";
-import {
-  makeAddLiquidityInstruction,
-  removeLiquidityInstruction,
-  createPoolV4InstructionV2,
-  makeAMMSwapInstruction,
-} from "./instruction";
-import { ComputeBudgetConfig } from "../type";
-import { ClmmInstrument } from "../clmm/instrument";
-import { getAssociatedPoolKeys, getAssociatedConfigId, toAmmComputePoolInfo } from "./utils";
-import { createPoolFeeLayout, liquidityStateV4Layout } from "./layout";
+} from "../../api/type";
+import { AccountLayout, NATIVE_MINT, TOKEN_PROGRAM_ID } from "../../common";
+import { getMultipleAccountsInfoWithCustomFlags } from "../../common/accountInfo";
+import { BN_ZERO, divCeil } from "../../common/bignumber";
+import { getATAAddress } from "../../common/pda";
+import { BNDivCeil } from "../../common/transfer";
+import { MakeMultiTxData, MakeTxData } from "../../common/txTool/txTool";
+import { InstructionType, TxVersion } from "../../common/txTool/txType";
+import { Percent, Token, TokenAmount } from "../../module";
 import {
   FARM_PROGRAM_TO_VERSION,
   FarmLedger,
-  makeWithdrawInstructionV3,
-  makeWithdrawInstructionV5,
-  makeWithdrawInstructionV6,
   createAssociatedLedgerAccountInstruction,
   getAssociatedLedgerAccount,
   getFarmLedgerLayout,
-} from "@/raydium/farm";
-import { StableLayout, getStablePrice, getDyByDxBaseIn, getDxByDyBaseIn } from "./stable";
-import { LIQUIDITY_FEES_NUMERATOR, LIQUIDITY_FEES_DENOMINATOR } from "./constant";
+  makeWithdrawInstructionV3,
+  makeWithdrawInstructionV5,
+  makeWithdrawInstructionV6,
+} from "../../raydium/farm";
+import { ClmmInstrument } from "../clmm/instrument";
+import ModuleBase, { ModuleBaseProps } from "../moduleBase";
+import { toToken } from "../token";
+import { ComputeBudgetConfig } from "../type";
+import { LIQUIDITY_FEES_DENOMINATOR, LIQUIDITY_FEES_NUMERATOR } from "./constant";
+import {
+  createPoolV4InstructionV2,
+  makeAMMSwapInstruction,
+  makeAddLiquidityInstruction,
+  removeLiquidityInstruction,
+} from "./instruction";
+import { createPoolFeeLayout, liquidityStateV4Layout } from "./layout";
+import { StableLayout, getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice } from "./stable";
+import {
+  AddLiquidityParams,
+  AmmRpcData,
+  AmountSide,
+  ComputeAmountInParam,
+  ComputeAmountOutParam,
+  CreatePoolAddress,
+  CreatePoolParam,
+  RemoveParams,
+  SwapParam,
+} from "./type";
+import { getAssociatedConfigId, getAssociatedPoolKeys, toAmmComputePoolInfo } from "./utils";
 
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { WSOLMint } from "@/common";
+import { WSOLMint } from "../../common";
 
 export default class LiquidityModule extends ModuleBase {
   public stableLayout: StableLayout;
@@ -428,8 +428,8 @@ export default class LiquidityModule extends ModuleBase {
 
         createInfo: mintBaseUseSOLBalance
           ? {
-              payer: this.scope.ownerPubKey,
-            }
+            payer: this.scope.ownerPubKey,
+          }
           : undefined,
         skipCloseAccount: !mintBaseUseSOLBalance,
         notUseTokenAccount: mintBaseUseSOLBalance,
@@ -446,9 +446,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintQuoteUseSOLBalance
           ? {
-              payer: this.scope.ownerPubKey!,
-              amount: 0,
-            }
+            payer: this.scope.ownerPubKey!,
+            amount: 0,
+          }
           : undefined,
         skipCloseAccount: !mintQuoteUseSOLBalance,
         notUseTokenAccount: mintQuoteUseSOLBalance,
@@ -523,8 +523,8 @@ export default class LiquidityModule extends ModuleBase {
         version === 6
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
-          ? makeWithdrawInstructionV5(insParams)
-          : makeWithdrawInstructionV3(insParams);
+            ? makeWithdrawInstructionV5(insParams)
+            : makeWithdrawInstructionV3(insParams);
       const insType = {
         3: InstructionType.FarmV3Withdraw,
         5: InstructionType.FarmV5Withdraw,
@@ -621,9 +621,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintAUseSOLBalance
           ? {
-              payer: payer!,
-              amount: baseAmount,
-            }
+            payer: payer!,
+            amount: baseAmount,
+          }
           : undefined,
         notUseTokenAccount: mintAUseSOLBalance,
         skipCloseAccount: !mintAUseSOLBalance,
@@ -638,9 +638,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintBUseSOLBalance
           ? {
-              payer: payer!,
-              amount: quoteAmount,
-            }
+            payer: payer!,
+            amount: quoteAmount,
+          }
           : undefined,
 
         notUseTokenAccount: mintBUseSOLBalance,
@@ -883,8 +883,7 @@ export default class LiquidityModule extends ModuleBase {
     );
     this.logDebug(
       "currentPrice invert:",
-      `1 ${tokenOut.symbol || tokenOut.address} ≈ ${new Decimal(1).div(currentPrice).toString()} ${
-        tokenIn.symbol || tokenIn.address
+      `1 ${tokenOut.symbol || tokenOut.address} ≈ ${new Decimal(1).div(currentPrice).toString()} ${tokenIn.symbol || tokenIn.address
       }`,
     );
 
@@ -984,9 +983,9 @@ export default class LiquidityModule extends ModuleBase {
 
         createInfo: inputTokenUseSolBalance
           ? {
-              payer: this.scope.ownerPubKey,
-              amount: amountIn,
-            }
+            payer: this.scope.ownerPubKey,
+            amount: amountIn,
+          }
           : undefined,
         skipCloseAccount: !inputTokenUseSolBalance,
         notUseTokenAccount: inputTokenUseSolBalance,

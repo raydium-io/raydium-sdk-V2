@@ -1,5 +1,5 @@
-import { Rounding } from "../common/bignumber";
 import BN from "bn.js";
+import { Rounding } from "../common";
 import { Fraction } from "./fraction";
 
 export const _100_PERCENT = new Fraction(new BN(100));

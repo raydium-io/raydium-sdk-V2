@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
-import { LIQUIDITY_VERSION_TO_SERUM_VERSION } from "./constant";
+import { createLogger } from "../../common/logger";
 import { SerumVersion } from "../serum";
-import { createLogger } from "@/common/logger";
+import { LIQUIDITY_VERSION_TO_SERUM_VERSION } from "./constant";
 
 const logger = createLogger("Raydium_liquidity_serum");
 

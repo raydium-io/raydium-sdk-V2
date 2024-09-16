@@ -1,8 +1,8 @@
 import { PublicKey, Signer, Transaction, TransactionInstruction, VersionedTransaction } from "@solana/web3.js";
-import { Mint, TransferFeeConfig } from "@solana/spl-token";
+import BN from "bn.js";
+import { getTransferFeeConfig, Mint } from "../common";
 import { MultiTxExecuteParam, TxBuilder } from "../common/txTool/txTool";
 import { TokenAmount } from "../module/amount";
-import BN from "bn.js";
 
 export type SignAllTransactions =
   | (<T extends Transaction | VersionedTransaction>(transaction: T[]) => Promise<T[]>)
@@ -63,7 +63,8 @@ export interface GetTransferAmountFee {
   expirationTime: number | undefined;
 }
 
-export type ReturnTypeFetchMultipleMintInfo = Mint & { feeConfig: TransferFeeConfig | undefined };
+// export type ReturnTypeFetchMultipleMintInfo = Mint & { feeConfig: TransferFeeConfig | undefined };
+export type ReturnTypeFetchMultipleMintInfo = Mint & { feeConfig: ReturnType<typeof getTransferFeeConfig> | undefined };
 export interface ReturnTypeFetchMultipleMintInfos {
   [mint: string]: ReturnTypeFetchMultipleMintInfo & { programId: PublicKey };
 }
@@ -99,12 +100,12 @@ type Primitive = boolean | number | string | null | undefined | PublicKey;
  */
 export type ReplaceType<Old, From, To> = {
   [T in keyof Old]: Old[T] extends From // to avoid case: Old[T] is an Object,
-    ? Exclude<Old[T], From> | To // when match,  directly replace
-    : Old[T] extends Primitive // judge whether need recursively replace
-    ? From extends Old[T] // it's an Object
-      ? Exclude<Old[T], From> | To // directly replace
-      : Old[T] // stay same
-    : ReplaceType<Old[T], From, To>; // recursively replace
+  ? Exclude<Old[T], From> | To // when match,  directly replace
+  : Old[T] extends Primitive // judge whether need recursively replace
+  ? From extends Old[T] // it's an Object
+  ? Exclude<Old[T], From> | To // directly replace
+  : Old[T] // stay same
+  : ReplaceType<Old[T], From, To>; // recursively replace
 };
 
 export type MayArray<T> = T | Array<T>;
