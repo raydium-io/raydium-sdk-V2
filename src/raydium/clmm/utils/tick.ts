@@ -2,13 +2,12 @@ import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 
-import { getPdaTickArrayAddress } from "./pda";
-import { TickArrayBitmapExtensionType } from "../type";
-import { TickQuery } from "./tickQuery";
-import { MIN_TICK, MAX_TICK } from "./constants";
+import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
+import { ClmmPoolInfo, TickArrayBitmapExtensionType } from "../type";
+import { MAX_TICK, MIN_TICK } from "./constants";
 import { SqrtPriceMath, TickMath } from "./math";
-import { ClmmPoolInfo } from "../type";
-import { ApiV3PoolInfoConcentratedItem } from "@/api/type";
+import { getPdaTickArrayAddress } from "./pda";
+import { TickQuery } from "./tickQuery";
 
 export const TICK_ARRAY_SIZE = 60;
 export const TICK_ARRAY_BITMAP_SIZE = 512;

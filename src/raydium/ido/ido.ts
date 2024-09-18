@@ -1,13 +1,13 @@
 import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import { IdoKeysData, OwnerIdoInfo } from "../../api/type";
+import { IDO_ALL_PROGRAM } from "../../common/programId";
+import { WSOLMint } from "../../common/pubKey";
+import { MakeTxData } from "../../common/txTool/txTool";
+import { TxVersion } from "../../common/txTool/txType";
+import { jsonInfo2PoolKeys } from "../../common/utility";
 import ModuleBase from "../moduleBase";
 import { makeClaimInstruction, makeClaimInstructionV4 } from "./instruction";
-import { jsonInfo2PoolKeys } from "@/common/utility";
-import { OwnerIdoInfo, IdoKeysData } from "@/api/type";
-import { IDO_ALL_PROGRAM } from "@/common/programId";
-import { WSOLMint } from "@/common/pubKey";
-import { TxVersion } from "@/common/txTool/txType";
-import { MakeTxData } from "@/common/txTool/txTool";
-import BN from "bn.js";
 
 const PROGRAM_TO_VERSION = {
   [IDO_ALL_PROGRAM.IDO_PROGRAM_ID_V1.toString()]: 1,
@@ -90,33 +90,33 @@ export default class MarketV2 extends ModuleBase {
           instructions: [
             ...(hasUnClaimedProject
               ? [
-                  makeClaimInstruction<"3">(
-                    { programId: poolConfigKey.programId },
-                    {
-                      idoId: poolConfigKey.id,
-                      authority: poolConfigKey.authority,
-                      poolTokenAccount: poolConfigKey.projectInfo.vault,
-                      userTokenAccount: userProjectTokenAccount!,
-                      userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
-                      userOwner: this.scope.ownerPubKey,
-                    },
-                  ),
-                ]
+                makeClaimInstruction<"3">(
+                  { programId: poolConfigKey.programId },
+                  {
+                    idoId: poolConfigKey.id,
+                    authority: poolConfigKey.authority,
+                    poolTokenAccount: poolConfigKey.projectInfo.vault,
+                    userTokenAccount: userProjectTokenAccount!,
+                    userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
+                    userOwner: this.scope.ownerPubKey,
+                  },
+                ),
+              ]
               : []),
             ...(hasUnClaimedBuy
               ? [
-                  makeClaimInstruction<"3">(
-                    { programId: new PublicKey(idoKeys.programId) },
-                    {
-                      idoId: poolConfigKey.id,
-                      authority: poolConfigKey.authority,
-                      poolTokenAccount: poolConfigKey.buyInfo.vault,
-                      userTokenAccount: userBuyTokenAccount!,
-                      userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
-                      userOwner: this.scope.ownerPubKey,
-                    },
-                  ),
-                ]
+                makeClaimInstruction<"3">(
+                  { programId: new PublicKey(idoKeys.programId) },
+                  {
+                    idoId: poolConfigKey.id,
+                    authority: poolConfigKey.authority,
+                    poolTokenAccount: poolConfigKey.buyInfo.vault,
+                    userTokenAccount: userBuyTokenAccount!,
+                    userIdoInfo: new PublicKey(ownerInfo.userIdoInfo),
+                    userOwner: this.scope.ownerPubKey,
+                  },
+                ),
+              ]
               : []),
           ],
         })

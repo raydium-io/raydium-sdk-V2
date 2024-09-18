@@ -274,7 +274,7 @@ export function array<T, P extends string = "">(
   );
 }
 
-export class Structure<T, P, D> extends _Structure<T, P, D> {
+export class Structure<T, P, D extends { [key: string]: any; }> extends _Structure<T, P, D> {
   /** @override */
   decode(b: Buffer, offset?: number): D {
     return super.decode(b, offset);
@@ -287,14 +287,14 @@ export function struct<T, P extends string = "">(
   decodePrefixes?: boolean,
 ): T extends Layout<infer Value, infer Property>[]
   ? Structure<
-      Value,
-      P,
-      {
-        [K in Exclude<Extract<Property, string>, "">]: Extract<T[number], Layout<any, K>> extends Layout<infer V, any>
-          ? V
-          : any;
-      }
-    >
+    Value,
+    P,
+    {
+      [K in Exclude<Extract<Property, string>, "">]: Extract<T[number], Layout<any, K>> extends Layout<infer V, any>
+      ? V
+      : any;
+    }
+  >
   : any {
   //@ts-expect-error this type is not quite satisfied the define, but, never no need to worry about.
   return new Structure(fields, property, decodePrefixes);
@@ -303,9 +303,9 @@ export function struct<T, P extends string = "">(
 export type GetLayoutSchemaFromStructure<T extends Structure<any, any, any>> = T extends Structure<any, any, infer S>
   ? S
   : any;
-export type GetStructureFromLayoutSchema<S> = Structure<any, any, S>;
+export type GetStructureFromLayoutSchema<S extends { [key: string]: any; }> = Structure<any, any, S>;
 
-export class Union<Schema> extends _Union<Schema> {
+export class Union<Schema extends { [key: string]: any; }> extends _Union<Schema> {
   encodeInstruction(instruction: any): Buffer {
     const instructionMaxSpan = Math.max(...Object.values(this.registry).map((r) => r.span));
     const b = Buffer.alloc(instructionMaxSpan);
@@ -348,8 +348,8 @@ export function seq<T, P extends string = "", AnotherP extends string = "">(
     typeof count === "number"
       ? count
       : isBN(count)
-      ? count.toNumber()
-      : new Proxy(count as unknown as Layout<number> /* pretend to be Layout<number> */, {
+        ? count.toNumber()
+        : new Proxy(count as unknown as Layout<number> /* pretend to be Layout<number> */, {
           get(target, property): any {
             if (!parsedCount) {
               // get count in targetLayout. note that count may be BN

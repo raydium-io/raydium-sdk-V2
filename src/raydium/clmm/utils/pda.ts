@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
-import { findProgramAddress, METADATA_PROGRAM_ID } from "@/common";
+import { findProgramAddress, METADATA_PROGRAM_ID } from "../../../common";
 
 import { i32ToBytes, u16ToBytes } from "./util";
 

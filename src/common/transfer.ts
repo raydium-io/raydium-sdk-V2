@@ -1,9 +1,9 @@
 import { EpochInfo } from "@solana/web3.js";
-import { TransferFeeConfig, TransferFee } from "@solana/spl-token";
 import BN from "bn.js";
+import { TransferFee, TransferFeeConfig } from "../common";
 
-import { GetTransferAmountFee } from "../raydium/type";
 import { TransferFeeDataBaseType } from "../api/type";
+import { GetTransferAmountFee } from "../raydium/type";
 
 const POINT = 10_000;
 export function getTransferAmountFee(

@@ -1,13 +1,13 @@
 import { PublicKey } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
-import ModuleBase from "../moduleBase";
-import { TxVersion } from "@/common/txTool/txType";
-import { MakeMultiTxData } from "@/common/txTool/txTool";
+import { TOKEN_PROGRAM_ID } from "../../common";
+import { BN_ZERO } from "../../common/bignumber";
+import { MakeMultiTxData } from "../../common/txTool/txTool";
+import { TxVersion } from "../../common/txTool/txType";
+import { ComputeBudgetConfig } from "../../raydium/type";
 import { generatePubKey } from "../account/util";
-import { BN_ZERO } from "@/common/bignumber";
+import ModuleBase from "../moduleBase";
 import { makeCreateMarketInstruction } from "./instrument";
-import { ComputeBudgetConfig } from "@/raydium/type";
 
 interface ExtInfo {
   address: {

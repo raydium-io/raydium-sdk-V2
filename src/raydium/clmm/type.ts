@@ -1,13 +1,13 @@
 import { EpochInfo, Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { TokenAmount, Percent, Price, Fraction } from "@/module";
+import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "../../api/type";
+import { TxVersion } from "../../common/txTool/txType";
+import { Fraction, Percent, Price, TokenAmount } from "../../module";
+import { ComputeBudgetConfig } from "../../raydium/type";
 import { TokenInfo } from "../token/type";
-import { TickArray } from "./utils/tick";
-import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ClmmKeys, ApiV3Token } from "@/api/type";
-import { TxVersion } from "@/common/txTool/txType";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
-import { ComputeBudgetConfig } from "@/raydium/type";
+import { TickArray } from "./utils/tick";
 
 import { ClmmPositionLayout, PoolInfoLayout } from "./layout";
 

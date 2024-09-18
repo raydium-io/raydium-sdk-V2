@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { findProgramAddress } from "@/common/txTool/txUtils";
+import { findProgramAddress } from "../../common/txTool/txUtils";
 
 const AUTH_SEED = Buffer.from("vault_and_lp_mint_auth_seed", "utf8");
 const AMM_CONFIG_SEED = Buffer.from("amm_config", "utf8");

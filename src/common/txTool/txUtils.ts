@@ -1,23 +1,23 @@
 import {
-  Connection,
-  PublicKey,
+  Commitment,
   ComputeBudgetProgram,
+  Connection,
+  EpochInfo,
+  Keypair,
+  PublicKey,
   SimulatedTransactionResponse,
   Transaction,
   TransactionInstruction,
   TransactionMessage,
-  Keypair,
-  EpochInfo,
   VersionedTransaction,
-  Commitment,
 } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import { createLogger } from "../logger";
-import { InstructionType } from "./txType";
 import { CacheLTA } from "./lookupTable";
+import { InstructionType } from "./txType";
 
-import { ComputeBudgetConfig } from "@/raydium/type";
+import { ComputeBudgetConfig } from "../../raydium/type";
+import { TOKEN_PROGRAM_ID } from "../splTokenProxy";
 
 const logger = createLogger("Raydium_txUtil");
 

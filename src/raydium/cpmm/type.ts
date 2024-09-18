@@ -1,12 +1,12 @@
 import { EpochInfo, PublicKey } from "@solana/web3.js";
-import { ApiCpmmConfigInfo, ApiV3PoolInfoStandardItemCpmm, ApiV3Token, CpmmKeys } from "@/api/type";
-import { TxVersion } from "@/common/txTool/txType";
 import BN from "bn.js";
-import { ComputeBudgetConfig, GetTransferAmountFee } from "@/raydium/type";
-import { SwapResult } from "./curve/calculator";
-import { Percent } from "@/module";
-import { CpmmPoolInfoLayout } from "./layout";
 import Decimal from "decimal.js";
+import { ApiCpmmConfigInfo, ApiV3PoolInfoStandardItemCpmm, ApiV3Token, CpmmKeys } from "../../api/type";
+import { TxVersion } from "../../common/txTool/txType";
+import { Percent } from "../../module";
+import { ComputeBudgetConfig, GetTransferAmountFee } from "../../raydium/type";
+import { SwapResult } from "./curve/calculator";
+import { CpmmPoolInfoLayout } from "./layout";
 
 export interface CpmmConfigInfoInterface {
   bump: number;
