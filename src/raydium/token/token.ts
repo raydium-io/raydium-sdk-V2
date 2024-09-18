@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
-import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../../common";
+import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-import { ApiV3Token, JupTokenType } from "../../api/type";
+import { ApiV3Token, JupTokenType } from "@/api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { LoadParams } from "../type";
 

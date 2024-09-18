@@ -1,14 +1,15 @@
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { createAssociatedTokenAccountInstruction, parseBigNumberish } from "../../common";
+import { createAssociatedTokenAccountInstruction } from "@solana/spl-token";
+import { parseBigNumberish } from "@/common";
 
 import { FormatFarmKeyOut } from "../../api/type";
-import { AddInstructionParam, jsonInfo2PoolKeys } from "../../common";
-import { BN_ZERO } from "../../common/bignumber";
-import { getATAAddress } from "../../common/pda";
-import { FARM_PROGRAM_ID_V6 } from "../../common/programId";
-import { SOLMint, WSOLMint } from "../../common/pubKey";
-import { MakeMultiTxData, MakeTxData } from "../../common/txTool/txTool";
-import { InstructionType, TxVersion } from "../../common/txTool/txType";
+import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
+import { BN_ZERO } from "@/common/bignumber";
+import { getATAAddress } from "@/common/pda";
+import { FARM_PROGRAM_ID_V6 } from "@/common/programId";
+import { SOLMint, WSOLMint } from "@/common/pubKey";
+import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
+import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { generatePubKey } from "../account/util";
 
 import Decimal from "decimal.js";
@@ -530,8 +531,8 @@ export default class Farm extends ModuleBase {
       version === 6
         ? makeDepositInstructionV6(insParams)
         : version === 5
-          ? makeDepositInstructionV5(insParams)
-          : makeDepositInstructionV3(insParams);
+        ? makeDepositInstructionV5(insParams)
+        : makeDepositInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Deposit,
@@ -684,8 +685,8 @@ export default class Farm extends ModuleBase {
       version === 6
         ? makeWithdrawInstructionV6(insParams)
         : version === 5
-          ? makeWithdrawInstructionV5(insParams)
-          : makeWithdrawInstructionV3(insParams);
+        ? makeWithdrawInstructionV5(insParams)
+        : makeWithdrawInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Withdraw,
@@ -895,8 +896,8 @@ export default class Farm extends ModuleBase {
         version === 6
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
-            ? makeWithdrawInstructionV5(insParams)
-            : makeWithdrawInstructionV3(insParams);
+          ? makeWithdrawInstructionV5(insParams)
+          : makeWithdrawInstructionV3(insParams);
 
       const insType = {
         3: InstructionType.FarmV3Withdraw,

@@ -1,4 +1,5 @@
 import { Connection, EpochInfo, PublicKey } from "@solana/web3.js";
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 
 import {
@@ -16,19 +17,18 @@ import {
   TickArrayBitmapExtensionType,
 } from "../type";
 
-import { ApiV3PoolInfoConcentratedItem, ApiV3Token } from "../../../api/type";
+import { ApiV3PoolInfoConcentratedItem, ApiV3Token } from "@/api/type";
 
 import Decimal from "decimal.js";
 import {
-  TOKEN_2022_PROGRAM_ID,
   getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
   getTransferAmountFeeV2,
   minExpirationTime,
   solToWSol,
-} from "../../../common";
-import { Percent, Price, Token, TokenAmount } from "../../../module";
-import { TokenAccountRaw } from "../../account/types";
+} from "@/common";
+import { Percent, Price, Token, TokenAmount } from "@/module";
+import { TokenAccountRaw } from "@/raydium/account/types";
 import { PoolInfoLayout, PositionInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout } from "../layout";
 import { MAX_SQRT_PRICE_X64, MAX_TICK, MIN_SQRT_PRICE_X64, MIN_TICK, NEGATIVE_ONE, Q64, ZERO } from "./constants";
 import { LiquidityMath, MathUtil, SqrtPriceMath, SwapMath } from "./math";
@@ -172,15 +172,15 @@ export class PoolUtils {
       poolInfo.tickCurrent,
     ])
       ? TickArrayBitmapExtensionUtils.checkTickArrayIsInit(
-        TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
-        poolInfo.tickSpacing,
-        poolInfo.exBitmapInfo,
-      )
+          TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
+          poolInfo.tickSpacing,
+          poolInfo.exBitmapInfo,
+        )
       : TickUtils.checkTickArrayIsInitialized(
-        TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
-        poolInfo.tickCurrent,
-        poolInfo.tickSpacing,
-      );
+          TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
+          poolInfo.tickCurrent,
+          poolInfo.tickSpacing,
+        );
 
     if (isInitialized) {
       const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, startIndex);
@@ -214,19 +214,19 @@ export class PoolUtils {
 
     const result: number[] = !zeroForOne
       ? TickUtils.searchLowBitFromStart(
-        poolInfo.tickArrayBitmap,
-        poolInfo.exBitmapInfo,
-        currentOffset - 1,
-        1,
-        poolInfo.tickSpacing,
-      )
+          poolInfo.tickArrayBitmap,
+          poolInfo.exBitmapInfo,
+          currentOffset - 1,
+          1,
+          poolInfo.tickSpacing,
+        )
       : TickUtils.searchHightBitFromStart(
-        poolInfo.tickArrayBitmap,
-        poolInfo.exBitmapInfo,
-        currentOffset + 1,
-        1,
-        poolInfo.tickSpacing,
-      );
+          poolInfo.tickArrayBitmap,
+          poolInfo.exBitmapInfo,
+          currentOffset + 1,
+          1,
+          poolInfo.tickSpacing,
+        );
 
     return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 };
   }
@@ -234,11 +234,11 @@ export class PoolUtils {
   public static nextInitializedTickArrayStartIndex(
     poolInfo:
       | {
-        tickCurrent: number;
-        tickSpacing: number;
-        tickArrayBitmap: BN[];
-        exBitmapInfo: TickArrayBitmapExtensionType;
-      }
+          tickCurrent: number;
+          tickSpacing: number;
+          tickArrayBitmap: BN[];
+          exBitmapInfo: TickArrayBitmapExtensionType;
+        }
       | ClmmPoolInfo,
     lastTickArrayStartIndex: number,
     zeroForOne: boolean,

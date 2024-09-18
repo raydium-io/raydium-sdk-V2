@@ -1,5 +1,5 @@
 import { AccountMeta, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "./splTokenProxy";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 interface AccountMetaProps {
   pubkey: PublicKey;

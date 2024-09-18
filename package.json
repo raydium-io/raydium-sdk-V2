@@ -34,7 +34,8 @@
     "build-all": "yarn build-dist && yarn build-lib",
     "build": "yarn build-lib",
     "push": "yarn build && yarn publish",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "dev": "ts-node -r tsconfig-paths/register"
   },
   "dependencies": {
     "@solana/buffer-layout": "^4.0.1",
@@ -46,7 +47,8 @@
     "dayjs": "^1.11.5",
     "decimal.js-light": "^2.5.1",
     "lodash": "^4.17.21",
-    "toformat": "^2.0.0"
+    "toformat": "^2.0.0",
+    "tsconfig-paths": "^4.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.18.0",

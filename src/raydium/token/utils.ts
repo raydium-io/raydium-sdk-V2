@@ -1,12 +1,12 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { MintLayout, RawMint, TOKEN_PROGRAM_ID, TransferFeeConfigLayout } from "../../common";
-import { BigNumberish } from "../../common/bignumber";
+import { MintLayout, RawMint, TOKEN_PROGRAM_ID, TransferFeeConfigLayout } from "@solana/spl-token";
+import { BigNumberish } from "@/common/bignumber";
 import { Token, TokenAmount } from "../../module";
 import { SOL_INFO, TOKEN_WSOL } from "./constant";
 import { TokenInfo } from "./type";
 
 import { ApiV3Token } from "../../api";
-import { solToWSol } from "../../common";
+import { solToWSol } from "@/common";
 
 export const parseTokenInfo = async ({
   connection,
@@ -113,22 +113,24 @@ export const toApiV3Token = ({
   ...props,
 });
 
-export const toFeeConfig = (config?: ReturnType<typeof TransferFeeConfigLayout.decode> | undefined | null): ApiV3Token["extensions"]["feeConfig"] | undefined =>
+export const toFeeConfig = (
+  config?: ReturnType<typeof TransferFeeConfigLayout.decode> | undefined | null,
+): ApiV3Token["extensions"]["feeConfig"] | undefined =>
   config
     ? {
-      ...config,
-      transferFeeConfigAuthority: config.transferFeeConfigAuthority.toBase58(),
-      withdrawWithheldAuthority: config.withdrawWithheldAuthority.toBase58(),
-      withheldAmount: config.withheldAmount.toString(),
-      olderTransferFee: {
-        ...config.olderTransferFee,
-        epoch: config.olderTransferFee.epoch.toString(),
-        maximumFee: config.olderTransferFee.maximumFee.toString(),
-      },
-      newerTransferFee: {
-        ...config.newerTransferFee,
-        epoch: config.newerTransferFee.epoch.toString(),
-        maximumFee: config.newerTransferFee.maximumFee.toString(),
-      },
-    }
+        ...config,
+        transferFeeConfigAuthority: config.transferFeeConfigAuthority.toBase58(),
+        withdrawWithheldAuthority: config.withdrawWithheldAuthority.toBase58(),
+        withheldAmount: config.withheldAmount.toString(),
+        olderTransferFee: {
+          ...config.olderTransferFee,
+          epoch: config.olderTransferFee.epoch.toString(),
+          maximumFee: config.olderTransferFee.maximumFee.toString(),
+        },
+        newerTransferFee: {
+          ...config.newerTransferFee,
+          epoch: config.newerTransferFee.epoch.toString(),
+          maximumFee: config.newerTransferFee.maximumFee.toString(),
+        },
+      }
     : undefined;

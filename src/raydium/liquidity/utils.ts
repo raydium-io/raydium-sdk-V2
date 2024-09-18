@@ -2,13 +2,13 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { AmmV4Keys, AmmV5Keys } from "../../api/type";
-import { TOKEN_PROGRAM_ID } from "../../common";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   findProgramAddress,
   parseSimulateLogToJson,
   parseSimulateValue,
   simulateMultipleInstruction,
-} from "../../common/txTool/txUtils";
+} from "@/common/txTool/txUtils";
 import { toApiV3Token } from "../../raydium/token/utils";
 import { makeSimulatePoolInfoInstruction } from "./instruction";
 import { getSerumAssociatedAuthority } from "./serum";

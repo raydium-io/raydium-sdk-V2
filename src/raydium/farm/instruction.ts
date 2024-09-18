@@ -11,20 +11,20 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
   TOKEN_PROGRAM_ID,
-} from "../../common";
+} from "@solana/spl-token";
 
-import { FormatFarmKeyOut } from "../../api/type";
-import { parseBigNumberish } from "../../common";
-import { createLogger } from "../../common/logger";
-import { getATAAddress } from "../../common/pda";
+import { FormatFarmKeyOut } from "@/api/type";
+import { parseBigNumberish } from "@/common";
+import { createLogger } from "@/common/logger";
+import { getATAAddress } from "@/common/pda";
 import {
   accountMeta,
   commonSystemAccountMeta,
   INSTRUCTION_PROGRAM_ID,
   RENT_PROGRAM_ID,
   SOLMint,
-} from "../../common/pubKey";
-import { InstructionType } from "../../common/txTool/txType";
+} from "@/common/pubKey";
+import { InstructionType } from "@/common/txTool/txType";
 import { bool, struct, u32, u64, u8 } from "../../marshmallow";
 import { InstructionReturn } from "../type";
 import { poolTypeV6 } from "./config";
@@ -785,28 +785,28 @@ export function makeDepositWithdrawInstruction(params: {
   const keys =
     version === 6
       ? [
-        accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-        ...(deposit ? [accountMeta({ pubkey: SystemProgram.programId, isWritable: false })] : []),
-        accountMeta({ pubkey: id }),
-        accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
-        accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
-        accountMeta({ pubkey: ledgerAddress }),
-        accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
-        accountMeta({ pubkey: lpAccount }),
-      ]
+          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+          ...(deposit ? [accountMeta({ pubkey: SystemProgram.programId, isWritable: false })] : []),
+          accountMeta({ pubkey: id }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+          accountMeta({ pubkey: ledgerAddress }),
+          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+          accountMeta({ pubkey: lpAccount }),
+        ]
       : [
-        accountMeta({ pubkey: id }),
-        accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
-        accountMeta({ pubkey: ledgerAddress }),
-        accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
-        accountMeta({ pubkey: lpAccount }),
-        accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
-        accountMeta({ pubkey: rewardAccounts[0] }),
-        accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
-        // system
-        accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
-        accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-      ];
+          accountMeta({ pubkey: id }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+          accountMeta({ pubkey: ledgerAddress }),
+          accountMeta({ pubkey: owner, isWritable: false, isSigner: true }),
+          accountMeta({ pubkey: lpAccount }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+          accountMeta({ pubkey: rewardAccounts[0] }),
+          accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
+          // system
+          accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+          accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+        ];
 
   if (version === 5) {
     for (let index = 1; index < farmKeys.rewardInfos.length; index++) {

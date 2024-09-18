@@ -1,14 +1,14 @@
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../../common";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import {
   InstructionType,
   LIQUIDITY_POOL_PROGRAM_ID_V5_MODEL,
   MEMO_PROGRAM_ID2,
   accountMeta,
-  jsonInfo2PoolKeys
-} from "../../common";
+  jsonInfo2PoolKeys,
+} from "@/common";
 import { seq, struct, u128, u64, u8 } from "../../marshmallow";
 import {
   ClmmInstrument,
@@ -116,13 +116,13 @@ export function route1Instruction(
         { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
         ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
           ? [
-            { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
-            { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
-          ]
+              { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
+              { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+            ]
           : [
-            { pubkey: poolKey.id, isSigner: false, isWritable: true },
-            { pubkey: poolKey.id, isSigner: false, isWritable: true },
-          ]),
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+            ]),
       ],
     );
   }
@@ -232,13 +232,13 @@ export function route2Instruction(
         { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
         ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
           ? [
-            { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
-            { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
-          ]
+              { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
+              { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+            ]
           : [
-            { pubkey: poolKey.id, isSigner: false, isWritable: true },
-            { pubkey: poolKey.id, isSigner: false, isWritable: true },
-          ]),
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+              { pubkey: poolKey.id, isSigner: false, isWritable: true },
+            ]),
       ],
     );
   }

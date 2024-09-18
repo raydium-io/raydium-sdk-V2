@@ -17,7 +17,7 @@ import { CacheLTA } from "./lookupTable";
 import { InstructionType } from "./txType";
 
 import { ComputeBudgetConfig } from "../../raydium/type";
-import { TOKEN_PROGRAM_ID } from "../splTokenProxy";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 const logger = createLogger("Raydium_txUtil");
 
