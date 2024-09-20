@@ -19,6 +19,14 @@ $ yarn add @raydium-io/raydium-sdk-v2
 
 [SDK V2 Demo Repo](https://github.com/raydium-io/raydium-sdk-V2-demo)
 
+## SDK local test
+
+```
+$ yarn dev {directory}
+
+e.g. yarn dev test/init.ts
+```
+
 ## Features
 
 ### Initialization
@@ -70,28 +78,33 @@ raydium.account.tokenAccountRawInfos
 #### Api methods (https://github.com/raydium-io/raydium-sdk-V2/blob/master/src/api/api.ts)
 
 - fetch raydium default mint list
+
 ```
 const data = await raydium.api.getTokenList()
 ```
 
 - fetch mints recognizable by raydium
+
 ```
 const data = await raydium.api.getTokenInfo(['So11111111111111111111111111111111111111112', '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'])
 ```
 
 - fetch pool list
-available fetch params defined here: https://github.com/raydium-io/raydium-sdk-V2/blob/master/src/api/type.ts#L249
+  available fetch params defined here: https://github.com/raydium-io/raydium-sdk-V2/blob/master/src/api/type.ts#L249
+
 ```
 const data = await raydium.api.getPoolList({})
 ```
 
 - fetch poolInfo by id
+
 ```
 // ids: join pool ids by comma(,)
 const data = await raydium.api.fetchPoolById({ ids: 'AVs9TA4nWDzfPJE9gGVNJMVhcQy3V9PGazuz33BfG2RA,8sLbNZoA1cfnvMJLPfp98ZLAnFSYCFApfJKMbiXNLwxj' })
 ```
 
 - fetch pool list by mints
+
 ```
 const data = await raydium.api.fetchPoolByMints({
   mint1: 'So11111111111111111111111111111111111111112',
@@ -101,8 +114,8 @@ const data = await raydium.api.fetchPoolByMints({
 ```
 
 - fetch farmInfo by id
+
 ```
 // ids: join farm ids by comma(,)
 const data = await raydium.api.fetchFarmInfoById({ ids: '4EwbZo8BZXP5313z5A2H11MRBP15M5n6YxfmkjXESKAW,HUDr9BDaAGqi37xbQHzxCyXvfMCKPTPNF8g9c9bPu1Fu' })
 ```
-
