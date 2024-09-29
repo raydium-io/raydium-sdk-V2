@@ -30,7 +30,7 @@ import {
 
 const logger = createLogger("Raydium_liquidity_instruction");
 export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParams): TransactionInstruction {
-  const { poolInfo, poolKeys, userKeys, baseAmountIn, quoteAmountIn, fixedSide } = params;
+  const { poolInfo, poolKeys, userKeys, baseAmountIn, quoteAmountIn, fixedSide, otherAmountMin } = params;
 
   const data = Buffer.alloc(addLiquidityLayout.span);
   addLiquidityLayout.encode(
@@ -38,6 +38,7 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
       instruction: 3,
       baseAmountIn: parseBigNumberish(baseAmountIn),
       quoteAmountIn: parseBigNumberish(quoteAmountIn),
+      otherAmountMin: parseBigNumberish(otherAmountMin),
       fixedSide: fixedSide === "base" ? BN_ZERO : BN_ONE,
     },
     data,
@@ -78,7 +79,7 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
 }
 
 export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): TransactionInstruction {
-  const { poolInfo, poolKeys: poolKeyProps, userKeys, amountIn } = params;
+  const { poolInfo, poolKeys: poolKeyProps, userKeys, lpAmount, baseAmountMin, quoteAmountMin } = params;
   const poolKeys = jsonInfo2PoolKeys(poolKeyProps);
 
   let version = 4;
@@ -89,7 +90,9 @@ export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): 
     removeLiquidityLayout.encode(
       {
         instruction: 4,
-        amountIn: parseBigNumberish(amountIn),
+        lpAmount: parseBigNumberish(lpAmount),
+        baseAmountMin: parseBigNumberish(baseAmountMin),
+        quoteAmountMin: parseBigNumberish(quoteAmountMin),
       },
       data,
     );

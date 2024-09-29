@@ -17,6 +17,7 @@ export interface AddLiquidityParams<T = TxVersion.LEGACY> {
   payer?: PublicKey;
   amountInA: TokenAmount;
   amountInB: TokenAmount;
+  otherAmountMin: TokenAmount;
   fixedSide: LiquiditySide;
   config?: {
     bypassAssociatedCheck?: boolean;
@@ -30,7 +31,9 @@ export interface RemoveParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItem;
   poolKeys?: AmmV4Keys | AmmV5Keys;
   payer?: PublicKey;
-  amountIn: BN;
+  lpAmount: BN;
+  baseAmountMin: BN;
+  quoteAmountMin: BN;
   config?: {
     bypassAssociatedCheck?: boolean;
     checkCreateATAOwner?: boolean;
@@ -52,6 +55,7 @@ export interface LiquidityAddInstructionParams {
   userKeys: LiquidityUserKeys;
   baseAmountIn: BigNumberish;
   quoteAmountIn: BigNumberish;
+  otherAmountMin: BigNumberish;
   fixedSide: AmountSide;
 }
 
@@ -59,7 +63,9 @@ export interface RemoveLiquidityInstruction {
   poolInfo: ApiV3PoolInfoStandardItem;
   poolKeys: AmmV4Keys | AmmV5Keys;
   userKeys: LiquidityUserKeys;
-  amountIn: BigNumberish;
+  lpAmount: BigNumberish;
+  baseAmountMin: BigNumberish;
+  quoteAmountMin: BigNumberish;
 }
 
 export interface LiquidityPoolKeys {

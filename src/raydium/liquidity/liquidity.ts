@@ -81,7 +81,7 @@ export default class LiquidityModule extends ModuleBase {
     amount: string | Decimal;
     slippage: Percent;
     baseIn?: boolean;
-  }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; liquidity: BN } {
+  }): { anotherAmount: TokenAmount; maxAnotherAmount: TokenAmount; minAnotherAmount: TokenAmount; liquidity: BN } {
     const inputAmount = new BN(new Decimal(amount).mul(10 ** poolInfo[baseIn ? "mintA" : "mintB"].decimals).toFixed(0));
     const _anotherToken = toToken(poolInfo[baseIn ? "mintB" : "mintA"]);
 
@@ -129,15 +129,19 @@ export default class LiquidityModule extends ModuleBase {
     this.logDebug("liquidity:", liquidity.toString());
 
     const _slippage = new Percent(new BN(1)).add(slippage);
+    const _slippageMin = new Percent(new BN(1)).sub(slippage);
     const slippageAdjustedAmount = _slippage.mul(amountRaw).quotient;
+    const slippageAdjustedMinAmount = _slippageMin.mul(amountRaw).quotient;
 
     const _anotherAmount = new TokenAmount(_anotherToken, amountRaw);
     const _maxAnotherAmount = new TokenAmount(_anotherToken, slippageAdjustedAmount);
+    const _minAnotherAmount = new TokenAmount(_anotherToken, slippageAdjustedMinAmount);
     this.logDebug("anotherAmount:", _anotherAmount.toFixed(), "maxAnotherAmount:", _maxAnotherAmount.toFixed());
 
     return {
       anotherAmount: _anotherAmount,
       maxAnotherAmount: _maxAnotherAmount,
+      minAnotherAmount: _minAnotherAmount,
       liquidity,
     };
   }
@@ -152,6 +156,7 @@ export default class LiquidityModule extends ModuleBase {
       poolKeys: propPoolKeys,
       amountInA,
       amountInB,
+      otherAmountMin,
       fixedSide,
       config,
       txVersion,
@@ -255,6 +260,7 @@ export default class LiquidityModule extends ModuleBase {
           },
           baseAmountIn: baseAmountRaw,
           quoteAmountIn: quoteAmountRaw,
+          otherAmountMin: otherAmountMin.raw,
           fixedSide: _fixedSide,
         }),
       ],
@@ -273,15 +279,26 @@ export default class LiquidityModule extends ModuleBase {
   public async removeLiquidity<T extends TxVersion>(params: RemoveParams<T>): Promise<Promise<MakeTxData<T>>> {
     if (this.scope.availability.removeStandardPosition === false)
       this.logAndCreateError("remove liquidity feature disabled in your region");
-    const { poolInfo, poolKeys: propPoolKeys, amountIn, config, txVersion, computeBudgetConfig } = params;
+    const {
+      poolInfo,
+      poolKeys: propPoolKeys,
+      lpAmount,
+      baseAmountMin,
+      quoteAmountMin,
+      config,
+      txVersion,
+      computeBudgetConfig,
+    } = params;
     const poolKeys = propPoolKeys ?? (await this.getAmmPoolKeys(poolInfo.id));
     const [baseMint, quoteMint, lpMint] = [
       new PublicKey(poolInfo.mintA.address),
       new PublicKey(poolInfo.mintB.address),
       new PublicKey(poolInfo.lpMint.address),
     ];
-    this.logDebug("amountIn:", amountIn);
-    if (amountIn.isZero()) this.logAndCreateError("amount must greater than zero", "amountIn", amountIn.toString());
+    this.logDebug("lpAmount:", lpAmount);
+    this.logDebug("baseAmountMin:", baseAmountMin);
+    this.logDebug("quoteAmountMin:", quoteAmountMin);
+    if (lpAmount.isZero()) this.logAndCreateError("amount must greater than zero", "lpAmount", lpAmount.toString());
 
     const { account } = this.scope;
     const lpTokenAccount = await account.getCreatedTokenAccount({
@@ -335,7 +352,9 @@ export default class LiquidityModule extends ModuleBase {
             quoteTokenAccount: _quoteTokenAccount!,
             owner: this.scope.ownerPubKey,
           },
-          amountIn,
+          lpAmount,
+          baseAmountMin,
+          quoteAmountMin,
         }),
       ],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
@@ -547,7 +566,9 @@ export default class LiquidityModule extends ModuleBase {
         quoteTokenAccount,
         owner: this.scope.ownerPubKey,
       },
-      amountIn,
+      lpAmount: amountIn,
+      baseAmountMin: 0,
+      quoteAmountMin: 0,
     });
 
     txBuilder.addInstruction({

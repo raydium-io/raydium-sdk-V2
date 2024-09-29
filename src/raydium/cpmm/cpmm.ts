@@ -828,6 +828,7 @@ export default class CpmmModule extends ModuleBase {
     inputAmountFee: GetTransferAmountFee;
     anotherAmount: GetTransferAmountFee;
     maxAnotherAmount: GetTransferAmountFee;
+    minAnotherAmount: GetTransferAmountFee;
     liquidity: BN;
   } {
     const coefficient = 1 - Number(slippage.toSignificant()) / 100;
@@ -888,8 +889,15 @@ export default class CpmmModule extends ModuleBase {
     }
 
     const _slippage = new Percent(new BN(1)).add(slippage);
+    const _slippageMin = new Percent(new BN(1)).sub(slippage);
     const slippageAdjustedAmount = getTransferAmountFeeV2(
       _slippage.mul(anotherAmountFee.amount.sub(anotherAmountFee.fee ?? new BN(0))).quotient,
+      poolInfo[baseIn ? "mintB" : "mintA"].extensions.feeConfig,
+      epochInfo,
+      true,
+    );
+    const slippageAdjustedMinAmount = getTransferAmountFeeV2(
+      _slippageMin.mul(anotherAmountFee.amount.sub(anotherAmountFee.fee ?? new BN(0))).quotient,
       poolInfo[baseIn ? "mintB" : "mintA"].extensions.feeConfig,
       epochInfo,
       true,
@@ -910,6 +918,7 @@ export default class CpmmModule extends ModuleBase {
       inputAmountFee,
       anotherAmount: anotherAmountFee,
       maxAnotherAmount: slippageAdjustedAmount,
+      minAnotherAmount: slippageAdjustedMinAmount,
       liquidity,
     };
   }

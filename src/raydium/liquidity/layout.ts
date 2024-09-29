@@ -136,9 +136,15 @@ export const addLiquidityLayout = struct([
   u64("baseAmountIn"),
   u64("quoteAmountIn"),
   u64("fixedSide"),
+  u64("otherAmountMin"),
 ]);
 
-export const removeLiquidityLayout = struct([u8("instruction"), u64("amountIn")]);
+export const removeLiquidityLayout = struct([
+  u8("instruction"),
+  u64("lpAmount"),
+  u64("baseAmountMin"),
+  u64("quoteAmountMin"),
+]);
 
 export type LiquidityStateLayoutV5 = typeof liquidityStateV5Layout;
 export type LiquidityStateV5 = GetStructureSchema<LiquidityStateLayoutV5>;
