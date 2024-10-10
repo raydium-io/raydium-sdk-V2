@@ -35,7 +35,8 @@
     "build": "yarn build-lib",
     "push": "yarn build && yarn publish",
     "prepare": "husky install",
-    "dev": "ts-node -r tsconfig-paths/register"
+    "dev": "ts-node -r tsconfig-paths/register",
+    "watch": "rm -rf lib && tsup src --watch --format cjs,esm --dts --sourcemap --no-splitting --minify -d lib"
   },
   "dependencies": {
     "@solana/buffer-layout": "^4.0.1",
