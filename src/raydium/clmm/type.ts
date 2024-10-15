@@ -217,13 +217,6 @@ export interface ReturnTypeMakeCreatePoolTransaction {
   transaction: Transaction;
   mockPoolInfo: ClmmPoolInfo;
 }
-export interface ReturnTypeMakeInstructions<T = Record<string, PublicKey>> {
-  signers: (Signer | Keypair)[];
-  instructions: TransactionInstruction[];
-  instructionTypes: string[];
-  address: T;
-  lookupTableAddress: string[];
-}
 
 export type ManipulateLiquidityExtInfo = {
   address: {

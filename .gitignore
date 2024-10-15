@@ -117,5 +117,6 @@ dist
 lib/
 .coverage/
 docs/
+test/local/
 
 example/node_modules/

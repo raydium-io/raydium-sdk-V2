@@ -1,5 +1,6 @@
 import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
+import { ReturnTypeMakeInstructions } from "@/raydium/type";
 import { ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "@/api/type";
 import {
   InstructionType,
@@ -21,7 +22,6 @@ import {
   ManipulateLiquidityExtInfo,
   OpenPositionFromBaseExtInfo,
   OpenPositionFromLiquidityExtInfo,
-  ReturnTypeMakeInstructions,
 } from "./type";
 import {
   getPdaExBitmapAccount,

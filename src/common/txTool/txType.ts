@@ -71,4 +71,7 @@ export const InstructionType = {
   CpmmWithdrawLiquidity: "CpmmWithdrawLiquidity",
   CpmmSwapBaseIn: "CpmmSwapBaseIn",
   CpmmSwapBaseOut: "CpmmSwapBaseOut",
+
+  CpmmLockLp: "CpmmLockLp",
+  CpmmCollectLockFee: "CpmmCollectLockFee",
 };
