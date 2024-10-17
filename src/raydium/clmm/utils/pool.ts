@@ -1240,6 +1240,7 @@ export class PoolUtils {
           exBitmapInfo:
             exBitData[getPdaExBitmapAccount(new PublicKey(cur.programId), new PublicKey(cur.id)).publicKey.toBase58()],
           startTime: rpcDataMap[cur.id].startTime.toNumber(),
+          rewardInfos: rpcDataMap[cur.id].rewardInfos,
         },
       }),
       {} as Record<string, ComputeClmmPoolInfo>,

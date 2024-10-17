@@ -73,6 +73,8 @@ export const API_URLS = {
   JITO: "https://mainnet.block-engine.jito.wtf",
   JITO_TRANSACTION: "/api/v1/transactions",
   JITO_BUNDLE: "/api/v1/bundles",
+
+  CPMM_LOCK: "https://dynamic-ipfs.raydium.io/lock/cpmm/position",
 };
 
 export const DEV_API_URLS = {

@@ -141,3 +141,13 @@ export function getPdaLockPositionId(
 } {
   return findProgramAddress([POOL_LOCK_ID_SEED, positionId.toBuffer()], programId);
 }
+
+export function getPdaLockClPositionIdV2(
+  programId: PublicKey,
+  lockNftMint: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress([POOL_LOCK_ID_SEED, lockNftMint.toBuffer()], programId);
+}

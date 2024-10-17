@@ -1,6 +1,6 @@
 import BN from "bn.js";
 
-import { AccountMeta, PublicKey, TransactionInstruction, Signer, Keypair } from "@solana/web3.js";
+import { AccountMeta, PublicKey, TransactionInstruction, Signer, Keypair, SystemProgram } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   MEMO_PROGRAM_ID2,
@@ -357,6 +357,7 @@ export async function makeCpmmLockInstruction(props: {
     auth: props.lockAuthProgram,
     payer: ownerInfo.feePayer,
     nftOwner: ownerInfo.feePayer,
+    liquidityOwner: ownerInfo.feePayer,
     nftMint: nftMintAccount,
     nftAccount,
     poolId,
@@ -391,6 +392,7 @@ export function cpmmLockPositionInstruction({
   programId,
   auth,
   payer,
+  liquidityOwner,
   nftOwner,
   nftMint,
   nftAccount,
@@ -408,6 +410,7 @@ export function cpmmLockPositionInstruction({
   programId: PublicKey;
   auth: PublicKey;
   payer: PublicKey;
+  liquidityOwner: PublicKey;
   nftOwner: PublicKey;
   nftMint: PublicKey;
   nftAccount: PublicKey;
@@ -425,6 +428,7 @@ export function cpmmLockPositionInstruction({
   const keys = [
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: payer, isSigner: true, isWritable: true },
+    { pubkey: liquidityOwner, isSigner: true, isWritable: false },
     { pubkey: nftOwner, isSigner: false, isWritable: false },
     { pubkey: nftMint, isSigner: true, isWritable: true },
     { pubkey: nftAccount, isSigner: false, isWritable: true },
@@ -437,7 +441,7 @@ export function cpmmLockPositionInstruction({
     { pubkey: poolVaultB, isSigner: false, isWritable: true },
     { pubkey: metadataAccount, isSigner: false, isWritable: true },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-    { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
@@ -458,11 +462,11 @@ export function cpmmLockPositionInstruction({
     data: aData,
   });
 }
+
 export function collectCpFeeInstruction({
   programId,
   nftOwner,
   auth,
-  nftMint,
   nftAccount,
   lockPda,
   poolId,
@@ -498,13 +502,13 @@ export function collectCpFeeInstruction({
   cpmmAuthProgram?: PublicKey;
 }): TransactionInstruction {
   const keys = [
-    { pubkey: nftOwner, isSigner: true, isWritable: false },
     { pubkey: auth, isSigner: false, isWritable: false },
-    { pubkey: nftMint, isSigner: false, isWritable: true },
+    { pubkey: nftOwner, isSigner: true, isWritable: false },
+    // { pubkey: nftMint, isSigner: false, isWritable: true },
     { pubkey: nftAccount, isSigner: false, isWritable: true },
     { pubkey: lockPda, isSigner: false, isWritable: true },
-    { pubkey: cpmmProgram || CREATE_CPMM_POOL_PROGRAM, isSigner: false, isWritable: false },
-    { pubkey: cpmmAuthProgram || CREATE_CPMM_POOL_AUTH, isSigner: false, isWritable: false },
+    { pubkey: cpmmProgram ?? CREATE_CPMM_POOL_PROGRAM, isSigner: false, isWritable: false },
+    { pubkey: cpmmAuthProgram ?? CREATE_CPMM_POOL_AUTH, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
     { pubkey: mintLp, isSigner: false, isWritable: true },
     { pubkey: userVaultA, isSigner: false, isWritable: true },
@@ -514,6 +518,7 @@ export function collectCpFeeInstruction({
     { pubkey: mintA, isSigner: false, isWritable: false },
     { pubkey: mintB, isSigner: false, isWritable: false },
     { pubkey: lockLpVault, isSigner: false, isWritable: true },
+    // { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: MEMO_PROGRAM_ID2, isSigner: false, isWritable: false },

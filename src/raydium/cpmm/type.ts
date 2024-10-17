@@ -198,6 +198,7 @@ export interface HarvestLockCpmmLpParams<T = TxVersion.LEGACY> {
 
   programId?: PublicKey;
   authProgram?: PublicKey;
+  clmmProgram?: PublicKey;
 
   cpmmProgram?: {
     programId?: PublicKey;
