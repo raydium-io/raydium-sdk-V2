@@ -39,7 +39,7 @@ export function parseTokenAccountResp({ owner, solAccountResp, tokenAccountResp 
   if (solAccountResp) {
     tokenAccounts.push({
       mint: PublicKey.default,
-      amount: new BN(solAccountResp.lamports),
+      amount: new BN(String(solAccountResp.lamports)),
       isNative: true,
       programId: solAccountResp.owner,
     });
