@@ -114,3 +114,15 @@ export function getCreatePoolKeys({
     observationId,
   };
 }
+
+export const LOCK_LIQUIDITY_SEED = Buffer.from("locked_liquidity", "utf8");
+
+export function getCpLockPda(
+  programId: PublicKey,
+  mint: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress([LOCK_LIQUIDITY_SEED, mint.toBuffer()], programId);
+}

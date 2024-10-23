@@ -1,4 +1,4 @@
-import { EpochInfo, Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { EpochInfo, Keypair, PublicKey, Signer, Transaction } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "../../api/type";
@@ -9,7 +9,7 @@ import { TokenInfo } from "../token/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 import { TickArray } from "./utils/tick";
 
-import { ClmmPositionLayout, PoolInfoLayout } from "./layout";
+import { ClmmPositionLayout, PoolInfoLayout, LockClPositionLayoutV2 } from "./layout";
 
 export { ApiClmmConfigInfo };
 
@@ -171,6 +171,7 @@ export interface ComputeClmmPoolInfo {
   startTime: number;
 
   exBitmapInfo: TickArrayBitmapExtensionType;
+  rewardInfos: ReturnType<typeof PoolInfoLayout.decode>["rewardInfos"];
 }
 
 export interface ReturnTypeMakeHarvestTransaction {
@@ -216,13 +217,6 @@ export interface ReturnTypeMakeCreatePoolTransaction {
   signers: (Signer | Keypair)[];
   transaction: Transaction;
   mockPoolInfo: ClmmPoolInfo;
-}
-export interface ReturnTypeMakeInstructions<T = Record<string, PublicKey>> {
-  signers: (Signer | Keypair)[];
-  instructions: TransactionInstruction[];
-  instructionTypes: string[];
-  address: T;
-  lookupTableAddress: string[];
 }
 
 export type ManipulateLiquidityExtInfo = {
@@ -393,6 +387,7 @@ export interface LockPosition<T = TxVersion.LEGACY> {
   authProgramId?: PublicKey;
   poolProgramId?: PublicKey;
   ownerPosition: ClmmPositionLayout;
+  payer?: PublicKey;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
 }
@@ -400,7 +395,9 @@ export interface LockPosition<T = TxVersion.LEGACY> {
 export interface HarvestLockPosition<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   authProgramId?: PublicKey;
-  ownerPosition: ClmmPositionLayout;
+  clmmProgram?: PublicKey;
+  poolKeys?: ClmmKeys;
+  lockData: ReturnType<typeof LockClPositionLayoutV2.decode>;
   ownerInfo?: {
     useSOLBalance?: boolean; // if has WSOL mint
   };
@@ -575,7 +572,7 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
     feePayer?: PublicKey;
     useSOLBalance?: boolean;
   };
-  lockInfo?: { [poolId: string]: { [positionNft: string]: { lockId: string | PublicKey } } };
+  lockInfo?: { [poolId: string]: { [positionNft: string]: ReturnType<typeof LockClPositionLayoutV2.decode> } };
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   programId?: PublicKey;
@@ -608,3 +605,12 @@ export interface InitRewardExtInfo {
 }
 
 export type ClmmRpcData = ReturnType<typeof PoolInfoLayout.decode> & { currentPrice: number; programId: PublicKey };
+
+export interface ClmmLockAddress {
+  positionId: PublicKey;
+  lockPositionId: PublicKey;
+  lockNftAccount: PublicKey;
+  lockNftMint: PublicKey;
+  positionNftAccount: PublicKey;
+  metadataAccount: PublicKey;
+}

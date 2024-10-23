@@ -1,4 +1,4 @@
-import { blob, bool, publicKey, seq, struct, u16, u64, u8 } from "../../marshmallow";
+import { blob, bool, publicKey, seq, struct, u16, u64, u8, u128 } from "../../marshmallow";
 
 export const CpmmConfigInfoLayout = struct([
   blob(8),

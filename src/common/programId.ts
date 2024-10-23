@@ -35,6 +35,12 @@ export const DEV_CREATE_CPMM_POOL_PROGRAM = new PublicKey("CPMDWBwJDtYax9qW7AyRu
 export const DEV_CREATE_CPMM_POOL_AUTH = new PublicKey("7rQ1QFNosMkUCuh7Z7fPbTHvh73b68sQYdirycEzJVuw");
 export const DEV_CREATE_CPMM_POOL_FEE_ACC = new PublicKey("G11FKBRaAkHAKuLCgLM6K6NUc9rTjPAznRCjZifrTQe2");
 
+export const LOCK_CPMM_PROGRAM = new PublicKey("LockrWmn6K5twhz3y9w1dQERbmgSaRkfnTeTKbpofwE");
+export const DEV_LOCK_CPMM_PROGRAM = new PublicKey("DLockwT7X7sxtLmGH9g5kmfcjaBtncdbUmi738m5bvQC");
+
+export const LOCK_CPMM_AUTH = new PublicKey("3f7GcQFG397GAaEnv51zR6tsTVihYRydnydDD1cXekxH");
+export const DEV_LOCK_CPMM_AUTH = new PublicKey("7AFUeLVRjBfzqK3tTGw8hN48KLQWSk6DTE8xprWdPqix");
+
 export const IDO_ALL_PROGRAM = {
   IDO_PROGRAM_ID_V1,
   IDO_PROGRAM_ID_V2,
@@ -63,6 +69,9 @@ export const ALL_PROGRAM_ID = {
   CREATE_CPMM_POOL_PROGRAM,
   CREATE_CPMM_POOL_AUTH,
   CREATE_CPMM_POOL_FEE_ACC,
+
+  LOCK_CPMM_PROGRAM,
+  LOCK_CPMM_AUTH,
 };
 
 export type ProgramIdConfig = Partial<typeof ALL_PROGRAM_ID>;
@@ -91,4 +100,7 @@ export const DEVNET_PROGRAM_ID = {
   CREATE_CPMM_POOL_FEE_ACC: DEV_CREATE_CPMM_POOL_FEE_ACC,
 
   FEE_DESTINATION_ID: new PublicKey("3XMrhbv989VxAMi3DErLV9eJht1pHppW5LbKxe9fkEFR"),
+
+  LOCK_CPMM_PROGRAM: DEV_LOCK_CPMM_PROGRAM,
+  LCOK_CPMM_AUTH: DEV_LOCK_CPMM_AUTH,
 };

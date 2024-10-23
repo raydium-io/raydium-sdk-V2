@@ -1,8 +1,16 @@
-import { PublicKey, Signer, Transaction, TransactionInstruction, VersionedTransaction } from "@solana/web3.js";
+import { PublicKey, Signer, Transaction, TransactionInstruction, VersionedTransaction, Keypair } from "@solana/web3.js";
 import BN from "bn.js";
 import { getTransferFeeConfig, Mint } from "@solana/spl-token";
 import { MultiTxExecuteParam, TxBuilder } from "../common/txTool/txTool";
 import { TokenAmount } from "../module/amount";
+
+export interface ReturnTypeMakeInstructions<T = Record<string, PublicKey>> {
+  signers: (Signer | Keypair)[];
+  instructions: TransactionInstruction[];
+  instructionTypes: string[];
+  address: T;
+  lookupTableAddress: string[];
+}
 
 export type SignAllTransactions =
   | (<T extends Transaction | VersionedTransaction>(transaction: T[]) => Promise<T[]>)

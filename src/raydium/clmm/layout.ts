@@ -162,3 +162,15 @@ export const LockPositionLayout = struct([
   publicKey("nftAccount"),
   seq(u64(), 8),
 ]);
+
+export const LockClPositionLayoutV2 = struct([
+  blob(8),
+  u8("bump"),
+  publicKey("lockOwner"),
+  publicKey("poolId"),
+  publicKey("positionId"),
+  publicKey("nftAccount"),
+  publicKey("lockNftMint"),
+  u64("recentEpoch"),
+  seq(u64(), 8),
+]);

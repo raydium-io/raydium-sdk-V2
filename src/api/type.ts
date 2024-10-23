@@ -94,25 +94,30 @@ export interface ApiClmmPoolsItemStatistics {
   priceMax: number;
 }
 
-// export interface ApiClmmPoolInfo {
-//   id: string;
-//   mintProgramIdA: string;
-//   mintProgramIdB: string;
-//   mintA: string;
-//   mintB: string;
-//   mintDecimalsA: number;
-//   mintDecimalsB: number;
-//   ammConfig: ApiClmmConfigInfo;
-//   rewardInfos: {
-//     mint: string;
-//     programId: string;
-//   }[];
-//   day: ApiClmmPoolsItemStatistics;
-//   week: ApiClmmPoolsItemStatistics;
-//   month: ApiClmmPoolsItemStatistics;
-//   tvl: number;
-//   lookupTableAccount: string;
-// }
+export interface CpmmLockInfo {
+  name: string;
+  symbol: string;
+  description: string;
+  external_url: string;
+  collection: {
+    name: string;
+    family: string;
+  };
+  image: string;
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  positionInfo: {
+    tvlPercentage: number;
+    usdValue: number;
+    amountA: number;
+    amountB: number;
+    unclaimedFee: {
+      lp: number;
+      amountA: number;
+      amountB: number;
+      usdValue: number;
+    };
+  };
+}
 
 /** ====== v3 api types ======= */
 export interface ApiV3PageIns<T> {

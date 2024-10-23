@@ -1,5 +1,6 @@
 import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
+import { ReturnTypeMakeInstructions } from "@/raydium/type";
 import { ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "@/api/type";
 import {
   InstructionType,
@@ -21,7 +22,7 @@ import {
   ManipulateLiquidityExtInfo,
   OpenPositionFromBaseExtInfo,
   OpenPositionFromLiquidityExtInfo,
-  ReturnTypeMakeInstructions,
+  ClmmLockAddress,
 } from "./type";
 import {
   getPdaExBitmapAccount,
@@ -35,6 +36,7 @@ import {
   getPdaPoolVaultId,
   getPdaProtocolPositionAddress,
   getPdaTickArrayAddress,
+  getPdaLockClPositionIdV2,
 } from "./utils/pda";
 import { PoolUtils } from "./utils/pool";
 import { TickUtils } from "./utils/tick";
@@ -1794,6 +1796,130 @@ export class ClmmInstrument {
     };
   }
 
+  static async makeLockPositions({
+    programId,
+    authProgramId,
+    poolProgramId,
+    payer,
+    wallet,
+    nftMint,
+    getEphemeralSigners,
+  }: {
+    programId: PublicKey;
+    authProgramId: PublicKey;
+    poolProgramId: PublicKey;
+    wallet: PublicKey;
+    payer: PublicKey;
+    nftMint: PublicKey;
+    getEphemeralSigners?: (k: number) => any;
+  }): Promise<ReturnTypeMakeInstructions<ClmmLockAddress>> {
+    const signers: Signer[] = [];
+    let lockNftMint: PublicKey;
+    if (getEphemeralSigners) {
+      lockNftMint = new PublicKey((await getEphemeralSigners(1))[0]);
+    } else {
+      const _k = Keypair.generate();
+      signers.push(_k);
+      lockNftMint = _k.publicKey;
+    }
+
+    const { publicKey: positionNftAccount } = getATAAddress(wallet, nftMint, TOKEN_PROGRAM_ID);
+    const { publicKey: positionId } = getPdaPersonalPositionAddress(poolProgramId, nftMint);
+    const lockPositionId = getPdaLockClPositionIdV2(programId, lockNftMint).publicKey;
+    const lockNftAccount = getATAAddress(wallet, lockNftMint, TOKEN_PROGRAM_ID).publicKey;
+    const metadataAccount = getPdaMetadataKey(lockNftMint).publicKey;
+
+    const ins = ClmmInstrument.lockPositionInstructionV2({
+      programId,
+      auth: authProgramId,
+      payer,
+      positionOwner: wallet,
+      lockOwner: wallet,
+      positionNftAccount,
+      positionId,
+      lockPositionId,
+      lockNftMint,
+      lockNftAccount,
+      metadataAccount,
+      withMetadata: true,
+    });
+
+    return {
+      address: {
+        positionId,
+        lockPositionId,
+        lockNftAccount,
+        lockNftMint,
+        positionNftAccount,
+        metadataAccount,
+      },
+      instructions: [ins],
+      signers,
+      instructionTypes: [InstructionType.ClmmLockPosition],
+      lookupTableAddress: [],
+    };
+  }
+
+  static lockPositionInstructionV2({
+    programId,
+    auth,
+    payer,
+    positionOwner,
+    lockOwner,
+    positionNftAccount,
+    positionId,
+    lockPositionId,
+    lockNftMint,
+    lockNftAccount,
+    metadataAccount,
+    withMetadata,
+  }: {
+    programId: PublicKey;
+    auth: PublicKey;
+    payer: PublicKey;
+    positionOwner: PublicKey;
+    lockOwner: PublicKey;
+    positionNftAccount: PublicKey;
+    positionId: PublicKey;
+    lockPositionId: PublicKey;
+    lockNftMint: PublicKey;
+    lockNftAccount: PublicKey;
+    metadataAccount: PublicKey;
+    withMetadata: boolean;
+  }): TransactionInstruction {
+    const keys = [
+      { pubkey: auth, isSigner: false, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: positionOwner, isSigner: true, isWritable: true },
+      { pubkey: lockOwner, isSigner: false, isWritable: false },
+      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
+      { pubkey: positionId, isSigner: false, isWritable: false },
+      { pubkey: lockPositionId, isSigner: false, isWritable: true },
+      { pubkey: lockNftMint, isSigner: true, isWritable: true },
+      { pubkey: lockNftAccount, isSigner: false, isWritable: true },
+      { pubkey: metadataAccount, isSigner: false, isWritable: true },
+      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ];
+    const dataLayout = struct([bool("withMetadata")]);
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
+      {
+        withMetadata,
+      },
+      data,
+    );
+    const aData = Buffer.from([...lockInsDataBuf, ...data]);
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
   static lockPositionInstruction({
     programId,
     authProgramId,
@@ -1907,6 +2033,99 @@ export class ClmmInstrument {
     return new TransactionInstruction({
       keys,
       programId: props.programId,
+      data: Buffer.from(lockHarvestInsDataBuf),
+    });
+  }
+
+  static harvestLockPositionInstructionV2({
+    programId,
+    auth,
+    lockPositionId,
+    clmmProgram,
+    lockOwner,
+    lockNftMint,
+    lockNftAccount,
+    positionNftAccount,
+    positionId,
+    poolId,
+    protocolPosition,
+    vaultA,
+    vaultB,
+    tickArrayLower,
+    tickArrayUpper,
+    userVaultA,
+    userVaultB,
+    mintA,
+    mintB,
+    rewardAccounts,
+    exTickArrayBitmap,
+  }: {
+    programId: PublicKey;
+    auth: PublicKey;
+    lockPositionId: PublicKey;
+    clmmProgram: PublicKey;
+    lockOwner: PublicKey;
+    lockNftMint: PublicKey;
+    lockNftAccount: PublicKey;
+    positionNftAccount: PublicKey;
+    positionId: PublicKey;
+    poolId: PublicKey;
+    protocolPosition: PublicKey;
+    vaultA: PublicKey;
+    vaultB: PublicKey;
+    tickArrayLower: PublicKey;
+    tickArrayUpper: PublicKey;
+    userVaultA: PublicKey;
+    userVaultB: PublicKey;
+    mintA: PublicKey;
+    mintB: PublicKey;
+    rewardAccounts: {
+      poolRewardVault: PublicKey;
+      ownerRewardVault: PublicKey;
+      rewardMint: PublicKey;
+    }[];
+
+    exTickArrayBitmap?: PublicKey;
+  }): TransactionInstruction {
+    const remainingAccounts = [
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+      ...rewardAccounts
+        .map((i) => [
+          { pubkey: i.poolRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.ownerRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.rewardMint, isSigner: false, isWritable: false },
+        ])
+        .flat(),
+    ];
+
+    const keys = [
+      { pubkey: auth, isSigner: false, isWritable: false },
+      { pubkey: lockOwner, isSigner: true, isWritable: false },
+      // { pubkey: lockNftMint, isSigner: false, isWritable: false },
+      { pubkey: lockNftAccount, isSigner: false, isWritable: true },
+      { pubkey: lockPositionId, isSigner: false, isWritable: false },
+      { pubkey: clmmProgram, isSigner: false, isWritable: false },
+      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
+      { pubkey: positionId, isSigner: false, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: true },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: userVaultA, isSigner: false, isWritable: true },
+      { pubkey: userVaultB, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID2, isSigner: false, isWritable: false },
+      { pubkey: mintA, isSigner: false, isWritable: false },
+      { pubkey: mintB, isSigner: false, isWritable: false },
+      ...remainingAccounts,
+    ];
+
+    return new TransactionInstruction({
+      keys,
+      programId,
       data: Buffer.from(lockHarvestInsDataBuf),
     });
   }

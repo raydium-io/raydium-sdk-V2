@@ -166,3 +166,75 @@ export type CpmmComputeData = {
   mintB: ApiV3Token;
   authority: PublicKey;
 } & Omit<CpmmRpcData, "configInfo" | "mintA" | "mintB">;
+
+export type CpmmLockExtInfo = {
+  nftMint: PublicKey;
+  nftAccount: PublicKey;
+  metadataAccount: PublicKey;
+  lockPda: PublicKey;
+  userLpVault: PublicKey;
+  lockLpVault: PublicKey;
+};
+
+export interface LockCpmmLpParams<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  poolKeys?: CpmmKeys;
+  lpAmount: BN;
+  programId?: PublicKey;
+  authProgram?: PublicKey;
+  feePayer?: PublicKey;
+  withMetadata?: boolean;
+  getEphemeralSigners?: (k: number) => any;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
+export interface HarvestLockCpmmLpParams<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  poolKeys?: CpmmKeys;
+
+  nftMint: PublicKey;
+  lpFeeAmount: BN;
+
+  programId?: PublicKey;
+  authProgram?: PublicKey;
+  clmmProgram?: PublicKey;
+
+  cpmmProgram?: {
+    programId?: PublicKey;
+    authProgram?: PublicKey;
+  };
+
+  feePayer?: PublicKey;
+
+  withMetadata?: boolean;
+  getEphemeralSigners?: (k: number) => any;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
+export interface CpmmLockNftBasicInfo {
+  name: string;
+  symbol: string;
+  description: string;
+  external_url: string;
+  collection: {
+    name: string;
+    family: string;
+  };
+  image: string;
+}
+
+export interface CpmmLockNftInfo extends CpmmLockNftBasicInfo {
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  positionInfo: {
+    percentage: number;
+    usdValue: number;
+    unclaimedFee: {
+      lp: number;
+      amountA: number;
+      amountB: number;
+      useValue: number;
+    };
+  };
+}
