@@ -805,7 +805,7 @@ export default class CpmmModule extends ModuleBase {
       lockProgram: params.programId ?? LOCK_CPMM_PROGRAM,
       lockAuthProgram: params.authProgram ?? LOCK_CPMM_AUTH,
       lpAmount,
-      withMetadata: params.withMetadata ?? false,
+      withMetadata: params.withMetadata ?? true,
       getEphemeralSigners: params.getEphemeralSigners,
     });
 

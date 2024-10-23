@@ -369,7 +369,7 @@ export async function makeCpmmLockInstruction(props: {
     poolVaultB: new PublicKey(poolKeys.vault.B),
     metadataAccount,
     lpAmount: props.lpAmount,
-    withMetadata: props.withMetadata ?? false,
+    withMetadata: props.withMetadata ?? true,
   });
 
   return {
