@@ -645,7 +645,7 @@ export default class TradeV2 extends ModuleBase {
         decimals: p.mintA.decimals,
         isInitialized: true,
         freezeAuthority: null,
-        tlvData: Buffer.from("0", "hex"),
+        tlvData: Buffer.from("00", "hex"),
         feeConfig: undefined,
       };
 
@@ -658,7 +658,7 @@ export default class TradeV2 extends ModuleBase {
         decimals: p.mintB.decimals,
         isInitialized: true,
         freezeAuthority: null,
-        tlvData: Buffer.from("0", "hex"),
+        tlvData: Buffer.from("00", "hex"),
         feeConfig: undefined,
       };
     });
@@ -681,7 +681,7 @@ export default class TradeV2 extends ModuleBase {
           decimals: p.mintDecimalA,
           isInitialized: true,
           freezeAuthority: null,
-          tlvData: Buffer.from("0", "hex"),
+          tlvData: Buffer.from("00", "hex"),
           feeConfig: undefined,
         };
       } else mintSet.add(mintA); // 2022, need to fetch fee config
@@ -695,7 +695,7 @@ export default class TradeV2 extends ModuleBase {
           decimals: p.mintDecimalB,
           isInitialized: true,
           freezeAuthority: null,
-          tlvData: Buffer.from("0", "hex"),
+          tlvData: Buffer.from("00", "hex"),
           feeConfig: undefined,
         };
       } else mintSet.add(mintB); // 2022, need to fetch fee config
