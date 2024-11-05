@@ -178,7 +178,7 @@ export async function makeCreateMarketInstruction({
       lamports: marketInfo.lowestFeeMarket
         ? 6208320
         : await connection.getMinimumBalanceForRentExemption(marketInfo.requestQueueSpace ?? 5120 + 12),
-      space: marketInfo.requestQueueSpace ?? 5120 + 12,
+      space: marketInfo.lowestFeeMarket ? 764 : marketInfo.requestQueueSpace ?? 5120 + 12,
       programId: marketInfo.programId,
     }),
     SystemProgram.createAccountWithSeed({
@@ -189,7 +189,7 @@ export async function makeCreateMarketInstruction({
       lamports: marketInfo.lowestFeeMarket
         ? 79594560
         : await connection.getMinimumBalanceForRentExemption(marketInfo.eventQueueSpace ?? 262144 + 12),
-      space: marketInfo.eventQueueSpace ?? 262144 + 12,
+      space: marketInfo.lowestFeeMarket ? 11308 : marketInfo.eventQueueSpace ?? 262144 + 12,
       programId: marketInfo.programId,
     }),
     SystemProgram.createAccountWithSeed({
@@ -200,7 +200,7 @@ export async function makeCreateMarketInstruction({
       lamports: marketInfo.lowestFeeMarket
         ? 101977920
         : await connection.getMinimumBalanceForRentExemption(marketInfo.orderbookQueueSpace ?? 65536 + 12),
-      space: marketInfo.orderbookQueueSpace ?? 65536 + 12,
+      space: marketInfo.lowestFeeMarket ? 14524 : marketInfo.orderbookQueueSpace ?? 65536 + 12,
       programId: marketInfo.programId,
     }),
     SystemProgram.createAccountWithSeed({
@@ -211,7 +211,7 @@ export async function makeCreateMarketInstruction({
       lamports: marketInfo.lowestFeeMarket
         ? 101977920
         : await connection.getMinimumBalanceForRentExemption(marketInfo.orderbookQueueSpace ?? 65536 + 12),
-      space: marketInfo.orderbookQueueSpace ?? 65536 + 12,
+      space: marketInfo.lowestFeeMarket ? 14524 : marketInfo.orderbookQueueSpace ?? 65536 + 12,
       programId: marketInfo.programId,
     }),
     initializeMarket({
