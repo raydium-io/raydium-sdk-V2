@@ -33,6 +33,7 @@ export default class MarketV2 extends ModuleBase {
     requestQueueSpace,
     eventQueueSpace,
     orderbookQueueSpace,
+    lowestFeeMarket,
     txVersion,
     computeBudgetConfig,
   }: {
@@ -52,6 +53,7 @@ export default class MarketV2 extends ModuleBase {
     requestQueueSpace?: number;
     eventQueueSpace?: number;
     orderbookQueueSpace?: number;
+    lowestFeeMarket?: boolean;
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
   }): Promise<MakeMultiTxData<T, ExtInfo>> {
@@ -112,6 +114,8 @@ export default class MarketV2 extends ModuleBase {
         requestQueueSpace,
         eventQueueSpace,
         orderbookQueueSpace,
+
+        lowestFeeMarket,
       },
     });
     const txBuilder = this.createTxBuilder();
