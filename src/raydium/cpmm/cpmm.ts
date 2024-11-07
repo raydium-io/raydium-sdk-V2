@@ -431,6 +431,7 @@ export default class CpmmModule extends ModuleBase {
       liquidity,
       inputAmountFee,
       anotherAmount: _anotherAmount,
+      maxAnotherAmount: _maxAnotherAmount,
     } = computeResult ||
     this.computePairAmount({
       poolInfo: {
@@ -448,6 +449,7 @@ export default class CpmmModule extends ModuleBase {
     });
 
     const anotherAmount = _anotherAmount.amount;
+    const maxAnotherAmount = _maxAnotherAmount.amount;
     const mintAUseSOLBalance = poolInfo.mintA.address === NATIVE_MINT.toString();
     const mintBUseSOLBalance = poolInfo.mintB.address === NATIVE_MINT.toString();
 
@@ -464,7 +466,8 @@ export default class CpmmModule extends ModuleBase {
           mintAUseSOLBalance || (baseIn ? inputAmount : anotherAmount).isZero()
             ? {
                 payer: this.scope.ownerPubKey,
-                amount: baseIn ? inputAmount : anotherAmount,
+                // We take max another amount as this will prevent failure(Insufficient balance error) in case where the invariant changes before the transaction is send.
+                amount: baseIn ? inputAmount : maxAnotherAmount,
               }
             : undefined,
         skipCloseAccount: !mintAUseSOLBalance,
