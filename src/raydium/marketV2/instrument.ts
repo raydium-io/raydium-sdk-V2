@@ -157,10 +157,6 @@ export async function makeCreateMarketInstruction({
     }),
     createInitializeAccountInstruction(marketInfo.baseVault.publicKey, marketInfo.baseMint, marketInfo.vaultOwner),
     createInitializeAccountInstruction(marketInfo.quoteVault.publicKey, marketInfo.quoteMint, marketInfo.vaultOwner),
-  );
-
-  const tx2 = new Transaction();
-  tx2.add(
     SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
       basePubkey: wallet,
@@ -170,6 +166,10 @@ export async function makeCreateMarketInstruction({
       space: MARKET_STATE_LAYOUT_V2.span,
       programId: marketInfo.programId,
     }),
+  );
+
+  const tx2 = new Transaction();
+  tx2.add(
     SystemProgram.createAccountWithSeed({
       fromPubkey: wallet,
       basePubkey: wallet,

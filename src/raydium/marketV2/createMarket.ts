@@ -9,7 +9,7 @@ import { generatePubKey } from "../account/util";
 import ModuleBase from "../moduleBase";
 import { makeCreateMarketInstruction } from "./instrument";
 
-interface ExtInfo {
+export interface MarketExtInfo {
   address: {
     marketId: PublicKey;
     requestQueue: PublicKey;
@@ -34,6 +34,7 @@ export default class MarketV2 extends ModuleBase {
     eventQueueSpace,
     orderbookQueueSpace,
     lowestFeeMarket,
+    assignSeed,
     txVersion,
     computeBudgetConfig,
   }: {
@@ -53,18 +54,52 @@ export default class MarketV2 extends ModuleBase {
     requestQueueSpace?: number;
     eventQueueSpace?: number;
     orderbookQueueSpace?: number;
+
     lowestFeeMarket?: boolean;
+    assignSeed?: string;
+
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
-  }): Promise<MakeMultiTxData<T, ExtInfo>> {
+  }): Promise<MakeMultiTxData<T, MarketExtInfo>> {
     const wallet = this.scope.ownerPubKey;
-    const market = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
-    const requestQueue = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
-    const eventQueue = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
-    const bids = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
-    const asks = generatePubKey({ fromPublicKey: wallet, programId: dexProgramId });
-    const baseVault = generatePubKey({ fromPublicKey: wallet, programId: TOKEN_PROGRAM_ID });
-    const quoteVault = generatePubKey({ fromPublicKey: wallet, programId: TOKEN_PROGRAM_ID });
+    const seed = assignSeed
+      ? `${baseInfo.mint.toBase58().slice(0, 10)}-${quoteInfo.mint.toBase58().slice(0, 10)}-${assignSeed}`
+      : undefined;
+    const market = generatePubKey({
+      fromPublicKey: wallet,
+      programId: dexProgramId,
+      assignSeed: seed ? `${seed}-market` : seed,
+    });
+    const requestQueue = generatePubKey({
+      fromPublicKey: wallet,
+      programId: dexProgramId,
+      assignSeed: seed ? `${seed}-request` : seed,
+    });
+    const eventQueue = generatePubKey({
+      fromPublicKey: wallet,
+      programId: dexProgramId,
+      assignSeed: seed ? `${seed}-event` : seed,
+    });
+    const bids = generatePubKey({
+      fromPublicKey: wallet,
+      programId: dexProgramId,
+      assignSeed: seed ? `${seed}-bids` : seed,
+    });
+    const asks = generatePubKey({
+      fromPublicKey: wallet,
+      programId: dexProgramId,
+      assignSeed: seed ? `${seed}-asks` : seed,
+    });
+    const baseVault = generatePubKey({
+      fromPublicKey: wallet,
+      programId: TOKEN_PROGRAM_ID,
+      assignSeed: seed ? `${seed}-baseVault` : seed,
+    });
+    const quoteVault = generatePubKey({
+      fromPublicKey: wallet,
+      programId: TOKEN_PROGRAM_ID,
+      assignSeed: seed ? `${seed}-quoteVault` : seed,
+    });
     const feeRateBps = 0;
     const quoteDustThreshold = new BN(100);
     function getVaultOwnerAndNonce() {
@@ -119,25 +154,17 @@ export default class MarketV2 extends ModuleBase {
       },
     });
     const txBuilder = this.createTxBuilder();
-    // txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addInstruction({
       instructions: allTxArr[0].transaction.instructions,
       signers: allTxArr[0].signer,
     });
 
-    // const extraTxBuildData: any[] = [];
-
     for await (const txData of allTxArr.slice(1, allTxArr.length)) {
-      // const extraTxBuilder = this.createTxBuilder();
-      // extraTxBuilder.addCustomComputeBudget(computeBudgetConfig);
       txBuilder.addInstruction({
         instructions: txData.transaction.instructions,
         signers: txData.signer,
         instructionTypes: txData.instructionTypes,
       });
-
-      // const build = await extraTxBuilder.versionBuild({ txVersion });
-      // extraTxBuildData.push(build);
     }
 
     if (txVersion === TxVersion.V0)
@@ -154,7 +181,7 @@ export default class MarketV2 extends ModuleBase {
           baseMint: new PublicKey(baseInfo.mint),
           quoteMin: new PublicKey(quoteInfo.mint),
         },
-      }) as Promise<MakeMultiTxData<T, ExtInfo>>;
+      }) as Promise<MakeMultiTxData<T, MarketExtInfo>>;
 
     return txBuilder.sizeCheckBuild({
       computeBudgetConfig,
@@ -169,6 +196,6 @@ export default class MarketV2 extends ModuleBase {
         baseMint: new PublicKey(baseInfo.mint),
         quoteMin: new PublicKey(quoteInfo.mint),
       },
-    }) as Promise<MakeMultiTxData<T, ExtInfo>>;
+    }) as Promise<MakeMultiTxData<T, MarketExtInfo>>;
   }
 }

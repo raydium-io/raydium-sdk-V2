@@ -130,6 +130,42 @@ export interface CreatePoolParam<T> {
   txVersion?: T;
 }
 
+export interface CreateMarketAndPoolParam<T> {
+  programId?: PublicKey;
+  marketProgram?: PublicKey;
+  feeDestinationId?: PublicKey;
+
+  baseMintInfo: {
+    mint: PublicKey;
+    decimals: number;
+  };
+  quoteMintInfo: {
+    mint: PublicKey;
+    decimals: number;
+  };
+
+  baseAmount: BN;
+  quoteAmount: BN;
+  startTime: BN;
+  lowestFeeMarket?: boolean;
+  assignSeed?: string;
+
+  lotSize?: number;
+  tickSize?: number;
+
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  associatedOnly: boolean;
+  checkCreateATAOwner?: boolean;
+
+  tokenProgram?: PublicKey;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+}
+
 export interface CreatePoolAddress {
   programId: PublicKey;
   ammId: PublicKey;

@@ -54,11 +54,13 @@ export function parseTokenAccountResp({ owner, solAccountResp, tokenAccountResp 
 export function generatePubKey({
   fromPublicKey,
   programId = TOKEN_PROGRAM_ID,
+  assignSeed,
 }: {
   fromPublicKey: PublicKey;
   programId: PublicKey;
+  assignSeed?: string;
 }): { publicKey: PublicKey; seed: string } {
-  const seed = Keypair.generate().publicKey.toBase58().slice(0, 32);
+  const seed = assignSeed ? btoa(assignSeed).slice(0, 32) : Keypair.generate().publicKey.toBase58().slice(0, 32);
   const publicKey = createWithSeed(fromPublicKey, seed, programId);
   return { publicKey, seed };
 }
