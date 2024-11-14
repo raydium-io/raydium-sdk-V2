@@ -863,7 +863,7 @@ export class Clmm extends ModuleBase {
       mintA: new PublicKey(poolKeys.mintA.address),
       mintB: new PublicKey(poolKeys.mintB.address),
       rewardAccounts: rewardAccountsFullInfo,
-      exTickArrayBitmap: getPdaExBitmapAccount(programId, lockData.poolId).publicKey,
+      exTickArrayBitmap: getPdaExBitmapAccount(clmmProgram, lockData.poolId).publicKey,
     });
 
     txBuilder.addInstruction({
@@ -1712,7 +1712,7 @@ export class Clmm extends ModuleBase {
             mintA: new PublicKey(poolKeys.mintA.address),
             mintB: new PublicKey(poolKeys.mintB.address),
             rewardAccounts: rewardAccountsFullInfo,
-            exTickArrayBitmap: getPdaExBitmapAccount(CLMM_LOCK_PROGRAM_ID, lockData.poolId).publicKey,
+            exTickArrayBitmap: getPdaExBitmapAccount(CLMM_PROGRAM_ID, lockData.poolId).publicKey,
           });
           txBuilder.addInstruction({
             instructions: [harvestLockIns],
