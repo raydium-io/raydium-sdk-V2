@@ -55,6 +55,7 @@ import {
   getPdaLockClPositionIdV2,
   getPdaTickArrayAddress,
   getPdaProtocolPositionAddress,
+  getPdaExBitmapAccount,
 } from "./utils/pda";
 import { PoolUtils, clmmComputeInfoToApiInfo } from "./utils/pool";
 import { TickUtils } from "./utils/tick";
@@ -862,6 +863,7 @@ export class Clmm extends ModuleBase {
       mintA: new PublicKey(poolKeys.mintA.address),
       mintB: new PublicKey(poolKeys.mintB.address),
       rewardAccounts: rewardAccountsFullInfo,
+      exTickArrayBitmap: getPdaExBitmapAccount(programId, lockData.poolId).publicKey,
     });
 
     txBuilder.addInstruction({
@@ -1710,6 +1712,7 @@ export class Clmm extends ModuleBase {
             mintA: new PublicKey(poolKeys.mintA.address),
             mintB: new PublicKey(poolKeys.mintB.address),
             rewardAccounts: rewardAccountsFullInfo,
+            exTickArrayBitmap: getPdaExBitmapAccount(CLMM_LOCK_PROGRAM_ID, lockData.poolId).publicKey,
           });
           txBuilder.addInstruction({
             instructions: [harvestLockIns],
