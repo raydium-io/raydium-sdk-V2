@@ -923,6 +923,43 @@ export function makeWithdrawInstructionV5(params: DepositWithdrawParams): Transa
   return new TransactionInstruction({ programId, keys, data });
 }
 
+export function makeWithdrawInstructionV4(params: DepositWithdrawParams): TransactionInstruction {
+  const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount, userAuxiliaryLedgers } = params;
+  const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
+
+  const dataLayout = struct([u8('instruction'), u64('amount')])
+
+  const keys = [
+    accountMeta({ pubkey: id }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.authority), isWritable: false }),
+    accountMeta({ pubkey: userAuxiliaryLedgers![0] }),
+    accountMeta({ pubkey: owner, isSigner: true, isWritable: false }),
+    accountMeta({ pubkey: lpAccount }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.lpVault) }),
+    accountMeta({ pubkey: rewardAccounts[0] }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[0].vault) }),
+    accountMeta({ pubkey: SYSVAR_CLOCK_PUBKEY, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: rewardAccounts[1] }),
+    accountMeta({ pubkey: new PublicKey(farmKeys.rewardInfos[1].vault) }),
+  ]
+
+  const data = Buffer.alloc(dataLayout.span)
+  dataLayout.encode(
+    {
+      instruction: 2,
+      amount
+    },
+    data
+  )
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data
+  })
+}
+
 export function makeWithdrawInstructionV3(params: DepositWithdrawParams): TransactionInstruction {
   const { farmInfo, farmKeys, lpAccount, rewardAccounts, owner, amount, userAuxiliaryLedgers } = params;
   const [programId, id] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];

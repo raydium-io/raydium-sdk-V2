@@ -489,7 +489,7 @@ export default class LiquidityModule extends ModuleBase {
         programId: new PublicKey(farmInfo.programId),
         poolId: new PublicKey(farmInfo.id),
         owner: this.scope.ownerPubKey,
-        version: farmVersion,
+        version: farmVersion as 3 | 5 | 6,
       });
       let ledgerInfo: FarmLedger | undefined = undefined;
       const ledgerData = await this.scope.connection.getAccountInfo(ledger);

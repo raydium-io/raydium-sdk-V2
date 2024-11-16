@@ -55,6 +55,8 @@ export const InstructionType = {
   FarmV3Withdraw: "FarmV3Withdraw",
   FarmV3CreateLedger: "FarmV3CreateLedger",
 
+  FarmV4Withdraw: "FarmV4Withdraw",
+
   FarmV5Deposit: "FarmV5Deposit",
   FarmV5Withdraw: "FarmV5Withdraw",
   FarmV5CreateLedger: "FarmV5CreateLedger",

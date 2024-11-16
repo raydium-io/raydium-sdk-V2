@@ -36,6 +36,7 @@ import {
   makeDepositInstructionV6,
   makeRestartRewardInstruction,
   makeWithdrawInstructionV3,
+  makeWithdrawInstructionV4,
   makeWithdrawInstructionV5,
   makeWithdrawInstructionV6,
 } from "./instruction";
@@ -437,6 +438,7 @@ export default class Farm extends ModuleBase {
 
     const { rewardInfos, programId } = farmInfo;
     const version = FARM_PROGRAM_TO_VERSION[programId];
+    if (version === 4) this.logAndCreateError("V4 has suspended deposits:", farmInfo.programId);
     if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm program:", farmInfo.programId);
     const [farmProgramId, farmId] = [new PublicKey(farmInfo.programId), new PublicKey(farmInfo.id)];
     const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
@@ -445,7 +447,7 @@ export default class Farm extends ModuleBase {
       programId: farmProgramId,
       poolId: farmId,
       owner: this.scope.ownerPubKey,
-      version,
+      version: version as 3 | 5 | 6,
     });
 
     const txBuilder = this.createTxBuilder();
@@ -583,7 +585,7 @@ export default class Farm extends ModuleBase {
       }
     }
 
-    if (!deposited) {
+    if (!deposited && version !== 4) {
       const ledger = getAssociatedLedgerAccount({
         programId: new PublicKey(farmInfo.programId),
         poolId: new PublicKey(farmInfo.id),
@@ -610,7 +612,7 @@ export default class Farm extends ModuleBase {
         const ledgerInfo = ledgerLayout.decode(ledgerData!.data);
         if (ledgerInfo.deposited.isZero()) this.logAndCreateError("no deposited lp", { farmId: farmInfo.id });
       }
-    } else {
+    } else if (deposited) {
       if (deposited.isZero()) this.logAndCreateError("no deposited lp", { farmId: farmInfo.id });
     }
 
@@ -685,11 +687,14 @@ export default class Farm extends ModuleBase {
       version === 6
         ? makeWithdrawInstructionV6(insParams)
         : version === 5
-        ? makeWithdrawInstructionV5(insParams)
-        : makeWithdrawInstructionV3(insParams);
+          ? makeWithdrawInstructionV5(insParams)
+          : version === 4
+            ? makeWithdrawInstructionV4(insParams)
+            : makeWithdrawInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Withdraw,
+      4: InstructionType.FarmV4Withdraw,
       5: InstructionType.FarmV5Withdraw,
       6: InstructionType.FarmV6Withdraw,
     };

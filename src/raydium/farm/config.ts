@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 
 import { ApiV3Token } from "../../api/type";
 import { createLogger } from "../../common/logger";
-import { FARM_PROGRAM_ID_V3, FARM_PROGRAM_ID_V5, FARM_PROGRAM_ID_V6 } from "../../common/programId";
+import { FARM_PROGRAM_ID_V3, FARM_PROGRAM_ID_V4, FARM_PROGRAM_ID_V5, FARM_PROGRAM_ID_V6 } from "../../common/programId";
 
 import {
   FarmLedgerLayout,
@@ -40,7 +40,7 @@ export const FARM_VERSION_TO_LEDGER_LAYOUT: {
   6: farmLedgerLayoutV6_1,
 };
 
-export const isValidFarmVersion = (version: number): boolean => [3, 5, 6].indexOf(version) !== -1;
+export const isValidFarmVersion = (version: number): boolean => [3, 4, 5, 6].indexOf(version) !== -1;
 
 export const validateFarmRewards = (params: {
   version: number;
@@ -76,8 +76,9 @@ export const validateFarmRewards = (params: {
 
 export const poolTypeV6 = { "Standard SPL": 0, "Option tokens": 1 };
 
-export const FARM_PROGRAM_TO_VERSION: Record<string, 3 | 5 | 6> = {
+export const FARM_PROGRAM_TO_VERSION: Record<string, 3 | 4 | 5 | 6> = {
   [FARM_PROGRAM_ID_V3.toString()]: 3,
+  [FARM_PROGRAM_ID_V4.toString()]: 4,
   [FARM_PROGRAM_ID_V5.toString()]: 5,
   [FARM_PROGRAM_ID_V6.toString()]: 6,
 };
