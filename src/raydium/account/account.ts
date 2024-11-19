@@ -21,6 +21,7 @@ import { generatePubKey, parseTokenAccountResp } from "./util";
 export interface TokenAccountDataProp {
   tokenAccounts?: TokenAccount[];
   tokenAccountRawInfos?: TokenAccountRaw[];
+  notSubscribeAccountChange?: boolean;
 }
 export default class Account extends ModuleBase {
   private _tokenAccounts: TokenAccount[] = [];
@@ -28,13 +29,15 @@ export default class Account extends ModuleBase {
   private _accountChangeListenerId?: number;
   private _accountListener: ((data: TokenAccountDataProp) => void)[] = [];
   private _clientOwnedToken = false;
+  private _notSubscribeAccountChange = false;
   private _accountFetchTime = 0;
 
   constructor(params: TokenAccountDataProp & ModuleBaseProps) {
     super(params);
-    const { tokenAccounts, tokenAccountRawInfos } = params;
+    const { tokenAccounts, tokenAccountRawInfos, notSubscribeAccountChange } = params;
     this._tokenAccounts = tokenAccounts || [];
     this._tokenAccountRawInfos = tokenAccountRawInfos || [];
+    this._notSubscribeAccountChange = notSubscribeAccountChange ?? false;
     this._clientOwnedToken = !!(tokenAccounts || tokenAccountRawInfos);
   }
 
@@ -43,6 +46,10 @@ export default class Account extends ModuleBase {
   }
   get tokenAccountRawInfos(): TokenAccountRaw[] {
     return this._tokenAccountRawInfos;
+  }
+
+  set notSubscribeAccountChange(subscribe: boolean) {
+    this._notSubscribeAccountChange = subscribe;
   }
 
   public updateTokenAccount({ tokenAccounts, tokenAccountRawInfos }: TokenAccountDataProp): Account {
@@ -120,12 +127,19 @@ export default class Account extends ModuleBase {
 
     this._accountFetchTime = Date.now();
 
-    this._accountChangeListenerId && this.scope.connection.removeAccountChangeListener(this._accountChangeListenerId);
-    this._accountChangeListenerId = this.scope.connection.onAccountChange(
-      this.scope.ownerPubKey,
-      () => this.fetchWalletTokenAccounts({ forceUpdate: true }),
-      config?.commitment,
-    );
+    if (!this._notSubscribeAccountChange) {
+      this._accountChangeListenerId && this.scope.connection.removeAccountChangeListener(this._accountChangeListenerId);
+      this._accountChangeListenerId = this.scope.connection.onAccountChange(
+        this.scope.ownerPubKey,
+        () => {
+          this.fetchWalletTokenAccounts({ forceUpdate: true });
+          this._accountListener.forEach((cb) =>
+            cb({ tokenAccounts: this._tokenAccounts, tokenAccountRawInfos: this._tokenAccountRawInfos }),
+          );
+        },
+        { commitment: config?.commitment },
+      );
+    }
 
     return { tokenAccounts, tokenAccountRawInfos };
   }
