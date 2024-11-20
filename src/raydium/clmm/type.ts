@@ -390,6 +390,7 @@ export interface LockPosition<T = TxVersion.LEGACY> {
   payer?: PublicKey;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  getEphemeralSigners?: (k: number) => any;
 }
 
 export interface HarvestLockPosition<T = TxVersion.LEGACY> {
