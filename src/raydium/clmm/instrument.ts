@@ -1013,6 +1013,7 @@ export class ClmmInstrument {
     positionNftMint: PublicKey,
     positionNftAccount: PublicKey,
     personalPosition: PublicKey,
+    nft2022?: boolean,
   ): TransactionInstruction {
     const dataLayout = struct([]);
 
@@ -1023,7 +1024,7 @@ export class ClmmInstrument {
       { pubkey: personalPosition, isSigner: false, isWritable: true },
 
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: nft2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -1043,6 +1044,7 @@ export class ClmmInstrument {
     poolKeys,
     ownerInfo,
     ownerPosition,
+    nft2022,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1050,9 +1052,13 @@ export class ClmmInstrument {
     ownerInfo: {
       wallet: PublicKey;
     };
+    nft2022?: boolean;
   }): ReturnTypeMakeInstructions<ClosePositionExtInfo["address"]> {
     const programId = new PublicKey(poolInfo.programId);
-    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
+    // const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
+    const positionNftAccount = nft2022
+      ? getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_2022_PROGRAM_ID).publicKey
+      : getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID).publicKey;
     const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, ownerPosition.nftMint);
 
     const ins: TransactionInstruction[] = [];
@@ -1063,6 +1069,7 @@ export class ClmmInstrument {
         ownerPosition.nftMint,
         positionNftAccount,
         personalPosition,
+        nft2022,
       ),
     );
 
@@ -1164,6 +1171,7 @@ export class ClmmInstrument {
     liquidity,
     amountMaxA,
     amountMaxB,
+    nft2022,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1178,6 +1186,7 @@ export class ClmmInstrument {
     liquidity: BN;
     amountMaxA: BN;
     amountMaxB: BN;
+    nft2022?: boolean;
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
@@ -1192,7 +1201,9 @@ export class ClmmInstrument {
     const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
     const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
 
-    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
+    const { publicKey: positionNftAccount } = nft2022
+      ? getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_2022_PROGRAM_ID)
+      : getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
 
     const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, ownerPosition.nftMint);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
@@ -1252,6 +1263,7 @@ export class ClmmInstrument {
     base,
     baseAmount,
     otherAmountMax,
+    nft2022,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1267,6 +1279,7 @@ export class ClmmInstrument {
     baseAmount: BN;
 
     otherAmountMax: BN;
+    nft2022?: boolean;
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
@@ -1281,7 +1294,9 @@ export class ClmmInstrument {
     const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
     const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
 
-    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
+    const { publicKey: positionNftAccount } = nft2022
+      ? getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_2022_PROGRAM_ID)
+      : getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_PROGRAM_ID);
 
     const { publicKey: personalPosition } = getPdaPersonalPositionAddress(programId, ownerPosition.nftMint);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
@@ -1506,6 +1521,7 @@ export class ClmmInstrument {
     amountMinA,
     amountMinB,
     programId,
+    nft2022,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1521,6 +1537,7 @@ export class ClmmInstrument {
     amountMinA: BN;
     amountMinB: BN;
     programId?: PublicKey;
+    nft2022?: boolean;
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [poolProgramId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
@@ -1534,8 +1551,9 @@ export class ClmmInstrument {
 
     const { publicKey: tickArrayLower } = getPdaTickArrayAddress(poolProgramId, id, tickArrayLowerStartIndex);
     const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(poolProgramId, id, tickArrayUpperStartIndex);
-    const { publicKey: positionNftAccount } = getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, programId);
-
+    const { publicKey: positionNftAccount } = nft2022
+      ? getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, TOKEN_2022_PROGRAM_ID)
+      : getATAAddress(ownerInfo.wallet, ownerPosition.nftMint, programId);
     const { publicKey: personalPosition } = getPdaPersonalPositionAddress(poolProgramId, ownerPosition.nftMint);
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(
       poolProgramId,
@@ -2127,6 +2145,7 @@ export class ClmmInstrument {
     payer,
     wallet,
     nftMint,
+    nft2022,
     getEphemeralSigners,
   }: {
     programId: PublicKey;
@@ -2135,6 +2154,7 @@ export class ClmmInstrument {
     wallet: PublicKey;
     payer: PublicKey;
     nftMint: PublicKey;
+    nft2022?: boolean;
     getEphemeralSigners?: (k: number) => any;
   }): Promise<ReturnTypeMakeInstructions<ClmmLockAddress>> {
     const signers: Signer[] = [];
@@ -2147,7 +2167,9 @@ export class ClmmInstrument {
       lockNftMint = _k.publicKey;
     }
 
-    const { publicKey: positionNftAccount } = getATAAddress(wallet, nftMint, TOKEN_PROGRAM_ID);
+    const positionNftAccount = nft2022
+      ? getATAAddress(wallet, nftMint, TOKEN_2022_PROGRAM_ID).publicKey
+      : getATAAddress(wallet, nftMint, TOKEN_PROGRAM_ID).publicKey;
     const { publicKey: positionId } = getPdaPersonalPositionAddress(poolProgramId, nftMint);
     const lockPositionId = getPdaLockClPositionIdV2(programId, lockNftMint).publicKey;
     const lockNftAccount = getATAAddress(wallet, lockNftMint, TOKEN_PROGRAM_ID).publicKey;
@@ -2166,6 +2188,7 @@ export class ClmmInstrument {
       lockNftAccount,
       metadataAccount,
       withMetadata: true,
+      nft2022,
     });
 
     return {
@@ -2210,6 +2233,7 @@ export class ClmmInstrument {
     lockNftAccount: PublicKey;
     metadataAccount: PublicKey;
     withMetadata: boolean;
+    nft2022?: boolean;
   }): TransactionInstruction {
     const keys = [
       { pubkey: auth, isSigner: false, isWritable: false },

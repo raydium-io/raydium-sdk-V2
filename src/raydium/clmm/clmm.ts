@@ -12,7 +12,7 @@ import {
   getATAAddress,
   getMultipleAccountsInfoWithCustomFlags,
 } from "@/common";
-import { AccountLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { AccountLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
 import { toApiV3Token, toFeeConfig } from "../../raydium/token/utils";
@@ -451,6 +451,7 @@ export class Clmm extends ModuleBase {
       liquidity,
       amountMaxA,
       amountMaxB,
+      nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
     txBuilder.addInstruction(ins);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
@@ -539,6 +540,7 @@ export class Clmm extends ModuleBase {
       base,
       baseAmount,
       otherAmountMax,
+      nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
     txBuilder.addInstruction(ins);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
@@ -564,6 +566,7 @@ export class Clmm extends ModuleBase {
       checkCreateATAOwner = false,
       computeBudgetConfig,
       txVersion,
+      nftAccount,
     } = props;
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");
@@ -646,7 +649,9 @@ export class Clmm extends ModuleBase {
       );
 
     const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
-
+    const nft2022 = (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(
+      TOKEN_2022_PROGRAM_ID,
+    );
     const decreaseInsInfo = await ClmmInstrument.decreaseLiquidityInstructions({
       poolInfo,
       poolKeys,
@@ -660,6 +665,7 @@ export class Clmm extends ModuleBase {
       liquidity,
       amountMinA,
       amountMinB,
+      nft2022,
     });
 
     txBuilder.addInstruction({
@@ -674,6 +680,7 @@ export class Clmm extends ModuleBase {
         poolKeys,
         ownerInfo: { wallet: this.scope.ownerPubKey },
         ownerPosition,
+        nft2022,
       });
       txBuilder.addInstruction({
         endInstructions: closeInsInfo.instructions,
@@ -701,7 +708,6 @@ export class Clmm extends ModuleBase {
       getEphemeralSigners,
     } = props;
     const txBuilder = this.createTxBuilder();
-
     const lockIns = await ClmmInstrument.makeLockPositions({
       programId,
       authProgramId,
@@ -710,6 +716,7 @@ export class Clmm extends ModuleBase {
       payer: payer ?? this.scope.ownerPubKey,
       nftMint: ownerPosition.nftMint,
       getEphemeralSigners,
+      nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
 
     txBuilder.addInstruction(lockIns);
@@ -904,6 +911,7 @@ export class Clmm extends ModuleBase {
       poolKeys,
       ownerInfo: { wallet: this.scope.ownerPubKey },
       ownerPosition,
+      nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
 
     return txBuilder.addInstruction(ins).versionBuild<ClosePositionExtInfo>({
@@ -1739,6 +1747,9 @@ export class Clmm extends ModuleBase {
             liquidity: new BN(0),
             amountMinA: new BN(0),
             amountMinB: new BN(0),
+            nft2022: (await this.scope.connection.getAccountInfo(itemPosition.nftMint))?.owner.equals(
+              TOKEN_2022_PROGRAM_ID,
+            ),
           });
           txBuilder.addInstruction(insData);
         }

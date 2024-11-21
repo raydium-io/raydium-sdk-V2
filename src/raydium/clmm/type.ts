@@ -375,6 +375,7 @@ export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   liquidity: BN;
   amountMinA: BN;
   amountMinB: BN;
+  nftAccount?: PublicKey;
 
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
