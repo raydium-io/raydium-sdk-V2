@@ -183,6 +183,7 @@ export default class Account extends ModuleBase {
       notUseTokenAccount = false,
       skipCloseAccount = false,
       checkCreateATAOwner = false,
+      assignSeed,
     } = params;
     const tokenProgram = new PublicKey(params.tokenProgram || TOKEN_PROGRAM_ID);
     const ata = this.getAssociatedTokenAccount(mint, new PublicKey(tokenProgram));
@@ -279,7 +280,7 @@ export default class Account extends ModuleBase {
 
       //   return { account: txInstruction.addresses.newAccount, instructionParams: newTxInstructions };
       // } else {
-      const newTokenAccount = generatePubKey({ fromPublicKey: owner, programId: tokenProgram });
+      const newTokenAccount = generatePubKey({ fromPublicKey: owner, programId: tokenProgram, assignSeed });
       const balanceNeeded = await this.scope.connection.getMinimumBalanceForRentExemption(AccountLayout.span);
 
       const createAccountIns = SystemProgram.createAccountWithSeed({

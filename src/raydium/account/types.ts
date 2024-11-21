@@ -53,4 +53,5 @@ export interface GetOrCreateTokenAccountParams {
   skipCloseAccount?: boolean;
   tokenProgram?: PublicKey | string;
   checkCreateATAOwner?: boolean;
+  assignSeed?: string;
 }

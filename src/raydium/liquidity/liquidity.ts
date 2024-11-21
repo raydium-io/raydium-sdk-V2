@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import {
   AmmV4Keys,
   AmmV5Keys,
@@ -886,7 +886,9 @@ export default class LiquidityModule extends ModuleBase {
         skipCloseAccount: !mintAUseSOLBalance,
         associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
         checkCreateATAOwner,
+        assignSeed: mintAUseSOLBalance && seed ? `${seed}-wsol` : undefined,
       });
+
     txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
 
     const { account: ownerTokenAccountQuote, instructionParams: ownerTokenAccountQuoteInstruction } =
@@ -904,6 +906,7 @@ export default class LiquidityModule extends ModuleBase {
         skipCloseAccount: !mintBUseSOLBalance,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
         checkCreateATAOwner,
+        assignSeed: mintBUseSOLBalance && seed ? `${seed}-wsol` : undefined,
       });
     txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
 
@@ -960,9 +963,17 @@ export default class LiquidityModule extends ModuleBase {
       instructionTypes: [instructionType],
     });
 
+    const splitIns =
+      mintAUseSOLBalance || mintBUseSOLBalance
+        ? ([
+            ownerTokenAccountBaseInstruction?.instructions?.[0] || ownerTokenAccountQuoteInstruction?.instructions?.[0],
+          ].filter((i) => !!i) as TransactionInstruction[])
+        : undefined;
+
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({
         computeBudgetConfig,
+        splitIns,
         address: {
           requestQueue: requestQueue.publicKey,
           eventQueue: eventQueue.publicKey,
@@ -978,6 +989,7 @@ export default class LiquidityModule extends ModuleBase {
 
     return txBuilder.sizeCheckBuild({
       computeBudgetConfig,
+      splitIns,
       address: {
         requestQueue: requestQueue.publicKey,
         eventQueue: eventQueue.publicKey,

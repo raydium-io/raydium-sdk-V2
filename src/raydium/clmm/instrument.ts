@@ -348,6 +348,12 @@ export class ClmmInstrument {
       amountMaxA,
       amountMaxB,
       withMetadata,
+      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+      ])
+        ? getPdaExBitmapAccount(programId, id).publicKey
+        : undefined,
     );
 
     return {

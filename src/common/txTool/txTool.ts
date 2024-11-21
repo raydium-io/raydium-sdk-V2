@@ -613,9 +613,9 @@ export class TxBuilder {
   }
 
   public async sizeCheckBuild(
-    props?: Record<string, any> & { computeBudgetConfig?: ComputeBudgetConfig },
+    props?: Record<string, any> & { computeBudgetConfig?: ComputeBudgetConfig; splitIns?: TransactionInstruction[] },
   ): Promise<MultiTxBuildData> {
-    const { computeBudgetConfig, ...extInfo } = props || {};
+    const { splitIns = [], computeBudgetConfig, ...extInfo } = props || {};
     const computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } =
       computeBudgetConfig
         ? addComputeBudget(computeBudgetConfig)
@@ -633,6 +633,7 @@ export class TxBuilder {
     const allSigners: Signer[][] = [];
 
     let instructionQueue: TransactionInstruction[] = [];
+    let splitInsIdx = 0;
     this.allInstructions.forEach((item) => {
       const _itemIns = [...instructionQueue, item];
       const _itemInsWithCompute = computeBudgetConfig ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
@@ -642,15 +643,16 @@ export class TxBuilder {
       const _signer = [..._signerStrs.values()].map((i) => new PublicKey(i));
 
       if (
-        (instructionQueue.length < 12 &&
-          checkLegacyTxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, signers: _signer })) ||
-        checkLegacyTxSize({ instructions: _itemIns, payer: this.feePayer, signers: _signer })
+        item !== splitIns[splitInsIdx] &&
+        instructionQueue.length < 12 &&
+        (checkLegacyTxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, signers: _signer }) ||
+          checkLegacyTxSize({ instructions: _itemIns, payer: this.feePayer, signers: _signer }))
       ) {
         // current ins add to queue still not exceed tx size limit
         instructionQueue.push(item);
       } else {
         if (instructionQueue.length === 0) throw Error("item ins too big");
-
+        splitInsIdx += item === splitIns[splitInsIdx] ? 1 : 0;
         // if add computeBudget still not exceed tx size limit
         if (
           checkLegacyTxSize({
@@ -819,9 +821,16 @@ export class TxBuilder {
       computeBudgetConfig?: ComputeBudgetConfig;
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
+      splitIns?: TransactionInstruction[];
     },
   ): Promise<MultiTxV0BuildData> {
-    const { computeBudgetConfig, lookupTableCache = {}, lookupTableAddress = [], ...extInfo } = props || {};
+    const {
+      computeBudgetConfig,
+      splitIns = [],
+      lookupTableCache = {},
+      lookupTableAddress = [],
+      ...extInfo
+    } = props || {};
     const lookupTableAddressAccount = {
       ...(this.cluster === "devnet" ? {} : LOOKUP_TABLE_CACHE),
       ...lookupTableCache,
@@ -852,19 +861,21 @@ export class TxBuilder {
     const allSigners: Signer[][] = [];
 
     let instructionQueue: TransactionInstruction[] = [];
+    let splitInsIdx = 0;
     this.allInstructions.forEach((item) => {
       const _itemIns = [...instructionQueue, item];
       const _itemInsWithCompute = computeBudgetConfig ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
       if (
-        (instructionQueue.length < 12 &&
-          checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount })) ||
-        checkV0TxSize({ instructions: _itemIns, payer: this.feePayer, lookupTableAddressAccount })
+        item !== splitIns[splitInsIdx] &&
+        instructionQueue.length < 12 &&
+        (checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount }) ||
+          checkV0TxSize({ instructions: _itemIns, payer: this.feePayer, lookupTableAddressAccount }))
       ) {
         // current ins add to queue still not exceed tx size limit
         instructionQueue.push(item);
       } else {
         if (instructionQueue.length === 0) throw Error("item ins too big");
-
+        splitInsIdx += item === splitIns[splitInsIdx] ? 1 : 0;
         const lookupTableAddress: undefined | CacheLTA = {};
         for (const item of [...new Set<string>(allLTA)]) {
           if (lookupTableAddressAccount[item] !== undefined) lookupTableAddress[item] = lookupTableAddressAccount[item];
