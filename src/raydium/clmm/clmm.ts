@@ -1575,6 +1575,19 @@ export class Clmm extends ModuleBase {
         ownerMintToAccount[item.accountInfo.mint.toString()] = item.pubkey;
       }
     }
+    const allNftMints = Object.values(allPositions)
+      .flat()
+      .map((p) => p.nftMint);
+
+    const mintData = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      allNftMints.map((n) => ({ pubkey: n })),
+    );
+    const record: Record<string, PublicKey | null> = {};
+    mintData.forEach((data) => {
+      record[data.pubkey.toBase58()] = data?.accountInfo?.owner ?? null;
+    });
+
     const txBuilder = this.createTxBuilder();
     for (const itemInfo of Object.values(allPoolInfo)) {
       if (allPositions[itemInfo.id] === undefined) continue;
@@ -1747,9 +1760,7 @@ export class Clmm extends ModuleBase {
             liquidity: new BN(0),
             amountMinA: new BN(0),
             amountMinB: new BN(0),
-            nft2022: (await this.scope.connection.getAccountInfo(itemPosition.nftMint))?.owner.equals(
-              TOKEN_2022_PROGRAM_ID,
-            ),
+            nft2022: record[itemPosition.nftMint.toBase58()]?.equals(TOKEN_2022_PROGRAM_ID),
           });
           txBuilder.addInstruction(insData);
         }
