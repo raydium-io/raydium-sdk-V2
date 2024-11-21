@@ -435,6 +435,7 @@ export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   baseAmount: BN;
   otherAmountMax: BN;
 
+  nft2022?: boolean;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   withMetadata?: "create" | "no-create";
@@ -470,6 +471,7 @@ export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
   getEphemeralSigners?: (k: number) => any;
   txVersion?: T;
   computeBudgetConfig;
+  nft2022?: boolean;
 }
 
 export interface OpenPositionFromLiquidityExtInfo {
