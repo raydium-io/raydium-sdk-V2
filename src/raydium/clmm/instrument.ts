@@ -2226,6 +2226,7 @@ export class ClmmInstrument {
       { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ];
     const dataLayout = struct([bool("withMetadata")]);
