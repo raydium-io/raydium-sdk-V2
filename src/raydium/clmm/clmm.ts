@@ -175,6 +175,7 @@ export class Clmm extends ModuleBase {
     base,
     baseAmount,
     otherAmountMax,
+    nft2022,
     associatedOnly = true,
     checkCreateATAOwner = false,
     withMetadata = "create",
@@ -260,6 +261,7 @@ export class Clmm extends ModuleBase {
       otherAmountMax,
       withMetadata,
       getEphemeralSigners,
+      nft2022,
     });
 
     txBuilder.addInstruction(insInfo);
@@ -285,6 +287,7 @@ export class Clmm extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     getEphemeralSigners,
+    nft2022,
   }: OpenPositionFromLiquidity<T>): Promise<MakeTxData<T, OpenPositionFromLiquidityExtInfo>> {
     if (this.scope.availability.createConcentratedPosition === false)
       this.logAndCreateError("open position feature disabled in your region");
@@ -358,6 +361,7 @@ export class Clmm extends ModuleBase {
       amountMaxB,
       withMetadata,
       getEphemeralSigners,
+      nft2022,
     });
     txBuilder.addInstruction(makeOpenPositionInstructions);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
