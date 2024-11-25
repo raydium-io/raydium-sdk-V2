@@ -47,6 +47,7 @@
     "bn.js": "^5.2.1",
     "dayjs": "^1.11.5",
     "decimal.js-light": "^2.5.1",
+    "jsonfile": "^6.1.0",
     "lodash": "^4.17.21",
     "toformat": "^2.0.0",
     "tsconfig-paths": "^4.2.0"

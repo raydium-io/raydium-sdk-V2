@@ -118,5 +118,6 @@ lib/
 .coverage/
 docs/
 test/local/
+test/data/
 
 example/node_modules/

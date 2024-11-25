@@ -209,7 +209,7 @@ export default class TradeV2 extends ModuleBase {
     }
 
     let destinationAcc: PublicKey;
-    if (swapInfo.routeType === "route") {
+    if (swapInfo.routeType === "route" && !isOutputSol) {
       destinationAcc = this.scope.account.getAssociatedTokenAccount(
         outputMint,
         amountOut.amount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
