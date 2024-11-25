@@ -322,6 +322,7 @@ interface _Cpmm {
   authority: string;
   mintLp: ApiV3Token;
   config: ApiCpmmConfigV3;
+  observationId: string;
 }
 interface _Market {
   marketProgramId: string;
@@ -340,7 +341,12 @@ export interface ClmmRewardType {
   mint: ApiV3Token;
   vault: string;
 }
-export type ClmmKeys = Base & { config: ApiClmmConfigV3; rewardInfos: ClmmRewardType[] };
+export type ClmmKeys = Base & {
+  config: ApiClmmConfigV3;
+  rewardInfos: ClmmRewardType[];
+  observationId: string;
+  exBitmapAccount: string;
+};
 export type PoolKeys = AmmV4Keys | AmmV5Keys | ClmmKeys | CpmmKeys;
 
 // clmm config

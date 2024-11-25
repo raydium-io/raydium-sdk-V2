@@ -8,6 +8,8 @@ import {
   MEMO_PROGRAM_ID2,
   accountMeta,
   jsonInfo2PoolKeys,
+  getATAAddress,
+  ALL_PROGRAM_ID,
 } from "@/common";
 import { seq, struct, u128, u64, u8 } from "../../marshmallow";
 import {
@@ -18,13 +20,14 @@ import {
   MIN_SQRT_PRICE_X64_ADD_ONE,
   ONE,
   getPdaExBitmapAccount,
+  getPdaObservationAccount,
+  getPdaPoolId,
 } from "../clmm";
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
 
 import { AmmV4Keys, AmmV5Keys, ApiV3PoolInfoItem, ClmmKeys, CpmmKeys, PoolKeys } from "../../api/type";
-import { makeSwapCpmmBaseInInInstruction } from "../../raydium/cpmm";
+import { getPdaObservationId, makeSwapCpmmBaseInInInstruction } from "../../raydium/cpmm";
 import { ComputePoolType, MakeSwapInstructionParam, ReturnTypeMakeSwapInstruction } from "./type";
-
 export function route1Instruction(
   programId: PublicKey,
   poolInfoA: ApiV3PoolInfoItem,
@@ -266,7 +269,7 @@ function makeInnerInsKey(
   userInAccount: PublicKey,
   userOutAccount: PublicKey,
   remainingAccount: PublicKey[] | undefined,
-): AccountMeta[] {
+): accountMeta[] {
   if (itemPool.version === 4) {
     const poolKey = jsonInfo2PoolKeys(itemPoolKey as AmmV4Keys);
 
@@ -666,4 +669,335 @@ export function makeSwapInstruction({
   } else {
     throw Error("route type error");
   }
+}
+
+export interface ApiSwapV1Out {
+  id: string;
+  success: boolean;
+  version: "V0" | "V1";
+  openTime?: undefined;
+  msg: undefined;
+  data: {
+    swapType: "BaseIn" | "BaseOut";
+    inputMint: string;
+    inputAmount: string;
+    outputMint: string;
+    outputAmount: string;
+    otherAmountThreshold: string;
+    slippageBps: number;
+    priceImpactPct: number;
+    routePlan: {
+      poolId: string;
+      inputMint: string;
+      outputMint: string;
+      feeMint: string;
+      feeRate: number;
+      feeAmount: string;
+      remainingAccounts?: string[];
+      lastPoolPriceX64?: string;
+    }[];
+  };
+}
+
+export function swapBaseInAutoAccount({
+  programId,
+  wallet,
+  amount,
+  inputAccount,
+  outputAccount,
+  routeInfo,
+  poolKeys,
+}: {
+  programId: PublicKey;
+  wallet: PublicKey;
+  amount: BN;
+  inputAccount: PublicKey;
+  outputAccount: PublicKey;
+  routeInfo: ApiSwapV1Out;
+  poolKeys: PoolKeys[];
+}): TransactionInstruction {
+  if (routeInfo.success === false) throw Error("route info error");
+  const clmmPriceLimit: BN[] = [];
+  const keys = [
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_2022_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
+    accountMeta({ pubkey: wallet, isSigner: true }),
+  ];
+  const cacheAccount: { [mint: string]: PublicKey } = {
+    [routeInfo.data.inputMint]: inputAccount,
+    [routeInfo.data.outputMint]: outputAccount,
+  };
+  keys.push(accountMeta({ pubkey: cacheAccount[routeInfo.data.inputMint] }));
+  keys.push(accountMeta({ pubkey: cacheAccount[routeInfo.data.outputMint] }));
+  for (let index = 0; index < poolKeys.length; index++) {
+    const _routeInfo = routeInfo.data.routePlan[index];
+    const _poolKey = poolKeys[index];
+    const inputIsA = _routeInfo.inputMint === _poolKey.mintA.address;
+    keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.programId), isWritable: false }));
+    if (index === poolKeys.length - 1) {
+      keys.push(accountMeta({ pubkey: cacheAccount[_routeInfo.outputMint] }));
+    } else {
+      const mint = _routeInfo.outputMint;
+      if (cacheAccount[mint] === undefined) {
+        const ata = getATAAddress(
+          wallet,
+          new PublicKey(mint),
+          _poolKey.programId === ALL_PROGRAM_ID.CLMM_PROGRAM_ID.toBase58() ||
+            _poolKey.programId === ALL_PROGRAM_ID.CREATE_CPMM_POOL_PROGRAM.toBase58()
+            ? new PublicKey(inputIsA ? _poolKey.mintB.programId : _poolKey.mintA.programId)
+            : TOKEN_PROGRAM_ID,
+        ).publicKey;
+        cacheAccount[mint] = ata;
+      }
+      keys.push(accountMeta({ pubkey: cacheAccount[mint] }));
+    }
+    keys.push(accountMeta({ pubkey: new PublicKey(_routeInfo.inputMint) }));
+    keys.push(accountMeta({ pubkey: new PublicKey(_routeInfo.outputMint) }));
+    if (_poolKey.programId === ALL_PROGRAM_ID.CLMM_PROGRAM_ID.toBase58()) {
+      const poolKey = _poolKey as ClmmKeys;
+
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.config.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.A : poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.B : poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.observationId) }));
+      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID2, isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.exBitmapAccount) }));
+      clmmPriceLimit.push(clmmPriceLimitX64InsData(_routeInfo.lastPoolPriceX64, inputIsA));
+      for (const item of _routeInfo.remainingAccounts ?? []) {
+        keys.push(accountMeta({ pubkey: new PublicKey(item) }));
+      }
+    } else if (_poolKey.programId === ALL_PROGRAM_ID.AMM_STABLE.toBase58()) {
+      const poolKey = _poolKey as AmmV5Keys;
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.authority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketProgramId), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketAuthority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: LIQUIDITY_POOL_PROGRAM_ID_V5_MODEL, isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.openOrders) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketBids) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketAsks) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketEventQueue) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketBaseVault) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.marketQuoteVault) }));
+    } else if (_poolKey.programId === ALL_PROGRAM_ID.AMM_V4.toBase58()) {
+      const poolKey = _poolKey as AmmV4Keys;
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.authority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketProgramId), isWritable: false }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAuthority), isWritable: false }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.openOrder) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.A) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.B) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketId) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.bids) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.asks) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.eventQueue) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketVaultA) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketVaultB) }))
+    } else if (_poolKey.programId === ALL_PROGRAM_ID.CREATE_CPMM_POOL_PROGRAM.toBase58()) {
+      const poolKey = _poolKey as CpmmKeys;
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.authority) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.config.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.A : poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.B : poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.observationId) }));
+    } else throw Error("pool type error");
+  }
+  const dataLayout = struct([
+    u8("insId"),
+    u64("amountIn"),
+    u64("amountOut"),
+    seq(u128(), clmmPriceLimit.length, "clmmPriceLimit"),
+  ]);
+  const data = Buffer.alloc(dataLayout.span);
+  dataLayout.encode(
+    {
+      insId: 0,
+      amountIn: amount,
+      amountOut: new BN(routeInfo.data.otherAmountThreshold),
+      clmmPriceLimit,
+    },
+    data,
+  );
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data,
+  });
+}
+
+export function swapBaseOutAutoAccount({
+  programId,
+  wallet,
+  inputAccount,
+  outputAccount,
+  routeInfo,
+  poolKeys,
+}: {
+  programId: PublicKey;
+  wallet: PublicKey;
+  inputAccount: PublicKey;
+  outputAccount: PublicKey;
+  routeInfo: ApiSwapV1Out;
+  poolKeys: PoolKeys[];
+}): TransactionInstruction {
+  if (routeInfo.success === false) throw Error("route info error");
+  const clmmPriceLimit: BN[] = [];
+  const keys = [
+    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: TOKEN_2022_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false }),
+    accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
+    accountMeta({ pubkey: wallet, isSigner: true }),
+  ];
+  const cacheAccount: { [mint: string]: PublicKey } = {
+    [routeInfo.data.inputMint]: inputAccount,
+    [routeInfo.data.outputMint]: outputAccount,
+  };
+  for (let index = poolKeys.length - 1; index >= 0; index--) {
+    const _routeInfo = routeInfo.data.routePlan[index];
+    const _poolKey = poolKeys[index];
+    const inputIsA = _routeInfo.inputMint === _poolKey.mintA.address;
+    keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.programId) }));
+    if (index === 0) {
+      keys.push(accountMeta({ pubkey: cacheAccount[_routeInfo.inputMint] }));
+    } else {
+      const mint = _routeInfo.inputMint;
+      if (cacheAccount[mint] === undefined) {
+        const ata = getATAAddress(
+          wallet,
+          new PublicKey(mint),
+          _poolKey.programId === ALL_PROGRAM_ID.CLMM_PROGRAM_ID.toBase58() ||
+            _poolKey.programId === ALL_PROGRAM_ID.CREATE_CPMM_POOL_PROGRAM.toBase58()
+            ? new PublicKey(inputIsA ? _poolKey.mintA.programId : _poolKey.mintB.programId)
+            : TOKEN_PROGRAM_ID,
+        ).publicKey;
+        cacheAccount[mint] = ata;
+      }
+      keys.push(accountMeta({ pubkey: cacheAccount[mint] }));
+    }
+    if (index === poolKeys.length - 1) {
+      keys.push(accountMeta({ pubkey: cacheAccount[_routeInfo.outputMint] }));
+    } else {
+      const mint = _routeInfo.outputMint;
+      if (cacheAccount[mint] === undefined) {
+        const ata = getATAAddress(
+          wallet,
+          new PublicKey(mint),
+          _poolKey.programId === ALL_PROGRAM_ID.CLMM_PROGRAM_ID.toBase58() ||
+            _poolKey.programId === ALL_PROGRAM_ID.CREATE_CPMM_POOL_PROGRAM.toBase58()
+            ? new PublicKey(inputIsA ? _poolKey.mintB.programId : _poolKey.mintA.programId)
+            : TOKEN_PROGRAM_ID,
+        ).publicKey;
+        cacheAccount[mint] = ata;
+      }
+      keys.push(accountMeta({ pubkey: cacheAccount[mint] }));
+    }
+    keys.push(accountMeta({ pubkey: new PublicKey(_routeInfo.inputMint) }));
+    keys.push(accountMeta({ pubkey: new PublicKey(_routeInfo.outputMint) }));
+    if (_poolKey.programId === ALL_PROGRAM_ID.CLMM_PROGRAM_ID.toBase58()) {
+      const poolKey = _poolKey as ClmmKeys;
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.config.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.A : poolKey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.B : poolKey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.observationId) }));
+      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID2, isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolKey.exBitmapAccount) }));
+      clmmPriceLimit.push(clmmPriceLimitX64InsData(_routeInfo.lastPoolPriceX64, inputIsA));
+      for (const item of _routeInfo.remainingAccounts ?? []) {
+        keys.push(accountMeta({ pubkey: new PublicKey(item) }));
+      }
+    } else if (_poolKey.programId === ALL_PROGRAM_ID.AMM_STABLE.toBase58()) {
+      const poolkey = _poolKey as AmmV5Keys;
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.authority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketProgramId), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketAuthority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: LIQUIDITY_POOL_PROGRAM_ID_V5_MODEL, isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.openOrders) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketId) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketBids) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketAsks) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketEventQueue) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketBaseVault) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.marketQuoteVault) }));
+    } else if (_poolKey.programId === ALL_PROGRAM_ID.AMM_V4.toBase58()) {
+      const poolkey = _poolKey as AmmV4Keys;
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.authority), isWritable: false }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketProgramId), isWritable: false }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketAuthority), isWritable: false }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.openOrder) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.A) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(poolKey.vault.B) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketId) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.bids) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.asks) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.eventQueue) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketVaultA) }))
+      // keys.push(accountMeta({ pubkey: new PublicKey(_poolKey.marketVaultB) }))
+    } else if (_poolKey.programId === ALL_PROGRAM_ID.CREATE_CPMM_POOL_PROGRAM.toBase58()) {
+      const poolkey = _poolKey as CpmmKeys;
+
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.authority) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.config.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.id) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolkey.vault.A : poolkey.vault.B) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolkey.vault.B : poolkey.vault.A) }));
+      keys.push(accountMeta({ pubkey: new PublicKey(poolkey.observationId) }));
+    } else throw Error("pool type error");
+  }
+  const dataLayout = struct([
+    u8("insId"),
+    u64("amountIn"),
+    u64("amountOut"),
+    seq(u128(), clmmPriceLimit.length, "clmmPriceLimit"),
+  ]);
+  const data = Buffer.alloc(dataLayout.span);
+  dataLayout.encode(
+    {
+      insId: 1,
+      amountIn: new BN(routeInfo.data.otherAmountThreshold),
+      amountOut: new BN(routeInfo.data.outputAmount),
+      clmmPriceLimit,
+    },
+    data,
+  );
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data,
+  });
 }

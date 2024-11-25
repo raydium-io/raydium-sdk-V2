@@ -281,6 +281,7 @@ export default class CpmmModule extends ModuleBase {
         authority: getPdaPoolAuthority(rpcData.programId).publicKey.toBase58(),
         mintLp: lpMint,
         config: configInfo,
+        observationId: getPdaObservationId(rpcData.programId, new PublicKey(poolId)).publicKey.toBase58(),
       },
       rpcData,
     };

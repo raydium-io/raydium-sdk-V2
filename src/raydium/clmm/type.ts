@@ -149,6 +149,7 @@ export interface ComputeClmmPoolInfo {
 
   ammConfig: ClmmConfigInfo;
   observationId: PublicKey;
+  exBitmapAccount: PublicKey;
 
   creator: PublicKey;
   programId: PublicKey;

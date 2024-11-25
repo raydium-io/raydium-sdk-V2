@@ -1178,6 +1178,8 @@ export default class TradeV2 extends ModuleBase {
             defaultRangePoint: [],
           },
           rewardInfos: [],
+          observationId: pool.observationId.toBase58(),
+          exBitmapAccount: pool.exBitmapAccount.toBase58(),
         };
         poolKeys.push(clmmKeys);
       } else if (pool.version === 4) {
@@ -1201,6 +1203,7 @@ export default class TradeV2 extends ModuleBase {
         poolKeys.push(ammKeys);
       } else if (pool.version === 7) {
         poolKeys.push({
+          observationId: pool.observationId.toBase58(),
           programId: pool.programId.toBase58(),
           id: pool.id.toBase58(),
           mintA: pool.mintA,

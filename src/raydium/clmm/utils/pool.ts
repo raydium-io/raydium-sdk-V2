@@ -1237,6 +1237,7 @@ export class PoolUtils {
             fundOwner: "",
           },
           currentPrice: new Decimal(cur.price),
+          exBitmapAccount: getPdaExBitmapAccount(new PublicKey(cur.programId), new PublicKey(cur.id)).publicKey,
           exBitmapInfo:
             exBitData[getPdaExBitmapAccount(new PublicKey(cur.programId), new PublicKey(cur.id)).publicKey.toBase58()],
           startTime: rpcDataMap[cur.id].startTime.toNumber(),

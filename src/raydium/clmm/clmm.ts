@@ -118,6 +118,8 @@ export class Clmm extends ModuleBase {
       extInfo: {
         address: {
           ...insInfo.address,
+          observationId: insInfo.address.observationId.toBase58(),
+          exBitmapAccount: insInfo.address.exBitmapAccount.toBase58(),
           programId: programId.toString(),
           id: insInfo.address.poolId.toString(),
           mintA,
@@ -1945,6 +1947,8 @@ export class Clmm extends ModuleBase {
 
     const poolKeys: ClmmKeys = {
       ...computeClmmPoolInfo[poolId],
+      exBitmapAccount: computeClmmPoolInfo[poolId].exBitmapAccount.toBase58(),
+      observationId: computeClmmPoolInfo[poolId].observationId.toBase58(),
       id: poolId,
       programId: rpcData.programId.toBase58(),
       openTime: rpcData.startTime.toString(),
