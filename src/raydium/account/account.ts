@@ -37,7 +37,7 @@ export default class Account extends ModuleBase {
     const { tokenAccounts, tokenAccountRawInfos, notSubscribeAccountChange } = params;
     this._tokenAccounts = tokenAccounts || [];
     this._tokenAccountRawInfos = tokenAccountRawInfos || [];
-    this._notSubscribeAccountChange = notSubscribeAccountChange ?? false;
+    this._notSubscribeAccountChange = notSubscribeAccountChange ?? true;
     this._clientOwnedToken = !!(tokenAccounts || tokenAccountRawInfos);
   }
 
@@ -87,7 +87,10 @@ export default class Account extends ModuleBase {
   }> {
     if (
       this._clientOwnedToken ||
-      (!config?.forceUpdate && this._tokenAccounts.length && Date.now() - this._accountFetchTime < 1000 * 60 * 3)
+      (!config?.forceUpdate &&
+        !this._notSubscribeAccountChange &&
+        this._tokenAccounts.length &&
+        Date.now() - this._accountFetchTime < 1000 * 60 * 3)
     ) {
       return {
         tokenAccounts: this._tokenAccounts,
@@ -142,6 +145,11 @@ export default class Account extends ModuleBase {
     }
 
     return { tokenAccounts, tokenAccountRawInfos };
+  }
+
+  public clearAccountChangeCkb(): void {
+    if (this._accountChangeListenerId !== undefined)
+      this.scope.connection.removeAccountChangeListener(this._accountChangeListenerId);
   }
 
   // user token account needed, old _selectTokenAccount
@@ -264,22 +272,6 @@ export default class Account extends ModuleBase {
 
       return { account: ata, instructionParams: newTxInstructions };
     } else {
-      // if (mint.equals(WSOLMint)) {
-      //   const txInstruction = await createWSolAccountInstructions({
-      //     connection: this.scope.connection,
-      //     owner: this.scope.ownerPubKey,
-      //     payer: createInfo.payer || this.scope.ownerPubKey,
-      //     amount: createInfo.amount ?? 0,
-      //     skipCloseAccount,
-      //   });
-      //   newTxInstructions.instructions!.push(...(txInstruction.instructions || []));
-      //   newTxInstructions.endInstructions!.push(...(txInstruction.endInstructions || []));
-      //   newTxInstructions.signers!.push(...(txInstruction.signers || []));
-      //   newTxInstructions.instructionTypes!.push(...(txInstruction.instructionTypes || []));
-      //   newTxInstructions.endInstructionTypes!.push(...(txInstruction.endInstructionTypes || []));
-
-      //   return { account: txInstruction.addresses.newAccount, instructionParams: newTxInstructions };
-      // } else {
       const newTokenAccount = generatePubKey({ fromPublicKey: owner, programId: tokenProgram, assignSeed });
       const balanceNeeded = await this.scope.connection.getMinimumBalanceForRentExemption(AccountLayout.span);
 
