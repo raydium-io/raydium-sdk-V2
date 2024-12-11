@@ -88,9 +88,8 @@ export default class Account extends ModuleBase {
     if (
       this._clientOwnedToken ||
       (!config?.forceUpdate &&
-        !this._notSubscribeAccountChange &&
         this._tokenAccounts.length &&
-        Date.now() - this._accountFetchTime < 1000 * 60 * 3)
+        Date.now() - this._accountFetchTime < (this._notSubscribeAccountChange ? 1000 * 5 : 1000 * 60 * 3))
     ) {
       return {
         tokenAccounts: this._tokenAccounts,
