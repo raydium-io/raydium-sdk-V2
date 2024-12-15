@@ -7,7 +7,7 @@ import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
 import { BN_ZERO } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { FARM_PROGRAM_ID_V6 } from "@/common/programId";
-import { SOLMint, WSOLMint } from "@/common/pubKey";
+import { SOLMint, solToWSol, WSOLMint } from "@/common/pubKey";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { generatePubKey } from "../account/util";
@@ -744,10 +744,12 @@ export default class Farm extends ModuleBase {
     farmInfo,
     withdrawMint,
     txVersion,
+    computeBudgetConfig,
   }: {
     farmInfo: FormatFarmInfoOut;
     withdrawMint: PublicKey;
     payer?: PublicKey;
+    computeBudgetConfig?: ComputeBudgetConfig;
     txVersion?: T;
   }): Promise<MakeTxData<T>> {
     this.scope.checkOwner();
@@ -757,10 +759,10 @@ export default class Farm extends ModuleBase {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version", version);
 
-    const rewardInfoIdx = farmInfo.rewardInfos.findIndex((item) =>
-      item.mint.address === SOLMint.toString() ? new PublicKey(TOKEN_WSOL.address) : withdrawMint,
-    );
-    const rewardInfo = farmKeys.rewardInfos[rewardInfoIdx];
+    // const rewardInfoIdx = farmInfo.rewardInfos.findIndex((item) =>
+    //   item.mint.address === SOLMint.toString() ? new PublicKey(TOKEN_WSOL.address) : withdrawMint,
+    // );
+    const rewardInfo = farmKeys.rewardInfos.find((r) => solToWSol(r.mint.address).equals(solToWSol(withdrawMint)));
     if (!rewardInfo) this.logAndCreateError("withdraw mint error", "rewardInfos", farmInfo);
 
     const rewardVault = rewardInfo?.vault ?? SOLMint;
@@ -768,16 +770,16 @@ export default class Farm extends ModuleBase {
 
     let userRewardToken: PublicKey;
 
-    if (withdrawMint.equals(SOLMint)) {
+    if (withdrawMint.equals(SOLMint) || withdrawMint.equals(PublicKey.default)) {
       const txInstruction = await createWSolAccountInstructions({
         connection: this.scope.connection,
         owner: this.scope.ownerPubKey,
         payer: this.scope.ownerPubKey,
         amount: calFarmRewardAmount({
           ...rewardInfo,
-          openTime: rewardInfo.openTime as unknown as string,
-          endTime: rewardInfo.endTime as unknown as string,
-          perSecond: new Decimal(rewardInfo.perSecond).mul(10 ** rewardInfo.mint.decimals).toString(),
+          openTime: rewardInfo!.openTime as unknown as string,
+          endTime: rewardInfo!.endTime as unknown as string,
+          perSecond: new Decimal(rewardInfo!.perSecond).mul(10 ** rewardInfo!.mint.decimals).toString(),
         }),
       });
       userRewardToken = txInstruction.addresses.newAccount;
@@ -814,6 +816,7 @@ export default class Farm extends ModuleBase {
       userRewardToken,
       owner: this.scope.ownerPubKey,
     });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder
       .addInstruction({

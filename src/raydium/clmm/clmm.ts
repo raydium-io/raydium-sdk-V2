@@ -1202,13 +1202,15 @@ export class Clmm extends ModuleBase {
     }) as Promise<MakeTxData<T, { address: Record<string, PublicKey> }>>;
   }
 
-  public async collectReward({
+  public async collectReward<T extends TxVersion>({
     poolInfo,
     ownerInfo,
     rewardMint,
     associatedOnly = true,
     checkCreateATAOwner = false,
-  }: CollectRewardParams): Promise<MakeTransaction> {
+    computeBudgetConfig,
+    txVersion,
+  }: CollectRewardParams<T>): Promise<MakeTxData<{ address: Record<string, PublicKey> }>> {
     const rewardInfo = poolInfo!.rewardDefaultInfos.find((i) => i.mint.address === rewardMint.toString());
     if (!rewardInfo) this.logAndCreateError("reward mint error", "not found reward mint", rewardMint);
 
@@ -1243,8 +1245,11 @@ export class Clmm extends ModuleBase {
       rewardMint,
     });
     txBuilder.addInstruction(insInfo);
-
-    return txBuilder.build<{ address: Record<string, PublicKey> }>({ address: insInfo.address });
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
+      txVersion,
+      extInfo: { address: insInfo.address },
+    }) as Promise<MakeTxData<{ address: Record<string, PublicKey> }>>;
   }
 
   public async collectRewards({

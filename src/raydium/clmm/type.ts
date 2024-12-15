@@ -555,7 +555,7 @@ export interface SetRewardsParams<T = TxVersion.LEGACY> extends Omit<SetRewardPa
   }[];
 }
 
-export interface CollectRewardParams {
+export interface CollectRewardParams<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   ownerInfo: {
     feePayer?: PublicKey;
@@ -564,9 +564,11 @@ export interface CollectRewardParams {
   rewardMint: PublicKey;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
 }
 
-export interface CollectRewardsParams extends Omit<CollectRewardParams, "rewardMint"> {
+export interface CollectRewardsParams<T = TxVersion.LEGACY> extends Omit<CollectRewardParams, "rewardMint"> {
   rewardMints: PublicKey[];
 }
 
