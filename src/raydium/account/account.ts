@@ -212,6 +212,7 @@ export default class Account extends ModuleBase {
 
     if (associatedOnly) {
       const _createATAIns = createAssociatedTokenAccountInstruction(owner, ata, owner, mint, tokenProgram);
+      const _ataInTokenAcc = this.tokenAccountRawInfos.find((i) => i.pubkey.equals(ata))
       if (checkCreateATAOwner) {
         const ataInfo = await this.scope.connection.getAccountInfo(ata);
         if (ataInfo === null) {
@@ -226,7 +227,7 @@ export default class Account extends ModuleBase {
         } else {
           throw Error(`create ata check error -> mint: ${mint.toString()}, ata: ${ata.toString()}`);
         }
-      } else {
+      } else if (_ataInTokenAcc === undefined) {
         newTxInstructions.instructions!.push(_createATAIns);
         newTxInstructions.instructionTypes!.push(InstructionType.CreateATA);
       }
@@ -257,7 +258,7 @@ export default class Account extends ModuleBase {
         }
       }
 
-      if (!skipCloseAccount) {
+      if (!skipCloseAccount && _ataInTokenAcc === undefined) {
         newTxInstructions.endInstructions!.push(
           closeAccountInstruction({
             owner,
