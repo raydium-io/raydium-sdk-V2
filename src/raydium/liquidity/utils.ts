@@ -254,7 +254,9 @@ export const toAmmComputePoolInfo = (
       marketId: poolInfo.marketId.toBase58(),
       configId: getAssociatedConfigId({ programId: poolInfo.programId }).toBase58(),
       lpPrice: 0,
-      lpAmount: 0,
+      lpAmount: new Decimal(poolInfo.lpReserve.toString())
+        .div(10 ** Math.min(poolInfo.baseDecimal.toNumber(), poolInfo.quoteDecimal.toNumber()))
+        .toNumber(),
       lpMint: toApiV3Token({
         address: poolInfo.lpMint.toBase58(),
         programId: tokenProgramStr,
