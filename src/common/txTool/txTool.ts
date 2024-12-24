@@ -138,7 +138,6 @@ export class TxBuilder {
   private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
   private blockhashCommitment?: Commitment;
-  private api?: Api;
 
   constructor(params: TxBuilderInit) {
     this.connection = params.connection;
@@ -147,7 +146,6 @@ export class TxBuilder {
     this.owner = params.owner;
     this.cluster = params.cluster;
     this.blockhashCommitment = params.blockhashCommitment;
-    this.api = params.api;
   }
 
   get AllTxData(): {
