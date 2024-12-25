@@ -982,7 +982,7 @@ export default class LiquidityModule extends ModuleBase {
           baseVault: baseVault.publicKey,
           quoteVault: quoteVault.publicKey,
           baseMint: new PublicKey(baseMintInfo.mint),
-          quoteMin: new PublicKey(quoteMintInfo.mint),
+          quoteMint: new PublicKey(quoteMintInfo.mint),
           ...createPoolKeys,
         },
       }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
@@ -998,7 +998,7 @@ export default class LiquidityModule extends ModuleBase {
         baseVault: baseVault.publicKey,
         quoteVault: quoteVault.publicKey,
         baseMint: new PublicKey(baseMintInfo.mint),
-        quoteMin: new PublicKey(quoteMintInfo.mint),
+        quoteMint: new PublicKey(quoteMintInfo.mint),
         ...createPoolKeys,
       },
     }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
