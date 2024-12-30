@@ -178,7 +178,7 @@ export class TickUtils {
     return TickUtils.searchHightBitFromStart(
       tickArrayBitmap,
       exTickArrayBitmap,
-      0,
+      -7680,
       TICK_ARRAY_BITMAP_SIZE,
       tickSpacing,
     );
