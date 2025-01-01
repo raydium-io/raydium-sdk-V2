@@ -275,7 +275,7 @@ export default class LiquidityModule extends ModuleBase {
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-    if (txVersion === TxVersion.V0) (await txBuilder.buildV0()) as MakeTxData<T>;
+    if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
   }
 
