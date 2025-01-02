@@ -568,7 +568,6 @@ export class Clmm extends ModuleBase {
       checkCreateATAOwner = false,
       computeBudgetConfig,
       txVersion,
-      nftAccount,
     } = props;
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");

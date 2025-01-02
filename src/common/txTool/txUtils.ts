@@ -61,7 +61,7 @@ export async function confirmTransaction(connection: Connection, txId: string): 
           resolve("");
           return;
         }
-        reject(signatureResult.err);
+        reject(Object.assign(signatureResult.err, { txId }));
       },
       "confirmed",
     );
