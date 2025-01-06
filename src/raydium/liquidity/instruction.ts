@@ -306,7 +306,7 @@ export function makeSwapFixedInInstruction(
     // user
     accountMeta({ pubkey: userKeys.tokenAccountIn }),
     accountMeta({ pubkey: userKeys.tokenAccountOut }),
-    accountMeta({ pubkey: userKeys.owner, isWritable: false }),
+    accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
   );
 
   return new TransactionInstruction({
