@@ -24,8 +24,8 @@ import { toApiV3Token, toFeeConfig } from "../token";
 import {
   makeCreateCpmmPoolInInstruction,
   makeDepositCpmmInInstruction,
-  makeSwapCpmmBaseInInInstruction,
-  makeSwapCpmmBaseOutInInstruction,
+  makeSwapCpmmBaseInInstruction,
+  makeSwapCpmmBaseOutInstruction,
   makeWithdrawCpmmInInstruction,
   makeCpmmLockInstruction,
   collectCpFeeInstruction,
@@ -734,7 +734,7 @@ export default class CpmmModule extends ModuleBase {
     txBuilder.addInstruction({
       instructions: [
         !fixedOut
-          ? makeSwapCpmmBaseInInInstruction(
+          ? makeSwapCpmmBaseInInstruction(
               new PublicKey(poolInfo.programId),
               this.scope.ownerPubKey,
               new PublicKey(poolKeys.authority),
@@ -753,7 +753,7 @@ export default class CpmmModule extends ModuleBase {
               inputAmount,
               swapResult.destinationAmountSwapped,
             )
-          : makeSwapCpmmBaseOutInInstruction(
+          : makeSwapCpmmBaseOutInstruction(
               new PublicKey(poolInfo.programId),
               this.scope.ownerPubKey,
               new PublicKey(poolKeys.authority),

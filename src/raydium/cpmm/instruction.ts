@@ -212,7 +212,7 @@ export function makeWithdrawCpmmInInstruction(
   });
 }
 
-export function makeSwapCpmmBaseInInInstruction(
+export function makeSwapCpmmBaseInInstruction(
   programId: PublicKey,
   payer: PublicKey,
   authority: PublicKey,
@@ -264,7 +264,7 @@ export function makeSwapCpmmBaseInInInstruction(
     data: Buffer.from([...anchorDataBuf.swapBaseInput, ...data]),
   });
 }
-export function makeSwapCpmmBaseOutInInstruction(
+export function makeSwapCpmmBaseOutInstruction(
   programId: PublicKey,
   payer: PublicKey,
   authority: PublicKey,

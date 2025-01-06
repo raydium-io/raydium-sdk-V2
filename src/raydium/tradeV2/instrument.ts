@@ -26,7 +26,7 @@ import {
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
 
 import { AmmV4Keys, AmmV5Keys, ApiV3PoolInfoItem, ClmmKeys, CpmmKeys, PoolKeys } from "../../api/type";
-import { getPdaObservationId, makeSwapCpmmBaseInInInstruction } from "../../raydium/cpmm";
+import { getPdaObservationId, makeSwapCpmmBaseInInstruction } from "../../raydium/cpmm";
 import { ComputePoolType, MakeSwapInstructionParam, ReturnTypeMakeSwapInstruction } from "./type";
 export function route1Instruction(
   programId: PublicKey,
@@ -575,7 +575,7 @@ export function makeSwapInstruction({
       return {
         signers: [],
         instructions: [
-          makeSwapCpmmBaseInInInstruction(
+          makeSwapCpmmBaseInInstruction(
             poolInfo.programId,
             ownerInfo.wallet,
             poolInfo.authority,
