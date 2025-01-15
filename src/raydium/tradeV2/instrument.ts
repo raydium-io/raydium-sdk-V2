@@ -20,13 +20,11 @@ import {
   MIN_SQRT_PRICE_X64_ADD_ONE,
   ONE,
   getPdaExBitmapAccount,
-  getPdaObservationAccount,
-  getPdaPoolId,
 } from "../clmm";
 import { makeAMMSwapInstruction } from "../liquidity/instruction";
 
 import { AmmV4Keys, AmmV5Keys, ApiV3PoolInfoItem, ClmmKeys, CpmmKeys, PoolKeys } from "../../api/type";
-import { getPdaObservationId, makeSwapCpmmBaseInInstruction } from "../../raydium/cpmm";
+import { makeSwapCpmmBaseInInstruction } from "../../raydium/cpmm";
 import { ComputePoolType, MakeSwapInstructionParam, ReturnTypeMakeSwapInstruction } from "./type";
 export function route1Instruction(
   programId: PublicKey,

@@ -16,7 +16,7 @@ import { AccountLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
 import { toApiV3Token, toFeeConfig } from "../../raydium/token/utils";
-import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos } from "../../raydium/type";
+import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos, TxTipConfig } from "../../raydium/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { MakeTransaction } from "../type";
 import { ClmmInstrument } from "./instrument";
@@ -84,6 +84,7 @@ export class Clmm extends ModuleBase {
       forerunCreate,
       getObserveState,
       txVersion,
+      txTipConfig,
     } = props;
     const txBuilder = this.createTxBuilder();
     const [mintA, mintB, initPrice] = new BN(new PublicKey(mint1.address).toBuffer()).gt(
@@ -108,6 +109,7 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addInstruction(insInfo);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{
       mockPoolInfo: ApiV3PoolInfoConcentratedItem;
@@ -183,6 +185,7 @@ export class Clmm extends ModuleBase {
     withMetadata = "create",
     getEphemeralSigners,
     computeBudgetConfig,
+    txTipConfig,
     txVersion,
   }: OpenPositionFromBase<T>): Promise<MakeTxData<T, OpenPositionFromBaseExtInfo>> {
     if (this.scope.availability.addConcentratedPosition === false)
@@ -268,6 +271,7 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addInstruction(insInfo);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<OpenPositionFromBaseExtInfo>({
       txVersion,
       extInfo: { ...insInfo.address },
@@ -288,6 +292,7 @@ export class Clmm extends ModuleBase {
     withMetadata = "create",
     txVersion,
     computeBudgetConfig,
+    txTipConfig,
     getEphemeralSigners,
     nft2022,
   }: OpenPositionFromLiquidity<T>): Promise<MakeTxData<T, OpenPositionFromLiquidityExtInfo>> {
@@ -367,7 +372,7 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(makeOpenPositionInstructions);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<OpenPositionFromLiquidityExtInfo>({
       txVersion,
       extInfo: { address: makeOpenPositionInstructions.address },
@@ -388,6 +393,7 @@ export class Clmm extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
       computeBudgetConfig,
+      txTipConfig,
       txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
@@ -457,6 +463,7 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(ins);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
       extInfo: { address: ins.address },
@@ -476,6 +483,7 @@ export class Clmm extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
       computeBudgetConfig,
+      txTipConfig,
       txVersion,
     } = props;
     const txBuilder = this.createTxBuilder();
@@ -546,7 +554,7 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(ins);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
       extInfo: { address: ins.address },
@@ -567,6 +575,7 @@ export class Clmm extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
       computeBudgetConfig,
+      txTipConfig,
       txVersion,
     } = props;
     if (this.scope.availability.removeConcentratedPosition === false)
@@ -690,7 +699,7 @@ export class Clmm extends ModuleBase {
       extInfo = { ...extInfo, ...closeInsInfo.address };
     }
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
       extInfo: { address: extInfo },
@@ -705,6 +714,7 @@ export class Clmm extends ModuleBase {
       ownerPosition,
       payer,
       computeBudgetConfig,
+      txTipConfig,
       txVersion,
       getEphemeralSigners,
     } = props;
@@ -721,9 +731,8 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(lockIns);
-
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
       extInfo: lockIns.address,
@@ -741,6 +750,7 @@ export class Clmm extends ModuleBase {
       associatedOnly = true,
       checkCreateATAOwner = false,
       computeBudgetConfig,
+      txTipConfig,
       txVersion,
     } = props;
 
@@ -886,7 +896,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData<T>>;
@@ -897,10 +907,14 @@ export class Clmm extends ModuleBase {
     poolKeys: propPoolKeys,
     ownerPosition,
     txVersion,
+    computeBudgetConfig,
+    txTipConfig,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys?: ClmmKeys;
     ownerPosition: ClmmPositionLayout;
+    computeBudgetConfig?: ComputeBudgetConfig;
+    txTipConfig?: TxTipConfig;
     txVersion: T;
   }): Promise<MakeTxData<T, ClosePositionExtInfo>> {
     if (this.scope.availability.removeConcentratedPosition === false)
@@ -914,7 +928,8 @@ export class Clmm extends ModuleBase {
       ownerPosition,
       nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
-
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.addInstruction(ins).versionBuild<ClosePositionExtInfo>({
       txVersion,
       extInfo: { address: ins.address },
@@ -995,6 +1010,7 @@ export class Clmm extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
     computeBudgetConfig,
+    txTipConfig,
     txVersion,
   }: InitRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     for (const rewardInfo of rewardInfos) {
@@ -1057,6 +1073,7 @@ export class Clmm extends ModuleBase {
       txBuilder.addInstruction(insInfo);
     }
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
       extInfo: { address },
@@ -1070,6 +1087,7 @@ export class Clmm extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
     computeBudgetConfig,
+    txTipConfig,
     txVersion,
   }: SetRewardParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -1123,6 +1141,7 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addInstruction(insInfo);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
       extInfo: { address: insInfo.address },
@@ -1137,6 +1156,7 @@ export class Clmm extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
     computeBudgetConfig,
+    txTipConfig,
     txVersion,
   }: SetRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     const txBuilder = this.createTxBuilder();
@@ -1195,6 +1215,7 @@ export class Clmm extends ModuleBase {
       };
     }
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
       extInfo: { address },
@@ -1208,6 +1229,7 @@ export class Clmm extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
     computeBudgetConfig,
+    txTipConfig,
     txVersion,
   }: CollectRewardParams<T>): Promise<MakeTxData<{ address: Record<string, PublicKey> }>> {
     const rewardInfo = poolInfo!.rewardDefaultInfos.find((i) => i.mint.address === rewardMint.toString());
@@ -1245,6 +1267,7 @@ export class Clmm extends ModuleBase {
     });
     txBuilder.addInstruction(insInfo);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
       extInfo: { address: insInfo.address },
@@ -1257,6 +1280,8 @@ export class Clmm extends ModuleBase {
     rewardMints,
     associatedOnly = true,
     checkCreateATAOwner = false,
+    computeBudgetConfig,
+    txTipConfig,
   }: CollectRewardsParams): Promise<MakeTransaction> {
     const txBuilder = this.createTxBuilder();
     let address: Record<string, PublicKey> = {};
@@ -1300,7 +1325,8 @@ export class Clmm extends ModuleBase {
       txBuilder.addInstruction(insInfo);
       address = { ...address, ...insInfo.address };
     }
-
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
@@ -1318,6 +1344,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     txVersion,
     computeBudgetConfig,
+    txTipConfig,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys?: ClmmKeys;
@@ -1335,6 +1362,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner?: boolean;
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
+    txTipConfig?: TxTipConfig;
   }): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder();
     const baseIn = inputMint.toString() === poolInfo.mintA.address;
@@ -1427,7 +1455,7 @@ export class Clmm extends ModuleBase {
     );
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
@@ -1445,6 +1473,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     txVersion,
     computeBudgetConfig,
+    txTipConfig,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys?: ClmmKeys;
@@ -1462,6 +1491,7 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner?: boolean;
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
+    txTipConfig?: TxTipConfig;
   }): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder();
     const baseIn = outputMint.toString() === poolInfo.mintB.address;
@@ -1557,7 +1587,7 @@ export class Clmm extends ModuleBase {
     );
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 

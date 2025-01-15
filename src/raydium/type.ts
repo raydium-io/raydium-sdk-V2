@@ -56,6 +56,11 @@ export interface ComputeBudgetConfig {
   microLamports?: number;
 }
 
+export interface TxTipConfig {
+  address: PublicKey;
+  amount: BN;
+}
+
 export interface LoadParams {
   forceUpdate?: boolean;
 }

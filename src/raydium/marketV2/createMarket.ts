@@ -4,7 +4,7 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { BN_ZERO } from "@/common/bignumber";
 import { MakeMultiTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
-import { ComputeBudgetConfig } from "../../raydium/type";
+import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { generatePubKey } from "../account/util";
 import ModuleBase from "../moduleBase";
 import { makeCreateMarketInstruction } from "./instrument";
@@ -37,6 +37,7 @@ export default class MarketV2 extends ModuleBase {
     assignSeed,
     txVersion,
     computeBudgetConfig,
+    txTipConfig,
   }: {
     baseInfo: {
       mint: PublicKey;
@@ -60,6 +61,7 @@ export default class MarketV2 extends ModuleBase {
 
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
+    txTipConfig?: TxTipConfig;
   }): Promise<MakeMultiTxData<T, MarketExtInfo>> {
     const wallet = this.scope.ownerPubKey;
     const seed = assignSeed

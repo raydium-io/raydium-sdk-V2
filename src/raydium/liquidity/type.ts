@@ -5,7 +5,7 @@ import { AmmV4Keys, AmmV5Keys, ApiV3PoolInfoStandardItem } from "../../api/type"
 import { BigNumberish } from "../../common/bignumber";
 import { TxVersion } from "../../common/txTool/txType";
 import { TokenAmount } from "../../module/amount";
-import { ComputeBudgetConfig } from "../../raydium/type";
+import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { liquidityStateV4Layout } from "./layout";
 
 export type LiquiditySide = "a" | "b";
@@ -25,6 +25,7 @@ export interface AddLiquidityParams<T = TxVersion.LEGACY> {
   };
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface RemoveParams<T = TxVersion.LEGACY> {
@@ -40,6 +41,7 @@ export interface RemoveParams<T = TxVersion.LEGACY> {
   };
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface LiquidityUserKeys {
@@ -128,6 +130,7 @@ export interface CreatePoolParam<T> {
   feeDestinationId: PublicKey;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface CreateMarketAndPoolParam<T> {
@@ -164,6 +167,7 @@ export interface CreateMarketAndPoolParam<T> {
 
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface CreatePoolAddress {
@@ -271,6 +275,7 @@ export interface SwapParam<T = TxVersion.LEGACY> {
   };
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export type AmmRpcData = ReturnType<typeof liquidityStateV4Layout.decode> & {

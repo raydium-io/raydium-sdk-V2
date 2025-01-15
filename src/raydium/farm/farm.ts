@@ -14,7 +14,7 @@ import { generatePubKey } from "../account/util";
 
 import Decimal from "decimal.js";
 import { FormatFarmInfoOut, FormatFarmKeyOutV6 } from "../../api/type";
-import { ComputeBudgetConfig } from "../../raydium/type";
+import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { createWSolAccountInstructions } from "../account/instruction";
 import ModuleBase from "../moduleBase";
 import { TOKEN_WSOL } from "../token/constant";
@@ -431,6 +431,7 @@ export default class Farm extends ModuleBase {
       checkCreateATAOwner = false,
       userAuxiliaryLedgers,
       computeBudgetConfig,
+      txTipConfig,
     } = params;
 
     if (this.scope.availability.addFarm === false)
@@ -452,6 +453,7 @@ export default class Farm extends ModuleBase {
 
     const txBuilder = this.createTxBuilder();
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {
@@ -562,6 +564,7 @@ export default class Farm extends ModuleBase {
       checkCreateATAOwner = false,
       userAuxiliaryLedgers,
       computeBudgetConfig,
+      txTipConfig,
     } = params;
     const { rewardInfos } = farmInfo;
 
@@ -575,6 +578,7 @@ export default class Farm extends ModuleBase {
     const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
     const txBuilder = this.createTxBuilder();
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {
@@ -745,11 +749,13 @@ export default class Farm extends ModuleBase {
     withdrawMint,
     txVersion,
     computeBudgetConfig,
+    txTipConfig,
   }: {
     farmInfo: FormatFarmInfoOut;
     withdrawMint: PublicKey;
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
+    txTipConfig?: TxTipConfig;
     txVersion?: T;
   }): Promise<MakeTxData<T>> {
     this.scope.checkOwner();
@@ -817,7 +823,7 @@ export default class Farm extends ModuleBase {
       owner: this.scope.ownerPubKey,
     });
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder
       .addInstruction({
         instructions: [instruction],

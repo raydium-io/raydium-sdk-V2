@@ -3,7 +3,7 @@ import BN from "bn.js";
 import { ApiV3PoolInfoStandardItem, ApiV3Token, FormatFarmInfoOut } from "../../api/type";
 import { TxVersion } from "../../common";
 import { BigNumberish } from "../../common/bignumber";
-import { ComputeBudgetConfig } from "../../raydium/type";
+import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { poolTypeV6 } from "./config";
 
 export type RewardType = keyof typeof poolTypeV6;
@@ -68,6 +68,8 @@ export interface CreateFarm<T = TxVersion.LEGACY> {
   payer?: PublicKey;
   programId?: PublicKey;
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface CreateFarmExtInfo {
@@ -83,6 +85,8 @@ export interface UpdateFarmReward<T = TxVersion.LEGACY> {
   newRewardInfo: FarmRewardInfo;
   payer?: PublicKey;
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface UpdateFarmRewards<T = TxVersion.LEGACY> {
@@ -90,6 +94,8 @@ export interface UpdateFarmRewards<T = TxVersion.LEGACY> {
   newRewardInfos: FarmRewardInfo[];
   payer?: PublicKey;
   txVersion?: T;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface FarmDWParam<T = TxVersion.LEGACY> {
@@ -108,6 +114,7 @@ export interface FarmDWParam<T = TxVersion.LEGACY> {
   txVersion?: T;
   userAuxiliaryLedgers?: string[];
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
 }
 /* ================= pool keys ================= */
 export type FarmPoolKeys = {
@@ -120,16 +127,16 @@ export type FarmPoolKeys = {
   readonly upcoming: boolean;
   readonly rewardInfos: (
     | {
-      readonly rewardMint: PublicKey;
-      readonly rewardVault: PublicKey;
-    }
+        readonly rewardMint: PublicKey;
+        readonly rewardVault: PublicKey;
+      }
     | {
-      readonly rewardMint: PublicKey;
-      readonly rewardVault: PublicKey;
-      readonly rewardOpenTime: number;
-      readonly rewardEndTime: number;
-      readonly rewardPerSecond: number;
-      readonly rewardType: RewardType;
-    }
+        readonly rewardMint: PublicKey;
+        readonly rewardVault: PublicKey;
+        readonly rewardOpenTime: number;
+        readonly rewardEndTime: number;
+        readonly rewardPerSecond: number;
+        readonly rewardType: RewardType;
+      }
   )[];
 };

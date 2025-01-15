@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { ApiCpmmConfigInfo, ApiV3PoolInfoStandardItemCpmm, ApiV3Token, CpmmKeys } from "../../api/type";
 import { TxVersion } from "../../common/txTool/txType";
 import { Percent } from "../../module";
-import { ComputeBudgetConfig, GetTransferAmountFee } from "../../raydium/type";
+import { ComputeBudgetConfig, GetTransferAmountFee, TxTipConfig } from "../../raydium/type";
 import { SwapResult } from "./curve/calculator";
 import { CpmmPoolInfoLayout } from "./layout";
 
@@ -71,6 +71,7 @@ export interface CreateCpmmPoolParam<T> {
   };
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface CreateCpmmPoolAddress {
@@ -100,6 +101,7 @@ export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
     checkCreateATAOwner?: boolean;
   };
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   txVersion?: T;
   computeResult?: {
     inputAmountFee: GetTransferAmountFee;
@@ -116,6 +118,7 @@ export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
   lpAmount: BN;
   slippage: Percent;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   txVersion?: T;
 }
 
@@ -135,6 +138,7 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
     associatedOnly?: boolean;
   };
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   txVersion?: T;
 }
 
@@ -186,6 +190,7 @@ export interface LockCpmmLpParams<T = TxVersion.LEGACY> {
   withMetadata?: boolean;
   getEphemeralSigners?: (k: number) => any;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   txVersion?: T;
 }
 
@@ -210,6 +215,7 @@ export interface HarvestLockCpmmLpParams<T = TxVersion.LEGACY> {
   withMetadata?: boolean;
   getEphemeralSigners?: (k: number) => any;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   txVersion?: T;
 }
 

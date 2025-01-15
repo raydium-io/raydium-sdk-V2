@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { ApiClmmConfigInfo, ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "../../api/type";
 import { TxVersion } from "../../common/txTool/txType";
 import { Fraction, Percent, Price, TokenAmount } from "../../module";
-import { ComputeBudgetConfig } from "../../raydium/type";
+import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { TokenInfo } from "../token/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 import { TickArray } from "./utils/tick";
@@ -294,6 +294,7 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   initialPrice: Decimal;
   startTime: BN;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   forerunCreate?: boolean;
   getObserveState?: boolean;
   txVersion?: T;
@@ -347,6 +348,7 @@ export interface IncreasePositionFromLiquidity<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
@@ -362,6 +364,7 @@ export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
@@ -382,6 +385,7 @@ export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface LockPosition<T = TxVersion.LEGACY> {
@@ -391,6 +395,7 @@ export interface LockPosition<T = TxVersion.LEGACY> {
   ownerPosition: ClmmPositionLayout;
   payer?: PublicKey;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   txVersion?: T;
   getEphemeralSigners?: (k: number) => any;
 }
@@ -408,6 +413,7 @@ export interface HarvestLockPosition<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface ClmmPoolRewardLayoutInfo {
@@ -444,6 +450,7 @@ export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   getEphemeralSigners?: (k: number) => any;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface OpenPositionFromBaseExtInfo {
@@ -474,6 +481,7 @@ export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
   txVersion?: T;
   computeBudgetConfig;
   nft2022?: boolean;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface OpenPositionFromLiquidityExtInfo {
@@ -514,6 +522,7 @@ export interface InitRewardParams<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface InitRewardsParams<T = TxVersion.LEGACY> extends Omit<InitRewardParams<T>, "rewardInfo"> {
@@ -544,6 +553,7 @@ export interface SetRewardParams<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface SetRewardsParams<T = TxVersion.LEGACY> extends Omit<SetRewardParams<T>, "rewardInfo"> {
@@ -566,6 +576,7 @@ export interface CollectRewardParams<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface CollectRewardsParams<T = TxVersion.LEGACY> extends Omit<CollectRewardParams, "rewardMint"> {
@@ -585,6 +596,7 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
 }
 
 export interface TickArrayBitmapExtensionType {

@@ -4,6 +4,7 @@ import {
   PublicKey,
   sendAndConfirmTransaction,
   Signer,
+  SystemProgram,
   Transaction,
   TransactionInstruction,
   TransactionMessage,
@@ -12,11 +13,11 @@ import {
 import axios from "axios";
 
 import { Api } from "../../api";
-import { ComputeBudgetConfig, SignAllTransactions } from "../../raydium/type";
+import { ComputeBudgetConfig, SignAllTransactions, TxTipConfig } from "../../raydium/type";
 import { Cluster } from "../../solana";
 import { Owner } from "../owner";
 import { CacheLTA, getMultipleLookupTableInfo, LOOKUP_TABLE_CACHE } from "./lookupTable";
-import { TxVersion } from "./txType";
+import { InstructionType, TxVersion } from "./txType";
 import {
   addComputeBudget,
   checkLegacyTxSize,
@@ -187,6 +188,21 @@ export class TxBuilder {
       const { instructions, instructionTypes } = addComputeBudget(config);
       this.instructions.unshift(...instructions);
       this.instructionTypes.unshift(...instructionTypes);
+      return true;
+    }
+    return false;
+  }
+
+  public addTipInstruction(tipConfig?: TxTipConfig): boolean {
+    if (tipConfig) {
+      this.endInstructions.push(
+        SystemProgram.transfer({
+          fromPubkey: this.owner!.publicKey,
+          toPubkey: new PublicKey(tipConfig.address),
+          lamports: BigInt(tipConfig.amount.toString()),
+        }),
+      );
+      this.endInstructionTypes.push(InstructionType.TransferTip);
       return true;
     }
     return false;

@@ -164,6 +164,7 @@ export default class LiquidityModule extends ModuleBase {
       config,
       txVersion,
       computeBudgetConfig,
+      txTipConfig,
     } = params;
 
     if (this.scope.availability.addStandardPosition === false)
@@ -275,6 +276,7 @@ export default class LiquidityModule extends ModuleBase {
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
   }
@@ -291,6 +293,7 @@ export default class LiquidityModule extends ModuleBase {
       config,
       txVersion,
       computeBudgetConfig,
+      txTipConfig,
     } = params;
     const poolKeys = propPoolKeys ?? (await this.getAmmPoolKeys(poolInfo.id));
     const [baseMint, quoteMint, lpMint] = [
@@ -368,6 +371,7 @@ export default class LiquidityModule extends ModuleBase {
       ],
     });
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
   }
@@ -424,7 +428,6 @@ export default class LiquidityModule extends ModuleBase {
       throw Error("mint check error");
 
     const txBuilder = this.createTxBuilder();
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     const mintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
       if (
@@ -613,8 +616,9 @@ export default class LiquidityModule extends ModuleBase {
       lookupTableAddress: clmmPoolKeys.lookupTableAccount ? [clmmPoolKeys.lookupTableAccount] : [],
     });
 
-    if (txVersion === TxVersion.V0) return txBuilder.sizeCheckBuildV0() as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild() as Promise<MakeMultiTxData<T>>;
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async createPoolV4<T extends TxVersion>({
@@ -632,6 +636,7 @@ export default class LiquidityModule extends ModuleBase {
     txVersion,
     feeDestinationId,
     computeBudgetConfig,
+    txTipConfig,
   }: CreatePoolParam<T>): Promise<MakeTxData<T, { address: CreatePoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(NATIVE_MINT);
@@ -727,7 +732,7 @@ export default class LiquidityModule extends ModuleBase {
     });
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
       extInfo: {
@@ -760,6 +765,7 @@ export default class LiquidityModule extends ModuleBase {
 
     txVersion,
     computeBudgetConfig,
+    txTipConfig,
   }: CreateMarketAndPoolParam<T>): Promise<
     MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>
   > {
@@ -1258,6 +1264,7 @@ export default class LiquidityModule extends ModuleBase {
     txVersion,
     config,
     computeBudgetConfig,
+    txTipConfig,
   }: SwapParam<T>): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder();
     const { associatedOnly = true, inputUseSolBalance = true, outputUseSolBalance = true } = config || {};
@@ -1339,7 +1346,7 @@ export default class LiquidityModule extends ModuleBase {
     });
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData<T>>;

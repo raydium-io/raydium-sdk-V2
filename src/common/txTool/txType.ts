@@ -76,4 +76,5 @@ export const InstructionType = {
 
   CpmmLockLp: "CpmmLockLp",
   CpmmCollectLockFee: "CpmmCollectLockFee",
+  TransferTip: "TransferTip",
 };

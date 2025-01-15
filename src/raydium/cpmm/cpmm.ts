@@ -298,6 +298,7 @@ export default class CpmmModule extends ModuleBase {
     txVersion,
     feeConfig,
     computeBudgetConfig,
+    txTipConfig,
     ...params
   }: CreateCpmmPoolParam<T>): Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
@@ -390,7 +391,7 @@ export default class CpmmModule extends ModuleBase {
     });
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
       extInfo: {
@@ -408,6 +409,7 @@ export default class CpmmModule extends ModuleBase {
       slippage,
       computeResult,
       computeBudgetConfig,
+      txTipConfig,
       config,
       txVersion,
     } = params;
@@ -539,11 +541,20 @@ export default class CpmmModule extends ModuleBase {
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
   public async withdrawLiquidity<T extends TxVersion>(params: WithdrawCpmmLiquidityParams<T>): Promise<MakeTxData<T>> {
-    const { poolInfo, poolKeys: propPoolKeys, lpAmount, slippage, computeBudgetConfig, txVersion } = params;
+    const {
+      poolInfo,
+      poolKeys: propPoolKeys,
+      lpAmount,
+      slippage,
+      computeBudgetConfig,
+      txTipConfig,
+      txVersion,
+    } = params;
 
     if (this.scope.availability.addStandardPosition === false)
       this.logAndCreateError("add liquidity feature disabled in your region");
@@ -640,6 +651,7 @@ export default class CpmmModule extends ModuleBase {
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
@@ -654,6 +666,7 @@ export default class CpmmModule extends ModuleBase {
       slippage = 0,
       config,
       computeBudgetConfig,
+      txTipConfig,
       txVersion,
     } = params;
 
@@ -780,12 +793,12 @@ export default class CpmmModule extends ModuleBase {
     });
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
-
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
   public async lockLp<T extends TxVersion>(params: LockCpmmLpParams<T>): Promise<MakeTxData<CpmmLockExtInfo>> {
-    const { poolInfo, lpAmount, computeBudgetConfig, txVersion } = params;
+    const { poolInfo, lpAmount, computeBudgetConfig, txTipConfig, txVersion } = params;
 
     if (lpAmount.isZero())
       this.logAndCreateError("lpAmount must greater than zero", {
@@ -812,6 +825,7 @@ export default class CpmmModule extends ModuleBase {
 
     txBuilder.addInstruction(insData);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion, extInfo: insData.address }) as Promise<MakeTxData<CpmmLockExtInfo>>;
   }
 
@@ -824,6 +838,7 @@ export default class CpmmModule extends ModuleBase {
       authProgram = LOCK_CPMM_AUTH,
       cpmmProgram,
       computeBudgetConfig,
+      txTipConfig,
       txVersion,
     } = params;
 
@@ -922,6 +937,7 @@ export default class CpmmModule extends ModuleBase {
     });
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData>;
   }
 
