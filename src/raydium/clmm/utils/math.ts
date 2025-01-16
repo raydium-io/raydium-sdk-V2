@@ -666,6 +666,7 @@ export abstract class SwapMath {
         state.liquidity,
         state.amountSpecifiedRemaining,
         fee,
+        zeroForOne,
       );
 
       state.feeAmount = state.feeAmount.add(step.feeAmount);
@@ -916,6 +917,7 @@ export abstract class SwapMath {
     liquidity: BN,
     amountRemaining: BN,
     feeRate: Fee,
+    zeroForOne: boolean,
   ): [BN, BN, BN, BN] {
     const swapStep: SwapStep = {
       sqrtPriceX64Next: new BN(0),
@@ -924,7 +926,6 @@ export abstract class SwapMath {
       feeAmount: new BN(0),
     };
 
-    const zeroForOne = sqrtPriceX64Current.gte(sqrtPriceX64Target);
     const baseInput = amountRemaining.gte(ZERO);
 
     if (baseInput) {

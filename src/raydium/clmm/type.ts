@@ -292,7 +292,6 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   mint2: ApiV3Token;
   ammConfig: ClmmConfigInfo;
   initialPrice: Decimal;
-  startTime: BN;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   forerunCreate?: boolean;
