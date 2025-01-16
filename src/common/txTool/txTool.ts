@@ -3,6 +3,7 @@ import {
   Connection,
   PublicKey,
   sendAndConfirmTransaction,
+  SignatureResult,
   Signer,
   SystemProgram,
   Transaction,
@@ -55,6 +56,7 @@ interface TxBuilderInit {
   cluster: Cluster;
   owner?: Owner;
   blockhashCommitment?: Commitment;
+  loopMultiTxStatus?: boolean;
   api?: Api;
   signAllTransactions?: SignAllTransactions;
 }
@@ -126,6 +128,8 @@ export type MakeTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extend
   ? TxBuildData<O>
   : TxV0BuildData<O>;
 
+const LOOP_INTERVAL = 2000;
+
 export class TxBuilder {
   private connection: Connection;
   private owner?: Owner;
@@ -139,6 +143,7 @@ export class TxBuilder {
   private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
   private blockhashCommitment?: Commitment;
+  private loopMultiTxStatus: boolean;
 
   constructor(params: TxBuilderInit) {
     this.connection = params.connection;
@@ -147,6 +152,7 @@ export class TxBuilder {
     this.owner = params.owner;
     this.cluster = params.cluster;
     this.blockhashCommitment = params.blockhashCommitment;
+    this.loopMultiTxStatus = !!params.loopMultiTxStatus;
   }
 
   get AllTxData(): {
@@ -388,15 +394,58 @@ export class TxBuilder {
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
-              this.connection.onSignature(
+              let confirmed = false;
+              // eslint-disable-next-line
+              let intervalId: NodeJS.Timer | null = null,
+                subSignatureId: number | null = null;
+              const cbk = (signatureResult: SignatureResult): void => {
+                intervalId !== null && clearInterval(intervalId);
+                subSignatureId !== null && this.connection.removeSignatureListener(subSignatureId);
+                const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
+                if (targetTxIdx > -1) {
+                  if (processedTxs[targetTxIdx].status === "error" || processedTxs[targetTxIdx].status === "success")
+                    return;
+                  processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+                }
+                onTxUpdate?.([...processedTxs]);
+                if (!signatureResult.err) checkSendTx();
+              };
+
+              if (this.loopMultiTxStatus)
+                intervalId = setInterval(async () => {
+                  if (confirmed) {
+                    clearInterval(intervalId!);
+                    return;
+                  }
+                  try {
+                    const r = await this.connection.getTransaction(txId, {
+                      commitment: "confirmed",
+                      maxSupportedTransactionVersion: TxVersion.V0,
+                    });
+                    if (r) {
+                      confirmed = true;
+                      clearInterval(intervalId!);
+                      cbk({ err: r.meta?.err || null });
+                      console.log("tx status from getTransaction:", txId);
+                    }
+                  } catch (e) {
+                    confirmed = true;
+                    clearInterval(intervalId!);
+                    console.error("getTransaction timeout:", e, txId);
+                  }
+                }, LOOP_INTERVAL);
+
+              subSignatureId = this.connection.onSignature(
                 txId,
-                (signatureResult) => {
-                  const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
-                  if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
-                  onTxUpdate?.([...processedTxs]);
-                  if (!signatureResult.err) checkSendTx();
+                (result) => {
+                  if (confirmed) {
+                    this.connection.removeSignatureListener(subSignatureId!);
+                    return;
+                  }
+                  confirmed = true;
+                  cbk(result);
                 },
-                "processed",
+                "confirmed",
               );
               this.connection.getSignatureStatus(txId);
             };
@@ -594,15 +643,59 @@ export class TxBuilder {
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
-              this.connection.onSignature(
+
+              let confirmed = false;
+              // eslint-disable-next-line
+              let intervalId: NodeJS.Timer | null = null,
+                subSignatureId: number | null = null;
+              const cbk = (signatureResult: SignatureResult): void => {
+                intervalId !== null && clearInterval(intervalId);
+                subSignatureId !== null && this.connection.removeSignatureListener(subSignatureId);
+                const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
+                if (targetTxIdx > -1) {
+                  if (processedTxs[targetTxIdx].status === "error" || processedTxs[targetTxIdx].status === "success")
+                    return;
+                  processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+                }
+                onTxUpdate?.([...processedTxs]);
+                if (!signatureResult.err) checkSendTx();
+              };
+
+              if (this.loopMultiTxStatus)
+                intervalId = setInterval(async () => {
+                  if (confirmed) {
+                    clearInterval(intervalId!);
+                    return;
+                  }
+                  try {
+                    const r = await this.connection.getTransaction(txId, {
+                      commitment: "confirmed",
+                      maxSupportedTransactionVersion: TxVersion.V0,
+                    });
+                    if (r) {
+                      confirmed = true;
+                      clearInterval(intervalId!);
+                      cbk({ err: r.meta?.err || null });
+                      console.log("tx status from getTransaction:", txId);
+                    }
+                  } catch (e) {
+                    confirmed = true;
+                    clearInterval(intervalId!);
+                    console.error("getTransaction timeout:", e, txId);
+                  }
+                }, LOOP_INTERVAL);
+
+              subSignatureId = this.connection.onSignature(
                 txId,
-                (signatureResult) => {
-                  const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
-                  if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
-                  onTxUpdate?.([...processedTxs]);
-                  if (!signatureResult.err) checkSendTx();
+                (result) => {
+                  if (confirmed) {
+                    this.connection.removeSignatureListener(subSignatureId!);
+                    return;
+                  }
+                  confirmed = true;
+                  cbk(result);
                 },
-                "processed",
+                "confirmed",
               );
               this.connection.getSignatureStatus(txId);
             };
@@ -798,15 +891,59 @@ export class TxBuilder {
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
-              this.connection.onSignature(
+
+              let confirmed = false;
+              // eslint-disable-next-line
+              let intervalId: NodeJS.Timer | null = null,
+                subSignatureId: number | null = null;
+              const cbk = (signatureResult: SignatureResult): void => {
+                intervalId !== null && clearInterval(intervalId);
+                subSignatureId !== null && this.connection.removeSignatureListener(subSignatureId);
+                const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
+                if (targetTxIdx > -1) {
+                  if (processedTxs[targetTxIdx].status === "error" || processedTxs[targetTxIdx].status === "success")
+                    return;
+                  processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+                }
+                onTxUpdate?.([...processedTxs]);
+                if (!signatureResult.err) checkSendTx();
+              };
+
+              if (this.loopMultiTxStatus)
+                intervalId = setInterval(async () => {
+                  if (confirmed) {
+                    clearInterval(intervalId!);
+                    return;
+                  }
+                  try {
+                    const r = await this.connection.getTransaction(txId, {
+                      commitment: "confirmed",
+                      maxSupportedTransactionVersion: TxVersion.V0,
+                    });
+                    if (r) {
+                      confirmed = true;
+                      clearInterval(intervalId!);
+                      cbk({ err: r.meta?.err || null });
+                      console.log("tx status from getTransaction:", txId);
+                    }
+                  } catch (e) {
+                    confirmed = true;
+                    clearInterval(intervalId!);
+                    console.error("getTransaction timeout:", e, txId);
+                  }
+                }, LOOP_INTERVAL);
+
+              subSignatureId = this.connection.onSignature(
                 txId,
-                (signatureResult) => {
-                  const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
-                  if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
-                  onTxUpdate?.([...processedTxs]);
-                  if (!signatureResult.err) checkSendTx();
+                (result) => {
+                  if (confirmed) {
+                    this.connection.removeSignatureListener(subSignatureId!);
+                    return;
+                  }
+                  confirmed = true;
+                  cbk(result);
                 },
-                "processed",
+                "confirmed",
               );
               this.connection.getSignatureStatus(txId);
             };
@@ -1040,15 +1177,59 @@ export class TxBuilder {
               processedTxs.push({ txId, status: "sent", signedTx: signedTxs[i] });
               onTxUpdate?.([...processedTxs]);
               i++;
-              this.connection.onSignature(
+
+              let confirmed = false;
+              // eslint-disable-next-line
+              let intervalId: NodeJS.Timer | null = null,
+                subSignatureId: number | null = null;
+              const cbk = (signatureResult: SignatureResult): void => {
+                intervalId !== null && clearInterval(intervalId);
+                subSignatureId !== null && this.connection.removeSignatureListener(subSignatureId);
+                const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
+                if (targetTxIdx > -1) {
+                  if (processedTxs[targetTxIdx].status === "error" || processedTxs[targetTxIdx].status === "success")
+                    return;
+                  processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+                }
+                onTxUpdate?.([...processedTxs]);
+                if (!signatureResult.err) checkSendTx();
+              };
+
+              if (this.loopMultiTxStatus)
+                intervalId = setInterval(async () => {
+                  if (confirmed) {
+                    clearInterval(intervalId!);
+                    return;
+                  }
+                  try {
+                    const r = await this.connection.getTransaction(txId, {
+                      commitment: "confirmed",
+                      maxSupportedTransactionVersion: TxVersion.V0,
+                    });
+                    if (r) {
+                      confirmed = true;
+                      clearInterval(intervalId!);
+                      cbk({ err: r.meta?.err || null });
+                      console.log("tx status from getTransaction:", txId);
+                    }
+                  } catch (e) {
+                    confirmed = true;
+                    clearInterval(intervalId!);
+                    console.error("getTransaction timeout:", e, txId);
+                  }
+                }, LOOP_INTERVAL);
+
+              subSignatureId = this.connection.onSignature(
                 txId,
-                (signatureResult) => {
-                  const targetTxIdx = processedTxs.findIndex((tx) => tx.txId === txId);
-                  if (targetTxIdx > -1) processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
-                  onTxUpdate?.([...processedTxs]);
-                  if (!signatureResult.err) checkSendTx();
+                (result) => {
+                  if (confirmed) {
+                    this.connection.removeSignatureListener(subSignatureId!);
+                    return;
+                  }
+                  confirmed = true;
+                  cbk(result);
                 },
-                "processed",
+                "confirmed",
               );
               this.connection.getSignatureStatus(txId);
             };

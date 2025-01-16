@@ -42,6 +42,7 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   disableFeatureCheck?: boolean;
   disableLoadToken?: boolean;
   blockhashCommitment?: Commitment;
+  loopMultiTxStatus?: boolean;
 }
 
 export interface RaydiumApiBatchRequestParams {
@@ -81,6 +82,7 @@ export class Raydium {
   public apiData: ApiData;
   public availability: Partial<AvailabilityCheckAPI3>;
   public blockhashCommitment: Commitment;
+  public loopMultiTxStatus?: boolean;
 
   private _connection: Connection;
   private _owner: Owner | undefined;
@@ -110,6 +112,7 @@ export class Raydium {
       defaultChainTimeOffset,
       apiCacheTime,
       blockhashCommitment = "confirmed",
+      loopMultiTxStatus,
     } = config;
 
     this._connection = connection;
@@ -117,6 +120,7 @@ export class Raydium {
     this._owner = owner ? new Owner(owner) : undefined;
     this._signAllTransactions = config.signAllTransactions;
     this.blockhashCommitment = blockhashCommitment;
+    this.loopMultiTxStatus = loopMultiTxStatus;
 
     this.api = api;
     this._apiCacheTime = apiCacheTime || 5 * 60 * 1000;
