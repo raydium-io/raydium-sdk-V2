@@ -11,12 +11,11 @@ export enum RoundDirection {
   Ceiling,
 }
 
-export type SwapWithoutFeesResult = { sourceAmountSwapped: BN; destinationAmountSwapped: BN };
+export type SwapWithoutFeesResult = { destinationAmountSwapped: BN };
 
 export type TradingTokenResult = { tokenAmount0: BN; tokenAmount1: BN };
 
 export type SwapResult = {
-  newSwapSourceAmount: BN;
   newSwapDestinationAmount: BN;
   sourceAmountSwapped: BN;
   destinationAmountSwapped: BN;
@@ -34,17 +33,15 @@ export class CurveCalculator {
 
     const sourceAmountLessFees = sourceAmount.sub(tradeFee);
 
-    const { sourceAmountSwapped, destinationAmountSwapped } = ConstantProductCurve.swapWithoutFees(
+    const { destinationAmountSwapped } = ConstantProductCurve.swapWithoutFees(
       sourceAmountLessFees,
       swapSourceAmount,
       swapDestinationAmount,
     );
 
-    const _sourceAmountSwapped = sourceAmountSwapped.add(tradeFee);
     return {
-      newSwapSourceAmount: swapSourceAmount.add(_sourceAmountSwapped),
       newSwapDestinationAmount: swapDestinationAmount.sub(destinationAmountSwapped),
-      sourceAmountSwapped: _sourceAmountSwapped,
+      sourceAmountSwapped: sourceAmount,
       destinationAmountSwapped,
       tradeFee,
     };

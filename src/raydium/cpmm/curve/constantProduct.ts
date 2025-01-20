@@ -36,14 +36,12 @@ export class ConstantProductCurve {
     const invariant = swapSourceAmount.mul(swapDestinationAmount);
 
     const newSwapSourceAmount = swapSourceAmount.add(sourceAmount);
-    const [newSwapDestinationAmount, _newSwapSourceAmount] = checkedCeilDiv(invariant, newSwapSourceAmount);
+    const [newSwapDestinationAmount] = checkedCeilDiv(invariant, newSwapSourceAmount);
 
-    const sourceAmountSwapped = _newSwapSourceAmount.sub(swapSourceAmount);
     const destinationAmountSwapped = swapDestinationAmount.sub(newSwapDestinationAmount);
     if (destinationAmountSwapped.isZero()) throw Error("destinationAmountSwapped is zero");
 
     return {
-      sourceAmountSwapped,
       destinationAmountSwapped,
     };
   }
