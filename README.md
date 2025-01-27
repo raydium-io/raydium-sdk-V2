@@ -38,7 +38,7 @@ const raydium = await Raydium.load({
   owner, // key pair or publicKey, if you run a node process, provide keyPair
   signAllTransactions, // optional - provide sign functions provided by @solana/wallet-adapter-react
   tokenAccounts, // optional, if dapp handle it by self can provide to sdk
-  tokenAccountRowInfos, // optional, if dapp handle it by self can provide to sdk
+  tokenAccountRawInfos, // optional, if dapp handle it by self can provide to sdk
   disableLoadToken: false // default is false, if you don't need token info, set to true
 })
 ```
