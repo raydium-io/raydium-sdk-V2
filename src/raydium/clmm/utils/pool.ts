@@ -172,15 +172,15 @@ export class PoolUtils {
       poolInfo.tickCurrent,
     ])
       ? TickArrayBitmapExtensionUtils.checkTickArrayIsInit(
-          TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
-          poolInfo.tickSpacing,
-          poolInfo.exBitmapInfo,
-        )
+        TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
+        poolInfo.tickSpacing,
+        poolInfo.exBitmapInfo,
+      )
       : TickUtils.checkTickArrayIsInitialized(
-          TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
-          poolInfo.tickCurrent,
-          poolInfo.tickSpacing,
-        );
+        TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
+        poolInfo.tickCurrent,
+        poolInfo.tickSpacing,
+      );
 
     if (isInitialized) {
       const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, startIndex);
@@ -214,19 +214,19 @@ export class PoolUtils {
 
     const result: number[] = !zeroForOne
       ? TickUtils.searchLowBitFromStart(
-          poolInfo.tickArrayBitmap,
-          poolInfo.exBitmapInfo,
-          currentOffset - 1,
-          1,
-          poolInfo.tickSpacing,
-        )
+        poolInfo.tickArrayBitmap,
+        poolInfo.exBitmapInfo,
+        currentOffset - 1,
+        1,
+        poolInfo.tickSpacing,
+      )
       : TickUtils.searchHightBitFromStart(
-          poolInfo.tickArrayBitmap,
-          poolInfo.exBitmapInfo,
-          currentOffset + 1,
-          1,
-          poolInfo.tickSpacing,
-        );
+        poolInfo.tickArrayBitmap,
+        poolInfo.exBitmapInfo,
+        currentOffset + 1,
+        1,
+        poolInfo.tickSpacing,
+      );
 
     return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 };
   }
@@ -234,11 +234,11 @@ export class PoolUtils {
   public static nextInitializedTickArrayStartIndex(
     poolInfo:
       | {
-          tickCurrent: number;
-          tickSpacing: number;
-          tickArrayBitmap: BN[];
-          exBitmapInfo: TickArrayBitmapExtensionType;
-        }
+        tickCurrent: number;
+        tickSpacing: number;
+        tickArrayBitmap: BN[];
+        exBitmapInfo: TickArrayBitmapExtensionType;
+      }
       | ClmmPoolInfo,
     lastTickArrayStartIndex: number,
     zeroForOne: boolean,
@@ -1071,7 +1071,7 @@ export class PoolUtils {
     };
   }
 
-  static getLiquidityAmountOutFromAmountIn({
+  static async getLiquidityAmountOutFromAmountIn({
     poolInfo,
     inputA,
     tickLower,
@@ -1100,7 +1100,7 @@ export class PoolUtils {
     const sqrtPriceX64A = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
     const sqrtPriceX64B = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
 
-    const coefficient = add ? 1 - slippage : 1 + slippage;
+    // const coefficient = add ? 1 - slippage : 1 + slippage;
     const addFeeAmount = getTransferAmountFeeV2(
       amount,
       poolInfo[inputA ? "mintA" : "mintB"].extensions?.feeConfig,
@@ -1108,7 +1108,7 @@ export class PoolUtils {
       !amountHasFee,
     );
     const _amount = new BN(
-      new Decimal(addFeeAmount.amount.sub(addFeeAmount.fee ?? ZERO).toString()).mul(coefficient).toFixed(0),
+      new Decimal(addFeeAmount.amount.sub(addFeeAmount.fee ?? ZERO).toString()).toFixed(0) // .mul(coefficient).toFixed(0),
     );
 
     let liquidity: BN;
@@ -1126,7 +1126,7 @@ export class PoolUtils {
         : LiquidityMath.getLiquidityFromTokenAmountB(sqrtPriceX64A, sqrtPriceX64B, _amount);
     }
 
-    return PoolUtils.getAmountsFromLiquidity({
+    const amountFromLiquidity = await PoolUtils.getAmountsFromLiquidity({
       epochInfo,
       poolInfo,
       tickLower,
@@ -1135,6 +1135,14 @@ export class PoolUtils {
       slippage,
       add,
     });
+    return {
+      liquidity,
+      amountA: inputA ? addFeeAmount : amountFromLiquidity.amountA,
+      amountB: inputA ? amountFromLiquidity.amountB : addFeeAmount,
+      amountSlippageA: inputA ? addFeeAmount : amountFromLiquidity.amountSlippageA,
+      amountSlippageB: inputA ? amountFromLiquidity.amountSlippageB : addFeeAmount,
+      expirationTime: amountFromLiquidity.expirationTime,
+    }
   }
 
   static async getAmountsFromLiquidity({
