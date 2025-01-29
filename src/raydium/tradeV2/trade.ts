@@ -1111,7 +1111,7 @@ export default class TradeV2 extends ModuleBase {
       pools.filter((p) => p.version === 4 && !ammRpcData[p.id.toString()]).map((p) => p.id.toString()),
     );
     if (ammFetchKeys.size > 0) {
-      const ammData = await this.scope.liquidity.getRpcPoolInfos(Array.from(clmmFetchKeys));
+      const ammData = await this.scope.liquidity.getRpcPoolInfos(Array.from(ammFetchKeys));
       Object.keys(ammData).forEach((poolId) => {
         ammRpcData[poolId] = ammData[poolId];
       });
