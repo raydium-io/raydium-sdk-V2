@@ -563,6 +563,15 @@ export class TxBuilder {
         }
         if (this.signAllTransactions) {
           const txs = await this.signAllTransactions<VersionedTransaction>([transaction]);
+          if (this.signers.length) {
+            for (const item of txs) {
+              try {
+                item.sign(this.signers)
+              } catch (e) {
+                //
+              }
+            }
+          }
           return {
             txId: await this.connection.sendTransaction(txs[0], { skipPreflight }),
             signedTx: txs[0],
