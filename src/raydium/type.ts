@@ -57,6 +57,7 @@ export interface ComputeBudgetConfig {
 }
 
 export interface TxTipConfig {
+  feePayer?: PublicKey;
   address: PublicKey;
   amount: BN;
 }
@@ -113,12 +114,12 @@ type Primitive = boolean | number | string | null | undefined | PublicKey;
  */
 export type ReplaceType<Old, From, To> = {
   [T in keyof Old]: Old[T] extends From // to avoid case: Old[T] is an Object,
-    ? Exclude<Old[T], From> | To // when match,  directly replace
-    : Old[T] extends Primitive // judge whether need recursively replace
-    ? From extends Old[T] // it's an Object
-      ? Exclude<Old[T], From> | To // directly replace
-      : Old[T] // stay same
-    : ReplaceType<Old[T], From, To>; // recursively replace
+  ? Exclude<Old[T], From> | To // when match,  directly replace
+  : Old[T] extends Primitive // judge whether need recursively replace
+  ? From extends Old[T] // it's an Object
+  ? Exclude<Old[T], From> | To // directly replace
+  : Old[T] // stay same
+  : ReplaceType<Old[T], From, To>; // recursively replace
 };
 
 export type MayArray<T> = T | Array<T>;

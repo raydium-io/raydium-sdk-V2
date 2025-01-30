@@ -23,14 +23,16 @@ export default class MarketV2 extends ModuleBase {
     associatedOnly = true,
     checkCreateATAOwner = false,
     txVersion,
+    feePayer,
   }: {
     ownerInfo: OwnerIdoInfo[keyof OwnerIdoInfo] & { userIdoInfo: string };
     idoKeys: IdoKeysData;
     associatedOnly?: boolean;
     checkCreateATAOwner?: boolean;
     txVersion?: T;
+    feePayer?: PublicKey;
   }): Promise<MakeTxData> {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const version = PROGRAM_TO_VERSION[idoKeys.programId];
 
     if (!version) this.logAndCreateError("invalid version", version);

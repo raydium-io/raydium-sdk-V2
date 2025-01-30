@@ -84,8 +84,9 @@ export class Clmm extends ModuleBase {
       getObserveState,
       txVersion,
       txTipConfig,
+      feePayer,
     } = props;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const [mintA, mintB, initPrice] = new BN(new PublicKey(mint1.address).toBuffer()).gt(
       new BN(new PublicKey(mint2.address).toBuffer()),
     )
@@ -185,12 +186,13 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     txVersion,
+    feePayer,
   }: OpenPositionFromBase<T>): Promise<MakeTxData<T, OpenPositionFromBaseExtInfo>> {
     if (this.scope.availability.addConcentratedPosition === false)
       this.logAndCreateError("add position feature disabled in your region");
 
     this.scope.checkOwner();
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     let ownerTokenAccountA: PublicKey | null = null;
     let ownerTokenAccountB: PublicKey | null = null;
@@ -293,10 +295,11 @@ export class Clmm extends ModuleBase {
     txTipConfig,
     getEphemeralSigners,
     nft2022,
+    feePayer,
   }: OpenPositionFromLiquidity<T>): Promise<MakeTxData<T, OpenPositionFromLiquidityExtInfo>> {
     if (this.scope.availability.createConcentratedPosition === false)
       this.logAndCreateError("open position feature disabled in your region");
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     let ownerTokenAccountA: PublicKey | null = null;
     let ownerTokenAccountB: PublicKey | null = null;
@@ -393,8 +396,9 @@ export class Clmm extends ModuleBase {
       computeBudgetConfig,
       txTipConfig,
       txVersion,
+      feePayer,
     } = props;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     let ownerTokenAccountA: PublicKey | undefined = undefined;
     let ownerTokenAccountB: PublicKey | undefined = undefined;
@@ -483,8 +487,9 @@ export class Clmm extends ModuleBase {
       computeBudgetConfig,
       txTipConfig,
       txVersion,
+      feePayer,
     } = props;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     let ownerTokenAccountA: PublicKey | undefined = undefined;
     let ownerTokenAccountB: PublicKey | undefined = undefined;
@@ -575,10 +580,11 @@ export class Clmm extends ModuleBase {
       computeBudgetConfig,
       txTipConfig,
       txVersion,
+      feePayer,
     } = props;
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toString();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toString();
@@ -715,8 +721,9 @@ export class Clmm extends ModuleBase {
       txTipConfig,
       txVersion,
       getEphemeralSigners,
+      feePayer,
     } = props;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const lockIns = await ClmmInstrument.makeLockPositions({
       programId,
       authProgramId,
@@ -750,10 +757,11 @@ export class Clmm extends ModuleBase {
       computeBudgetConfig,
       txTipConfig,
       txVersion,
+      feePayer,
     } = props;
 
     const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(lockData.poolId.toString()));
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const positionData = await this.scope.connection.getAccountInfo(lockData.positionId);
     if (!positionData) this.logger.logWithError("position not found", lockData.positionId);
@@ -907,6 +915,7 @@ export class Clmm extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys?: ClmmKeys;
@@ -914,10 +923,11 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig?: ComputeBudgetConfig;
     txTipConfig?: TxTipConfig;
     txVersion: T;
+    feePayer?: PublicKey;
   }): Promise<MakeTxData<T, ClosePositionExtInfo>> {
     if (this.scope.availability.removeConcentratedPosition === false)
       this.logAndCreateError("remove position feature disabled in your region");
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
     const ins = ClmmInstrument.closePositionInstructions({
       poolInfo,
@@ -942,11 +952,12 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     computeBudgetConfig,
     txVersion,
+    feePayer,
   }: InitRewardParams<T>): Promise<MakeTxData<T, InitRewardExtInfo>> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const rewardMintUseSOLBalance =
       ownerInfo.useSOLBalance && rewardInfo.mint.address.toString() === WSOLMint.toString();
@@ -1010,13 +1021,14 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     txVersion,
+    feePayer,
   }: InitRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     for (const rewardInfo of rewardInfos) {
       if (rewardInfo.endTime <= rewardInfo.openTime)
         this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
     }
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     let address: Record<string, PublicKey> = {};
 
     for (const rewardInfo of rewardInfos) {
@@ -1087,11 +1099,12 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     txVersion,
+    feePayer,
   }: SetRewardParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
     if (rewardInfo.endTime <= rewardInfo.openTime)
       this.logAndCreateError("reward time error", "rewardInfo", rewardInfo);
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardInfo.mint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -1156,8 +1169,9 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     txVersion,
+    feePayer,
   }: SetRewardsParams<T>): Promise<MakeTxData<T, { address: Record<string, PublicKey> }>> {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     let address: Record<string, PublicKey> = {};
     for (const rewardInfo of rewardInfos) {
       if (rewardInfo.endTime <= rewardInfo.openTime)
@@ -1229,11 +1243,12 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     txVersion,
+    feePayer,
   }: CollectRewardParams<T>): Promise<MakeTxData<{ address: Record<string, PublicKey> }>> {
     const rewardInfo = poolInfo!.rewardDefaultInfos.find((i) => i.mint.address === rewardMint.toString());
     if (!rewardInfo) this.logAndCreateError("reward mint error", "not found reward mint", rewardMint);
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const rewardMintUseSOLBalance = ownerInfo.useSOLBalance && rewardMint.equals(WSOLMint);
     const { account: ownerRewardAccount, instructionParams: ownerRewardIns } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -1280,8 +1295,9 @@ export class Clmm extends ModuleBase {
     checkCreateATAOwner = false,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: CollectRewardsParams): Promise<MakeTransaction> {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     let address: Record<string, PublicKey> = {};
 
     for (const rewardMint of rewardMints) {
@@ -1343,6 +1359,7 @@ export class Clmm extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys?: ClmmKeys;
@@ -1361,8 +1378,9 @@ export class Clmm extends ModuleBase {
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
     txTipConfig?: TxTipConfig;
+    feePayer?: PublicKey;
   }): Promise<MakeTxData<T>> {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const baseIn = inputMint.toString() === poolInfo.mintA.address;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toBase58();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toBase58();
@@ -1472,6 +1490,7 @@ export class Clmm extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys?: ClmmKeys;
@@ -1490,8 +1509,9 @@ export class Clmm extends ModuleBase {
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
     txTipConfig?: TxTipConfig;
+    feePayer?: PublicKey;
   }): Promise<MakeTxData<T>> {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const baseIn = outputMint.toString() === poolInfo.mintB.address;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toBase58();
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toBase58();
@@ -1599,6 +1619,7 @@ export class Clmm extends ModuleBase {
     programId,
     txVersion,
     computeBudgetConfig,
+    feePayer,
   }: HarvestAllRewardsParams<T>): Promise<MakeMultiTxData<T>> {
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
@@ -1622,7 +1643,7 @@ export class Clmm extends ModuleBase {
       record[data.pubkey.toBase58()] = data?.accountInfo?.owner ?? null;
     });
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     for (const itemInfo of Object.values(allPoolInfo)) {
       if (allPositions[itemInfo.id] === undefined) continue;
       if (

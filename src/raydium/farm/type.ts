@@ -70,6 +70,7 @@ export interface CreateFarm<T = TxVersion.LEGACY> {
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface CreateFarmExtInfo {
@@ -87,6 +88,7 @@ export interface UpdateFarmReward<T = TxVersion.LEGACY> {
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface UpdateFarmRewards<T = TxVersion.LEGACY> {
@@ -96,6 +98,7 @@ export interface UpdateFarmRewards<T = TxVersion.LEGACY> {
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface FarmDWParam<T = TxVersion.LEGACY> {
@@ -127,16 +130,16 @@ export type FarmPoolKeys = {
   readonly upcoming: boolean;
   readonly rewardInfos: (
     | {
-        readonly rewardMint: PublicKey;
-        readonly rewardVault: PublicKey;
-      }
+      readonly rewardMint: PublicKey;
+      readonly rewardVault: PublicKey;
+    }
     | {
-        readonly rewardMint: PublicKey;
-        readonly rewardVault: PublicKey;
-        readonly rewardOpenTime: number;
-        readonly rewardEndTime: number;
-        readonly rewardPerSecond: number;
-        readonly rewardType: RewardType;
-      }
+      readonly rewardMint: PublicKey;
+      readonly rewardVault: PublicKey;
+      readonly rewardOpenTime: number;
+      readonly rewardEndTime: number;
+      readonly rewardPerSecond: number;
+      readonly rewardType: RewardType;
+    }
   )[];
 };

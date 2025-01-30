@@ -26,6 +26,7 @@ export interface AddLiquidityParams<T = TxVersion.LEGACY> {
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface RemoveParams<T = TxVersion.LEGACY> {
@@ -42,6 +43,7 @@ export interface RemoveParams<T = TxVersion.LEGACY> {
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface LiquidityUserKeys {
@@ -131,6 +133,7 @@ export interface CreatePoolParam<T> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface CreateMarketAndPoolParam<T> {
@@ -168,6 +171,7 @@ export interface CreateMarketAndPoolParam<T> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface CreatePoolAddress {
@@ -276,6 +280,7 @@ export interface SwapParam<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export type AmmRpcData = ReturnType<typeof liquidityStateV4Layout.decode> & {

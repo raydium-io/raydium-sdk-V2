@@ -212,6 +212,7 @@ export default class Utils1216 extends ModuleBase {
   public async makeClaimTransaction({
     poolInfo,
     ownerInfo,
+    feePayer,
   }: {
     connection: Connection;
     poolInfo: SHOW_INFO;
@@ -219,6 +220,7 @@ export default class Utils1216 extends ModuleBase {
       wallet?: PublicKey;
       associatedOnly: boolean;
     };
+    feePayer?: PublicKey;
   }): Promise<
     {
       transaction: Transaction;
@@ -226,7 +228,7 @@ export default class Utils1216 extends ModuleBase {
     }[]
   > {
     if (!ownerInfo.wallet) this.scope.checkOwner();
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const wallet = ownerInfo.wallet || this.scope.ownerPubKey;
 
     const ownerVaultList: PublicKey[] = [];
@@ -273,19 +275,21 @@ export default class Utils1216 extends ModuleBase {
   public async makeClaimAllTransaction({
     poolInfos,
     ownerInfo,
+    feePayer,
   }: {
     poolInfos: SHOW_INFO[];
     ownerInfo: {
       wallet?: PublicKey;
       associatedOnly: boolean;
     };
+    feePayer?: PublicKey;
   }): Promise<
     {
       transaction: Transaction;
       signer: Signer[];
     }[]
   > {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const wallet = ownerInfo.wallet || this.scope.ownerPubKey;
 
     const tempNewVault: { [mint: string]: PublicKey } = {};

@@ -71,10 +71,11 @@ export default class TradeV2 extends ModuleBase {
     computeBudgetConfig?: ComputeBudgetConfig;
     tokenProgram?: PublicKey;
     txVersion?: T;
+    feePayer?: PublicKey;
   }): Promise<MakeTxData<T>> {
-    const { amount, tokenProgram, txVersion = TxVersion.LEGACY } = props;
+    const { amount, tokenProgram, txVersion = TxVersion.LEGACY, feePayer, } = props;
     const tokenAccounts = await this.getWSolAccounts();
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     txBuilder.addCustomComputeBudget(props.computeBudgetConfig);
     const ins = await createWSolAccountInstructions({
       connection: this.scope.connection,
@@ -119,10 +120,11 @@ export default class TradeV2 extends ModuleBase {
     amount: BigNumberish,
     tokenProgram?: PublicKey,
     txVersion?: T,
+    feePayer?: PublicKey,
   ): Promise<MakeTxData<T>> {
     // const tokenAccounts = await this.getWSolAccounts();
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const ins = await createWSolAccountInstructions({
       connection: this.scope.connection,
@@ -165,6 +167,7 @@ export default class TradeV2 extends ModuleBase {
     computeBudgetConfig,
     routeProgram,
     txVersion,
+    feePayer,
   }: {
     txVersion: T;
     swapInfo: ComputeAmountOutLayout;
@@ -175,8 +178,9 @@ export default class TradeV2 extends ModuleBase {
     };
     routeProgram: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
+    feePayer?: PublicKey;
   }): Promise<MakeMultiTxData<T>> {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
@@ -194,9 +198,9 @@ export default class TradeV2 extends ModuleBase {
         skipCloseAccount: !useSolBalance,
         createInfo: useSolBalance
           ? {
-              payer: this.scope.ownerPubKey,
-              amount: amountIn.amount.raw,
-            }
+            payer: this.scope.ownerPubKey,
+            amount: amountIn.amount.raw,
+          }
           : undefined,
         associatedOnly: useSolBalance ? false : ownerInfo.associatedOnly,
         checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
@@ -807,9 +811,9 @@ export default class TradeV2 extends ModuleBase {
       feeConfig === undefined
         ? undefined
         : {
-            feeAmount: _amountInFee,
-            feeAccount: feeConfig.feeAccount,
-          };
+          feeAmount: _amountInFee,
+          feeAccount: feeConfig.feeAccount,
+        };
     const outputToken = {
       ...propOutputToken,
       address: solToWSol(propOutputToken.address).toString(),
@@ -914,9 +918,9 @@ export default class TradeV2 extends ModuleBase {
             remainingAccounts: [maxFirstIn.data.remainingAccounts[0], outC.remainingAccounts[0]],
             minMiddleAmountFee: outC.amountOut.fee?.raw
               ? new TokenAmount(
-                  (maxFirstIn.data.amountOut.amount as TokenAmount).token,
-                  (maxFirstIn.data.amountOut.fee?.raw ?? ZERO).add(outC.amountOut.fee?.raw ?? ZERO),
-                )
+                (maxFirstIn.data.amountOut.amount as TokenAmount).token,
+                (maxFirstIn.data.amountOut.fee?.raw ?? ZERO).add(outC.amountOut.fee?.raw ?? ZERO),
+              )
               : undefined,
             middleToken: (maxFirstIn.data.amountOut.amount as TokenAmount).token,
             poolReady: maxFirstIn.data.poolReady && outC.poolReady,

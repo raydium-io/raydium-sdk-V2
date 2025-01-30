@@ -419,10 +419,11 @@ export default class Account extends ModuleBase {
     amount?: BigNumberish;
     useSOLBalance?: boolean;
     handleTokenAccount?: boolean;
+    feePayer?: PublicKey;
   }): Promise<Promise<AddInstructionParam & { tokenAccount?: PublicKey }>> {
-    const { mint, programId = TOKEN_PROGRAM_ID, amount, useSOLBalance, handleTokenAccount } = props;
+    const { mint, programId = TOKEN_PROGRAM_ID, amount, useSOLBalance, handleTokenAccount, feePayer } = props;
     let tokenAccount: PublicKey | undefined;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     if (mint.equals(new PublicKey(WSOLMint)) && useSOLBalance) {
       // mintA

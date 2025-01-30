@@ -38,6 +38,7 @@ export default class MarketV2 extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: {
     baseInfo: {
       mint: PublicKey;
@@ -62,6 +63,7 @@ export default class MarketV2 extends ModuleBase {
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
     txTipConfig?: TxTipConfig;
+    feePayer?: PublicKey;
   }): Promise<MakeMultiTxData<T, MarketExtInfo>> {
     const wallet = this.scope.ownerPubKey;
     const seed = assignSeed
@@ -155,7 +157,7 @@ export default class MarketV2 extends ModuleBase {
         lowestFeeMarket,
       },
     });
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     txBuilder.addInstruction({
       instructions: allTxArr[0].transaction.instructions,
       signers: allTxArr[0].signer,

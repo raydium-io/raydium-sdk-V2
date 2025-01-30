@@ -165,6 +165,7 @@ export default class LiquidityModule extends ModuleBase {
       txVersion,
       computeBudgetConfig,
       txTipConfig,
+      feePayer,
     } = params;
 
     if (this.scope.availability.addStandardPosition === false)
@@ -222,7 +223,7 @@ export default class LiquidityModule extends ModuleBase {
 
     const poolKeys = propPoolKeys ?? (await this.getAmmPoolKeys(poolInfo.id));
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const { tokenAccount: _baseTokenAccount, ...baseInstruction } = await account.handleTokenAccount({
       side: "in",
@@ -294,6 +295,7 @@ export default class LiquidityModule extends ModuleBase {
       txVersion,
       computeBudgetConfig,
       txTipConfig,
+      feePayer,
     } = params;
     const poolKeys = propPoolKeys ?? (await this.getAmmPoolKeys(poolInfo.id));
     const [baseMint, quoteMint, lpMint] = [
@@ -320,7 +322,7 @@ export default class LiquidityModule extends ModuleBase {
       mint: quoteMint,
     });
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const { bypassAssociatedCheck, checkCreateATAOwner } = {
       // default
       ...{ bypassAssociatedCheck: false, checkCreateATAOwner: false },
@@ -391,6 +393,7 @@ export default class LiquidityModule extends ModuleBase {
     checkCreateATAOwner = true,
     getEphemeralSigners,
     txVersion,
+    feePayer,
   }: {
     poolInfo: ApiV3PoolInfoStandardItem;
     clmmPoolInfo: ApiV3PoolInfoConcentratedItem;
@@ -411,6 +414,7 @@ export default class LiquidityModule extends ModuleBase {
     checkCreateATAOwner?: boolean;
     txVersion?: T;
     getEphemeralSigners?: (k: number) => any;
+    feePayer?: PublicKey;
   }): Promise<MakeMultiTxData<T>> {
     if (
       this.scope.availability.removeStandardPosition === false ||
@@ -427,7 +431,7 @@ export default class LiquidityModule extends ModuleBase {
     )
       throw Error("mint check error");
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const mintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
       if (
@@ -453,8 +457,8 @@ export default class LiquidityModule extends ModuleBase {
 
         createInfo: mintBaseUseSOLBalance
           ? {
-              payer: this.scope.ownerPubKey,
-            }
+            payer: this.scope.ownerPubKey,
+          }
           : undefined,
         skipCloseAccount: !mintBaseUseSOLBalance,
         notUseTokenAccount: mintBaseUseSOLBalance,
@@ -471,9 +475,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintQuoteUseSOLBalance
           ? {
-              payer: this.scope.ownerPubKey!,
-              amount: 0,
-            }
+            payer: this.scope.ownerPubKey!,
+            amount: 0,
+          }
           : undefined,
         skipCloseAccount: !mintQuoteUseSOLBalance,
         notUseTokenAccount: mintQuoteUseSOLBalance,
@@ -548,8 +552,8 @@ export default class LiquidityModule extends ModuleBase {
         version === 6
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
-          ? makeWithdrawInstructionV5(insParams)
-          : makeWithdrawInstructionV3(insParams);
+            ? makeWithdrawInstructionV5(insParams)
+            : makeWithdrawInstructionV3(insParams);
       const insType = {
         3: InstructionType.FarmV3Withdraw,
         5: InstructionType.FarmV5Withdraw,
@@ -637,12 +641,13 @@ export default class LiquidityModule extends ModuleBase {
     feeDestinationId,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: CreatePoolParam<T>): Promise<MakeTxData<T, { address: CreatePoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(NATIVE_MINT);
     const mintBUseSOLBalance = ownerInfo.useSOLBalance && quoteMintInfo.mint.equals(NATIVE_MINT);
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const { account: ownerTokenAccountBase, instructionParams: ownerTokenAccountBaseInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -650,9 +655,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintAUseSOLBalance
           ? {
-              payer: payer!,
-              amount: baseAmount,
-            }
+            payer: payer!,
+            amount: baseAmount,
+          }
           : undefined,
         notUseTokenAccount: mintAUseSOLBalance,
         skipCloseAccount: !mintAUseSOLBalance,
@@ -667,9 +672,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintBUseSOLBalance
           ? {
-              payer: payer!,
-              amount: quoteAmount,
-            }
+            payer: payer!,
+            amount: quoteAmount,
+          }
           : undefined,
 
         notUseTokenAccount: mintBUseSOLBalance,
@@ -766,6 +771,7 @@ export default class LiquidityModule extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: CreateMarketAndPoolParam<T>): Promise<
     MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>
   > {
@@ -864,7 +870,7 @@ export default class LiquidityModule extends ModuleBase {
       },
     });
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     txBuilder.addInstruction({
       instructions: allTxArr[0].transaction.instructions,
       signers: allTxArr[0].signer,
@@ -884,9 +890,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintAUseSOLBalance
           ? {
-              payer: payer!,
-              amount: baseAmount,
-            }
+            payer: payer!,
+            amount: baseAmount,
+          }
           : undefined,
         notUseTokenAccount: mintAUseSOLBalance,
         skipCloseAccount: !mintAUseSOLBalance,
@@ -903,9 +909,9 @@ export default class LiquidityModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintBUseSOLBalance
           ? {
-              payer: payer!,
-              amount: quoteAmount,
-            }
+            payer: payer!,
+            amount: quoteAmount,
+          }
           : undefined,
 
         notUseTokenAccount: mintBUseSOLBalance,
@@ -972,8 +978,8 @@ export default class LiquidityModule extends ModuleBase {
     const splitIns =
       mintAUseSOLBalance || mintBUseSOLBalance
         ? ([
-            ownerTokenAccountBaseInstruction?.instructions?.[0] || ownerTokenAccountQuoteInstruction?.instructions?.[0],
-          ].filter((i) => !!i) as TransactionInstruction[])
+          ownerTokenAccountBaseInstruction?.instructions?.[0] || ownerTokenAccountQuoteInstruction?.instructions?.[0],
+        ].filter((i) => !!i) as TransactionInstruction[])
         : undefined;
 
     if (txVersion === TxVersion.V0)
@@ -1181,8 +1187,7 @@ export default class LiquidityModule extends ModuleBase {
     );
     this.logDebug(
       "currentPrice invert:",
-      `1 ${tokenOut.symbol || tokenOut.address} ≈ ${new Decimal(1).div(currentPrice).toString()} ${
-        tokenIn.symbol || tokenIn.address
+      `1 ${tokenOut.symbol || tokenOut.address} ≈ ${new Decimal(1).div(currentPrice).toString()} ${tokenIn.symbol || tokenIn.address
       }`,
     );
 
@@ -1265,8 +1270,9 @@ export default class LiquidityModule extends ModuleBase {
     config,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: SwapParam<T>): Promise<MakeTxData<T>> {
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const { associatedOnly = true, inputUseSolBalance = true, outputUseSolBalance = true } = config || {};
 
     const [tokenIn, tokenOut] =
@@ -1283,9 +1289,9 @@ export default class LiquidityModule extends ModuleBase {
 
         createInfo: inputTokenUseSolBalance
           ? {
-              payer: this.scope.ownerPubKey,
-              amount: amountIn,
-            }
+            payer: this.scope.ownerPubKey,
+            amount: amountIn,
+          }
           : undefined,
         skipCloseAccount: !inputTokenUseSolBalance,
         notUseTokenAccount: inputTokenUseSolBalance,

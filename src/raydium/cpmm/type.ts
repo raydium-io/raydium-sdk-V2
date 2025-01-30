@@ -72,6 +72,7 @@ export interface CreateCpmmPoolParam<T> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface CreateCpmmPoolAddress {
@@ -109,6 +110,7 @@ export interface AddCpmmLiquidityParams<T = TxVersion.LEGACY> {
     maxAnotherAmount: GetTransferAmountFee;
     liquidity: BN;
   };
+  feePayer?: PublicKey;
 }
 
 export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
@@ -120,6 +122,7 @@ export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
+  feePayer?: PublicKey;
 }
 
 export interface CpmmSwapParams<T = TxVersion.LEGACY> {
@@ -140,6 +143,7 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
+  feePayer?: PublicKey;
 }
 
 export interface ComputePairAmountParams {

@@ -297,6 +297,7 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   forerunCreate?: boolean;
   getObserveState?: boolean;
   txVersion?: T;
+  feePayer?: PublicKey;
 }
 
 export interface UserPositionAccount {
@@ -348,6 +349,7 @@ export interface IncreasePositionFromLiquidity<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
@@ -364,6 +366,7 @@ export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
@@ -385,6 +388,7 @@ export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface LockPosition<T = TxVersion.LEGACY> {
@@ -397,6 +401,7 @@ export interface LockPosition<T = TxVersion.LEGACY> {
   txTipConfig?: TxTipConfig;
   txVersion?: T;
   getEphemeralSigners?: (k: number) => any;
+  feePayer?: PublicKey;
 }
 
 export interface HarvestLockPosition<T = TxVersion.LEGACY> {
@@ -413,6 +418,7 @@ export interface HarvestLockPosition<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface ClmmPoolRewardLayoutInfo {
@@ -427,6 +433,7 @@ export interface ClmmPoolRewardLayoutInfo {
   tokenVault: PublicKey;
   creator: PublicKey;
   rewardGrowthGlobalX64: BN;
+  feePayer?: PublicKey;
 }
 
 export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
@@ -450,6 +457,7 @@ export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface OpenPositionFromBaseExtInfo {
@@ -481,6 +489,7 @@ export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
   computeBudgetConfig;
   nft2022?: boolean;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface OpenPositionFromLiquidityExtInfo {
@@ -522,6 +531,7 @@ export interface InitRewardParams<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface InitRewardsParams<T = TxVersion.LEGACY> extends Omit<InitRewardParams<T>, "rewardInfo"> {
@@ -553,6 +563,7 @@ export interface SetRewardParams<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface SetRewardsParams<T = TxVersion.LEGACY> extends Omit<SetRewardParams<T>, "rewardInfo"> {
@@ -576,6 +587,7 @@ export interface CollectRewardParams<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface CollectRewardsParams<T = TxVersion.LEGACY> extends Omit<CollectRewardParams, "rewardMint"> {
@@ -596,6 +608,7 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
 
 export interface TickArrayBitmapExtensionType {

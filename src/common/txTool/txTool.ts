@@ -203,7 +203,7 @@ export class TxBuilder {
     if (tipConfig) {
       this.endInstructions.push(
         SystemProgram.transfer({
-          fromPubkey: this.owner!.publicKey,
+          fromPubkey: tipConfig.feePayer ?? this.feePayer,
           toPubkey: new PublicKey(tipConfig.address),
           lamports: BigInt(tipConfig.amount.toString()),
         }),

@@ -98,6 +98,7 @@ export default class Farm extends ModuleBase {
     payer,
     programId = FARM_PROGRAM_ID_V6,
     txVersion,
+    feePayer,
   }: CreateFarm<T>): Promise<MakeTxData<T, CreateFarmExtInfo>> {
     this.checkDisabled();
     this.scope.checkOwner();
@@ -111,7 +112,7 @@ export default class Farm extends ModuleBase {
       programId,
     };
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const payerPubKey = payer ?? this.scope.ownerPubKey;
     const farmKeyPair = generatePubKey({ fromPublicKey: payerPubKey, programId: poolInfo.programId });
     const lamports = await this.scope.connection.getMinimumBalanceForRentExemption(farmStateV6Layout.span);
@@ -225,6 +226,7 @@ export default class Farm extends ModuleBase {
     payer,
     newRewardInfo,
     txVersion,
+    feePayer,
   }: UpdateFarmReward): Promise<MakeTxData<T>> {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
@@ -252,7 +254,7 @@ export default class Farm extends ModuleBase {
     if (!rewardInfo) this.logAndCreateError("configuration does not exist", "rewardMint", rewardMint);
 
     const rewardVault = rewardInfo!.vault ?? SOLMint;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const { rewardPubKey: userRewardTokenPub, newInstruction } = await this._getUserRewardInfo({
       rewardInfo: newRewardInfo,
@@ -284,6 +286,7 @@ export default class Farm extends ModuleBase {
     payer,
     newRewardInfos,
     txVersion,
+    feePayer,
   }: UpdateFarmRewards<T>): Promise<MakeTxData<T>> {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
@@ -302,7 +305,7 @@ export default class Farm extends ModuleBase {
     });
 
     const payerPubKey = payer || this.scope.ownerPubKey;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     for (const itemReward of newRewardInfos) {
       const rewardMint = itemReward.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.address) : itemReward.mint;
@@ -336,13 +339,13 @@ export default class Farm extends ModuleBase {
   }
 
   public async addNewRewardToken<T extends TxVersion>(params: UpdateFarmReward): Promise<MakeTxData<T>> {
-    const { txVersion, farmInfo, newRewardInfo, payer } = params;
+    const { txVersion, farmInfo, newRewardInfo, payer, feePayer } = params;
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
     const farmKeys = jsonInfo2PoolKeys((await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0]);
     const payerPubKey = payer ?? this.scope.ownerPubKey;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     const rewardMint = newRewardInfo.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.address) : newRewardInfo.mint;
 
@@ -381,13 +384,13 @@ export default class Farm extends ModuleBase {
   }
 
   public async addNewRewardsToken<T extends TxVersion>(params: UpdateFarmRewards<T>): Promise<MakeTxData<T>> {
-    const { txVersion, farmInfo, newRewardInfos, payer } = params;
+    const { txVersion, farmInfo, newRewardInfos, payer, feePayer } = params;
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version ", version);
 
     const farmKeys = jsonInfo2PoolKeys((await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0]);
     const payerPubKey = payer ?? this.scope.ownerPubKey;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     for (const itemReward of newRewardInfos) {
       const rewardMint = itemReward.mint.equals(SOLMint) ? new PublicKey(TOKEN_WSOL.address) : itemReward.mint;
@@ -451,7 +454,7 @@ export default class Farm extends ModuleBase {
       version: version as 3 | 5 | 6,
     });
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
@@ -535,8 +538,8 @@ export default class Farm extends ModuleBase {
       version === 6
         ? makeDepositInstructionV6(insParams)
         : version === 5
-        ? makeDepositInstructionV5(insParams)
-        : makeDepositInstructionV3(insParams);
+          ? makeDepositInstructionV5(insParams)
+          : makeDepositInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Deposit,
@@ -576,7 +579,7 @@ export default class Farm extends ModuleBase {
     if (!isValidFarmVersion(version)) this.logAndCreateError("invalid farm program:", farmInfo.programId);
 
     const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
@@ -723,10 +726,10 @@ export default class Farm extends ModuleBase {
       version === 6
         ? makeWithdrawInstructionV6(insParams)
         : version === 5
-        ? makeWithdrawInstructionV5(insParams)
-        : version === 4
-        ? makeWithdrawInstructionV4(insParams)
-        : makeWithdrawInstructionV3(insParams);
+          ? makeWithdrawInstructionV5(insParams)
+          : version === 4
+            ? makeWithdrawInstructionV4(insParams)
+            : makeWithdrawInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Withdraw,
@@ -750,6 +753,7 @@ export default class Farm extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     txTipConfig,
+    feePayer,
   }: {
     farmInfo: FormatFarmInfoOut;
     withdrawMint: PublicKey;
@@ -757,6 +761,7 @@ export default class Farm extends ModuleBase {
     computeBudgetConfig?: ComputeBudgetConfig;
     txTipConfig?: TxTipConfig;
     txVersion?: T;
+    feePayer?: PublicKey;
   }): Promise<MakeTxData<T>> {
     this.scope.checkOwner();
     const farmKeys = jsonInfo2PoolKeys(
@@ -772,7 +777,7 @@ export default class Farm extends ModuleBase {
     if (!rewardInfo) this.logAndCreateError("withdraw mint error", "rewardInfos", farmInfo);
 
     const rewardVault = rewardInfo?.vault ?? SOLMint;
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
 
     let userRewardToken: PublicKey;
 
@@ -853,7 +858,7 @@ export default class Farm extends ModuleBase {
       computeBudgetConfig,
     } = params;
 
-    const txBuilder = this.createTxBuilder();
+    const txBuilder = this.createTxBuilder(feePayer);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
       if (associatedOnly) {
@@ -942,8 +947,8 @@ export default class Farm extends ModuleBase {
         version === 6
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
-          ? makeWithdrawInstructionV5(insParams)
-          : makeWithdrawInstructionV3(insParams);
+            ? makeWithdrawInstructionV5(insParams)
+            : makeWithdrawInstructionV3(insParams);
 
       const insType = {
         3: InstructionType.FarmV3Withdraw,
