@@ -802,7 +802,7 @@ export default class CpmmModule extends ModuleBase {
   }
 
   public async lockLp<T extends TxVersion>(params: LockCpmmLpParams<T>): Promise<MakeTxData<CpmmLockExtInfo>> {
-    const { poolInfo, lpAmount, computeBudgetConfig, txTipConfig, txVersion, feePayer } = params;
+    const { poolInfo, lpAmount, computeBudgetConfig, txTipConfig, txVersion, feePayer, feeNftOwner } = params;
 
     if (lpAmount.isZero())
       this.logAndCreateError("lpAmount must greater than zero", {
@@ -820,6 +820,7 @@ export default class CpmmModule extends ModuleBase {
         wallet: this.scope.ownerPubKey,
         feePayer: params.feePayer ?? this.scope.ownerPubKey,
       },
+      feeNftOwner: feeNftOwner ?? this.scope.ownerPubKey,
       lockProgram: params.programId ?? LOCK_CPMM_PROGRAM,
       lockAuthProgram: params.authProgram ?? LOCK_CPMM_AUTH,
       lpAmount,

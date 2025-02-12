@@ -191,6 +191,7 @@ export interface LockCpmmLpParams<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   authProgram?: PublicKey;
   feePayer?: PublicKey;
+  feeNftOwner?: PublicKey;
   withMetadata?: boolean;
   getEphemeralSigners?: (k: number) => any;
   computeBudgetConfig?: ComputeBudgetConfig;

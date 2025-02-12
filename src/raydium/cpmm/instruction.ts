@@ -324,6 +324,7 @@ export async function makeCpmmLockInstruction(props: {
     feePayer: PublicKey;
     wallet: PublicKey;
   };
+  feeNftOwner: PublicKey;
 
   lockProgram: PublicKey;
   lockAuthProgram: PublicKey;
@@ -331,7 +332,7 @@ export async function makeCpmmLockInstruction(props: {
   withMetadata?: boolean;
   getEphemeralSigners?: (k: number) => any;
 }): Promise<ReturnTypeMakeInstructions<CpmmLockExtInfo>> {
-  const { ownerInfo, poolInfo, poolKeys, getEphemeralSigners } = props;
+  const { ownerInfo, poolInfo, poolKeys, feeNftOwner, getEphemeralSigners } = props;
 
   const signers: Signer[] = [];
   const [poolId, lpMint] = [new PublicKey(poolInfo.id), new PublicKey(poolInfo.lpMint.address)];
@@ -345,19 +346,19 @@ export async function makeCpmmLockInstruction(props: {
     nftMintAccount = _k.publicKey;
   }
 
-  const { publicKey: nftAccount } = getATAAddress(ownerInfo.feePayer, nftMintAccount, TOKEN_PROGRAM_ID);
+  const { publicKey: nftAccount } = getATAAddress(feeNftOwner, nftMintAccount, TOKEN_PROGRAM_ID);
   const { publicKey: metadataAccount } = getPdaMetadataKey(nftMintAccount);
   const { publicKey: lockPda } = getCpLockPda(props.lockProgram, nftMintAccount);
 
-  const { publicKey: userLpVault } = getATAAddress(ownerInfo.feePayer, lpMint, TOKEN_PROGRAM_ID);
+  const { publicKey: userLpVault } = getATAAddress(ownerInfo.wallet, lpMint, TOKEN_PROGRAM_ID);
   const { publicKey: lockLpVault } = getATAAddress(props.lockAuthProgram, lpMint, TOKEN_PROGRAM_ID);
 
   const ins = cpmmLockPositionInstruction({
     programId: props.lockProgram,
     auth: props.lockAuthProgram,
     payer: ownerInfo.feePayer,
-    nftOwner: ownerInfo.feePayer,
-    liquidityOwner: ownerInfo.feePayer,
+    liquidityOwner: ownerInfo.wallet,
+    nftOwner: feeNftOwner,
     nftMint: nftMintAccount,
     nftAccount,
     poolId,
