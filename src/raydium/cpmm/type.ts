@@ -123,6 +123,7 @@ export interface WithdrawCpmmLiquidityParams<T = TxVersion.LEGACY> {
   txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;
+  closeWsol?: boolean;
 }
 
 export interface CpmmSwapParams<T = TxVersion.LEGACY> {
@@ -222,6 +223,7 @@ export interface HarvestLockCpmmLpParams<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
+  closeWsol?: boolean;
 }
 
 export interface CpmmLockNftBasicInfo {

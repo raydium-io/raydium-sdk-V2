@@ -557,6 +557,7 @@ export default class CpmmModule extends ModuleBase {
       txTipConfig,
       txVersion,
       feePayer,
+      closeWsol = true,
     } = params;
 
     if (this.scope.availability.addStandardPosition === false)
@@ -595,7 +596,7 @@ export default class CpmmModule extends ModuleBase {
           payer: this.scope.ownerPubKey,
           amount: 0,
         },
-        skipCloseAccount: !mintAUseSOLBalance,
+        skipCloseAccount: !(mintAUseSOLBalance && closeWsol),
         associatedOnly: mintAUseSOLBalance ? false : true,
         checkCreateATAOwner: false,
       });
@@ -612,7 +613,7 @@ export default class CpmmModule extends ModuleBase {
           payer: this.scope.ownerPubKey,
           amount: 0,
         },
-        skipCloseAccount: !mintBUseSOLBalance,
+        skipCloseAccount: !(mintBUseSOLBalance && closeWsol),
         associatedOnly: mintBUseSOLBalance ? false : true,
         checkCreateATAOwner: false,
       });
@@ -845,6 +846,7 @@ export default class CpmmModule extends ModuleBase {
       computeBudgetConfig,
       txTipConfig,
       txVersion,
+      closeWsol = true,
     } = params;
 
     if (lpFeeAmount.isZero())
@@ -873,7 +875,7 @@ export default class CpmmModule extends ModuleBase {
           payer: this.scope.ownerPubKey,
           amount: 0,
         },
-        skipCloseAccount: !mintAUseSOLBalance,
+        skipCloseAccount: !(mintAUseSOLBalance && closeWsol),
         associatedOnly: mintAUseSOLBalance ? false : true,
         checkCreateATAOwner: false,
       });
@@ -890,7 +892,7 @@ export default class CpmmModule extends ModuleBase {
           payer: this.scope.ownerPubKey,
           amount: 0,
         },
-        skipCloseAccount: !mintBUseSOLBalance,
+        skipCloseAccount: !(mintBUseSOLBalance && closeWsol),
         associatedOnly: mintBUseSOLBalance ? false : true,
         checkCreateATAOwner: false,
       });
