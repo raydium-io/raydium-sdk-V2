@@ -11,7 +11,7 @@ import { TokenInfo } from "./type";
 export default class TokenModule extends ModuleBase {
   private _tokenList: TokenInfo[] = [];
   private _tokenMap: Map<string, TokenInfo> = new Map();
-  private _blackTokenMap: Map<string, TokenInfo> = new Map();
+  private _blackTokenMap: Set<string> = new Set();
   private _mintGroup: { official: Set<string>; jup: Set<string>; extra: Set<string> } = {
     official: new Set(),
     jup: new Set(),
@@ -32,15 +32,12 @@ export default class TokenModule extends ModuleBase {
     // reset all data
     this._tokenList = [];
     this._tokenMap = new Map();
-    this._blackTokenMap = new Map();
+    this._blackTokenMap = new Set(blacklist);
     this._mintGroup = { official: new Set(), jup: new Set(), extra: new Set() };
     this._whiteMap = new Set(whiteList);
 
     this._tokenMap.set(SOL_INFO.address, SOL_INFO);
     this._mintGroup.official.add(SOL_INFO.address);
-    blacklist.forEach((token) => {
-      this._blackTokenMap.set(token.address, { ...token, priority: -1 });
-    });
 
     mintList.forEach((token) => {
       if (this._blackTokenMap.has(token.address)) return;
@@ -92,7 +89,7 @@ export default class TokenModule extends ModuleBase {
   get tokenMap(): Map<string, TokenInfo> {
     return this._tokenMap;
   }
-  get blackTokenMap(): Map<string, TokenInfo> {
+  get blackTokenMap(): Set<string> {
     return this._blackTokenMap;
   }
   get mintGroup(): { official: Set<string>; jup: Set<string> } {
