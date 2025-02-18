@@ -151,3 +151,14 @@ export function getPdaLockClPositionIdV2(
 } {
   return findProgramAddress([POOL_LOCK_ID_SEED, lockNftMint.toBuffer()], programId);
 }
+
+export const SUPPORT_MINT_SEED = Buffer.from("support_mint", "utf8");
+export function getPdaMintExAccount(
+  programId: PublicKey,
+  mintAddress: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress([SUPPORT_MINT_SEED, mintAddress.toBuffer()], programId);
+}
