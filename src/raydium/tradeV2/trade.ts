@@ -181,7 +181,6 @@ export default class TradeV2 extends ModuleBase {
     feePayer?: PublicKey;
   }): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
-
     const amountIn = swapInfo.amountIn;
     const amountOut = swapInfo.amountOut;
     const useSolBalance = amountIn.amount.token.mint.equals(WSOLMint);

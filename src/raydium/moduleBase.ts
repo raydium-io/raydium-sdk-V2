@@ -54,7 +54,6 @@ export default class ModuleBase {
 
   public logAndCreateError(...args: (string | number | Record<string, any>)[]): void {
     const message = joinMsg(args);
-    // this.logger.error(message);
     throw new Error(message);
   }
 

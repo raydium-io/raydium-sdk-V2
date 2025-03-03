@@ -213,7 +213,7 @@ export class Raydium {
 
   public checkOwner(): void {
     if (!this.owner) {
-      this.logger.error(EMPTY_OWNER);
+      console.error(EMPTY_OWNER);
       throw new Error(EMPTY_OWNER);
     }
   }
