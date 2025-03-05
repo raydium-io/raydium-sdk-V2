@@ -15,3 +15,4 @@ export * from "./txTool/txTool";
 export * from "./txTool/txType";
 export * from "./txTool/txUtils";
 export * from "./utility";
+export * from "./fee";

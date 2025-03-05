@@ -43,6 +43,12 @@ export const DEV_LOCK_CPMM_PROGRAM = new PublicKey("DLockwT7X7sxtLmGH9g5kmfcjaBt
 export const LOCK_CPMM_AUTH = new PublicKey("3f7GcQFG397GAaEnv51zR6tsTVihYRydnydDD1cXekxH");
 export const DEV_LOCK_CPMM_AUTH = new PublicKey("7AFUeLVRjBfzqK3tTGw8hN48KLQWSk6DTE8xprWdPqix");
 
+export const LAUNCHPAD_PROGRAM = new PublicKey("LanMkFSVSncjWqWAM8MUHenZzt9xTcT3DcAp949ZwbF");
+export const LAUNCHPAD_AUTH = new PublicKey("495mQpkX8mHAv18yGsfubCXbFQ9Jok1L1BvMrV9KvCHr");
+
+export const DEV_LAUNCHPAD_PROGRAM = new PublicKey("9PiyX1DBEVwp8B1SmRUmZcSHBDbF31j8ivryq4TmV3G8");
+export const DEV_LAUNCHPAD_AUTH = new PublicKey("EyW7hDUcKgAcRA9FBkThTS75kGbz7qSBexMoTB8t2v1H");
+
 export const IDO_ALL_PROGRAM = {
   IDO_PROGRAM_ID_V1,
   IDO_PROGRAM_ID_V2,
@@ -74,6 +80,9 @@ export const ALL_PROGRAM_ID = {
 
   LOCK_CPMM_PROGRAM,
   LOCK_CPMM_AUTH,
+
+  LAUNCHPAD_PROGRAM,
+  LAUNCHPAD_AUTH,
 };
 
 export type ProgramIdConfig = Partial<typeof ALL_PROGRAM_ID>;
@@ -105,4 +114,7 @@ export const DEVNET_PROGRAM_ID = {
 
   LOCK_CPMM_PROGRAM: DEV_LOCK_CPMM_PROGRAM,
   LCOK_CPMM_AUTH: DEV_LOCK_CPMM_AUTH,
+
+  LAUNCHPAD_PROGRAM: DEV_LAUNCHPAD_PROGRAM,
+  LAUNCHPAD_AUTH: DEV_LAUNCHPAD_AUTH,
 };
