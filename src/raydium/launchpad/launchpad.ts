@@ -44,6 +44,8 @@ export default class LaunchpadModule extends ModuleBase {
     symbol,
     uri,
     migrateType,
+    curType = 0,
+    configIndex = 0,
     txVersion,
     computeBudgetConfig,
     txTipConfig,
@@ -58,9 +60,8 @@ export default class LaunchpadModule extends ModuleBase {
   }: CreateLunchPad<T>): Promise<MakeTxData<T, { address: LaunchpadPoolInfo; outAmount: BN }>> {
     const txBuilder = this.createTxBuilder(feePayer);
 
-    if (buyAmount.lte(new BN(0))) this.logAndCreateError("buy amount should gt 0:", buyAmount.toString());
     authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
-    const { publicKey: configId } = getPdaLaunchpadConfigId(programId, mintB, 0, 0); // index mock
+    const { publicKey: configId } = getPdaLaunchpadConfigId(programId, mintB, curType, configIndex);
     const { publicKey: poolId } = getPdaLaunchpadPoolId(programId, mintA, mintB);
     const { publicKey: vaultA } = getPdaLaunchpadVaultId(programId, poolId, mintA);
     const { publicKey: vaultB } = getPdaLaunchpadVaultId(programId, poolId, mintB);
@@ -68,6 +69,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     if (symbol.length > 10) this.logAndCreateError("Symbol length should shorter than 11");
     if (!uri) this.logAndCreateError("uri should not empty");
+    if (buyAmount.lte(new BN(0))) this.logAndCreateError("buy amount should gt 0:", buyAmount.toString());
 
     const initialPriceX64 = LaunchpadPoolInitParam.initPriceX64;
     const supply = extraConfigs?.supply ?? LaunchpadPoolInitParam.supply;
@@ -87,7 +89,7 @@ export default class LaunchpadModule extends ModuleBase {
       realB: LaunchpadPoolInitParam.realB,
       tradeFee: LaunchpadPoolInitParam.tradeFee,
       migrateFee: LaunchpadPoolInitParam.migrateFee,
-      migrateType: 0,
+      migrateType: migrateType === "amm" ? 0 : 1,
       configId,
       vaultA,
       vaultB,
@@ -218,7 +220,11 @@ export default class LaunchpadModule extends ModuleBase {
     txBuilder.addInstruction(_tokenAccountAInstruction || {});
 
     if (userTokenAccountA === undefined)
-      this.logAndCreateError("cannot found mintA token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
+      this.logAndCreateError(
+        `cannot found mintA(${mintA.toBase58()}) token accounts`,
+        "tokenAccounts",
+        this.scope.account.tokenAccounts,
+      );
 
     const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
       await this.scope.account.getOrCreateTokenAccount({
@@ -239,12 +245,16 @@ export default class LaunchpadModule extends ModuleBase {
     txBuilder.addInstruction(_tokenAccountBInstruction || {});
 
     if (userTokenAccountB === undefined)
-      this.logAndCreateError("cannot found mintB token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
+      this.logAndCreateError(
+        `cannot found mintB(${mintB.toBase58()}) token accounts`,
+        "tokenAccounts",
+        this.scope.account.tokenAccounts,
+      );
 
     let poolInfo = propPoolInfo;
     if (!poolInfo) {
       const poolData = await this.scope.connection.getAccountInfo(poolId, { commitment: "confirmed" });
-      if (!poolData) this.logAndCreateError("cannot found pool", poolId.toBase58());
+      if (!poolData) this.logAndCreateError("cannot found pool:", poolId.toBase58());
       poolInfo = LaunchpadPool.decode(poolData!.data);
     }
 
@@ -265,10 +275,11 @@ export default class LaunchpadModule extends ModuleBase {
         ? calculatedAmount.amountA.mul(SLIPPAGE_UNIT.sub(slippage)).div(SLIPPAGE_UNIT)
         : calculatedAmount.amountA);
 
-    console.log({
-      amountA: calculatedAmount.amountA.toString(),
-      minAmountA: minMintAAmount.toString(),
-    });
+    if (calculatedAmount.realAmountB.lt(buyAmount)) {
+      console.log(
+        `maximum ${mintA.toBase58()} amount can buy is ${minMintAAmount.toString()}, input ${mintB.toBase58()} amount: ${calculatedAmount.realAmountB.toString()}`,
+      );
+    }
 
     txBuilder.addInstruction({
       instructions: [
@@ -402,7 +413,7 @@ export default class LaunchpadModule extends ModuleBase {
         ? calculatedAmount.amountB.mul(SLIPPAGE_UNIT.sub(slippage)).div(SLIPPAGE_UNIT)
         : calculatedAmount.amountB);
 
-    if (minAmountB.lte(new BN(0))) this.logAndCreateError("out amount should be gt 0");
+    if (minAmountB.lte(new BN(0))) this.logAndCreateError(`out ${mintB.toBase58()} amount should be gt 0`);
 
     txBuilder.addInstruction({
       instructions: [
@@ -412,8 +423,8 @@ export default class LaunchpadModule extends ModuleBase {
           authProgramId,
           configId,
           poolId,
-          userTokenAccountA!, //userTokenAccountA: PublicKey,
-          userTokenAccountB!, //userTokenAccountB: PublicKey,
+          userTokenAccountA!,
+          userTokenAccountB!,
           vaultA,
           vaultB,
           mintA,
@@ -421,7 +432,7 @@ export default class LaunchpadModule extends ModuleBase {
           TOKEN_PROGRAM_ID, //tokenProgramA
           TOKEN_PROGRAM_ID, //tokenProgramB
           calculatedAmount.realAmountA.lt(sellAmount) ? calculatedAmount.realAmountA : sellAmount, // amountA: BN,
-          minAmountB, // minAmountB: BN,
+          minAmountB,
           shareFeeRate,
           shareFeeReceiver,
         ),

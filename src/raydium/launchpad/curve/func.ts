@@ -4,18 +4,18 @@ import Decimal from "decimal.js";
 export class MathLaunch {
   static _Q64 = new Decimal(new BN(1).shln(64).toString());
 
-  static _multipler(decimals: number) {
+  static _multipler(decimals: number): Decimal {
     return new Decimal(10).pow(decimals);
   }
 
-  static getPrice({ priceX64, decimalA, decimalB }: { priceX64: BN; decimalA: number; decimalB: number }) {
+  static getPrice({ priceX64, decimalA, decimalB }: { priceX64: BN; decimalA: number; decimalB: number }): Decimal {
     const priceWithDecimals = new Decimal(priceX64.toString()).div(this._Q64);
     const price = priceWithDecimals.mul(this._multipler(decimalA)).div(this._multipler(decimalB));
 
     return price;
   }
 
-  static getPriceX64({ price, decimalA, decimalB }: { price: Decimal; decimalA: number; decimalB: number }) {
+  static getPriceX64({ price, decimalA, decimalB }: { price: Decimal; decimalA: number; decimalB: number }): BN {
     const priceWithDecimals = price.mul(this._multipler(decimalB)).div(this._multipler(decimalA));
     const priceX64 = new BN(priceWithDecimals.mul(this._Q64).toFixed(0));
     return priceX64;
@@ -36,7 +36,7 @@ export function checkPoolToAmm({
   totalFundRaisingB: BN;
   migrateType: "amm" | "cpmm";
   decimalsA: number;
-}) {
+}): boolean {
   const migrateAmountA = supply.sub(totalSellA).sub(totalLockedAmount);
   const liquidity = new BN(new Decimal(migrateAmountA.mul(totalFundRaisingB).toString()).sqrt().toFixed(0));
 

@@ -59,7 +59,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     totalLockedAmount: BN;
     totalFundRaising: BN;
     migrateFee: BN;
-  }) {
+  }): { a: BN; b: BN } {
     if (supply.lte(totalSell)) throw Error("supply need gt total sell");
     const supplyMinusSellLocked = supply.sub(totalSell).sub(totalLockedAmount);
     if (supplyMinusSellLocked.lte(new BN(0))) throw Error("supplyMinusSellLocked <= 0");
@@ -113,7 +113,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     amountIn: BN;
     inputReserve: BN;
     outputReserve: BN;
-  }) {
+  }): BN {
     const numerator = amountIn.mul(outputReserve);
     const denominator = inputReserve.add(amountIn);
     const amountOut = numerator.div(denominator);
@@ -127,7 +127,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     amountOut: BN;
     inputReserve: BN;
     outputReserve: BN;
-  }) {
+  }): BN {
     const numerator = inputReserve.mul(amountOut);
     const denominator = outputReserve.sub(amountOut);
     const amountIn = BNDivCeil(numerator, denominator);

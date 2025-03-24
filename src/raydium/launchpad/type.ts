@@ -2,7 +2,6 @@ import { PublicKey } from "@solana/web3.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../type";
 import { TxVersion } from "@/common";
 import BN from "bn.js";
-import Decimal from "decimal.js";
 import { LaunchpadPool } from "./layout";
 
 export interface CreateLunchPad<T = TxVersion.LEGACY> {
@@ -16,6 +15,9 @@ export interface CreateLunchPad<T = TxVersion.LEGACY> {
   mintB?: PublicKey; // default SOL
   mintBDecimals?: number; // default SOL decimals 9
   decimals?: number; // default 6
+  curType?: number; // default 0
+  configIndex?: number; //default 0
+
   minMintAAmount?: BN; // default calculated by realtime rpc data
   slippage?: BN;
 
