@@ -9,6 +9,37 @@ import { ceilDiv, floorDiv } from "@/common/bignumber";
 import Decimal from "decimal.js";
 
 export class Curve {
+  static getPoolInitPriceByPool({
+    poolInfo,
+    decimalA,
+    decimalB,
+    curveType,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    decimalA: number;
+    decimalB: number;
+    curveType: number;
+  }) {
+    const curve = this.getCurve(curveType);
+    return curve.getPoolInitPriceByPool({ poolInfo, decimalA, decimalB });
+  }
+  static getPoolInitPriceByInit({
+    a,
+    b,
+    decimalA,
+    decimalB,
+    curveType,
+  }: {
+    a: BN;
+    b: BN;
+    decimalA: number;
+    decimalB: number;
+    curveType: number;
+  }) {
+    const curve = this.getCurve(curveType);
+    return curve.getPoolInitPriceByInit({ a, b, decimalA, decimalB });
+  }
+
   static getPrice({
     poolInfo,
     curveType,
@@ -22,6 +53,35 @@ export class Curve {
   }): Decimal {
     const curve = this.getCurve(curveType);
     return curve.getPoolPrice({ poolInfo, decimalA, decimalB });
+  }
+
+  static getEndPrice({
+    poolInfo,
+    curveType,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    curveType: number;
+    decimalA: number;
+    decimalB: number;
+  }) {
+    const curve = this.getCurve(curveType);
+    return curve.getPoolPrice({ poolInfo, decimalA, decimalB });
+  }
+  static getPoolEndPriceReal({
+    poolInfo,
+    curveType,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    curveType: number;
+    decimalA: number;
+    decimalB: number;
+  }) {
+    const curve = this.getCurve(curveType);
+    return curve.getPoolEndPriceReal({ poolInfo, decimalA, decimalB });
   }
 
   static buy({
@@ -60,10 +120,9 @@ export class Curve {
     let tradeFee: BN;
     if (_amountA.gt(remainingAmountA)) {
       amountA = remainingAmountA;
-      const _amountLessFeeB = curve.buyExactOut({ poolInfo, amount: amountA });
-
-      realAmountB = this.calculatePreFee({ postFeeAmount: _amountLessFeeB, feeRate });
-      tradeFee = realAmountB.sub(_amountLessFeeB);
+      const amountLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+      realAmountB = this.calculatePreFee({ postFeeAmount: amountLessFeeB, feeRate });
+      tradeFee = realAmountB.sub(amountLessFeeB);
     } else {
       amountA = _amountA;
       realAmountB = amountB;

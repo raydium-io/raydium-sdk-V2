@@ -4,8 +4,34 @@ import { Q64 } from "./constantProductCurve";
 import { MathLaunch } from "./func";
 import { MaxU64 } from "@/raydium/clmm";
 import { LaunchpadPoolInfo } from "../type";
+import { CurveBase } from "./curveBase";
 
-export class LinearPriceCurve {
+export class LinearPriceCurve extends CurveBase {
+  static getPoolInitPriceByPool({
+    poolInfo,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    return new Decimal(0);
+  }
+  static getPoolInitPriceByInit({
+    a,
+    b,
+    decimalA,
+    decimalB,
+  }: {
+    a: BN;
+    b: BN;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    return new Decimal(0);
+  }
+
   static getPoolPrice({
     poolInfo,
     decimalA,
@@ -20,7 +46,6 @@ export class LinearPriceCurve {
       .mul(10 ** (decimalA - decimalB));
   }
   static getPoolEndPrice({
-    initPriceX64,
     supply,
     totalSell,
     totalLockedAmount,
@@ -29,7 +54,6 @@ export class LinearPriceCurve {
     decimalA,
     decimalB,
   }: {
-    initPriceX64: BN;
     supply: BN;
     totalSell: BN;
     totalLockedAmount: BN;
@@ -42,15 +66,36 @@ export class LinearPriceCurve {
       .div(supply.sub(totalSell).sub(totalLockedAmount).toString())
       .mul(10 ** (decimalA - decimalB));
   }
+
+  static getPoolEndPriceReal({
+    poolInfo,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    const allSellToken = poolInfo.totalSellA.sub(poolInfo.realA);
+    const buyAllTokenUseB = allSellToken.isZero()
+      ? new BN(0)
+      : this.buyExactOut({
+          amount: poolInfo.totalSellA.sub(poolInfo.realA),
+          poolInfo,
+        });
+
+    return new Decimal(poolInfo.virtualB.add(poolInfo.realB).add(buyAllTokenUseB).toString())
+      .div(poolInfo.virtualA.sub(poolInfo.realA).add(allSellToken).toString())
+      .mul(10 ** (decimalA - decimalB));
+  }
+
   static getInitParam({
-    initPriceX64,
     supply,
     totalFundRaising,
     totalSell,
     totalLockedAmount,
     migrateFee,
   }: {
-    initPriceX64: BN;
     supply: BN;
     totalSell: BN;
     totalLockedAmount: BN;

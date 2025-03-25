@@ -1,21 +1,46 @@
 import BN from "bn.js";
 import { LaunchpadPool } from "../layout";
 import Decimal from "decimal.js";
+import { LaunchpadPoolInfo } from "../type";
 
 export class CurveBase {
+  static getPoolInitPriceByPool({
+    poolInfo,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    throw Error();
+  }
+  static getPoolInitPriceByInit({
+    a,
+    b,
+    decimalA,
+    decimalB,
+  }: {
+    a: BN;
+    b: BN;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    throw Error();
+  }
+
   static getPoolPrice({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
+    poolInfo: LaunchpadPoolInfo;
     decimalA: number;
     decimalB: number;
   }): Decimal {
     throw Error();
   }
   static getPoolEndPrice({
-    initPriceX64,
     supply,
     totalSell,
     totalLockedAmount,
@@ -24,7 +49,6 @@ export class CurveBase {
     decimalA,
     decimalB,
   }: {
-    initPriceX64: BN;
     supply: BN;
     totalSell: BN;
     totalLockedAmount: BN;
@@ -35,15 +59,26 @@ export class CurveBase {
   }): Decimal {
     throw Error();
   }
+
+  static getPoolEndPriceReal({
+    poolInfo,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    throw Error();
+  }
+
   static getInitParam({
-    initPriceX64,
     supply,
     totalFundRaising,
     totalSell,
     totalLockedAmount,
     migrateFee,
   }: {
-    initPriceX64: BN;
     supply: BN;
     totalSell: BN;
     totalLockedAmount: BN;

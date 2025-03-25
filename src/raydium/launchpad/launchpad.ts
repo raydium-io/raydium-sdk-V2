@@ -25,6 +25,7 @@ export const LaunchpadPoolInitParam = {
   realB: new BN(0),
   tradeFee: new BN("10000"),
   migrateFee: new BN("100000000"),
+  migrateReturnNft: 0 as 0 | 1,
 };
 
 const SLIPPAGE_UNIT = new BN(10000);
@@ -71,7 +72,6 @@ export default class LaunchpadModule extends ModuleBase {
     if (!uri) this.logAndCreateError("uri should not empty");
     if (buyAmount.lte(new BN(0))) this.logAndCreateError("buy amount should gt 0:", buyAmount.toString());
 
-    const initialPriceX64 = LaunchpadPoolInitParam.initPriceX64;
     const supply = extraConfigs?.supply ?? LaunchpadPoolInitParam.supply;
     const totalSellA = extraConfigs?.totalSellA ?? LaunchpadPoolInitParam.totalSellA;
     const totalFundRaisingB = extraConfigs?.totalFundRaisingB ?? LaunchpadPoolInitParam.totalFundRaisingB;
@@ -90,6 +90,7 @@ export default class LaunchpadModule extends ModuleBase {
       tradeFee: LaunchpadPoolInitParam.tradeFee,
       migrateFee: LaunchpadPoolInitParam.migrateFee,
       migrateType: migrateType === "amm" ? 0 : 1,
+      migrateReturnNft: 0,
       configId,
       vaultA,
       vaultB,
@@ -128,7 +129,7 @@ export default class LaunchpadModule extends ModuleBase {
 
           migrateType,
 
-          initialPriceX64,
+          LaunchpadPoolInitParam.migrateReturnNft,
           supply,
           totalSellA,
           totalFundRaisingB,
@@ -341,10 +342,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     if (sellAmount.lte(new BN(0))) this.logAndCreateError("sell amount should be gt 0");
 
-    const { publicKey: configId } = getPdaLaunchpadConfigId(programId, mintB, 0, 0); // index mock
     const { publicKey: poolId } = getPdaLaunchpadPoolId(programId, mintA, mintB);
-    const { publicKey: vaultA } = getPdaLaunchpadVaultId(programId, poolId, mintA);
-    const { publicKey: vaultB } = getPdaLaunchpadVaultId(programId, poolId, mintB);
 
     let userTokenAccountA: PublicKey | null = null;
     let userTokenAccountB: PublicKey | null = null;
@@ -421,12 +419,12 @@ export default class LaunchpadModule extends ModuleBase {
           programId,
           this.scope.ownerPubKey,
           authProgramId,
-          configId,
+          poolInfo.configId,
           poolId,
           userTokenAccountA!,
           userTokenAccountB!,
-          vaultA,
-          vaultB,
+          poolInfo.vaultA,
+          poolInfo.vaultB,
           mintA,
           mintB,
           TOKEN_PROGRAM_ID, //tokenProgramA

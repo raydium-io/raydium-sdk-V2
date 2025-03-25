@@ -8,6 +8,31 @@ import { LaunchpadPoolInfo } from "../type";
 export { Q64 };
 
 export class LaunchPadConstantProductCurve extends CurveBase {
+  static getPoolInitPriceByPool({
+    poolInfo,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    return new Decimal(poolInfo.virtualB.toString()).div(poolInfo.virtualA.toString()).mul(10 ** (decimalA - decimalB));
+  }
+  static getPoolInitPriceByInit({
+    a,
+    b,
+    decimalA,
+    decimalB,
+  }: {
+    a: BN;
+    b: BN;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    return new Decimal(b.toString()).div(a.toString()).mul(10 ** (decimalA - decimalB));
+  }
+
   static getPoolPrice({
     poolInfo,
     decimalA,
@@ -22,7 +47,6 @@ export class LaunchPadConstantProductCurve extends CurveBase {
       .mul(10 ** (decimalA - decimalB));
   }
   static getPoolEndPrice({
-    initPriceX64,
     supply,
     totalSell,
     totalLockedAmount,
@@ -31,7 +55,6 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    initPriceX64: BN;
     supply: BN;
     totalSell: BN;
     totalLockedAmount: BN;
@@ -45,15 +68,35 @@ export class LaunchPadConstantProductCurve extends CurveBase {
       .mul(10 ** (decimalA - decimalB));
   }
 
+  static getPoolEndPriceReal({
+    poolInfo,
+    decimalA,
+    decimalB,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    decimalA: number;
+    decimalB: number;
+  }): Decimal {
+    const allSellToken = poolInfo.totalSellA.sub(poolInfo.realA);
+    const buyAllTokenUseB = allSellToken.isZero()
+      ? new BN(0)
+      : this.buyExactOut({
+          amount: poolInfo.totalSellA.sub(poolInfo.realA),
+          poolInfo,
+        });
+
+    return new Decimal(poolInfo.virtualB.add(poolInfo.realB.add(buyAllTokenUseB)).toString())
+      .div(poolInfo.virtualA.sub(poolInfo.realA.add(allSellToken)).toString())
+      .mul(10 ** (decimalA - decimalB));
+  }
+
   static getInitParam({
-    initPriceX64,
     supply,
     totalFundRaising,
     totalSell,
     totalLockedAmount,
     migrateFee,
   }: {
-    initPriceX64: BN;
     supply: BN;
     totalSell: BN;
     totalLockedAmount: BN;

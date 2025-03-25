@@ -6,6 +6,14 @@ export const LaunchpadConfig = struct([
   u16("index"),
   u64("migrateFee"),
   u64("tradeFeeRate"),
+
+  u64("maxShareFeeRate"),
+  u64("minSupplyA"),
+  u64(),
+  u64("minSellRateA"),
+  u64("maxSellRateA"),
+  u64("minFundRaisingB"),
+
   publicKey("feeOwner"),
   publicKey("mintB"),
   seq(u64(), 16),
@@ -25,6 +33,7 @@ export const LaunchpadPool = struct([
   u8("status"),
   u8("decimals"),
   u8("migrateType"),
+  u8("migrateReturnNft"),
 
   u64("supply"),
   u64("totalSellA"),
