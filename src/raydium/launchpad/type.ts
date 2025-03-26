@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../type";
 import { TxVersion } from "@/common";
 import BN from "bn.js";
-import { LaunchpadPool } from "./layout";
+import { LaunchpadPool, LaunchpadConfig } from "./layout";
 
 export interface CreateLunchPad<T = TxVersion.LEGACY> {
   mintA: PublicKey;
@@ -85,3 +85,4 @@ export interface SellToken<T = TxVersion.LEGACY> {
 }
 
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;
+export type LaunchpadConfigInfo = ReturnType<typeof LaunchpadConfig.decode>;

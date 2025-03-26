@@ -2,6 +2,7 @@ import { PublicKey, SystemProgram, TransactionInstruction, AccountMeta } from "@
 import BN from "bn.js";
 import { struct, u8, u64, u128, str } from "@/marshmallow";
 import { RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "@/common";
+import { getPdaCpiEvent } from "./pad";
 export const anchorDataBuf = {
   initialize: Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]),
   buy: Buffer.from([102, 6, 61, 18, 1, 218, 235, 234]),
@@ -72,6 +73,8 @@ export function initialize(
     { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
+    { pubkey: programId, isSigner: false, isWritable: false },
   ];
   const data = Buffer.alloc(
     1 +
@@ -149,6 +152,8 @@ export function buyInstruction(
 
     { pubkey: tokenProgramA, isSigner: false, isWritable: false },
     { pubkey: tokenProgramB, isSigner: false, isWritable: false },
+    { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
+    { pubkey: programId, isSigner: false, isWritable: false },
   ];
 
   if (shareFeeReceiver) {
@@ -208,6 +213,8 @@ export function sellInstruction(
 
     { pubkey: tokenProgramA, isSigner: false, isWritable: false },
     { pubkey: tokenProgramB, isSigner: false, isWritable: false },
+    { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
+    { pubkey: programId, isSigner: false, isWritable: false },
   ];
 
   if (shareFeeReceiver) {

@@ -41,8 +41,9 @@ export const LaunchpadPool = struct([
   u64("virtualB"),
   u64("realA"),
   u64("realB"),
-  u64("tradeFee"),
+
   u64("totalFundRaisingB"),
+  u64("protocolFee"),
   u64("migrateFee"),
 
   LaunchpadVestingSchedule.replicate("vestingSchedule"),

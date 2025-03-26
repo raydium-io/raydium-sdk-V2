@@ -19,8 +19,8 @@ export const LaunchpadPoolInitParam = {
   cliffPeriod: new BN("0"),
   unlockPeriod: new BN("0"),
   decimals: 6,
-  virtualA: new BN("1073374096056445"),
-  virtualB: new BN("30010459349"),
+  virtualA: new BN("1073471847374405"),
+  virtualB: new BN("30050573465"),
   realA: new BN(0),
   realB: new BN(0),
   tradeFee: new BN("10000"),
@@ -76,6 +76,9 @@ export default class LaunchpadModule extends ModuleBase {
     const totalSellA = extraConfigs?.totalSellA ?? LaunchpadPoolInitParam.totalSellA;
     const totalFundRaisingB = extraConfigs?.totalFundRaisingB ?? LaunchpadPoolInitParam.totalFundRaisingB;
 
+    const configData = await this.scope.connection.getAccountInfo(configId);
+    const configInfo = LaunchpadConfig.decode(configData!.data);
+
     const poolInfo: LaunchpadPoolInfo = {
       bump: 255,
       status: 0,
@@ -87,10 +90,10 @@ export default class LaunchpadModule extends ModuleBase {
       virtualB: LaunchpadPoolInitParam.virtualB,
       realA: LaunchpadPoolInitParam.realA,
       realB: LaunchpadPoolInitParam.realB,
-      tradeFee: LaunchpadPoolInitParam.tradeFee,
       migrateFee: LaunchpadPoolInitParam.migrateFee,
       migrateType: migrateType === "amm" ? 0 : 1,
       migrateReturnNft: 0,
+      protocolFee: new BN(0),
       configId,
       vaultA,
       vaultB,
@@ -427,8 +430,8 @@ export default class LaunchpadModule extends ModuleBase {
           poolInfo.vaultB,
           mintA,
           mintB,
-          TOKEN_PROGRAM_ID, //tokenProgramA
-          TOKEN_PROGRAM_ID, //tokenProgramB
+          TOKEN_PROGRAM_ID,
+          TOKEN_PROGRAM_ID,
           calculatedAmount.realAmountA.lt(sellAmount) ? calculatedAmount.realAmountA : sellAmount, // amountA: BN,
           minAmountB,
           shareFeeRate,
