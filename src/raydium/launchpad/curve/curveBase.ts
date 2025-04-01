@@ -88,7 +88,7 @@ export class CurveBase {
     throw Error();
   }
 
-  static buy({ poolInfo, amount }: { poolInfo: ReturnType<typeof LaunchpadPool.decode>; amount: BN }): BN {
+  static buyExactIn({ poolInfo, amount }: { poolInfo: ReturnType<typeof LaunchpadPool.decode>; amount: BN }): BN {
     throw Error();
   }
 
@@ -96,7 +96,10 @@ export class CurveBase {
     throw Error();
   }
 
-  static sell({ poolInfo, amount }: { poolInfo: ReturnType<typeof LaunchpadPool.decode>; amount: BN }): BN {
+  static sellExactIn({ poolInfo, amount }: { poolInfo: ReturnType<typeof LaunchpadPool.decode>; amount: BN }): BN {
+    throw Error();
+  }
+  static sellExactOut({ poolInfo, amount }: { poolInfo: ReturnType<typeof LaunchpadPool.decode>; amount: BN }): BN {
     throw Error();
   }
 }

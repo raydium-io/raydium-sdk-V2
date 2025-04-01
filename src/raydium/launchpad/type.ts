@@ -2,18 +2,18 @@ import { PublicKey } from "@solana/web3.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../type";
 import { TxVersion } from "@/common";
 import BN from "bn.js";
-import { LaunchpadPool, LaunchpadConfig } from "./layout";
+import { LaunchpadPool, LaunchpadConfig, PlatformConfig } from "./layout";
 
 export interface CreateLunchPad<T = TxVersion.LEGACY> {
   mintA: PublicKey;
   name: string;
   symbol: string;
   buyAmount: BN;
+  platformId?: PublicKey;
 
   programId?: PublicKey; // default mainnet
   authProgramId?: PublicKey; // default mainnet
   mintB?: PublicKey; // default SOL
-  mintBDecimals?: number; // default SOL decimals 9
   decimals?: number; // default 6
   curType?: number; // default 0
   configIndex?: number; //default 0
@@ -30,6 +30,12 @@ export interface CreateLunchPad<T = TxVersion.LEGACY> {
   totalLockedAmount?: BN;
   cliffPeriod?: BN;
   unlockPeriod?: BN;
+
+  shareFeeRate?: BN;
+  shareFeeReceiver?: PublicKey;
+
+  configInfo?: LaunchpadConfigInfo; // for preload usage
+  platformFeeRate?: BN; // for preload usage
 
   createOnly?: boolean;
 
@@ -54,6 +60,9 @@ export interface BuyToken<T = TxVersion.LEGACY> {
   shareFeeRate?: BN;
   shareFeeReceiver?: PublicKey;
 
+  configInfo?: LaunchpadConfigInfo; // for preload usage
+  platformFeeRate?: BN; // for preload usage
+
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
@@ -76,6 +85,69 @@ export interface SellToken<T = TxVersion.LEGACY> {
   shareFeeRate?: BN;
   shareFeeReceiver?: PublicKey;
 
+  configInfo?: LaunchpadConfigInfo; // for preload usage
+  platformFeeRate?: BN; // for preload usage
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+}
+
+export interface CreatePlatform<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  platformAdmin: PublicKey;
+  platformClaimFeeWallet: PublicKey;
+  platformLockNftWallet: PublicKey;
+
+  migrateCpLockNftScale: {
+    platformScale: BN;
+    creatorScale: BN;
+    burnScale: BN;
+  };
+
+  feeRate: BN;
+  name: string;
+  web: string;
+  img: string;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
+export interface UpdatePlatform<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  platformAdmin: PublicKey;
+  platformId?: PublicKey;
+
+  updateInfo:
+    | { type: "updateClaimFeeWallet"; value: PublicKey }
+    | { type: "updateFeeRate"; value: BN }
+    | { type: "updateName" | "updateImg" | "updateWeb"; value: string };
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
+export interface ClaimPlatformFee<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  authProgramId?: PublicKey;
+  platformId: PublicKey;
+  platformClaimFeeWallet: PublicKey;
+  poolId: PublicKey;
+
+  mintB?: PublicKey;
+  vaultB?: PublicKey;
+  mintBProgram?: PublicKey;
+
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
@@ -86,3 +158,4 @@ export interface SellToken<T = TxVersion.LEGACY> {
 
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;
 export type LaunchpadConfigInfo = ReturnType<typeof LaunchpadConfig.decode>;
+export type LaunchpadPlatformInfo = ReturnType<typeof PlatformConfig.decode>;

@@ -7,6 +7,7 @@ export const LAUNCHPAD_CONFIG_SEED = Buffer.from("global_config", "utf8");
 export const LAUNCHPAD_POOL_SEED = Buffer.from("pool", "utf8");
 export const LAUNCHPAD_POOL_VAULT_SEED = Buffer.from("pool_vault", "utf8");
 export const LAUNCHPAD_POOL_VESTING_SEED = Buffer.from("pool_vesting", "utf8");
+export const LAUNCHPAD_POOL_PLATFORM_SEED = Buffer.from("platform_config", "utf8");
 
 export function getPdaLaunchpadAuth(programId: PublicKey): ProgramAddress {
   return findProgramAddress([LAUNCHPAD_AUTH_SEED], programId);
@@ -41,4 +42,8 @@ export function u8ToBytes(num: number): Uint8Array {
 
 export function getPdaCpiEvent(programId: PublicKey): ProgramAddress {
   return findProgramAddress([Buffer.from("__event_authority", "utf8")], programId);
+}
+
+export function getPdaPlatformId(programId: PublicKey, platformAdminWallet: PublicKey): ProgramAddress {
+  return findProgramAddress([LAUNCHPAD_POOL_PLATFORM_SEED, platformAdminWallet.toBuffer()], programId);
 }

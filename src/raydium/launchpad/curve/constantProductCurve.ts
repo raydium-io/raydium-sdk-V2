@@ -1,10 +1,9 @@
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { BNDivCeil } from "@/common";
+import { ceilDivBN } from "@/common";
 import { CurveBase } from "./curveBase";
 import { Q64 } from "@/raydium/clmm";
 import { LaunchpadPoolInfo } from "../type";
-
 export { Q64 };
 
 export class LaunchPadConstantProductCurve extends CurveBase {
@@ -78,12 +77,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     decimalB: number;
   }): Decimal {
     const allSellToken = poolInfo.totalSellA.sub(poolInfo.realA);
-    const buyAllTokenUseB = allSellToken.isZero()
-      ? new BN(0)
-      : this.buyExactOut({
-          amount: poolInfo.totalSellA.sub(poolInfo.realA),
-          poolInfo,
-        });
+    const buyAllTokenUseB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
 
     return new Decimal(poolInfo.virtualB.add(poolInfo.realB.add(buyAllTokenUseB)).toString())
       .div(poolInfo.virtualA.sub(poolInfo.realA.add(allSellToken)).toString())
@@ -124,7 +118,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     };
   }
 
-  static buy({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
     return this.getAmountOut({
       amountIn: amount,
       inputReserve: poolInfo.virtualB.add(poolInfo.realB),
@@ -140,9 +134,17 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     });
   }
 
-  static sell({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
     return this.getAmountOut({
       amountIn: amount,
+      inputReserve: poolInfo.virtualA.sub(poolInfo.realA),
+      outputReserve: poolInfo.virtualB.add(poolInfo.realB),
+    });
+  }
+
+  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+    return this.getAmountIn({
+      amountOut: amount,
       inputReserve: poolInfo.virtualA.sub(poolInfo.realA),
       outputReserve: poolInfo.virtualB.add(poolInfo.realB),
     });
@@ -173,7 +175,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
   }): BN {
     const numerator = inputReserve.mul(amountOut);
     const denominator = outputReserve.sub(amountOut);
-    const amountIn = BNDivCeil(numerator, denominator);
+    const amountIn = ceilDivBN(numerator, denominator);
     return amountIn;
   }
 }

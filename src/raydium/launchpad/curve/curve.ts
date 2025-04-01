@@ -5,7 +5,7 @@ import { CurveBase } from "./curveBase";
 import { LaunchpadPoolInfo } from "../type";
 import { FEE_RATE_DENOMINATOR_VALUE } from "@/common/fee";
 import { LinearPriceCurve } from "./linearPriceCurve";
-import { ceilDiv, floorDiv } from "@/common/bignumber";
+import { ceilDiv } from "@/common/bignumber";
 import Decimal from "decimal.js";
 
 export class Curve {
@@ -19,7 +19,7 @@ export class Curve {
     decimalA: number;
     decimalB: number;
     curveType: number;
-  }) {
+  }): Decimal {
     const curve = this.getCurve(curveType);
     return curve.getPoolInitPriceByPool({ poolInfo, decimalA, decimalB });
   }
@@ -35,7 +35,7 @@ export class Curve {
     decimalA: number;
     decimalB: number;
     curveType: number;
-  }) {
+  }): Decimal {
     const curve = this.getCurve(curveType);
     return curve.getPoolInitPriceByInit({ a, b, decimalA, decimalB });
   }
@@ -65,7 +65,7 @@ export class Curve {
     curveType: number;
     decimalA: number;
     decimalB: number;
-  }) {
+  }): Decimal {
     const curve = this.getCurve(curveType);
     return curve.getPoolPrice({ poolInfo, decimalA, decimalB });
   }
@@ -79,110 +79,193 @@ export class Curve {
     curveType: number;
     decimalA: number;
     decimalB: number;
-  }) {
+  }): Decimal {
     const curve = this.getCurve(curveType);
     return curve.getPoolEndPriceReal({ poolInfo, decimalA, decimalB });
   }
 
-  static buy({
+  /**
+   * @returns Please note that amountA/B is subject to change
+   */
+  static buyExactIn({
     poolInfo,
     amountB,
-    tradeFeeRate,
+    protocolFeeRate,
+    platformFeeRate,
     curveType,
     shareFeeRate,
   }: {
     poolInfo: LaunchpadPoolInfo;
     amountB: BN;
-    tradeFeeRate: BN;
+    protocolFeeRate: BN;
+    platformFeeRate: BN;
     curveType: number;
     shareFeeRate: BN;
   }): {
-    realAmountB: BN;
     amountA: BN;
-    splitFee: {
-      shareFee: BN;
-      tradeFee: BN;
-    };
+    amountB: BN;
+    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
   } {
-    const feeRate = tradeFeeRate.add(shareFeeRate);
-    const _tradeFee = this.calculateFee({ amount: amountB, feeRate });
+    const feeRate = protocolFeeRate.add(shareFeeRate).add(platformFeeRate);
+    const _totalFee = this.calculateFee({ amount: amountB, feeRate });
 
-    const amountLessFeeB = amountB.sub(_tradeFee);
+    const amountLessFeeB = amountB.sub(_totalFee);
 
     const curve = this.getCurve(curveType);
 
-    const _amountA = curve.buy({ poolInfo, amount: amountLessFeeB });
+    const _amountA = curve.buyExactIn({ poolInfo, amount: amountLessFeeB });
 
     const remainingAmountA = poolInfo.totalSellA.sub(poolInfo.realA);
 
     let amountA: BN;
     let realAmountB: BN;
-    let tradeFee: BN;
+    let totalFee: BN;
     if (_amountA.gt(remainingAmountA)) {
       amountA = remainingAmountA;
       const amountLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+
       realAmountB = this.calculatePreFee({ postFeeAmount: amountLessFeeB, feeRate });
-      tradeFee = realAmountB.sub(amountLessFeeB);
+      totalFee = realAmountB.sub(amountLessFeeB);
     } else {
       amountA = _amountA;
       realAmountB = amountB;
-      tradeFee = _tradeFee;
+      totalFee = _totalFee;
     }
 
-    const splitFee = this.splitFee({ tradeFeeAll: tradeFee, tradeFeeRate, shareFeeRate });
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
 
-    return { realAmountB, amountA, splitFee };
+    return { amountA, amountB: realAmountB, splitFee };
   }
 
-  static sell({
+  /**
+   * @returns Please note that amountA/B is subject to change
+   */
+  static buyExactOut({
     poolInfo,
     amountA,
-    tradeFeeRate,
+    protocolFeeRate,
+    platformFeeRate,
     curveType,
     shareFeeRate,
   }: {
     poolInfo: LaunchpadPoolInfo;
     amountA: BN;
-    tradeFeeRate: BN;
+    protocolFeeRate: BN;
+    platformFeeRate: BN;
     curveType: number;
     shareFeeRate: BN;
   }): {
-    realAmountA: BN;
+    amountA: BN;
     amountB: BN;
-    splitFee: {
-      shareFee: BN;
-      tradeFee: BN;
-    };
+    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
+  } {
+    const remainingAmountA = poolInfo.totalSellA.sub(poolInfo.realA);
+
+    let realAmountA = amountA;
+    let amountInLessFeeB;
+    if (amountA.gte(remainingAmountA)) {
+      realAmountA = remainingAmountA;
+      amountInLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+    } else {
+      const curve = this.getCurve(curveType);
+      amountInLessFeeB = curve.buyExactOut({ poolInfo, amount: amountA });
+    }
+
+    const totalFeeRate = protocolFeeRate.add(shareFeeRate).add(platformFeeRate);
+
+    const amountB = this.calculatePreFee({ postFeeAmount: amountInLessFeeB, feeRate: totalFeeRate });
+    const totalFee = amountB.sub(amountInLessFeeB);
+
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
+
+    return { amountA: realAmountA, amountB, splitFee };
+  }
+
+  static sellExactIn({
+    poolInfo,
+    amountA,
+    protocolFeeRate,
+    platformFeeRate,
+    curveType,
+    shareFeeRate,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    amountA: BN;
+    protocolFeeRate: BN;
+    platformFeeRate: BN;
+    curveType: number;
+    shareFeeRate: BN;
+  }): {
+    amountA: BN;
+    amountB: BN;
+    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
   } {
     const curve = this.getCurve(curveType);
 
-    const amountB = curve.sell({ poolInfo, amount: amountA });
+    const amountB = curve.sellExactIn({ poolInfo, amount: amountA });
+    const totalFee = this.calculateFee({
+      amount: amountB,
+      feeRate: protocolFeeRate.add(shareFeeRate).add(platformFeeRate),
+    });
 
-    const tradeFee = this.calculateFee({ amount: amountB, feeRate: tradeFeeRate.add(shareFeeRate) });
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
 
-    const splitFee = this.splitFee({ tradeFeeAll: tradeFee, tradeFeeRate, shareFeeRate });
+    return { amountA, amountB: amountB.sub(totalFee), splitFee };
+  }
 
-    return { realAmountA: amountA, amountB: amountB.sub(tradeFee), splitFee };
+  static sellExactOut({
+    poolInfo,
+    amountB,
+    protocolFeeRate,
+    platformFeeRate,
+    curveType,
+    shareFeeRate,
+  }: {
+    poolInfo: LaunchpadPoolInfo;
+    amountB: BN;
+    protocolFeeRate: BN;
+    platformFeeRate: BN;
+    curveType: number;
+    shareFeeRate: BN;
+  }): {
+    amountA: BN;
+    amountB: BN;
+    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
+  } {
+    const totalFeeRate = protocolFeeRate.add(shareFeeRate).add(platformFeeRate);
+
+    const amountOutWithFeeB = this.calculatePreFee({ postFeeAmount: amountB, feeRate: totalFeeRate });
+    if (poolInfo.realB.lt(amountOutWithFeeB)) throw Error("Insufficient liquidity");
+
+    const totalFee = amountOutWithFeeB.sub(amountB);
+
+    const curve = Curve.getCurve(curveType);
+    const amountA = curve.sellExactOut({ poolInfo, amount: amountB });
+
+    if (amountA.gt(poolInfo.realA)) throw Error();
+
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
+
+    return { amountA, amountB, splitFee };
   }
 
   static splitFee({
-    tradeFeeAll,
-    tradeFeeRate,
+    totalFee,
+    protocolFeeRate,
+    platformFeeRate,
     shareFeeRate,
   }: {
-    tradeFeeAll: BN;
-    tradeFeeRate: BN;
+    totalFee: BN;
+    protocolFeeRate: BN;
+    platformFeeRate: BN;
     shareFeeRate: BN;
-  }): { shareFee: BN; tradeFee: BN } {
-    if (shareFeeRate.isZero()) return { shareFee: new BN(0), tradeFee: tradeFeeAll };
+  }): { platformFee: BN; shareFee: BN; protocolFee: BN } {
+    const totalFeeRate = protocolFeeRate.add(platformFeeRate).add(shareFeeRate);
+    const platformFee = totalFeeRate.isZero() ? new BN(0) : totalFee.mul(platformFeeRate).div(totalFeeRate);
+    const shareFee = totalFeeRate.isZero() ? new BN(0) : totalFee.mul(shareFeeRate).div(totalFeeRate);
+    const protocolFee = totalFee.sub(platformFee).sub(shareFee);
 
-    const totalFeeRate = tradeFeeRate.add(shareFeeRate);
-
-    const shareFee = floorDiv(tradeFeeAll, shareFeeRate, totalFeeRate);
-
-    const tradeFee = tradeFeeAll.sub(shareFee);
-
-    return { shareFee, tradeFee };
+    return { platformFee, shareFee, protocolFee };
   }
 
   static calculateFee({ amount, feeRate }: { amount: BN; feeRate: BN }): BN {

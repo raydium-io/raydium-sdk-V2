@@ -1,14 +1,49 @@
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
-import { TxVersion, MakeTxData, LAUNCHPAD_PROGRAM } from "@/common";
-import { BuyToken, CreateLunchPad, LaunchpadPoolInfo, SellToken } from "./type";
-import { getPdaLaunchpadAuth, getPdaLaunchpadConfigId, getPdaLaunchpadPoolId, getPdaLaunchpadVaultId } from "./pad";
-import { initialize, buyInstruction, sellInstruction } from "./instrument";
-import { NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  TxVersion,
+  MakeTxData,
+  LAUNCHPAD_PROGRAM,
+  getMultipleAccountsInfoWithCustomFlags,
+  getATAAddress,
+} from "@/common";
+import {
+  BuyToken,
+  ClaimPlatformFee,
+  CreateLunchPad,
+  CreatePlatform,
+  LaunchpadConfigInfo,
+  LaunchpadPoolInfo,
+  SellToken,
+  UpdatePlatform,
+} from "./type";
+import {
+  getPdaLaunchpadAuth,
+  getPdaLaunchpadConfigId,
+  getPdaLaunchpadPoolId,
+  getPdaLaunchpadVaultId,
+  getPdaPlatformId,
+} from "./pad";
+import {
+  initialize,
+  buyExactInInstruction,
+  sellExactInInstruction,
+  createPlatformConfig,
+  updatePlatformConfig,
+  claimPlatformFee,
+} from "./instrument";
+import {
+  NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createCloseAccountInstruction,
+} from "@solana/spl-token";
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
 import { getPdaMetadataKey } from "../clmm";
-import { LaunchpadConfig, LaunchpadPool } from "./layout";
+import { LaunchpadConfig, LaunchpadPool, PlatformConfig } from "./layout";
 import { Curve } from "./curve/curve";
+import Decimal from "decimal.js";
+import { createWSolAccountInstructions } from "../account";
 
 export const LaunchpadPoolInitParam = {
   initPriceX64: new BN("515752397214619"),
@@ -25,7 +60,15 @@ export const LaunchpadPoolInitParam = {
   realB: new BN(0),
   tradeFee: new BN("10000"),
   migrateFee: new BN("100000000"),
-  migrateReturnNft: 0 as 0 | 1,
+  protocolFee: new BN(0),
+  platformId: new PublicKey("4akSZQbuFzBZdtdfFdsPjZacqFYt1Hkdmiy9dTg2rAaR"),
+  vestingSchedule: {
+    totalLockedAmount: new BN(0),
+    cliffPeriod: new BN(0),
+    unlockPeriod: new BN(0),
+    startTime: new BN(0),
+    totalAllocatedShare: new BN(0),
+  },
 };
 
 const SLIPPAGE_UNIT = new BN(10000);
@@ -37,9 +80,9 @@ export default class LaunchpadModule extends ModuleBase {
   public async createLaunchpad<T extends TxVersion>({
     programId = LAUNCHPAD_PROGRAM,
     authProgramId,
+    platformId = LaunchpadPoolInitParam.platformId,
     mintA,
     mintB = NATIVE_MINT,
-    mintBDecimals = 9,
     decimals = 6,
     name,
     symbol,
@@ -47,6 +90,9 @@ export default class LaunchpadModule extends ModuleBase {
     migrateType,
     curType = 0,
     configIndex = 0,
+
+    configInfo,
+    platformFeeRate,
     txVersion,
     computeBudgetConfig,
     txTipConfig,
@@ -58,7 +104,7 @@ export default class LaunchpadModule extends ModuleBase {
     checkCreateATAOwner = false,
 
     ...extraConfigs
-  }: CreateLunchPad<T>): Promise<MakeTxData<T, { address: LaunchpadPoolInfo; outAmount: BN }>> {
+  }: CreateLunchPad<T>): Promise<MakeTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>> {
     const txBuilder = this.createTxBuilder(feePayer);
 
     authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
@@ -76,10 +122,14 @@ export default class LaunchpadModule extends ModuleBase {
     const totalSellA = extraConfigs?.totalSellA ?? LaunchpadPoolInitParam.totalSellA;
     const totalFundRaisingB = extraConfigs?.totalFundRaisingB ?? LaunchpadPoolInitParam.totalFundRaisingB;
 
-    const configData = await this.scope.connection.getAccountInfo(configId);
-    const configInfo = LaunchpadConfig.decode(configData!.data);
-
+    let defaultPlatformFeeRate = platformFeeRate;
+    if (!platformFeeRate) {
+      const platformData = await this.scope.connection.getAccountInfo(platformId);
+      if (!platformData) this.logAndCreateError("platform id not found:", platformId.toString());
+      defaultPlatformFeeRate = PlatformConfig.decode(platformData!.data).feeRate;
+    }
     const poolInfo: LaunchpadPoolInfo = {
+      epoch: new BN(896),
       bump: 255,
       status: 0,
       decimals,
@@ -92,8 +142,9 @@ export default class LaunchpadModule extends ModuleBase {
       realB: LaunchpadPoolInitParam.realB,
       migrateFee: LaunchpadPoolInitParam.migrateFee,
       migrateType: migrateType === "amm" ? 0 : 1,
-      migrateReturnNft: 0,
-      protocolFee: new BN(0),
+      protocolFee: LaunchpadPoolInitParam.protocolFee,
+      platformFee: defaultPlatformFeeRate!,
+      platformId,
       configId,
       vaultA,
       vaultB,
@@ -115,6 +166,7 @@ export default class LaunchpadModule extends ModuleBase {
           feePayer ?? this.scope.ownerPubKey,
           this.scope.ownerPubKey,
           configId,
+          platformId,
           authProgramId,
           poolId,
           mintA,
@@ -122,8 +174,8 @@ export default class LaunchpadModule extends ModuleBase {
           vaultA,
           vaultB,
           metaId,
-          TOKEN_PROGRAM_ID, // tokenProgramA
-          TOKEN_PROGRAM_ID, // tokenProgramB
+          TOKEN_PROGRAM_ID,
+          TOKEN_PROGRAM_ID,
 
           decimals,
           name,
@@ -132,7 +184,6 @@ export default class LaunchpadModule extends ModuleBase {
 
           migrateType,
 
-          LaunchpadPoolInitParam.migrateReturnNft,
           supply,
           totalSellA,
           totalFundRaisingB,
@@ -153,6 +204,10 @@ export default class LaunchpadModule extends ModuleBase {
         poolInfo,
         buyAmount,
         minMintAAmount,
+        shareFeeRate: extraConfigs.shareFeeRate,
+        shareFeeReceiver: extraConfigs.shareFeeReceiver,
+        configInfo,
+        platformFeeRate: defaultPlatformFeeRate,
         slippage,
         associatedOnly,
         checkCreateATAOwner,
@@ -165,15 +220,18 @@ export default class LaunchpadModule extends ModuleBase {
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{
-      address: LaunchpadPoolInfo;
+      address: LaunchpadPoolInfo & { poolId: PublicKey };
       outAmount: BN;
     }>({
       txVersion,
       extInfo: {
-        address: poolInfo,
+        address: {
+          ...poolInfo,
+          poolId,
+        },
         outAmount,
       },
-    }) as Promise<MakeTxData<T, { address: LaunchpadPoolInfo; outAmount: BN }>>;
+    }) as Promise<MakeTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>>;
   }
 
   public async buyToken<T extends TxVersion>({
@@ -182,6 +240,10 @@ export default class LaunchpadModule extends ModuleBase {
     mintA,
     mintB = NATIVE_MINT,
     poolInfo: propPoolInfo,
+
+    configInfo: propConfigInfo,
+    platformFeeRate,
+
     txVersion,
     computeBudgetConfig,
     txTipConfig,
@@ -262,36 +324,81 @@ export default class LaunchpadModule extends ModuleBase {
       poolInfo = LaunchpadPool.decode(poolData!.data);
     }
 
-    const configData = await this.scope.connection.getAccountInfo(poolInfo.configId);
-    const configInfo = LaunchpadConfig.decode(configData!.data);
+    let configInfo = propConfigInfo;
+    const allData = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      [configInfo ? undefined : poolInfo.configId, platformFeeRate ? undefined : poolInfo.platformId]
+        .filter(Boolean)
+        .map((key) => ({ pubkey: key! })),
+    );
+    if (!configInfo) {
+      const data = allData.find((d) => d.pubkey.equals(poolInfo!.configId));
+      if (!data || !data.accountInfo) this.logAndCreateError("config not found: ", poolInfo.configId.toBase58());
+      configInfo = LaunchpadConfig.decode(data!.accountInfo!.data);
+    }
+    if (!platformFeeRate) {
+      const data = allData.find((d) => d.pubkey.equals(poolInfo!.platformId));
+      if (!data || !data.accountInfo) this.logAndCreateError("platform info not found: ", poolInfo.configId.toBase58());
+      platformFeeRate = PlatformConfig.decode(data!.accountInfo!.data).feeRate;
+    }
 
-    const calculatedAmount = Curve.buy({
+    const calculatedAmount = Curve.buyExactIn({
       poolInfo,
       amountB: buyAmount,
-      tradeFeeRate: configInfo.tradeFeeRate,
+      protocolFeeRate: configInfo.tradeFeeRate,
+      platformFeeRate,
       curveType: configInfo.curveType,
       shareFeeRate,
     });
 
-    const minMintAAmount =
-      propMinMintAAmount ??
-      (slippage
-        ? calculatedAmount.amountA.mul(SLIPPAGE_UNIT.sub(slippage)).div(SLIPPAGE_UNIT)
-        : calculatedAmount.amountA);
+    const decimalAmountA = new Decimal(calculatedAmount.amountA.toString());
+    const multiplier = slippage
+      ? new Decimal(SLIPPAGE_UNIT.sub(slippage).toNumber() / SLIPPAGE_UNIT.toNumber()).clampedTo(0, 1)
+      : new Decimal(1);
 
-    if (calculatedAmount.realAmountB.lt(buyAmount)) {
+    const minMintAAmount =
+      propMinMintAAmount ?? (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA);
+
+    if (calculatedAmount.amountB.lt(buyAmount)) {
       console.log(
-        `maximum ${mintA.toBase58()} amount can buy is ${minMintAAmount.toString()}, input ${mintB.toBase58()} amount: ${calculatedAmount.realAmountB.toString()}`,
+        `maximum ${mintA.toBase58()} amount can buy is ${calculatedAmount.amountA.toString()}, input ${mintB.toBase58()} amount: ${calculatedAmount.amountB.toString()}`,
       );
+    }
+
+    let shareATA: PublicKey | undefined;
+    if (shareFeeReceiver) {
+      if (mintB.equals(NATIVE_MINT)) {
+        const { addresses, ...txInstruction } = await createWSolAccountInstructions({
+          connection: this.scope.connection,
+          owner: shareFeeReceiver,
+          payer: this.scope.ownerPubKey,
+          amount: 0,
+        });
+        txBuilder.addInstruction(txInstruction);
+        shareATA = addresses.newAccount;
+      } else {
+        shareATA = getATAAddress(shareFeeReceiver, mintB, TOKEN_PROGRAM_ID).publicKey;
+        txBuilder.addInstruction({
+          instructions: [
+            createAssociatedTokenAccountIdempotentInstruction(
+              this.scope.ownerPubKey,
+              shareATA,
+              shareFeeReceiver!,
+              mintB,
+            ),
+          ],
+        });
+      }
     }
 
     txBuilder.addInstruction({
       instructions: [
-        buyInstruction(
+        buyExactInInstruction(
           programId,
           this.scope.ownerPubKey,
           authProgramId,
           poolInfo.configId,
+          poolInfo.platformId,
           poolId,
           userTokenAccountA!,
           userTokenAccountB!,
@@ -301,10 +408,10 @@ export default class LaunchpadModule extends ModuleBase {
           mintB,
           TOKEN_PROGRAM_ID,
           TOKEN_PROGRAM_ID,
-          calculatedAmount.realAmountB.lt(buyAmount) ? calculatedAmount.realAmountB : buyAmount,
+          calculatedAmount.amountB.lt(buyAmount) ? calculatedAmount.amountB : buyAmount,
           minMintAAmount,
           shareFeeRate,
-          shareFeeReceiver,
+          shareATA,
         ),
       ],
     });
@@ -326,6 +433,8 @@ export default class LaunchpadModule extends ModuleBase {
     mintA,
     mintB = NATIVE_MINT,
     poolInfo: propPoolInfo,
+    configInfo: propConfigInfo,
+    platformFeeRate,
     txVersion,
     computeBudgetConfig,
     txTipConfig,
@@ -398,31 +507,60 @@ export default class LaunchpadModule extends ModuleBase {
       poolInfo = LaunchpadPool.decode(poolData!.data);
     }
 
-    const configData = await this.scope.connection.getAccountInfo(poolInfo.configId);
-    const configInfo = LaunchpadConfig.decode(configData!.data);
+    let configInfo = propConfigInfo;
+    const allData = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      [configInfo ? undefined : poolInfo.configId, platformFeeRate ? undefined : poolInfo.platformId]
+        .filter(Boolean)
+        .map((key) => ({ pubkey: key! })),
+    );
+    if (!configInfo) {
+      const data = allData.find((d) => d.pubkey.equals(poolInfo!.configId));
+      if (!data || !data.accountInfo) this.logAndCreateError("config not found: ", poolInfo.configId.toBase58());
+      configInfo = LaunchpadConfig.decode(data!.accountInfo!.data);
+    }
+    if (!platformFeeRate) {
+      const data = allData.find((d) => d.pubkey.equals(poolInfo!.platformId));
+      if (!data || !data.accountInfo) this.logAndCreateError("platform info not found: ", poolInfo.configId.toBase58());
+      platformFeeRate = PlatformConfig.decode(data!.accountInfo!.data).feeRate;
+    }
 
-    const calculatedAmount = Curve.sell({
+    const calculatedAmount = Curve.sellExactIn({
       poolInfo,
       amountA: sellAmount,
-      tradeFeeRate: configInfo.tradeFeeRate,
+      protocolFeeRate: configInfo.tradeFeeRate,
+      platformFeeRate,
       curveType: configInfo.curveType,
       shareFeeRate,
     });
+
+    const decimalAmountB = new Decimal(calculatedAmount.amountB.toString());
+    const multiplier = slippage
+      ? new Decimal(SLIPPAGE_UNIT.sub(slippage).toNumber() / SLIPPAGE_UNIT.toNumber()).clampedTo(0, 1)
+      : new Decimal(1);
+
     const minAmountB =
-      propMinAmountB ??
-      (slippage
-        ? calculatedAmount.amountB.mul(SLIPPAGE_UNIT.sub(slippage)).div(SLIPPAGE_UNIT)
-        : calculatedAmount.amountB);
+      propMinAmountB ?? (slippage ? new BN(decimalAmountB.mul(multiplier).toFixed(0)) : calculatedAmount.amountB);
 
     if (minAmountB.lte(new BN(0))) this.logAndCreateError(`out ${mintB.toBase58()} amount should be gt 0`);
 
+    const shareATA = shareFeeReceiver ? getATAAddress(shareFeeReceiver, mintB, TOKEN_PROGRAM_ID).publicKey : undefined;
+    if (shareATA) {
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(this.scope.ownerPubKey, shareATA, shareFeeReceiver!, mintB),
+        ],
+      });
+    }
+
     txBuilder.addInstruction({
       instructions: [
-        sellInstruction(
+        sellExactInInstruction(
           programId,
           this.scope.ownerPubKey,
           authProgramId,
           poolInfo.configId,
+          poolInfo.platformId,
           poolId,
           userTokenAccountA!,
           userTokenAccountB!,
@@ -432,10 +570,10 @@ export default class LaunchpadModule extends ModuleBase {
           mintB,
           TOKEN_PROGRAM_ID,
           TOKEN_PROGRAM_ID,
-          calculatedAmount.realAmountA.lt(sellAmount) ? calculatedAmount.realAmountA : sellAmount, // amountA: BN,
+          calculatedAmount.amountA.lt(sellAmount) ? calculatedAmount.amountA : sellAmount,
           minAmountB,
           shareFeeRate,
-          shareFeeReceiver,
+          shareATA,
         ),
       ],
     });
@@ -449,5 +587,244 @@ export default class LaunchpadModule extends ModuleBase {
         outAmount: minAmountB,
       },
     }) as Promise<MakeTxData<T, { outAmount: BN }>>;
+  }
+
+  public async createPlatformConfig<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    platformAdmin,
+    platformClaimFeeWallet,
+    platformLockNftWallet,
+    migrateCpLockNftScale,
+    feeRate,
+    name,
+    web,
+    img,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: CreatePlatform<T>): Promise<MakeTxData<T, { platformId: PublicKey }>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const { publicKey: platformId } = getPdaPlatformId(programId, platformAdmin);
+
+    txBuilder.addInstruction({
+      instructions: [
+        createPlatformConfig(
+          programId,
+          platformAdmin,
+          platformClaimFeeWallet,
+          platformLockNftWallet,
+          platformId,
+          migrateCpLockNftScale,
+          feeRate,
+          name,
+          web,
+          img,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: {
+        platformId,
+      },
+    }) as Promise<MakeTxData<T, { platformId: PublicKey }>>;
+  }
+
+  public async updatePlatformConfig<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    platformAdmin,
+    platformId: propsPlatformId,
+    updateInfo,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: UpdatePlatform<T>): Promise<MakeTxData> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const platformId = propsPlatformId ?? getPdaPlatformId(programId, platformAdmin).publicKey;
+
+    txBuilder.addInstruction({
+      instructions: [updatePlatformConfig(programId, platformAdmin, platformId, updateInfo)],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData>;
+  }
+
+  public async claimPlatformFee<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    authProgramId,
+    platformId,
+    poolId,
+    platformClaimFeeWallet,
+
+    mintB: propsMintB,
+    vaultB: propsVaultB,
+    mintBProgram = TOKEN_PROGRAM_ID,
+
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+
+    associatedOnly = true,
+    checkCreateATAOwner = false,
+  }: ClaimPlatformFee<T>): Promise<MakeTxData> {
+    const txBuilder = this.createTxBuilder(feePayer);
+    authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
+
+    let mintB = propsMintB;
+    let vaultB = propsVaultB;
+
+    if (!mintB) {
+      const poolData = await this.scope.connection.getAccountInfo(poolId, { commitment: "confirmed" });
+      if (!poolData) this.logAndCreateError("cannot found pool:", poolId.toBase58());
+      const poolInfo = LaunchpadPool.decode(poolData!.data);
+
+      const configData = await this.scope.connection.getAccountInfo(poolInfo.configId);
+      if (!configData) this.logAndCreateError("cannot found config:", poolInfo.configId.toBase58());
+      const configInfo = LaunchpadConfig.decode(configData!.data);
+
+      mintB = configInfo.mintB;
+      vaultB = vaultB ?? poolInfo.vaultB;
+    }
+
+    if (!mintB || !vaultB) {
+      this.logAndCreateError(
+        "cannot found mint info, mintB: ",
+        mintB.toBase58(),
+        ", vaultB: ",
+        vaultB?.toBase58() ?? "",
+      );
+    }
+
+    let userTokenAccountB: PublicKey | null = null;
+    const { account: _ownerTokenAccountB, instructionParams: _tokenAccountAInstruction } =
+      await this.scope.account.getOrCreateTokenAccount({
+        mint: mintB,
+        owner: this.scope.ownerPubKey,
+
+        createInfo: {
+          payer: this.scope.ownerPubKey,
+          amount: 0,
+        },
+        skipCloseAccount: true,
+        notUseTokenAccount: false,
+        associatedOnly,
+        checkCreateATAOwner,
+      });
+    if (_ownerTokenAccountB) userTokenAccountB = _ownerTokenAccountB;
+    txBuilder.addInstruction(_tokenAccountAInstruction || {});
+
+    txBuilder.addInstruction({
+      instructions: [
+        claimPlatformFee(
+          programId,
+          platformClaimFeeWallet,
+          authProgramId,
+          poolId,
+          platformId,
+          vaultB!,
+          userTokenAccountB!,
+          mintB,
+          mintBProgram,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData>;
+  }
+
+  public async getRpcPoolInfo({
+    poolId,
+  }: {
+    poolId: PublicKey;
+  }): Promise<LaunchpadPoolInfo & { configInfo: LaunchpadConfigInfo }> {
+    const data = await this.getRpcPoolsInfo({ poolIdList: [poolId] });
+
+    return data.poolInfoMap[poolId.toBase58()];
+  }
+
+  public async getRpcPoolsInfo({
+    poolIdList,
+    config,
+  }: {
+    poolIdList: PublicKey[];
+    config?: { batchRequest?: boolean; chunkCount?: number };
+  }): Promise<{
+    poolInfoMap: Record<
+      string,
+      LaunchpadPoolInfo & {
+        poolId: PublicKey;
+        configInfo: LaunchpadConfigInfo;
+      }
+    >;
+  }> {
+    const accounts = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      poolIdList.map((i) => ({ pubkey: i })),
+      config,
+    );
+
+    const poolInfoMap: { [poolId: string]: LaunchpadPoolInfo & { poolId: PublicKey } } = {};
+    const configKeys: PublicKey[] = [];
+
+    for (let i = 0; i < poolIdList.length; i++) {
+      const item = accounts[i];
+      if (item === null || !item.accountInfo) throw Error("fetch pool info error: " + poolIdList[i].toBase58());
+      const poolInfo = LaunchpadPool.decode(item.accountInfo.data);
+      poolInfoMap[poolIdList[i].toBase58()] = {
+        ...poolInfo,
+        poolId: item.accountInfo.owner,
+      };
+      configKeys.push(poolInfo.configId);
+    }
+
+    const configAccounts = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      configKeys.map((i) => ({ pubkey: i })),
+      config,
+    );
+
+    const configInfoMap: { [poolId: string]: LaunchpadConfigInfo & { configId: PublicKey } } = {};
+
+    for (let i = 0; i < configKeys.length; i++) {
+      const item = configAccounts[i];
+      if (item === null || !item.accountInfo) throw Error("fetch config info error: " + configKeys[i].toBase58());
+      const configInfo = LaunchpadConfig.decode(item.accountInfo.data);
+      configInfoMap[configKeys[i].toBase58()] = {
+        ...configInfo,
+        configId: item.accountInfo.owner,
+      };
+    }
+
+    return {
+      poolInfoMap: Object.keys(poolInfoMap).reduce(
+        (acc, cur) => ({
+          ...acc,
+          [cur]: {
+            ...poolInfoMap[cur],
+            configInfo: configInfoMap[poolInfoMap[cur].configId.toBase58()],
+          },
+        }),
+        {},
+      ),
+    };
   }
 }

@@ -2,6 +2,7 @@ import BN from "bn.js";
 import Decimal from "decimal.js";
 import { CurveBase } from "./curveBase";
 import { LaunchpadPoolInfo } from "../type";
+import { ceilDivBN } from "@/common";
 
 export class FixedPriceCurve extends CurveBase {
   static getPoolInitPriceByPool({
@@ -72,12 +73,7 @@ export class FixedPriceCurve extends CurveBase {
     decimalB: number;
   }): Decimal {
     const allSellToken = poolInfo.totalSellA.sub(poolInfo.realA);
-    const buyAllTokenUseB = allSellToken.isZero()
-      ? new BN(0)
-      : this.buyExactOut({
-          amount: poolInfo.totalSellA.sub(poolInfo.realA),
-          poolInfo,
-        });
+    const buyAllTokenUseB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
 
     return new Decimal(poolInfo.virtualB.add(poolInfo.realB).add(buyAllTokenUseB).toString())
       .div(poolInfo.virtualA.sub(poolInfo.realA).add(allSellToken).toString())
@@ -97,15 +93,20 @@ export class FixedPriceCurve extends CurveBase {
     totalLockedAmount: BN;
     migrateFee: BN;
   }): { a: BN; b: BN } {
-    if (supply.lte(totalSell.add(totalLockedAmount))) throw Error("supply need gt totalSell");
-    if (totalFundRaising.lte(migrateFee)) throw Error("totalFundRaising need gt migrateFee");
-    return {
-      a: supply.sub(totalSell).sub(totalLockedAmount),
-      b: totalFundRaising.sub(migrateFee),
-    };
+    const supplyMinusLocked = supply.sub(totalLockedAmount);
+
+    if (supplyMinusLocked.lte(new BN(0))) throw Error("invalid input 1");
+
+    const denominator = new BN(2).mul(totalFundRaising).sub(migrateFee);
+    const numerator = totalFundRaising.mul(supplyMinusLocked);
+    const totalSellExpect = numerator.div(denominator);
+
+    if (!totalSell.eq(totalSellExpect)) throw Error("invalid input 2");
+
+    return { a: totalSell, b: totalFundRaising };
   }
 
-  static buy({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
     return this.getAmountOut({ amountIn: amount, initInput: poolInfo.virtualB, initOutput: poolInfo.virtualA });
   }
 
@@ -113,8 +114,12 @@ export class FixedPriceCurve extends CurveBase {
     return this.getAmountIn({ amountOut: amount, initInput: poolInfo.virtualB, initOutput: poolInfo.virtualA });
   }
 
-  static sell({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
     return this.getAmountOut({ amountIn: amount, initInput: poolInfo.virtualA, initOutput: poolInfo.virtualB });
+  }
+
+  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+    return this.getAmountIn({ amountOut: amount, initInput: poolInfo.virtualA, initOutput: poolInfo.virtualB });
   }
 
   static getAmountOut({ amountIn, initInput, initOutput }: { amountIn: BN; initInput: BN; initOutput: BN }): BN {
@@ -125,7 +130,7 @@ export class FixedPriceCurve extends CurveBase {
 
   static getAmountIn({ amountOut, initInput, initOutput }: { amountOut: BN; initInput: BN; initOutput: BN }): BN {
     const numerator = initInput.mul(amountOut);
-    const amountIn = numerator.div(initOutput);
+    const amountIn = ceilDivBN(numerator, initOutput);
     return amountIn;
   }
 }
