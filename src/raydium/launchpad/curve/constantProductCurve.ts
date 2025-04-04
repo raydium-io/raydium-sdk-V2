@@ -1,7 +1,7 @@
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { ceilDivBN } from "@/common";
-import { CurveBase } from "./curveBase";
+import { CurveBase, PoolBaseAmount } from "./curveBase";
 import { Q64 } from "@/raydium/clmm";
 import { LaunchpadPoolInfo } from "../type";
 export { Q64 };
@@ -12,7 +12,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -37,7 +37,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -96,7 +96,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     totalLockedAmount: BN;
     totalFundRaising: BN;
     migrateFee: BN;
-  }): { a: BN; b: BN } {
+  }): { a: BN; b: BN; c: BN } {
     if (supply.lte(totalSell)) throw Error("supply need gt total sell");
     const supplyMinusSellLocked = supply.sub(totalSell).sub(totalLockedAmount);
     if (supplyMinusSellLocked.lte(new BN(0))) throw Error("supplyMinusSellLocked <= 0");
@@ -109,16 +109,21 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     const numerator = migratePriceX64.mul(totalSell).mul(totalSell).div(Q64);
     const denominator = migratePriceX64.mul(totalSell).div(Q64).sub(totalFundRaising);
 
+    if (denominator.lt(new BN(0))) throw Error("supply/totalSell/totalLockedAmount diff too high");
+
     const x0 = numerator.div(denominator);
     const y0 = totalFundRaising.mul(totalFundRaising).div(denominator);
+
+    if (x0.lt(new BN(0)) || y0.lt(new BN(0))) throw Error("invalid input 0");
 
     return {
       a: x0,
       b: y0,
+      c: totalSell,
     };
   }
 
-  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountOut({
       amountIn: amount,
       inputReserve: poolInfo.virtualB.add(poolInfo.realB),
@@ -126,7 +131,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     });
   }
 
-  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountIn({
       amountOut: amount,
       inputReserve: poolInfo.virtualB.add(poolInfo.realB),
@@ -134,7 +139,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     });
   }
 
-  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountOut({
       amountIn: amount,
       inputReserve: poolInfo.virtualA.sub(poolInfo.realA),
@@ -142,7 +147,7 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     });
   }
 
-  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountIn({
       amountOut: amount,
       inputReserve: poolInfo.virtualA.sub(poolInfo.realA),

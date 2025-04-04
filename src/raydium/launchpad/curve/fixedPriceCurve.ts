@@ -1,6 +1,6 @@
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { CurveBase } from "./curveBase";
+import { CurveBase, PoolBaseAmount } from "./curveBase";
 import { LaunchpadPoolInfo } from "../type";
 import { ceilDivBN } from "@/common";
 
@@ -10,7 +10,7 @@ export class FixedPriceCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -35,7 +35,7 @@ export class FixedPriceCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -92,7 +92,7 @@ export class FixedPriceCurve extends CurveBase {
     totalFundRaising: BN;
     totalLockedAmount: BN;
     migrateFee: BN;
-  }): { a: BN; b: BN } {
+  }): { a: BN; b: BN; c: BN } {
     const supplyMinusLocked = supply.sub(totalLockedAmount);
 
     if (supplyMinusLocked.lte(new BN(0))) throw Error("invalid input 1");
@@ -101,24 +101,24 @@ export class FixedPriceCurve extends CurveBase {
     const numerator = totalFundRaising.mul(supplyMinusLocked);
     const totalSellExpect = numerator.div(denominator);
 
-    if (!totalSell.eq(totalSellExpect)) throw Error("invalid input 2");
+    // if (!totalSell.eq(totalSellExpect)) throw Error("invalid input 2");
 
-    return { a: totalSell, b: totalFundRaising };
+    return { a: totalSellExpect, b: totalFundRaising, c: totalSellExpect };
   }
 
-  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountOut({ amountIn: amount, initInput: poolInfo.virtualB, initOutput: poolInfo.virtualA });
   }
 
-  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountIn({ amountOut: amount, initInput: poolInfo.virtualB, initOutput: poolInfo.virtualA });
   }
 
-  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountOut({ amountIn: amount, initInput: poolInfo.virtualA, initOutput: poolInfo.virtualB });
   }
 
-  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     return this.getAmountIn({ amountOut: amount, initInput: poolInfo.virtualA, initOutput: poolInfo.virtualB });
   }
 

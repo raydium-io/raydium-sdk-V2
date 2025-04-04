@@ -16,13 +16,7 @@ import {
   SellToken,
   UpdatePlatform,
 } from "./type";
-import {
-  getPdaLaunchpadAuth,
-  getPdaLaunchpadConfigId,
-  getPdaLaunchpadPoolId,
-  getPdaLaunchpadVaultId,
-  getPdaPlatformId,
-} from "./pad";
+import { getPdaLaunchpadAuth, getPdaLaunchpadPoolId, getPdaLaunchpadVaultId, getPdaPlatformId } from "./pad";
 import {
   initialize,
   buyExactInInstruction,
@@ -31,12 +25,7 @@ import {
   updatePlatformConfig,
   claimPlatformFee,
 } from "./instrument";
-import {
-  NATIVE_MINT,
-  TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountIdempotentInstruction,
-  createCloseAccountInstruction,
-} from "@solana/spl-token";
+import { NATIVE_MINT, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import BN from "bn.js";
 import { PublicKey } from "@solana/web3.js";
 import { getPdaMetadataKey } from "../clmm";
@@ -47,9 +36,9 @@ import { createWSolAccountInstructions } from "../account";
 
 export const LaunchpadPoolInitParam = {
   initPriceX64: new BN("515752397214619"),
-  supply: new BN("1000000000000000"),
-  totalSellA: new BN("793100000000000"),
-  totalFundRaisingB: new BN("85005359983"),
+  supply: new BN(1_000_000_000_000_000),
+  totalSellA: new BN(793_100_000_000_000),
+  totalFundRaisingB: new BN(85_000_000_000),
   totalLockedAmount: new BN("0"),
   cliffPeriod: new BN("0"),
   unlockPeriod: new BN("0"),
@@ -58,10 +47,8 @@ export const LaunchpadPoolInitParam = {
   virtualB: new BN("30050573465"),
   realA: new BN(0),
   realB: new BN(0),
-  tradeFee: new BN("10000"),
-  migrateFee: new BN("100000000"),
   protocolFee: new BN(0),
-  platformId: new PublicKey("4akSZQbuFzBZdtdfFdsPjZacqFYt1Hkdmiy9dTg2rAaR"),
+  platformId: new PublicKey("2vSBJMh4zLm2tij3BjBcbvTogbfST9oAzSsk4HTFcRok"),
   vestingSchedule: {
     totalLockedAmount: new BN(0),
     cliffPeriod: new BN(0),
@@ -82,16 +69,15 @@ export default class LaunchpadModule extends ModuleBase {
     authProgramId,
     platformId = LaunchpadPoolInitParam.platformId,
     mintA,
-    mintB = NATIVE_MINT,
     decimals = 6,
+    mintBDecimals = 9,
     name,
     symbol,
     uri,
     migrateType,
-    curType = 0,
-    configIndex = 0,
+    configId,
 
-    configInfo,
+    configInfo: propConfigInfo,
     platformFeeRate,
     txVersion,
     computeBudgetConfig,
@@ -106,13 +92,27 @@ export default class LaunchpadModule extends ModuleBase {
     ...extraConfigs
   }: CreateLunchPad<T>): Promise<MakeTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>> {
     const txBuilder = this.createTxBuilder(feePayer);
-
     authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
-    const { publicKey: configId } = getPdaLaunchpadConfigId(programId, mintB, curType, configIndex);
+
+    let configInfo = propConfigInfo;
+    if (!configInfo && configId) {
+      const r = await this.scope.connection.getAccountInfo(configId);
+      if (r) configInfo = LaunchpadConfig.decode(r.data);
+    }
+
+    if (!configInfo) this.logAndCreateError("config not found");
+    const mintB = configInfo!.mintB;
+    const curType = configInfo!.curveType;
+
+    // const { publicKey: configId } = getPdaLaunchpadConfigId(programId, mintB, curType, configIndex);
     const { publicKey: poolId } = getPdaLaunchpadPoolId(programId, mintA, mintB);
     const { publicKey: vaultA } = getPdaLaunchpadVaultId(programId, poolId, mintA);
     const { publicKey: vaultB } = getPdaLaunchpadVaultId(programId, poolId, mintB);
     const { publicKey: metaId } = getPdaMetadataKey(mintA);
+
+    console.log(
+      `create token: ${mintA.toBase58()}, mintB: ${mintB.toBase58()}, decimals A:${decimals}/B:${mintBDecimals}, config:${configId.toBase58()}`,
+    );
 
     if (symbol.length > 10) this.logAndCreateError("Symbol length should shorter than 11");
     if (!uri) this.logAndCreateError("uri should not empty");
@@ -121,6 +121,7 @@ export default class LaunchpadModule extends ModuleBase {
     const supply = extraConfigs?.supply ?? LaunchpadPoolInitParam.supply;
     const totalSellA = extraConfigs?.totalSellA ?? LaunchpadPoolInitParam.totalSellA;
     const totalFundRaisingB = extraConfigs?.totalFundRaisingB ?? LaunchpadPoolInitParam.totalFundRaisingB;
+    const totalLockedAmount = extraConfigs?.totalLockedAmount ?? new BN(0);
 
     let defaultPlatformFeeRate = platformFeeRate;
     if (!platformFeeRate) {
@@ -128,19 +129,31 @@ export default class LaunchpadModule extends ModuleBase {
       if (!platformData) this.logAndCreateError("platform id not found:", platformId.toString());
       defaultPlatformFeeRate = PlatformConfig.decode(platformData!.data).feeRate;
     }
+
+    const curve = Curve.getCurve(configInfo!.curveType);
+    const initParam = curve.getInitParam({
+      supply,
+      totalFundRaising: totalFundRaisingB,
+      totalSell: totalSellA,
+      totalLockedAmount,
+      migrateFee: configInfo!.migrateFee,
+    });
+
     const poolInfo: LaunchpadPoolInfo = {
       epoch: new BN(896),
       bump: 255,
       status: 0,
-      decimals,
+      mintDecimalsA: decimals,
+      mintDecimalsB: mintBDecimals,
       supply,
       totalSellA,
       mintA: new PublicKey(mintA),
-      virtualA: LaunchpadPoolInitParam.virtualA,
-      virtualB: LaunchpadPoolInitParam.virtualB,
+      mintB,
+      virtualA: initParam.a,
+      virtualB: initParam.b,
       realA: LaunchpadPoolInitParam.realA,
       realB: LaunchpadPoolInitParam.realB,
-      migrateFee: LaunchpadPoolInitParam.migrateFee,
+      migrateFee: configInfo!.migrateFee,
       migrateType: migrateType === "amm" ? 0 : 1,
       protocolFee: LaunchpadPoolInitParam.protocolFee,
       platformFee: defaultPlatformFeeRate!,
@@ -151,13 +164,37 @@ export default class LaunchpadModule extends ModuleBase {
       creator: this.scope.ownerPubKey,
       totalFundRaisingB,
       vestingSchedule: {
-        totalLockedAmount: new BN(0),
+        totalLockedAmount,
         cliffPeriod: new BN(0),
         unlockPeriod: new BN(0),
         startTime: new BN(0),
         totalAllocatedShare: new BN(0),
       },
     };
+
+    const initCurve = Curve.getCurve(configInfo!.curveType);
+    const { c } = initCurve.getInitParam({
+      supply: poolInfo.supply,
+      totalFundRaising: poolInfo.totalFundRaisingB,
+      totalLockedAmount,
+      totalSell: configInfo!.curveType === 0 ? poolInfo.totalSellA : new BN(0),
+      migrateFee: configInfo!.migrateFee,
+    });
+
+    try {
+      Curve.checkParam({
+        supply: poolInfo.supply,
+        totalFundRaising: poolInfo.totalFundRaisingB,
+        totalSell: c,
+        totalLockedAmount,
+        decimals: poolInfo.mintDecimalsA,
+        config: configInfo!,
+        migrateType,
+      });
+      console.log("check init params success");
+    } catch (e: any) {
+      this.logAndCreateError(`check create mint params failed, ${e.message}`);
+    }
 
     txBuilder.addInstruction({
       instructions: [
@@ -182,12 +219,21 @@ export default class LaunchpadModule extends ModuleBase {
           symbol,
           uri || "https://",
 
-          migrateType,
-
-          supply,
-          totalSellA,
-          totalFundRaisingB,
-          extraConfigs?.totalLockedAmount ?? new BN(0),
+          {
+            type:
+              curType === 0
+                ? "ConstantCurve"
+                : curType === 1
+                ? "FixedCurve"
+                : curType === 2
+                ? "LinearCurve"
+                : "ConstantCurve",
+            totalSellA,
+            migrateType,
+            supply,
+            totalFundRaisingB,
+          },
+          totalLockedAmount,
           extraConfigs?.cliffPeriod ?? new BN(0),
           extraConfigs?.unlockPeriod ?? new BN(0),
         ),

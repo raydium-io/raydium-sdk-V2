@@ -1,4 +1,4 @@
-import { bool, publicKey, seq, struct, u16, u64, u8 } from "../../marshmallow";
+import { publicKey, seq, struct, u16, u64, u8 } from "../../marshmallow";
 
 export const LaunchpadConfig = struct([
   u64(),
@@ -7,16 +7,17 @@ export const LaunchpadConfig = struct([
   u16("index"),
   u64("migrateFee"),
   u64("tradeFeeRate"),
-
   u64("maxShareFeeRate"),
   u64("minSupplyA"),
   u64("maxLockRate"),
   u64("minSellRateA"),
   u64("minMigrateRateA"),
   u64("minFundRaisingB"),
-
-  publicKey("feeOwner"),
   publicKey("mintB"),
+  publicKey("protocolFeeOwner"),
+  publicKey("migrateFeeOwner"),
+  publicKey("migrateToAmmWallet"),
+  publicKey("migrateToCpmmWallet"),
   seq(u64(), 16),
 ]);
 
@@ -33,7 +34,8 @@ export const LaunchpadPool = struct([
   u64("epoch"),
   u8("bump"),
   u8("status"),
-  u8("decimals"),
+  u8("mintDecimalsA"),
+  u8("mintDecimalsB"),
   u8("migrateType"),
 
   u64("supply"),
@@ -53,6 +55,7 @@ export const LaunchpadPool = struct([
   publicKey("configId"),
   publicKey("platformId"),
   publicKey("mintA"),
+  publicKey("mintB"),
   publicKey("vaultA"),
   publicKey("vaultB"),
 

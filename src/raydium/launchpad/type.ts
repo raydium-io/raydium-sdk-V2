@@ -13,10 +13,11 @@ export interface CreateLunchPad<T = TxVersion.LEGACY> {
 
   programId?: PublicKey; // default mainnet
   authProgramId?: PublicKey; // default mainnet
-  mintB?: PublicKey; // default SOL
   decimals?: number; // default 6
+  mintBDecimals?: number; // default 9
   curType?: number; // default 0
-  configIndex?: number; //default 0
+  configId: PublicKey;
+  configInfo?: LaunchpadConfigInfo;
 
   minMintAAmount?: BN; // default calculated by realtime rpc data
   slippage?: BN;
@@ -33,8 +34,6 @@ export interface CreateLunchPad<T = TxVersion.LEGACY> {
 
   shareFeeRate?: BN;
   shareFeeReceiver?: PublicKey;
-
-  configInfo?: LaunchpadConfigInfo; // for preload usage
   platformFeeRate?: BN; // for preload usage
 
   createOnly?: boolean;

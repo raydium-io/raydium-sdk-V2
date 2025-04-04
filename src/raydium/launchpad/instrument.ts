@@ -40,28 +40,26 @@ export function initialize(
   symbol: string,
   uri: string,
 
-  migrateType: "amm" | "cpmm",
-
-  supply: BN,
-  totalSellA: BN,
-  totalFundRaisingB: BN,
+  curveParam: ({ type: "ConstantCurve"; totalSellA: BN } | { type: "FixedCurve" } | { type: "LinearCurve" }) & {
+    migrateType: "amm" | "cpmm";
+    supply: BN;
+    totalFundRaisingB: BN;
+  },
 
   totalLockedAmount: BN,
   cliffPeriod: BN,
   unlockPeriod: BN,
 ): TransactionInstruction {
-  const dataLayout = struct([
-    u8("decimals"),
-    str("name"),
-    str("symbol"),
-    str("uri"),
+  const dataLayout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
+  const dataLayout3 = struct([u64("totalLockedAmount"), u64("cliffPeriod"), u64("unlockPeriod")]);
+
+  const dataLayout21 = struct([u8("index"), u64("supply"), u64("totalFundRaisingB"), u8("migrateType")]);
+  const dataLayout22 = struct([
+    u8("index"),
     u64("supply"),
     u64("totalSellA"),
     u64("totalFundRaisingB"),
     u8("migrateType"),
-    u64("totalLockedAmount"),
-    u64("cliffPeriod"),
-    u64("unlockPeriod"),
   ]);
 
   const keys: Array<AccountMeta> = [
@@ -86,40 +84,31 @@ export function initialize(
     { pubkey: programId, isSigner: false, isWritable: false },
   ];
 
-  const data = Buffer.alloc(
-    1 +
-      8 * 3 +
-      4 * 3 +
-      Buffer.from(name, "utf-8").length +
+  const data1 = Buffer.alloc(
+    Buffer.from(name, "utf-8").length +
       Buffer.from(symbol, "utf-8").length +
       Buffer.from(uri, "utf-8").length +
-      8 * 3 +
+      4 * 3 +
       1,
   );
+  const data3 = Buffer.alloc(dataLayout3.span);
+  const data2 = Buffer.alloc(curveParam.type === "ConstantCurve" ? dataLayout22.span : dataLayout21.span);
 
-  dataLayout.encode(
-    {
-      decimals,
-      name,
-      symbol,
-      uri,
+  dataLayout1.encode({ decimals, name, symbol, uri }, data1);
+  if (curveParam.type === "ConstantCurve") {
+    dataLayout22.encode({ index: 0, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  } else if (curveParam.type === "FixedCurve") {
+    dataLayout21.encode({ index: 1, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  } else if (curveParam.type === "LinearCurve") {
+    dataLayout21.encode({ index: 2, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  }
 
-      migrateType: migrateType === "amm" ? 0 : 1,
+  dataLayout3.encode({ totalLockedAmount, cliffPeriod, unlockPeriod }, data3);
 
-      supply,
-      totalSellA,
-      totalFundRaisingB,
-
-      totalLockedAmount,
-      cliffPeriod,
-      unlockPeriod,
-    },
-    data,
-  );
   return new TransactionInstruction({
     keys,
     programId,
-    data: Buffer.from([...anchorDataBuf.initialize, ...data]),
+    data: Buffer.from([...anchorDataBuf.initialize, ...data1, ...data2, ...data3]),
   });
 }
 export function buyExactInInstruction(
@@ -438,8 +427,9 @@ export function createVestingAccount(
   poolId: PublicKey,
 
   vestingRecord: PublicKey,
+  shareAmount: BN,
 ): TransactionInstruction {
-  const dataLayout = struct([]);
+  const dataLayout = struct([u64("shareAmount")]);
 
   const keys: Array<AccountMeta> = [
     { pubkey: owner, isSigner: true, isWritable: false },
@@ -452,7 +442,7 @@ export function createVestingAccount(
   ];
 
   const data = Buffer.alloc(dataLayout.span);
-  dataLayout.encode({}, data);
+  dataLayout.encode({ shareAmount }, data);
 
   return new TransactionInstruction({
     keys,

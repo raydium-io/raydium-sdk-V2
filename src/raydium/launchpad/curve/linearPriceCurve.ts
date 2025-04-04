@@ -4,16 +4,14 @@ import { Q64 } from "./constantProductCurve";
 import { MathLaunch } from "./func";
 import { MaxU64 } from "@/raydium/clmm";
 import { LaunchpadPoolInfo } from "../type";
-import { CurveBase } from "./curveBase";
-import { ceilDivBN } from "@/common";
-
+import { CurveBase, PoolBaseAmount } from "./curveBase";
 export class LinearPriceCurve extends CurveBase {
   static getPoolInitPriceByPool({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -38,7 +36,7 @@ export class LinearPriceCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -97,7 +95,7 @@ export class LinearPriceCurve extends CurveBase {
     totalLockedAmount: BN;
     totalFundRaising: BN;
     migrateFee: BN;
-  }): { a: BN; b: BN } {
+  }): { a: BN; b: BN; c: BN } {
     const supplyMinusLocked = supply.sub(totalLockedAmount);
     if (supplyMinusLocked.lte(new BN(0))) throw Error("supplyMinusLocked need gt 0");
     const denominator = totalFundRaising.mul(new BN(3)).sub(migrateFee);
@@ -105,19 +103,19 @@ export class LinearPriceCurve extends CurveBase {
 
     const totalSellExpect = numerator.div(denominator);
 
-    if (!totalSell.eq(totalSellExpect)) throw Error("invalid input");
+    // if (!totalSell.eq(totalSellExpect)) throw Error("invalid input");
 
-    const totalSellSquared = totalSell.mul(totalSell);
+    const totalSellSquared = totalSellExpect.mul(totalSellExpect);
     const a = totalFundRaising.mul(new BN(2)).mul(Q64).div(totalSellSquared);
 
     if (!a.gt(new BN(0))) throw Error("a need gt 0");
 
     if (!MaxU64.gt(a)) throw Error("a need lt u64 max");
 
-    return { a, b: new BN(0) };
+    return { a, b: new BN(0), c: totalSellExpect };
   }
 
-  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     const newQuote = poolInfo.realB.add(amount);
     const termInsideSqrt = new BN(2).mul(newQuote).mul(Q64).div(poolInfo.virtualA);
     const sqrtTerm = new BN(new Decimal(termInsideSqrt.toString()).sqrt().toFixed(0));
@@ -126,7 +124,7 @@ export class LinearPriceCurve extends CurveBase {
     return amountOut;
   }
 
-  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     const newBase = poolInfo.realA.add(amount);
     const newBaseSquared = newBase.mul(newBase);
     const { div: _newQuoteDiv, mod: _newQuoteMod } = poolInfo.virtualA.mul(newBaseSquared).divmod(new BN(2).mul(Q64));
@@ -134,7 +132,7 @@ export class LinearPriceCurve extends CurveBase {
     return newQuote.sub(poolInfo.realB);
   }
 
-  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     const newBase = poolInfo.realA.sub(amount);
     const newBaseSquared = newBase.mul(newBase);
 
@@ -145,7 +143,7 @@ export class LinearPriceCurve extends CurveBase {
     return poolInfo.realB.sub(newQuote);
   }
 
-  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo; amount: BN }): BN {
+  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
     const newB = poolInfo.realB.sub(amount);
     const termInsideSqrt = new BN(2).mul(newB).mul(Q64).div(poolInfo.virtualA);
 
