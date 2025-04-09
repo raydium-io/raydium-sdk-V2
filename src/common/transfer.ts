@@ -150,3 +150,17 @@ export function BNDivCeil(bn1: BN, bn2: BN): BN {
     return div;
   }
 }
+
+export function ceilDivBN(amountA: BN, amountB: BN): BN {
+  if (amountA.isZero()) return new BN(0);
+
+  const quotient = amountA.div(amountB);
+
+  if (quotient.isZero()) return new BN(1);
+
+  const remainder = amountA.mod(amountB);
+  if (remainder.gt(new BN(0))) {
+    return quotient.add(new BN(1));
+  }
+  return quotient;
+}

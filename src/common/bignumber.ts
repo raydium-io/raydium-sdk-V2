@@ -24,7 +24,6 @@ export const BN_10000 = new BN(10000);
 export type BigNumberish = BN | string | number | bigint;
 export type Numberish = number | string | bigint | Fraction | BN;
 
-
 export function tenExponential(shift: BigNumberish): BN {
   return BN_TEN.pow(parseBigNumberish(shift));
 }
@@ -104,6 +103,14 @@ export function toFraction(value: Numberish): Fraction {
   return new Fraction(details.numerator, details.denominator);
 }
 
+export function ceilDiv(tokenAmount: BN, feeNumerator: BN, feeDenominator: BN): BN {
+  return tokenAmount.mul(feeNumerator).add(feeDenominator).sub(new BN(1)).div(feeDenominator);
+}
+
+export function floorDiv(tokenAmount: BN, feeNumerator: BN, feeDenominator: BN): BN {
+  return tokenAmount.mul(feeNumerator).div(feeDenominator);
+}
+
 /**
  * @example
  * toPercent(3.14) // => Percent { 314.00% }
@@ -162,8 +169,8 @@ export function recursivelyDecimalToFraction<T>(info: T): ReplaceType<T, Decimal
   return isDecimal(info)
     ? decimalToFraction(info as any)
     : Array.isArray(info)
-      ? info.map((k) => recursivelyDecimalToFraction(k))
-      : notInnerObject(info)
-        ? Object.fromEntries(Object.entries(info as any).map(([k, v]) => [k, recursivelyDecimalToFraction(v)]))
-        : info;
+    ? info.map((k) => recursivelyDecimalToFraction(k))
+    : notInnerObject(info)
+    ? Object.fromEntries(Object.entries(info as any).map(([k, v]) => [k, recursivelyDecimalToFraction(v)]))
+    : info;
 }
