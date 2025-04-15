@@ -384,7 +384,7 @@ export class Curve {
     const totalFee = amountOutWithFeeB.sub(amountB);
 
     const curve = Curve.getCurve(curveType);
-    const amountA = curve.sellExactOut({ poolInfo, amount: amountB });
+    const amountA = curve.sellExactOut({ poolInfo, amount: amountOutWithFeeB });
 
     if (amountA.gt(poolInfo.realA)) throw Error();
 

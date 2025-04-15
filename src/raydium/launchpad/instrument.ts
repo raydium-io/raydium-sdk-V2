@@ -512,11 +512,11 @@ export function createPlatformConfig(
   ]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: platformAdmin, isSigner: true, isWritable: false },
+    { pubkey: platformAdmin, isSigner: true, isWritable: true },
     { pubkey: platformClaimFeeWallet, isSigner: false, isWritable: false },
     { pubkey: platformLockNftWallet, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: true },
-    { pubkey: SystemProgram.programId, isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
 
   const data = Buffer.alloc(

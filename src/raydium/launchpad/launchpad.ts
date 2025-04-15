@@ -5,6 +5,7 @@ import {
   LAUNCHPAD_PROGRAM,
   getMultipleAccountsInfoWithCustomFlags,
   getATAAddress,
+  MakeMultiTxData,
 } from "@/common";
 import {
   BuyToken,
@@ -32,7 +33,6 @@ import { getPdaMetadataKey } from "../clmm";
 import { LaunchpadConfig, LaunchpadPool, PlatformConfig } from "./layout";
 import { Curve } from "./curve/curve";
 import Decimal from "decimal.js";
-import { createWSolAccountInstructions } from "../account";
 
 export const LaunchpadPoolInitParam = {
   initPriceX64: new BN("515752397214619"),
@@ -48,7 +48,7 @@ export const LaunchpadPoolInitParam = {
   realA: new BN(0),
   realB: new BN(0),
   protocolFee: new BN(0),
-  platformId: new PublicKey("2vSBJMh4zLm2tij3BjBcbvTogbfST9oAzSsk4HTFcRok"),
+  platformId: new PublicKey("4Bu96XjU84XjPDSpveTVf6LYGCkfW5FK7SNkREWcEfV4"),
   vestingSchedule: {
     totalLockedAmount: new BN(0),
     cliffPeriod: new BN(0),
@@ -88,9 +88,11 @@ export default class LaunchpadModule extends ModuleBase {
     slippage,
     associatedOnly = true,
     checkCreateATAOwner = false,
-
+    extraSigners,
     ...extraConfigs
-  }: CreateLunchPad<T>): Promise<MakeTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>> {
+  }: CreateLunchPad<T>): Promise<
+    MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>
+  > {
     const txBuilder = this.createTxBuilder(feePayer);
     authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
 
@@ -141,7 +143,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     const poolInfo: LaunchpadPoolInfo = {
       epoch: new BN(896),
-      bump: 255,
+      bump: 254,
       status: 0,
       mintDecimalsA: decimals,
       mintDecimalsB: mintBDecimals,
@@ -241,6 +243,8 @@ export default class LaunchpadModule extends ModuleBase {
     });
 
     let outAmount = new BN(0);
+    let splitIns;
+    if (extraSigners?.length) txBuilder.addInstruction({ signers: extraSigners });
     if (!extraConfigs.createOnly) {
       const { builder, extInfo } = await this.buyToken({
         programId,
@@ -260,24 +264,33 @@ export default class LaunchpadModule extends ModuleBase {
       });
       txBuilder.addInstruction({ ...builder.AllTxData });
       outAmount = extInfo.outAmount;
+      splitIns =
+        (this.scope.cluster === "devnet" || txVersion === TxVersion.LEGACY) && extraConfigs.shareFeeReceiver
+          ? [builder.allInstructions[0]]
+          : undefined;
     }
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
-    return txBuilder.versionBuild<{
-      address: LaunchpadPoolInfo & { poolId: PublicKey };
-      outAmount: BN;
-    }>({
-      txVersion,
-      extInfo: {
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({
+        computeBudgetConfig,
+        outAmount,
+        splitIns,
         address: {
           ...poolInfo,
           poolId,
         },
-        outAmount,
+      }) as Promise<MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>>;
+    return txBuilder.sizeCheckBuild({
+      computeBudgetConfig,
+      outAmount,
+      splitIns,
+      address: {
+        ...poolInfo,
+        poolId,
       },
-    }) as Promise<MakeTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>>;
+    }) as Promise<MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; outAmount: BN }>>;
   }
 
   public async buyToken<T extends TxVersion>({
@@ -355,7 +368,6 @@ export default class LaunchpadModule extends ModuleBase {
       });
     if (_ownerTokenAccountB) userTokenAccountB = _ownerTokenAccountB;
     txBuilder.addInstruction(_tokenAccountBInstruction || {});
-
     if (userTokenAccountB === undefined)
       this.logAndCreateError(
         `cannot found mintB(${mintB.toBase58()}) token accounts`,
@@ -411,30 +423,34 @@ export default class LaunchpadModule extends ModuleBase {
       );
     }
 
-    let shareATA: PublicKey | undefined;
-    if (shareFeeReceiver) {
-      if (mintB.equals(NATIVE_MINT)) {
-        const { addresses, ...txInstruction } = await createWSolAccountInstructions({
-          connection: this.scope.connection,
-          owner: shareFeeReceiver,
-          payer: this.scope.ownerPubKey,
-          amount: 0,
-        });
-        txBuilder.addInstruction(txInstruction);
-        shareATA = addresses.newAccount;
-      } else {
-        shareATA = getATAAddress(shareFeeReceiver, mintB, TOKEN_PROGRAM_ID).publicKey;
-        txBuilder.addInstruction({
-          instructions: [
-            createAssociatedTokenAccountIdempotentInstruction(
-              this.scope.ownerPubKey,
-              shareATA,
-              shareFeeReceiver!,
-              mintB,
-            ),
-          ],
-        });
-      }
+    // let shareATA: PublicKey | undefined;
+    // if (shareFeeReceiver) {
+    // if (mintB.equals(NATIVE_MINT)) {
+    //   const { addresses, ...txInstruction } = await createWSolAccountInstructions({
+    //     connection: this.scope.connection,
+    //     owner: shareFeeReceiver,
+    //     payer: this.scope.ownerPubKey,
+    //     amount: 0,
+    //     skipCloseAccount: true,
+    //   });
+    //   txBuilder.addInstruction(txInstruction);
+    //   shareATA = addresses.newAccount;
+    // } else {
+    //   shareATA = getATAAddress(shareFeeReceiver, mintB, TOKEN_PROGRAM_ID).publicKey;
+    //   txBuilder.addInstruction({
+    //     instructions: [
+    //       createAssociatedTokenAccountIdempotentInstruction(this.scope.ownerPubKey, shareATA, shareFeeReceiver!, mintB),
+    //     ],
+    //   });
+    //   // }
+    // }
+    const shareATA = shareFeeReceiver ? getATAAddress(shareFeeReceiver, mintB, TOKEN_PROGRAM_ID).publicKey : undefined;
+    if (shareATA) {
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(this.scope.ownerPubKey, shareATA, shareFeeReceiver!, mintB),
+        ],
+      });
     }
 
     txBuilder.addInstruction({

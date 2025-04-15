@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Signer } from "@solana/web3.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../type";
 import { TxVersion } from "@/common";
 import BN from "bn.js";
@@ -44,6 +44,7 @@ export interface CreateLunchPad<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  extraSigners?: Signer[];
 }
 
 export interface BuyToken<T = TxVersion.LEGACY> {

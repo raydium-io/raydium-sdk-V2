@@ -540,7 +540,9 @@ export class TxBuilder {
     if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
       this.signers.push(this.owner.signer);
     const transaction = new VersionedTransaction(messageV0);
+
     transaction.sign(this.signers);
+
     return {
       builder: this,
       transaction,
@@ -1115,6 +1117,7 @@ export class TxBuilder {
         }).compileToV0Message(Object.values(lookupTableAddressAccount));
         allTransactions.push(new VersionedTransaction(messageV0));
       }
+
       allSigners.push(_signers);
     }
 
@@ -1123,6 +1126,10 @@ export class TxBuilder {
         if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) signers.push(this.owner!.signer!);
       });
     }
+
+    allTransactions.forEach((tx, idx) => {
+      tx.sign(allSigners[idx]);
+    });
 
     return {
       builder: this,
