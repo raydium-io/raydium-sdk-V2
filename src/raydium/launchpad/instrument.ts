@@ -3,7 +3,7 @@ import { ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import { publicKey, str, struct, u64, u8 } from "@/marshmallow";
 import { RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "@/common";
-import { getPdaCpiEvent } from "./pad";
+import { getPdaCpiEvent } from "./pda";
 export const anchorDataBuf = {
   initialize: Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]),
   buyExactIn: Buffer.from([250, 234, 13, 123, 213, 156, 19, 236]),
