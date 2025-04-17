@@ -17,7 +17,7 @@ import {
   SellToken,
   UpdatePlatform,
 } from "./type";
-import { getPdaLaunchpadAuth, getPdaLaunchpadPoolId, getPdaLaunchpadVaultId, getPdaPlatformId } from "./pad";
+import { getPdaLaunchpadAuth, getPdaLaunchpadPoolId, getPdaLaunchpadVaultId, getPdaPlatformId } from "./pda";
 import {
   initialize,
   buyExactInInstruction,
