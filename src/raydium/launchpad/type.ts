@@ -156,6 +156,18 @@ export interface ClaimPlatformFee<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
 }
 
+export interface createVesting<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  poolId: PublicKey;
+  beneficiary: PublicKey;
+  shareAmount: BN;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;
 export type LaunchpadConfigInfo = ReturnType<typeof LaunchpadConfig.decode>;
 export type LaunchpadPlatformInfo = ReturnType<typeof PlatformConfig.decode>;

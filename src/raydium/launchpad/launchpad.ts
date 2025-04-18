@@ -12,12 +12,19 @@ import {
   ClaimPlatformFee,
   CreateLunchPad,
   CreatePlatform,
+  createVesting,
   LaunchpadConfigInfo,
   LaunchpadPoolInfo,
   SellToken,
   UpdatePlatform,
 } from "./type";
-import { getPdaLaunchpadAuth, getPdaLaunchpadPoolId, getPdaLaunchpadVaultId, getPdaPlatformId } from "./pad";
+import {
+  getPdaLaunchpadAuth,
+  getPdaLaunchpadPoolId,
+  getPdaLaunchpadVaultId,
+  getPdaPlatformId,
+  getPdaVestId,
+} from "./pad";
 import {
   initialize,
   buyExactInInstruction,
@@ -25,6 +32,7 @@ import {
   createPlatformConfig,
   updatePlatformConfig,
   claimPlatformFee,
+  createVestingAccount,
 } from "./instrument";
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import BN from "bn.js";
@@ -802,6 +810,34 @@ export default class LaunchpadModule extends ModuleBase {
           mintB,
           mintBProgram,
         ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData>;
+  }
+
+  public async createVesting<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    poolId,
+    beneficiary,
+    shareAmount,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: createVesting<T>): Promise<MakeTxData> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const vestingRecord = getPdaVestId(programId, poolId, beneficiary).publicKey;
+
+    txBuilder.addInstruction({
+      instructions: [
+        createVestingAccount(programId, this.scope.ownerPubKey, beneficiary, poolId, vestingRecord, shareAmount),
       ],
     });
 

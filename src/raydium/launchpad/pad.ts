@@ -47,3 +47,7 @@ export function getPdaCpiEvent(programId: PublicKey): ProgramAddress {
 export function getPdaPlatformId(programId: PublicKey, platformAdminWallet: PublicKey): ProgramAddress {
   return findProgramAddress([LAUNCHPAD_POOL_PLATFORM_SEED, platformAdminWallet.toBuffer()], programId);
 }
+
+export function getPdaVestId(programId: PublicKey, poolId: PublicKey, owner: PublicKey): ProgramAddress {
+  return findProgramAddress([LAUNCHPAD_POOL_VESTING_SEED, poolId.toBuffer(), owner.toBuffer()], programId);
+}

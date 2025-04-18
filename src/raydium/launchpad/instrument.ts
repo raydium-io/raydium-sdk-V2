@@ -433,7 +433,7 @@ export function createVestingAccount(
 
   const keys: Array<AccountMeta> = [
     { pubkey: owner, isSigner: true, isWritable: false },
-    { pubkey: beneficiary, isSigner: false, isWritable: false },
+    { pubkey: beneficiary, isSigner: false, isWritable: true },
     { pubkey: poolId, isSigner: false, isWritable: true },
 
     { pubkey: vestingRecord, isSigner: false, isWritable: true },
