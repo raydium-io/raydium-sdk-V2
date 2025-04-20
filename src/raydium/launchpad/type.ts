@@ -4,7 +4,7 @@ import { TxVersion } from "@/common";
 import BN from "bn.js";
 import { LaunchpadPool, LaunchpadConfig, PlatformConfig } from "./layout";
 
-export interface CreateLunchPad<T = TxVersion.LEGACY> {
+export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   mintA: PublicKey;
   name: string;
   symbol: string;
@@ -156,7 +156,7 @@ export interface ClaimPlatformFee<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
 }
 
-export interface createVesting<T = TxVersion.LEGACY> {
+export interface CreateVesting<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   poolId: PublicKey;
   beneficiary: PublicKey;
@@ -166,6 +166,20 @@ export interface createVesting<T = TxVersion.LEGACY> {
   txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;
+}
+
+export interface ClaimVesting<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  poolId: PublicKey;
+  poolInfo?: LaunchpadPoolInfo;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
 }
 
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;
