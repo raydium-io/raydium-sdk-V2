@@ -104,10 +104,10 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     const tfMinusMf = totalFundRaising.sub(migrateFee);
     if (tfMinusMf.lte(new BN(0))) throw Error("tfMinusMf <= 0");
 
-    const migratePriceX64 = tfMinusMf.mul(Q64).div(supplyMinusSellLocked);
+    // const migratePriceX64 = tfMinusMf.mul(Q64).div(supplyMinusSellLocked);
 
-    const numerator = migratePriceX64.mul(totalSell).mul(totalSell).div(Q64);
-    const denominator = migratePriceX64.mul(totalSell).div(Q64).sub(totalFundRaising);
+    const numerator = tfMinusMf.mul(totalSell).mul(totalSell).div(supplyMinusSellLocked);
+    const denominator = tfMinusMf.mul(totalSell).div(supplyMinusSellLocked).sub(totalFundRaising);
 
     if (denominator.lt(new BN(0))) throw Error("supply/totalSell/totalLockedAmount diff too high");
 

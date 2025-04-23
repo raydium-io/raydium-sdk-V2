@@ -266,7 +266,11 @@ export class Curve {
     let totalFee: BN;
     if (_amountA.gt(remainingAmountA)) {
       amountA = remainingAmountA;
-      const amountLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+      // const amountLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+      const amountLessFeeB = curve.buyExactOut({
+        poolInfo,
+        amount: amountA,
+      });
 
       realAmountB = this.calculatePreFee({ postFeeAmount: amountLessFeeB, feeRate });
       totalFee = realAmountB.sub(amountLessFeeB);
@@ -306,15 +310,17 @@ export class Curve {
     const remainingAmountA = poolInfo.totalSellA.sub(poolInfo.realA);
 
     let realAmountA = amountA;
-    let amountInLessFeeB;
-    if (amountA.gte(remainingAmountA)) {
+    // const amountInLessFeeB;
+    if (amountA.gt(remainingAmountA)) {
       realAmountA = remainingAmountA;
-      amountInLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+      // amountInLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
     } else {
-      const curve = this.getCurve(curveType);
-      amountInLessFeeB = curve.buyExactOut({ poolInfo, amount: amountA });
+      // const curve = this.getCurve(curveType);
+      // amountInLessFeeB = curve.buyExactOut({ poolInfo, amount: amountA });
     }
 
+    const curve = this.getCurve(curveType);
+    const amountInLessFeeB = curve.buyExactOut({ poolInfo, amount: amountA });
     const totalFeeRate = protocolFeeRate.add(shareFeeRate).add(platformFeeRate);
 
     const amountB = this.calculatePreFee({ postFeeAmount: amountInLessFeeB, feeRate: totalFeeRate });
