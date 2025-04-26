@@ -236,10 +236,10 @@ export default class LaunchpadModule extends ModuleBase {
               curType === 0
                 ? "ConstantCurve"
                 : curType === 1
-                ? "FixedCurve"
-                : curType === 2
-                ? "LinearCurve"
-                : "ConstantCurve",
+                  ? "FixedCurve"
+                  : curType === 2
+                    ? "LinearCurve"
+                    : "ConstantCurve",
             totalSellA,
             migrateType,
             supply,
@@ -367,9 +367,9 @@ export default class LaunchpadModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintBUseSOLBalance
           ? {
-              payer: this.scope.ownerPubKey!,
-              amount: buyAmount,
-            }
+            payer: this.scope.ownerPubKey!,
+            amount: buyAmount,
+          }
           : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
         notUseTokenAccount: mintBUseSOLBalance,
@@ -557,9 +557,9 @@ export default class LaunchpadModule extends ModuleBase {
 
         createInfo: mintBUseSOLBalance
           ? {
-              payer: this.scope.ownerPubKey!,
-              amount: 0,
-            }
+            payer: this.scope.ownerPubKey!,
+            amount: 0,
+          }
           : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
         notUseTokenAccount: mintBUseSOLBalance,
@@ -666,6 +666,7 @@ export default class LaunchpadModule extends ModuleBase {
     platformAdmin,
     platformClaimFeeWallet,
     platformLockNftWallet,
+    cpConfigId,
     migrateCpLockNftScale,
     feeRate,
     name,
@@ -688,6 +689,7 @@ export default class LaunchpadModule extends ModuleBase {
           platformClaimFeeWallet,
           platformLockNftWallet,
           platformId,
+          cpConfigId,
           migrateCpLockNftScale,
           feeRate,
           name,

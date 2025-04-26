@@ -102,6 +102,7 @@ export interface CreatePlatform<T = TxVersion.LEGACY> {
   platformAdmin: PublicKey;
   platformClaimFeeWallet: PublicKey;
   platformLockNftWallet: PublicKey;
+  cpConfigId: PublicKey;
 
   migrateCpLockNftScale: {
     platformScale: BN;
@@ -127,9 +128,11 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
   platformId?: PublicKey;
 
   updateInfo:
-    | { type: "updateClaimFeeWallet"; value: PublicKey }
-    | { type: "updateFeeRate"; value: BN }
-    | { type: "updateName" | "updateImg" | "updateWeb"; value: string };
+  | { type: "updateClaimFeeWallet"; value: PublicKey }
+  | { type: "updateFeeRate"; value: BN }
+  | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
+  | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
+  | { type: 'updateCpConfigId', value: PublicKey };
 
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
