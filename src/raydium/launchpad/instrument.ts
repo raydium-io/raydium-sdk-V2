@@ -587,7 +587,7 @@ export function updatePlatformConfig(
     dataLayout.encode({ index: 3, value: updateInfo.value }, data);
   } else if (updateInfo.type === "updateImg" || updateInfo.type === "updateName" || updateInfo.type === "updateWeb") {
     const dataLayout = struct([u8("index"), str("value")]);
-    data = Buffer.alloc(dataLayout.span);
+    data = Buffer.alloc(Buffer.from(updateInfo.value, 'utf-8').length + 4 + 1 * 1);
     if (updateInfo.type === "updateName") dataLayout.encode({ index: 4, value: updateInfo.value }, data);
     else if (updateInfo.type === "updateWeb") dataLayout.encode({ index: 5, value: updateInfo.value }, data);
     else if (updateInfo.type === "updateImg") dataLayout.encode({ index: 6, value: updateInfo.value }, data);
