@@ -464,7 +464,7 @@ export function claimPlatformFee(
   tokenProgramB: PublicKey,
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
-    { pubkey: platformClaimFeeWallet, isSigner: true, isWritable: false },
+    { pubkey: platformClaimFeeWallet, isSigner: true, isWritable: true },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
     { pubkey: platformId, isSigner: false, isWritable: true },
