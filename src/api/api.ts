@@ -15,11 +15,14 @@ import {
   FormatFarmKeyOut,
   AvailabilityCheckAPI3,
   PoolFetchType,
+  ExtensionsItem,
+  JupToken,
 } from "./type";
 import { API_URLS, API_URL_CONFIG } from "./url";
 import { updateReqHistory } from "./utils";
 import { PublicKey } from "@solana/web3.js";
 import { solToWSol } from "../common";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 const logger = createLogger("Raydium_Api");
 const poolKeysCache: Map<string, PoolKeys> = new Map();
@@ -175,14 +178,20 @@ export class Api {
 
   async getJupTokenList(): Promise<
     (ApiV3Token & {
-      daily_volume: number;
       freeze_authority: string | null;
       mint_authority: string | null;
+      permanent_delegate: string | null;
+      minted_at: string;
     })[]
   > {
-    return this.api.get("", {
+    const r: JupToken[] = await this.api.get("", {
       baseURL: this.urlConfigs.JUP_TOKEN_LIST || API_URLS.JUP_TOKEN_LIST,
     });
+    return r.map((t) => ({
+      ...t,
+      chainId: 101,
+      programId: t.tags.includes("token-2022") ? TOKEN_2022_PROGRAM_ID.toBase58() : TOKEN_PROGRAM_ID.toBase58(),
+    }));
   }
 
   async getTokenInfo(mint: (string | PublicKey)[]): Promise<ApiV3Token[]> {

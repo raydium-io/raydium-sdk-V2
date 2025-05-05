@@ -148,7 +148,7 @@ export interface TransferFeeDataBaseType {
   };
 }
 
-type ExtensionsItem = {
+export type ExtensionsItem = {
   coingeckoId?: string;
   feeConfig?: TransferFeeDataBaseType;
 };
@@ -165,6 +165,22 @@ export type ApiV3Token = {
   extensions: ExtensionsItem;
   freezeAuthority?: string;
   mintAuthority?: string;
+};
+
+export type JupToken = {
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  logoURI: string;
+  tags: string[];
+  daily_volume: number;
+  created_at: string;
+  freeze_authority: string | null;
+  mint_authority: string | null;
+  permanent_delegate: string | null;
+  minted_at: string;
+  extensions: ExtensionsItem;
 };
 
 export type ApiV3TokenRes = {

@@ -267,6 +267,7 @@ export class Raydium {
     if (prevFetched && !this.isCacheInvalidate(prevFetched.fetched) && !forceUpdate) return prevFetched.data;
     try {
       const jupList = await this.api.getJupTokenList();
+
       this.apiData.jupTokenList = {
         fetched: Date.now(),
         data: jupList.map((t) => ({
