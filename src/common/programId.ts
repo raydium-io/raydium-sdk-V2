@@ -46,8 +46,8 @@ export const DEV_LOCK_CPMM_AUTH = new PublicKey("7AFUeLVRjBfzqK3tTGw8hN48KLQWSk6
 export const LAUNCHPAD_PROGRAM = new PublicKey("LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj");
 export const LAUNCHPAD_AUTH = new PublicKey("WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh");
 
-export const DEV_LAUNCHPAD_PROGRAM = new PublicKey("7soRSLviCKHCKzCbRuVpZDif76NWLVqFtbjt8LpyxWSq");
-export const DEV_LAUNCHPAD_AUTH = new PublicKey("DG6kZFFCqxdtWXw53Zc28hLs3MTr28Efkm2FrsNERNSQ");
+export const DEV_LAUNCHPAD_PROGRAM = new PublicKey("LanD8FpTBBvzZFXjTxsAoipkFsxPUCDB4qAqKxYDiNP");
+export const DEV_LAUNCHPAD_AUTH = new PublicKey("HYNHiyKJ3gGVFvyxJAurK7qr7P2o5J9THmvCGMdULtpW");
 
 export const IDO_ALL_PROGRAM = {
   IDO_PROGRAM_ID_V1,
