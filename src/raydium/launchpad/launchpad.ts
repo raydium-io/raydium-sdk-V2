@@ -236,10 +236,10 @@ export default class LaunchpadModule extends ModuleBase {
               curType === 0
                 ? "ConstantCurve"
                 : curType === 1
-                  ? "FixedCurve"
-                  : curType === 2
-                    ? "LinearCurve"
-                    : "ConstantCurve",
+                ? "FixedCurve"
+                : curType === 2
+                ? "LinearCurve"
+                : "ConstantCurve",
             totalSellA,
             migrateType,
             supply,
@@ -367,9 +367,9 @@ export default class LaunchpadModule extends ModuleBase {
         owner: this.scope.ownerPubKey,
         createInfo: mintBUseSOLBalance
           ? {
-            payer: this.scope.ownerPubKey!,
-            amount: buyAmount,
-          }
+              payer: this.scope.ownerPubKey!,
+              amount: buyAmount,
+            }
           : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
         notUseTokenAccount: mintBUseSOLBalance,
@@ -387,7 +387,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     let poolInfo = propPoolInfo;
     if (!poolInfo) {
-      const poolData = await this.scope.connection.getAccountInfo(poolId, { commitment: "confirmed" });
+      const poolData = await this.scope.connection.getAccountInfo(poolId, { commitment: "processed" });
       if (!poolData) this.logAndCreateError("cannot found pool:", poolId.toBase58());
       poolInfo = LaunchpadPool.decode(poolData!.data);
     }
@@ -557,9 +557,9 @@ export default class LaunchpadModule extends ModuleBase {
 
         createInfo: mintBUseSOLBalance
           ? {
-            payer: this.scope.ownerPubKey!,
-            amount: 0,
-          }
+              payer: this.scope.ownerPubKey!,
+              amount: 0,
+            }
           : undefined,
         skipCloseAccount: !mintBUseSOLBalance,
         notUseTokenAccount: mintBUseSOLBalance,
@@ -574,7 +574,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     let poolInfo = propPoolInfo;
     if (!poolInfo) {
-      const poolData = await this.scope.connection.getAccountInfo(poolId);
+      const poolData = await this.scope.connection.getAccountInfo(poolId, { commitment: "processed" });
       if (!poolData) this.logAndCreateError("cannot found pool", poolId.toBase58());
       poolInfo = LaunchpadPool.decode(poolData!.data);
     }
@@ -762,11 +762,11 @@ export default class LaunchpadModule extends ModuleBase {
     let vaultB = propsVaultB;
 
     if (!mintB) {
-      const poolData = await this.scope.connection.getAccountInfo(poolId, { commitment: "confirmed" });
+      const poolData = await this.scope.connection.getAccountInfo(poolId, { commitment: "processed" });
       if (!poolData) this.logAndCreateError("cannot found pool:", poolId.toBase58());
       const poolInfo = LaunchpadPool.decode(poolData!.data);
 
-      const configData = await this.scope.connection.getAccountInfo(poolInfo.configId);
+      const configData = await this.scope.connection.getAccountInfo(poolInfo.configId, { commitment: "processed" });
       if (!configData) this.logAndCreateError("cannot found config:", poolInfo.configId.toBase58());
       const configInfo = LaunchpadConfig.decode(configData!.data);
 
