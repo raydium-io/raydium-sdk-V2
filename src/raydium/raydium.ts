@@ -11,6 +11,7 @@ import Account, { TokenAccountDataProp } from "./account/account";
 import Farm from "./farm/farm";
 import Liquidity from "./liquidity/liquidity";
 import { Clmm } from "./clmm";
+import { ClmmSol } from "./clmmSol";
 import Cpmm from "./cpmm/cpmm";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
@@ -73,6 +74,7 @@ export class Raydium {
   public account: Account;
   public liquidity: Liquidity;
   public clmm: Clmm;
+  public clmmSol: ClmmSol;
   public cpmm: Cpmm;
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
@@ -138,6 +140,7 @@ export class Raydium {
     this.token = new TokenModule({ scope: this, moduleName: "Raydium_tokenV2" });
     this.tradeV2 = new TradeV2({ scope: this, moduleName: "Raydium_tradeV2" });
     this.clmm = new Clmm({ scope: this, moduleName: "Raydium_clmm" });
+    this.clmmSol = new ClmmSol({ scope: this, moduleName: "Raydium_clmmSol" });
     this.cpmm = new Cpmm({ scope: this, moduleName: "Raydium_cpmm" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
