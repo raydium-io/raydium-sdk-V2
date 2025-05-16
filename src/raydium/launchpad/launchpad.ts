@@ -783,23 +783,17 @@ export default class LaunchpadModule extends ModuleBase {
       );
     }
 
-    let userTokenAccountB: PublicKey | null = null;
-    const { account: _ownerTokenAccountB, instructionParams: _tokenAccountAInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: mintB,
-        owner: this.scope.ownerPubKey,
-
-        createInfo: {
-          payer: this.scope.ownerPubKey,
-          amount: 0,
-        },
-        skipCloseAccount: true,
-        notUseTokenAccount: false,
-        associatedOnly,
-        checkCreateATAOwner,
-      });
-    if (_ownerTokenAccountB) userTokenAccountB = _ownerTokenAccountB;
-    txBuilder.addInstruction(_tokenAccountAInstruction || {});
+    const userTokenAccountB = getATAAddress(this.scope.ownerPubKey, mintB, TOKEN_PROGRAM_ID).publicKey;
+    txBuilder.addInstruction({
+      instructions: [
+        createAssociatedTokenAccountIdempotentInstruction(
+          this.scope.ownerPubKey,
+          userTokenAccountB,
+          this.scope.ownerPubKey,
+          mintB,
+        ),
+      ],
+    });
 
     txBuilder.addInstruction({
       instructions: [
