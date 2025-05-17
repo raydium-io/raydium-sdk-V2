@@ -847,73 +847,64 @@ export default class LaunchpadModule extends ModuleBase {
     }) as Promise<MakeTxData>;
   }
 
-  // public async claimVesting<T extends TxVersion>({
-  //   programId = LAUNCHPAD_PROGRAM,
-  //   poolId,
-  //   poolInfo: propsPoolInfo,
-  //   txVersion,
-  //   computeBudgetConfig,
-  //   txTipConfig,
-  //   feePayer,
-  //   associatedOnly = true,
-  //   checkCreateATAOwner = false,
-  // }: ClaimVesting<T>): Promise<MakeTxData> {
-  //   const txBuilder = this.createTxBuilder(feePayer);
+  public async claimVesting<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    poolId,
+    poolInfo: propsPoolInfo,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+    associatedOnly = true,
+    checkCreateATAOwner = false,
+  }: ClaimVesting<T>): Promise<MakeTxData> {
+    const txBuilder = this.createTxBuilder(feePayer);
 
-  //   const authProgramId = getPdaLaunchpadAuth(programId).publicKey;
-  //   const vestingRecord = getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
+    const authProgramId = getPdaLaunchpadAuth(programId).publicKey;
+    const vestingRecord = getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
 
-  //   let poolInfo = propsPoolInfo;
-  //   if (!poolInfo) {
-  //     const r = await this.scope.connection.getAccountInfo(poolId);
-  //     if (!r) this.logAndCreateError("pool not found");
-  //     poolInfo = LaunchpadPool.decode(r!.data);
-  //   }
+    let poolInfo = propsPoolInfo;
+    if (!poolInfo) {
+      const r = await this.scope.connection.getAccountInfo(poolId);
+      if (!r) this.logAndCreateError("pool not found");
+      poolInfo = LaunchpadPool.decode(r!.data);
+    }
 
-  //   let userTokenAccountA: PublicKey | null = null;
+    const userTokenAccountA = getATAAddress(this.scope.ownerPubKey, poolInfo.mintA, TOKEN_PROGRAM_ID).publicKey;
+    txBuilder.addInstruction({
+      instructions: [
+        createAssociatedTokenAccountIdempotentInstruction(
+          this.scope.ownerPubKey,
+          userTokenAccountA,
+          this.scope.ownerPubKey,
+          poolInfo.mintA,
+        ),
+      ],
+    });
 
-  //   const { account: _ownerTokenAccountA, instructionParams: _tokenAccountAInstruction } =
-  //     await this.scope.account.getOrCreateTokenAccount({
-  //       mint: poolInfo.mintA,
-  //       owner: this.scope.ownerPubKey,
+    txBuilder.addInstruction({
+      instructions: [
+        claimVestedToken(
+          programId,
+          this.scope.ownerPubKey,
+          authProgramId,
+          poolId,
+          vestingRecord,
+          userTokenAccountA!,
+          poolInfo.vaultA,
+          poolInfo.mintA,
+          TOKEN_PROGRAM_ID,
+        ),
+      ],
+    });
 
-  //       createInfo: {
-  //         payer: this.scope.ownerPubKey,
-  //         amount: 0,
-  //       },
-  //       skipCloseAccount: true,
-  //       notUseTokenAccount: false,
-  //       associatedOnly,
-  //       checkCreateATAOwner,
-  //     });
-  //   if (_ownerTokenAccountA) userTokenAccountA = _ownerTokenAccountA;
-  //   txBuilder.addInstruction(_tokenAccountAInstruction || {});
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
 
-  //   // const userTokenAccountA = getATAAddress(this.scope.ownerPubKey, poolInfo.mintA).publicKey;
-
-  //   txBuilder.addInstruction({
-  //     instructions: [
-  //       claimVestedToken(
-  //         programId,
-  //         this.scope.ownerPubKey,
-  //         authProgramId,
-  //         poolId,
-  //         vestingRecord,
-  //         userTokenAccountA!,
-  //         poolInfo.vaultA,
-  //         poolInfo.mintA,
-  //         TOKEN_PROGRAM_ID,
-  //       ),
-  //     ],
-  //   });
-
-  //   txBuilder.addCustomComputeBudget(computeBudgetConfig);
-  //   txBuilder.addTipInstruction(txTipConfig);
-
-  //   return txBuilder.versionBuild({
-  //     txVersion,
-  //   }) as Promise<MakeTxData>;
-  // }
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData>;
+  }
 
   public async getRpcPoolInfo({
     poolId,
