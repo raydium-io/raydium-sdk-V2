@@ -9,6 +9,7 @@ import {
 } from "@/common";
 import {
   BuyToken,
+  ClaimAllPlatformFee,
   ClaimPlatformFee,
   ClaimVesting,
   CreateLaunchPad,
@@ -751,9 +752,6 @@ export default class LaunchpadModule extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     feePayer,
-
-    associatedOnly = true,
-    checkCreateATAOwner = false,
   }: ClaimPlatformFee<T>): Promise<MakeTxData> {
     const txBuilder = this.createTxBuilder(feePayer);
     authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
@@ -817,6 +815,68 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData>;
+  }
+
+  public async claimAllPlatformFee<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    authProgramId,
+    platformId,
+    platformClaimFeeWallet,
+
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: ClaimAllPlatformFee<T>): Promise<MakeMultiTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+    authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
+
+    const allPlatformPool = await this.scope.connection.getProgramAccounts(programId, {
+      filters: [
+        { dataSize: LaunchpadPool.span },
+        { memcmp: { offset: LaunchpadPool.offsetOf("platformId"), bytes: platformId.toString() } },
+      ],
+    });
+
+    allPlatformPool.forEach((data) => {
+      const pool = LaunchpadPool.decode(data.account.data);
+      const userTokenAccountB = getATAAddress(this.scope.ownerPubKey, pool.mintB, TOKEN_PROGRAM_ID).publicKey;
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            userTokenAccountB,
+            this.scope.ownerPubKey,
+            pool.mintB,
+          ),
+        ],
+      });
+
+      txBuilder.addInstruction({
+        instructions: [
+          claimPlatformFee(
+            programId,
+            platformClaimFeeWallet,
+            authProgramId!,
+            data.pubkey,
+            platformId,
+            pool.vaultB,
+            userTokenAccountB!,
+            pool.mintB,
+            TOKEN_PROGRAM_ID,
+          ),
+        ],
+      });
+    });
+
+    txBuilder.addTipInstruction(txTipConfig);
+
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+
+    return txBuilder.sizeCheckBuild({
+      computeBudgetConfig,
+    }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async createVesting<T extends TxVersion>({

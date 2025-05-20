@@ -402,7 +402,7 @@ export function claimVestedToken(
     { pubkey: vestingRecord, isSigner: false, isWritable: true },
 
     { pubkey: vaultA, isSigner: false, isWritable: true },
-    { pubkey: userTokenAccountA, isSigner: true, isWritable: true },
+    { pubkey: userTokenAccountA, isSigner: false, isWritable: true },
 
     { pubkey: mintA, isSigner: false, isWritable: false },
     { pubkey: tokenProgramA, isSigner: false, isWritable: false },
