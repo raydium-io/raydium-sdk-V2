@@ -181,6 +181,20 @@ export interface CreateVesting<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface CreateMultipleVesting<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  poolId: PublicKey;
+  beneficiaryList: {
+    wallet: PublicKey;
+    shareAmount: BN;
+  }[];
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
 export interface ClaimVesting<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   poolId: PublicKey;

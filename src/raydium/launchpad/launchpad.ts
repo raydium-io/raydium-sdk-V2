@@ -13,6 +13,7 @@ import {
   ClaimPlatformFee,
   ClaimVesting,
   CreateLaunchPad,
+  CreateMultipleVesting,
   CreatePlatform,
   CreateVesting,
   LaunchpadConfigInfo,
@@ -840,6 +841,8 @@ export default class LaunchpadModule extends ModuleBase {
 
     allPlatformPool.forEach((data) => {
       const pool = LaunchpadPool.decode(data.account.data);
+      if (pool.platformFee.lte(new BN(0))) return;
+
       const userTokenAccountB = getATAAddress(this.scope.ownerPubKey, pool.mintB, TOKEN_PROGRAM_ID).publicKey;
       txBuilder.addInstruction({
         instructions: [
@@ -891,8 +894,11 @@ export default class LaunchpadModule extends ModuleBase {
   }: CreateVesting<T>): Promise<MakeTxData> {
     const txBuilder = this.createTxBuilder(feePayer);
 
-    const vestingRecord = getPdaVestId(programId, poolId, beneficiary).publicKey;
+    const poolInfo = await this.getRpcPoolInfo({ poolId });
+    if (shareAmount.add(poolInfo.vestingSchedule.totalAllocatedShare).gt(poolInfo.vestingSchedule.totalLockedAmount))
+      this.logAndCreateError("share amount exceed total locked amount");
 
+    const vestingRecord = getPdaVestId(programId, poolId, beneficiary).publicKey;
     txBuilder.addInstruction({
       instructions: [
         createVestingAccount(programId, this.scope.ownerPubKey, beneficiary, poolId, vestingRecord, shareAmount),
@@ -905,6 +911,49 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData>;
+  }
+
+  public async createMultipleVesting<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    poolId,
+    beneficiaryList,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: CreateMultipleVesting<T>): Promise<MakeTxData> {
+    const txBuilder = this.createTxBuilder(feePayer);
+    if (beneficiaryList.length === 0) this.logAndCreateError("beneficiaryList is null");
+
+    const poolInfo = await this.getRpcPoolInfo({ poolId });
+    const allShareAmount = beneficiaryList.reduce(
+      (acc, cur) => acc.add(cur.shareAmount),
+      poolInfo.vestingSchedule.totalAllocatedShare,
+    );
+
+    if (allShareAmount.gt(poolInfo.vestingSchedule.totalLockedAmount))
+      this.logAndCreateError("share amount exceed total locked amount");
+
+    beneficiaryList.forEach((beneficiary) => {
+      const vestingRecord = getPdaVestId(programId, poolId, beneficiary.wallet).publicKey;
+      txBuilder.addInstruction({
+        instructions: [
+          createVestingAccount(
+            programId,
+            this.scope.ownerPubKey,
+            beneficiary.wallet,
+            poolId,
+            vestingRecord,
+            beneficiary.shareAmount,
+          ),
+        ],
+      });
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData>;
   }
 
   public async claimVesting<T extends TxVersion>({
