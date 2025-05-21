@@ -2,7 +2,7 @@ import { PublicKey, Signer } from "@solana/web3.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../type";
 import { TxVersion } from "@/common";
 import BN from "bn.js";
-import { LaunchpadPool, LaunchpadConfig, PlatformConfig } from "./layout";
+import { LaunchpadPool, LaunchpadConfig, PlatformConfig, LaunchpadVesting } from "./layout";
 
 export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   mintA: PublicKey;
@@ -190,23 +190,38 @@ export interface CreateMultipleVesting<T = TxVersion.LEGACY> {
   }[];
 
   computeBudgetConfig?: ComputeBudgetConfig;
-  txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;
 }
 
 export interface ClaimVesting<T = TxVersion.LEGACY> {
   programId?: PublicKey;
+
   poolId: PublicKey;
+  vestingRecord?: PublicKey;
   poolInfo?: LaunchpadPoolInfo;
 
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;
+}
 
-  associatedOnly?: boolean;
-  checkCreateATAOwner?: boolean;
+export interface ClaimMultiVesting<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  poolIdList: PublicKey[];
+  vestingRecords?: Record<string, PublicKey>;
+  poolsInfo?: Record<
+    string,
+    {
+      mintA: PublicKey;
+      vaultA: PublicKey;
+    }
+  >;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
 }
 
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;

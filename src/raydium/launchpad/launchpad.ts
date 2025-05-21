@@ -10,6 +10,7 @@ import {
 import {
   BuyToken,
   ClaimAllPlatformFee,
+  ClaimMultiVesting,
   ClaimPlatformFee,
   ClaimVesting,
   CreateLaunchPad,
@@ -919,9 +920,8 @@ export default class LaunchpadModule extends ModuleBase {
     beneficiaryList,
     txVersion,
     computeBudgetConfig,
-    txTipConfig,
     feePayer,
-  }: CreateMultipleVesting<T>): Promise<MakeTxData> {
+  }: CreateMultipleVesting<T>): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
     if (beneficiaryList.length === 0) this.logAndCreateError("beneficiaryList is null");
 
@@ -950,27 +950,25 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
-    txBuilder.addTipInstruction(txTipConfig);
-
-    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData>;
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async claimVesting<T extends TxVersion>({
     programId = LAUNCHPAD_PROGRAM,
     poolId,
     poolInfo: propsPoolInfo,
+    vestingRecord: propsVestingRecord,
     txVersion,
     computeBudgetConfig,
     txTipConfig,
     feePayer,
-    associatedOnly = true,
-    checkCreateATAOwner = false,
   }: ClaimVesting<T>): Promise<MakeTxData> {
     const txBuilder = this.createTxBuilder(feePayer);
 
     const authProgramId = getPdaLaunchpadAuth(programId).publicKey;
-    const vestingRecord = getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
+    const vestingRecord = propsVestingRecord || getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
 
     let poolInfo = propsPoolInfo;
     if (!poolInfo) {
@@ -1013,6 +1011,68 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData>;
+  }
+
+  public async claimMultiVesting<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    poolIdList,
+    poolsInfo: propsPoolsInfo = {},
+    vestingRecords = {},
+    txVersion,
+    computeBudgetConfig,
+    feePayer,
+  }: ClaimMultiVesting<T>): Promise<MakeMultiTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    let poolsInfo = { ...propsPoolsInfo };
+    const authProgramId = getPdaLaunchpadAuth(programId).publicKey;
+    const needFetchPools = poolIdList.filter((id) => !poolsInfo[id.toBase58()]);
+    if (needFetchPools.length) {
+      const fetchedPools = await this.getRpcPoolsInfo({ poolIdList: needFetchPools });
+      poolsInfo = {
+        ...poolsInfo,
+        ...fetchedPools.poolInfoMap,
+      };
+    }
+
+    poolIdList.forEach((poolId) => {
+      const poolIdStr = poolId.toBase58();
+      const poolInfo = poolsInfo[poolIdStr];
+      if (!poolInfo) this.logAndCreateError(`pool info not found: ${poolIdStr}`);
+      const vestingRecord =
+        vestingRecords[poolIdStr] || getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
+      const userTokenAccountA = getATAAddress(this.scope.ownerPubKey, poolInfo.mintA, TOKEN_PROGRAM_ID).publicKey;
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            userTokenAccountA,
+            this.scope.ownerPubKey,
+            poolInfo.mintA,
+          ),
+        ],
+      });
+
+      txBuilder.addInstruction({
+        instructions: [
+          claimVestedToken(
+            programId,
+            this.scope.ownerPubKey,
+            authProgramId,
+            poolId,
+            vestingRecord,
+            userTokenAccountA!,
+            poolInfo.vaultA,
+            poolInfo.mintA,
+            TOKEN_PROGRAM_ID,
+          ),
+        ],
+      });
+    });
+
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async getRpcPoolInfo({
