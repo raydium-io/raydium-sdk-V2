@@ -86,10 +86,10 @@ export function initialize(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLayout3.span);
   const data2 = Buffer.alloc(curveParam.type === "ConstantCurve" ? dataLayout22.span : dataLayout21.span);
@@ -525,10 +525,10 @@ export function createPlatformConfig(
 
   const data = Buffer.alloc(
     8 * 4 +
-      Buffer.from(name, "utf-8").length +
-      Buffer.from(web, "utf-8").length +
-      Buffer.from(img, "utf-8").length +
-      4 * 3,
+    Buffer.from(name, "utf-8").length +
+    Buffer.from(web, "utf-8").length +
+    Buffer.from(img, "utf-8").length +
+    4 * 3,
   );
   dataLayout.encode(
     {
@@ -561,7 +561,23 @@ export function updatePlatformConfig(
     | { type: "updateFeeRate"; value: BN }
     | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
     | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
-    | { type: "updateCpConfigId"; value: PublicKey },
+    | { type: 'updateCpConfigId', value: PublicKey }
+    | {
+      type: 'updateAll', value: {
+        platformClaimFeeWallet: PublicKey,
+        platformLockNftWallet: PublicKey,
+        cpConfigId: PublicKey,
+        migrateCpLockNftScale: {
+          platformScale: BN,
+          creatorScale: BN,
+          burnScale: BN,
+        },
+        feeRate: BN,
+        name: string,
+        web: string,
+        img: string,
+      }
+    },
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: false },
@@ -587,16 +603,45 @@ export function updatePlatformConfig(
     dataLayout.encode({ index: 3, value: updateInfo.value }, data);
   } else if (updateInfo.type === "updateImg" || updateInfo.type === "updateName" || updateInfo.type === "updateWeb") {
     const dataLayout = struct([u8("index"), str("value")]);
-    data = Buffer.alloc(Buffer.from(updateInfo.value, "utf-8").length + 4 + 1 * 1);
+    data = Buffer.alloc(Buffer.from(updateInfo.value, 'utf-8').length + 4 + 1 * 1);
     if (updateInfo.type === "updateName") dataLayout.encode({ index: 4, value: updateInfo.value }, data);
     else if (updateInfo.type === "updateWeb") dataLayout.encode({ index: 5, value: updateInfo.value }, data);
     else if (updateInfo.type === "updateImg") dataLayout.encode({ index: 6, value: updateInfo.value }, data);
-  } else if (updateInfo.type === "updateCpConfigId") {
-    keys.push({ pubkey: updateInfo.value, isSigner: false, isWritable: false });
+  } else if (updateInfo.type === 'updateCpConfigId') {
+    keys.push({ pubkey: updateInfo.value, isSigner: false, isWritable: false })
 
-    const dataLayout = struct([u8("index")]);
-    data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode({ index: 7 }, data);
+    const dataLayout = struct([u8('index')])
+    data = Buffer.alloc(dataLayout.span)
+    dataLayout.encode({ index: 7 }, data)
+  } else if (updateInfo.type === 'updateAll') {
+    keys.push({ pubkey: updateInfo.value.cpConfigId, isSigner: false, isWritable: false })
+
+    const dataLayout = struct([
+      u8('index'),
+      publicKey('platformClaimFeeWallet'),
+      publicKey('platformLockNftWallet'),
+      u64('platformScale'),
+      u64('creatorScale'),
+      u64('burnScale'),
+
+      u64('feeRate'),
+      str('name'),
+      str('web'),
+      str('img'),
+    ])
+    data = Buffer.alloc(1 + 32 + 32 + 8 * 4 + 4 * 3 + Buffer.from(updateInfo.value.name, 'utf-8').length + Buffer.from(updateInfo.value.web, 'utf-8').length + Buffer.from(updateInfo.value.img, 'utf-8').length)
+    dataLayout.encode({
+      index: 8,
+      platformClaimFeeWallet: updateInfo.value.platformClaimFeeWallet,
+      platformLockNftWallet: updateInfo.value.platformLockNftWallet,
+      platformScale: updateInfo.value.migrateCpLockNftScale.platformScale,
+      creatorScale: updateInfo.value.migrateCpLockNftScale.creatorScale,
+      burnScale: updateInfo.value.migrateCpLockNftScale.burnScale,
+      feeRate: updateInfo.value.feeRate,
+      name: updateInfo.value.name,
+      web: updateInfo.value.web,
+      img: updateInfo.value.img,
+    }, data)
   } else {
     throw Error("updateInfo params type error");
   }

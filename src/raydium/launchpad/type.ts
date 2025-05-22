@@ -128,11 +128,27 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
   platformId?: PublicKey;
 
   updateInfo:
-    | { type: "updateClaimFeeWallet"; value: PublicKey }
-    | { type: "updateFeeRate"; value: BN }
-    | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
-    | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
-    | { type: "updateCpConfigId"; value: PublicKey };
+  | { type: "updateClaimFeeWallet"; value: PublicKey }
+  | { type: "updateFeeRate"; value: BN }
+  | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
+  | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
+  | { type: 'updateCpConfigId', value: PublicKey }
+  | {
+    type: 'updateAll', value: {
+      platformClaimFeeWallet: PublicKey,
+      platformLockNftWallet: PublicKey,
+      cpConfigId: PublicKey,
+      migrateCpLockNftScale: {
+        platformScale: BN,
+        creatorScale: BN,
+        burnScale: BN,
+      },
+      feeRate: BN,
+      name: string,
+      web: string,
+      img: string,
+    }
+  };
 
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
