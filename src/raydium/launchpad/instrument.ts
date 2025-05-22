@@ -614,6 +614,7 @@ export function updatePlatformConfig(
     data = Buffer.alloc(dataLayout.span)
     dataLayout.encode({ index: 7 }, data)
   } else if (updateInfo.type === 'updateAll') {
+    console.log('Please note that this update will overwrite all data in the platform account with the new data.')
     keys.push({ pubkey: updateInfo.value.cpConfigId, isSigner: false, isWritable: false })
 
     const dataLayout = struct([
