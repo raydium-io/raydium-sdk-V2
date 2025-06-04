@@ -158,10 +158,7 @@ export function buyExactInInstruction(
   if (shareFeeReceiver) {
     keys.push({ pubkey: shareFeeReceiver, isSigner: false, isWritable: true });
   }
-  console.log({
-    amountB: amountB.toString(),
-    minAmountA: minAmountA.toString(),
-  });
+  
   const data = Buffer.alloc(dataLayout.span);
   dataLayout.encode(
     {
