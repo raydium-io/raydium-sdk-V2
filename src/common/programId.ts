@@ -59,6 +59,7 @@ export const IDO_ALL_PROGRAM = {
 export const ALL_PROGRAM_ID = {
   AMM_V4,
   AMM_STABLE,
+
   CLMM_PROGRAM_ID,
   CLMM_LOCK_PROGRAM_ID,
   CLMM_LOCK_AUTH_ID,
@@ -83,26 +84,28 @@ export const ALL_PROGRAM_ID = {
 
   LAUNCHPAD_PROGRAM,
   LAUNCHPAD_AUTH,
+
+  FEE_DESTINATION_ID,
 };
 
 export type ProgramIdConfig = Partial<typeof ALL_PROGRAM_ID>;
 
 export const DEVNET_PROGRAM_ID = {
-  SERUM_MARKET: PublicKey.default,
-  OPENBOOK_MARKET: new PublicKey("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj"),
+  AMM_V4: new PublicKey("HWy1jotHpo6UqeQxx49dpYYdQB8wj9Qk9MdxwjLvDHB8"),
+  AMM_STABLE: new PublicKey("DDg4VmQaJV9ogWce7LpcjBA9bv22wRp5uaTPa5pGjijF"),
 
-  UTIL1216: PublicKey.default,
-
-  FarmV3: new PublicKey("85BFyr98MbCUU9MVTEgzx1nbhWACbJqLzho6zd6DZcWL"),
-  FarmV5: new PublicKey("EcLzTrNg9V7qhcdyXDe2qjtPkiGzDM2UbdRaeaadU5r2"),
-  FarmV6: new PublicKey("Farm2hJLcqPtPg8M4rR6DMrsRNc5TPm5Cs4bVQrMe2T7"),
-
-  AmmV4: new PublicKey("HWy1jotHpo6UqeQxx49dpYYdQB8wj9Qk9MdxwjLvDHB8"),
-  AmmStable: new PublicKey("DDg4VmQaJV9ogWce7LpcjBA9bv22wRp5uaTPa5pGjijF"),
-
-  CLMM: new PublicKey("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH"),
+  CLMM_PROGRAM_ID: new PublicKey("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH"),
   CLMM_LOCK_PROGRAM_ID: new PublicKey("DLockwT7X7sxtLmGH9g5kmfcjaBtncdbUmi738m5bvQC"),
   CLMM_LOCK_AUTH_ID: new PublicKey("8qmHNvu2Kr2C7U8mJL4Vz1vTDxMhVuXKREwU7TNoaVEo"),
+
+  FARM_PROGRAM_ID_V3: new PublicKey("85BFyr98MbCUU9MVTEgzx1nbhWACbJqLzho6zd6DZcWL"),
+  FARM_PROGRAM_ID_V5: new PublicKey("EcLzTrNg9V7qhcdyXDe2qjtPkiGzDM2UbdRaeaadU5r2"),
+  FARM_PROGRAM_ID_V6: new PublicKey("Farm2hJLcqPtPg8M4rR6DMrsRNc5TPm5Cs4bVQrMe2T7"),
+
+  OPEN_BOOK_PROGRAM: new PublicKey("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj"),
+  SERUM_PROGRAM_ID_V3: PublicKey.default,
+
+  UTIL1216: PublicKey.default,
 
   Router: new PublicKey("BVChZ3XFEwTMUk1o9i3HAf91H6mFxSwa5X2wFAWhYPhU"),
 
@@ -110,11 +113,11 @@ export const DEVNET_PROGRAM_ID = {
   CREATE_CPMM_POOL_AUTH: DEV_CREATE_CPMM_POOL_AUTH,
   CREATE_CPMM_POOL_FEE_ACC: DEV_CREATE_CPMM_POOL_FEE_ACC,
 
-  FEE_DESTINATION_ID: new PublicKey("3XMrhbv989VxAMi3DErLV9eJht1pHppW5LbKxe9fkEFR"),
-
   LOCK_CPMM_PROGRAM: DEV_LOCK_CPMM_PROGRAM,
-  LCOK_CPMM_AUTH: DEV_LOCK_CPMM_AUTH,
+  LOCK_CPMM_AUTH: DEV_LOCK_CPMM_AUTH,
 
   LAUNCHPAD_PROGRAM: DEV_LAUNCHPAD_PROGRAM,
   LAUNCHPAD_AUTH: DEV_LAUNCHPAD_AUTH,
+
+  FEE_DESTINATION_ID: new PublicKey("3XMrhbv989VxAMi3DErLV9eJht1pHppW5LbKxe9fkEFR"),
 };
