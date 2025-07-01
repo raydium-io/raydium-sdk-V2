@@ -2,7 +2,7 @@ import { Commitment, PublicKey, SystemProgram, TransactionInstruction } from "@s
 import { BigNumberish, getATAAddress, InstructionType, WSOLMint } from "@/common";
 import {
   AccountLayout,
-  createAssociatedTokenAccountInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -211,7 +211,7 @@ export default class Account extends ModuleBase {
     };
 
     if (associatedOnly) {
-      const _createATAIns = createAssociatedTokenAccountInstruction(owner, ata, owner, mint, tokenProgram);
+      const _createATAIns = createAssociatedTokenAccountIdempotentInstruction(owner, ata, owner, mint, tokenProgram);
       const _ataInTokenAcc = this.tokenAccountRawInfos.find((i) => i.pubkey.equals(ata))
       if (checkCreateATAOwner) {
         const ataInfo = await this.scope.connection.getAccountInfo(ata);
@@ -331,7 +331,7 @@ export default class Account extends ModuleBase {
 
     if (!tokenAccountAddress) {
       const ataAddress = this.getAssociatedTokenAccount(mint, programId);
-      const instruction = await createAssociatedTokenAccountInstruction(owner, ataAddress, owner, mint, programId);
+      const instruction = await createAssociatedTokenAccountIdempotentInstruction(owner, ataAddress, owner, mint, programId);
       newTxInstructions.instructions = [instruction];
       newTxInstructions.instructionTypes = [InstructionType.CreateATA];
       tokenAccountAddress = ataAddress;
@@ -378,7 +378,7 @@ export default class Account extends ModuleBase {
       return { tokenAccount: txInstruction.addresses.newAccount, ...txInstruction };
     } else if (!tokenAccount || (side === "out" && !ata.equals(tokenAccount) && !bypassAssociatedCheck)) {
       const instructions: TransactionInstruction[] = [];
-      const _createATAIns = createAssociatedTokenAccountInstruction(
+      const _createATAIns = createAssociatedTokenAccountIdempotentInstruction(
         this.scope.ownerPubKey,
         ata,
         this.scope.ownerPubKey,

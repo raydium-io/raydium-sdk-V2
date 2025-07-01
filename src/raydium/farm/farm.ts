@@ -1,5 +1,5 @@
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { createAssociatedTokenAccountInstruction } from "@solana/spl-token";
+import { createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { parseBigNumberish } from "@/common";
 
 import { FormatFarmKeyOut } from "../../api/type";
@@ -804,7 +804,7 @@ export default class Farm extends ModuleBase {
         userRewardToken = await this.scope.account.getAssociatedTokenAccount(withdrawMint);
         txBuilder.addInstruction({
           instructions: [
-            createAssociatedTokenAccountInstruction(
+            createAssociatedTokenAccountIdempotentInstruction(
               this.scope.ownerPubKey,
               userRewardToken,
               this.scope.ownerPubKey,
