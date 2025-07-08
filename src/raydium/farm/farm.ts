@@ -1,5 +1,5 @@
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { createAssociatedTokenAccountInstruction } from "@solana/spl-token";
+import { createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 import { parseBigNumberish } from "@/common";
 
 import { FormatFarmKeyOut } from "../../api/type";
@@ -538,8 +538,8 @@ export default class Farm extends ModuleBase {
       version === 6
         ? makeDepositInstructionV6(insParams)
         : version === 5
-          ? makeDepositInstructionV5(insParams)
-          : makeDepositInstructionV3(insParams);
+        ? makeDepositInstructionV5(insParams)
+        : makeDepositInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Deposit,
@@ -726,10 +726,10 @@ export default class Farm extends ModuleBase {
       version === 6
         ? makeWithdrawInstructionV6(insParams)
         : version === 5
-          ? makeWithdrawInstructionV5(insParams)
-          : version === 4
-            ? makeWithdrawInstructionV4(insParams)
-            : makeWithdrawInstructionV3(insParams);
+        ? makeWithdrawInstructionV5(insParams)
+        : version === 4
+        ? makeWithdrawInstructionV4(insParams)
+        : makeWithdrawInstructionV3(insParams);
 
     const insType = {
       3: InstructionType.FarmV3Withdraw,
@@ -804,7 +804,7 @@ export default class Farm extends ModuleBase {
         userRewardToken = await this.scope.account.getAssociatedTokenAccount(withdrawMint);
         txBuilder.addInstruction({
           instructions: [
-            createAssociatedTokenAccountInstruction(
+            createAssociatedTokenAccountIdempotentInstruction(
               this.scope.ownerPubKey,
               userRewardToken,
               this.scope.ownerPubKey,
@@ -911,21 +911,37 @@ export default class Farm extends ModuleBase {
 
         let ownerRewardAccount = ownerMintToAccount[itemReward.mint.address];
         if (!ownerRewardAccount) {
-          const { account: _ownerRewardAccount, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-            tokenProgram: itemReward.mint.programId,
-            mint: new PublicKey(itemReward.mint.address),
-            notUseTokenAccount: rewardUseSOLBalance,
-            createInfo: {
-              payer: feePayer || this.scope.ownerPubKey,
-              amount: 0,
-            },
-            owner: this.scope.ownerPubKey,
-            skipCloseAccount: !rewardUseSOLBalance,
-            associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
-            checkCreateATAOwner,
-          });
-          ownerRewardAccount = _ownerRewardAccount!;
-          instructionParams && txBuilder.addInstruction(instructionParams);
+          if (rewardUseSOLBalance) {
+            const { account: _ownerRewardAccount, instructionParams } =
+              await this.scope.account.getOrCreateTokenAccount({
+                tokenProgram: itemReward.mint.programId,
+                mint: new PublicKey(itemReward.mint.address),
+                notUseTokenAccount: rewardUseSOLBalance,
+                createInfo: {
+                  payer: feePayer || this.scope.ownerPubKey,
+                  amount: 0,
+                },
+                owner: this.scope.ownerPubKey,
+                skipCloseAccount: !rewardUseSOLBalance,
+                associatedOnly: rewardUseSOLBalance ? false : associatedOnly,
+                checkCreateATAOwner,
+              });
+            ownerRewardAccount = _ownerRewardAccount!;
+            instructionParams && txBuilder.addInstruction(instructionParams);
+          } else {
+            const mint = new PublicKey(itemReward.mint.address);
+            ownerRewardAccount = this.scope.account.getAssociatedTokenAccount(mint);
+            txBuilder.addInstruction({
+              instructions: [
+                createAssociatedTokenAccountIdempotentInstruction(
+                  this.scope.ownerPubKey,
+                  ownerRewardAccount,
+                  this.scope.ownerPubKey,
+                  mint,
+                ),
+              ],
+            });
+          }
         }
 
         ownerMintToAccount[itemReward.mint.address] = ownerRewardAccount;
@@ -947,8 +963,8 @@ export default class Farm extends ModuleBase {
         version === 6
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
-            ? makeWithdrawInstructionV5(insParams)
-            : makeWithdrawInstructionV3(insParams);
+          ? makeWithdrawInstructionV5(insParams)
+          : makeWithdrawInstructionV3(insParams);
 
       const insType = {
         3: InstructionType.FarmV3Withdraw,
