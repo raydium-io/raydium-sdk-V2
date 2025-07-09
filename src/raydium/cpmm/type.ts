@@ -226,6 +226,31 @@ export interface HarvestLockCpmmLpParams<T = TxVersion.LEGACY> {
   closeWsol?: boolean;
 }
 
+export interface HarvestMultiLockCpmmLpParams<T = TxVersion.LEGACY> {
+  lockInfo: {
+    poolInfo: ApiV3PoolInfoStandardItemCpmm;
+    poolKeys?: CpmmKeys;
+    nftMint: PublicKey;
+    lpFeeAmount: BN;
+  }[];
+
+  programId?: PublicKey;
+  authProgram?: PublicKey;
+  clmmProgram?: PublicKey;
+
+  cpmmProgram?: {
+    programId?: PublicKey;
+    authProgram?: PublicKey;
+  };
+
+  feePayer?: PublicKey;
+  withMetadata?: boolean;
+  getEphemeralSigners?: (k: number) => any;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  closeWsol?: boolean;
+}
+
 export interface CpmmLockNftBasicInfo {
   name: string;
   symbol: string;

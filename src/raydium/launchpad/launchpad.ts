@@ -10,9 +10,11 @@ import {
 import {
   BuyToken,
   ClaimAllPlatformFee,
+  ClaimMultiVesting,
   ClaimPlatformFee,
   ClaimVesting,
   CreateLaunchPad,
+  CreateMultipleVesting,
   CreatePlatform,
   CreateVesting,
   LaunchpadConfigInfo,
@@ -840,6 +842,8 @@ export default class LaunchpadModule extends ModuleBase {
 
     allPlatformPool.forEach((data) => {
       const pool = LaunchpadPool.decode(data.account.data);
+      if (pool.platformFee.lte(new BN(0))) return;
+
       const userTokenAccountB = getATAAddress(this.scope.ownerPubKey, pool.mintB, TOKEN_PROGRAM_ID).publicKey;
       txBuilder.addInstruction({
         instructions: [
@@ -891,8 +895,11 @@ export default class LaunchpadModule extends ModuleBase {
   }: CreateVesting<T>): Promise<MakeTxData> {
     const txBuilder = this.createTxBuilder(feePayer);
 
-    const vestingRecord = getPdaVestId(programId, poolId, beneficiary).publicKey;
+    const poolInfo = await this.getRpcPoolInfo({ poolId });
+    if (shareAmount.add(poolInfo.vestingSchedule.totalAllocatedShare).gt(poolInfo.vestingSchedule.totalLockedAmount))
+      this.logAndCreateError("share amount exceed total locked amount");
 
+    const vestingRecord = getPdaVestId(programId, poolId, beneficiary).publicKey;
     txBuilder.addInstruction({
       instructions: [
         createVestingAccount(programId, this.scope.ownerPubKey, beneficiary, poolId, vestingRecord, shareAmount),
@@ -907,21 +914,61 @@ export default class LaunchpadModule extends ModuleBase {
     }) as Promise<MakeTxData>;
   }
 
+  public async createMultipleVesting<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    poolId,
+    beneficiaryList,
+    txVersion,
+    computeBudgetConfig,
+    feePayer,
+  }: CreateMultipleVesting<T>): Promise<MakeMultiTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+    if (beneficiaryList.length === 0) this.logAndCreateError("beneficiaryList is null");
+
+    const poolInfo = await this.getRpcPoolInfo({ poolId });
+    const allShareAmount = beneficiaryList.reduce(
+      (acc, cur) => acc.add(cur.shareAmount),
+      poolInfo.vestingSchedule.totalAllocatedShare,
+    );
+
+    if (allShareAmount.gt(poolInfo.vestingSchedule.totalLockedAmount))
+      this.logAndCreateError("share amount exceed total locked amount");
+
+    beneficiaryList.forEach((beneficiary) => {
+      const vestingRecord = getPdaVestId(programId, poolId, beneficiary.wallet).publicKey;
+      txBuilder.addInstruction({
+        instructions: [
+          createVestingAccount(
+            programId,
+            this.scope.ownerPubKey,
+            beneficiary.wallet,
+            poolId,
+            vestingRecord,
+            beneficiary.shareAmount,
+          ),
+        ],
+      });
+    });
+
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+  }
+
   public async claimVesting<T extends TxVersion>({
     programId = LAUNCHPAD_PROGRAM,
     poolId,
     poolInfo: propsPoolInfo,
+    vestingRecord: propsVestingRecord,
     txVersion,
     computeBudgetConfig,
     txTipConfig,
     feePayer,
-    associatedOnly = true,
-    checkCreateATAOwner = false,
   }: ClaimVesting<T>): Promise<MakeTxData> {
     const txBuilder = this.createTxBuilder(feePayer);
 
     const authProgramId = getPdaLaunchpadAuth(programId).publicKey;
-    const vestingRecord = getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
+    const vestingRecord = propsVestingRecord || getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
 
     let poolInfo = propsPoolInfo;
     if (!poolInfo) {
@@ -964,6 +1011,68 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData>;
+  }
+
+  public async claimMultiVesting<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    poolIdList,
+    poolsInfo: propsPoolsInfo = {},
+    vestingRecords = {},
+    txVersion,
+    computeBudgetConfig,
+    feePayer,
+  }: ClaimMultiVesting<T>): Promise<MakeMultiTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    let poolsInfo = { ...propsPoolsInfo };
+    const authProgramId = getPdaLaunchpadAuth(programId).publicKey;
+    const needFetchPools = poolIdList.filter((id) => !poolsInfo[id.toBase58()]);
+    if (needFetchPools.length) {
+      const fetchedPools = await this.getRpcPoolsInfo({ poolIdList: needFetchPools });
+      poolsInfo = {
+        ...poolsInfo,
+        ...fetchedPools.poolInfoMap,
+      };
+    }
+
+    poolIdList.forEach((poolId) => {
+      const poolIdStr = poolId.toBase58();
+      const poolInfo = poolsInfo[poolIdStr];
+      if (!poolInfo) this.logAndCreateError(`pool info not found: ${poolIdStr}`);
+      const vestingRecord =
+        vestingRecords[poolIdStr] || getPdaVestId(programId, poolId, this.scope.ownerPubKey).publicKey;
+      const userTokenAccountA = getATAAddress(this.scope.ownerPubKey, poolInfo.mintA, TOKEN_PROGRAM_ID).publicKey;
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            userTokenAccountA,
+            this.scope.ownerPubKey,
+            poolInfo.mintA,
+          ),
+        ],
+      });
+
+      txBuilder.addInstruction({
+        instructions: [
+          claimVestedToken(
+            programId,
+            this.scope.ownerPubKey,
+            authProgramId,
+            poolId,
+            vestingRecord,
+            userTokenAccountA!,
+            poolInfo.vaultA,
+            poolInfo.mintA,
+            TOKEN_PROGRAM_ID,
+          ),
+        ],
+      });
+    });
+
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async getRpcPoolInfo({

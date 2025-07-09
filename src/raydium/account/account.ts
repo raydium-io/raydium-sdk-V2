@@ -212,7 +212,7 @@ export default class Account extends ModuleBase {
 
     if (associatedOnly) {
       const _createATAIns = createAssociatedTokenAccountIdempotentInstruction(owner, ata, owner, mint, tokenProgram);
-      const _ataInTokenAcc = this.tokenAccountRawInfos.find((i) => i.pubkey.equals(ata))
+      const _ataInTokenAcc = this.tokenAccountRawInfos.find((i) => i.pubkey.equals(ata));
       if (checkCreateATAOwner) {
         const ataInfo = await this.scope.connection.getAccountInfo(ata);
         if (ataInfo === null) {
@@ -331,7 +331,13 @@ export default class Account extends ModuleBase {
 
     if (!tokenAccountAddress) {
       const ataAddress = this.getAssociatedTokenAccount(mint, programId);
-      const instruction = await createAssociatedTokenAccountIdempotentInstruction(owner, ataAddress, owner, mint, programId);
+      const instruction = await createAssociatedTokenAccountIdempotentInstruction(
+        owner,
+        ataAddress,
+        owner,
+        mint,
+        programId,
+      );
       newTxInstructions.instructions = [instruction];
       newTxInstructions.instructionTypes = [InstructionType.CreateATA];
       tokenAccountAddress = ataAddress;
