@@ -25,7 +25,14 @@ import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos, TxTipConfig } fr
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { MakeTransaction } from "../type";
 import { ClmmInstrument } from "./instrument";
-import { ClmmConfigLayout, ClmmPositionLayout, OperationLayout, PoolInfoLayout, PositionInfoLayout } from "./layout";
+import {
+  ClmmConfigLayout,
+  ClmmPositionLayout,
+  LockClPositionLayoutV2,
+  OperationLayout,
+  PoolInfoLayout,
+  PositionInfoLayout,
+} from "./layout";
 import {
   ClmmRpcData,
   ClosePositionExtInfo,
@@ -1915,14 +1922,27 @@ export class Clmm extends ModuleBase {
     programId = CLMM_LOCK_PROGRAM_ID,
   }: {
     programId?: string | PublicKey;
-  }): Promise<ReturnType<typeof PositionInfoLayout.decode>[]> {
+  }): Promise<
+    {
+      position: ReturnType<typeof PositionInfoLayout.decode>;
+      lockInfo: ReturnType<typeof LockClPositionLayoutV2.decode>;
+    }[]
+  > {
     await this.scope.account.fetchWalletTokenAccounts();
     const balanceMints = this.scope.account.tokenAccountRawInfos.filter((acc) => acc.accountInfo.amount.eq(new BN(1)));
     const allPositionKey = balanceMints.map(
       (acc) => getPdaLockClPositionIdV2(new PublicKey(programId), acc.accountInfo.mint).publicKey,
     );
 
-    const accountInfo = await this.scope.connection.getMultipleAccountsInfo(allPositionKey);
+    const lockAccountInfo = await this.scope.connection.getMultipleAccountsInfo(allPositionKey);
+    const allLockPosition: ReturnType<typeof LockClPositionLayoutV2.decode>[] = [];
+    lockAccountInfo.forEach((positionRes) => {
+      if (!positionRes) return;
+      const position = LockClPositionLayoutV2.decode(positionRes.data);
+      allLockPosition.push(position);
+    });
+
+    const accountInfo = await this.scope.connection.getMultipleAccountsInfo(allLockPosition.map((p) => p.positionId));
     const allPosition: ReturnType<typeof PositionInfoLayout.decode>[] = [];
     accountInfo.forEach((positionRes) => {
       if (!positionRes) return;
@@ -1930,7 +1950,10 @@ export class Clmm extends ModuleBase {
       allPosition.push(position);
     });
 
-    return allPosition;
+    return allLockPosition.map((data, idx) => ({
+      position: allPosition[idx],
+      lockInfo: data,
+    }));
   }
 
   public async getRpcClmmPoolInfo({ poolId }: { poolId: string | PublicKey }): Promise<ClmmRpcData> {
