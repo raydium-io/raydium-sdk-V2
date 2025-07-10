@@ -151,6 +151,11 @@ export interface TransferFeeDataBaseType {
 export type ExtensionsItem = {
   coingeckoId?: string;
   feeConfig?: TransferFeeDataBaseType;
+  tips?: {
+    icon: string;
+    link: string;
+    text: string;
+  };
 };
 
 export type ApiV3Token = {
