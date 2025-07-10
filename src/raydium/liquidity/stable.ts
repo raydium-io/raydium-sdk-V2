@@ -1,8 +1,8 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 
 import { seq, struct, u64 } from "../../marshmallow";
+import { MODEL_DATA_PUBKEY, DEV_MODEL_DATA_PUBKEY } from "@/common";
 
-export const MODEL_DATA_PUBKEY = new PublicKey("CDSr3ssLcRB6XYPJwAfFt18MZvEZp4LjHcvzBVZ45duo");
 const ELEMENT_SIZE = 50000;
 
 export const DataElement = struct([u64("x"), u64("y"), u64("price")]);
@@ -302,6 +302,7 @@ export function getStablePrice(
 
 export class StableLayout {
   private readonly connection: Connection;
+  public modelDataPubKey: PublicKey;
   private _layoutData: StableModelLayout = {
     accountType: 0,
     status: 0,
@@ -310,8 +311,15 @@ export class StableLayout {
     DataElement: [],
   };
 
-  constructor({ connection }: { connection: Connection }) {
+  constructor({
+    connection,
+    modelDataPubKey = MODEL_DATA_PUBKEY,
+  }: {
+    connection: Connection;
+    modelDataPubKey?: PublicKey;
+  }) {
     this.connection = connection;
+    this.modelDataPubKey = modelDataPubKey;
   }
 
   get stableModelData(): StableModelLayout {
@@ -321,7 +329,7 @@ export class StableLayout {
   public async initStableModelLayout(): Promise<void> {
     if (this._layoutData.validDataCount === 0) {
       if (this.connection) {
-        const acc = await this.connection.getAccountInfo(MODEL_DATA_PUBKEY);
+        const acc = await this.connection.getAccountInfo(this.modelDataPubKey);
         if (acc) this._layoutData = formatLayout(acc?.data);
       }
     }

@@ -6,7 +6,7 @@ import { FormatFarmKeyOut } from "../../api/type";
 import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
 import { BN_ZERO } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
-import { FARM_PROGRAM_ID_V6 } from "@/common/programId";
+import { FARM_PROGRAM_ID_V6, UI_DEVNET_PROGRAM_ID } from "@/common/programId";
 import { SOLMint, solToWSol, WSOLMint } from "@/common/pubKey";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
@@ -99,6 +99,7 @@ export default class Farm extends ModuleBase {
     programId = FARM_PROGRAM_ID_V6,
     txVersion,
     feePayer,
+    lockProgram,
   }: CreateFarm<T>): Promise<MakeTxData<T, CreateFarmExtInfo>> {
     this.checkDisabled();
     this.scope.checkOwner();
@@ -106,7 +107,7 @@ export default class Farm extends ModuleBase {
     const lpMint = new PublicKey(propPoolInfo.lpMint.address);
     const poolInfo = {
       lpMint,
-      lockInfo: { lockMint: FARM_LOCK_MINT, lockVault: FARM_LOCK_VAULT },
+      lockInfo: { lockMint: lockProgram?.mint ?? FARM_LOCK_MINT, lockVault: lockProgram?.vault ?? FARM_LOCK_VAULT },
       version: 6,
       rewardInfos,
       programId,
@@ -506,7 +507,11 @@ export default class Farm extends ModuleBase {
       ledgerInfo = ledgerLayout.decode(ledgerData.data);
     }
 
-    if (farmInfo.programId !== FARM_PROGRAM_ID_V6.toString() && !ledgerInfo) {
+    if (
+      farmInfo.programId !== FARM_PROGRAM_ID_V6.toString() &&
+      farmInfo.programId !== UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V6.toString() &&
+      !ledgerInfo
+    ) {
       const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
         id: farmId,
         programId: farmProgramId,

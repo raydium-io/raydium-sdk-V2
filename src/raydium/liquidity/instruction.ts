@@ -2,7 +2,7 @@ import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } 
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import { AmmV4Keys, AmmV5Keys } from "@/api/type";
-import { BN_ONE, BN_ZERO, parseBigNumberish } from "@/common";
+import { BN_ONE, BN_ZERO, MODEL_DATA_PUBKEY, parseBigNumberish } from "@/common";
 import { createLogger } from "@/common/logger";
 import { accountMeta, RENT_PROGRAM_ID } from "@/common/pubKey";
 import { InstructionType } from "@/common/txTool/txType";
@@ -18,7 +18,6 @@ import {
   initPoolLayout,
   removeLiquidityLayout,
 } from "./layout";
-import { MODEL_DATA_PUBKEY } from "./stable";
 import {
   InitPoolInstructionParamsV4,
   LiquidityAddInstructionParams,
@@ -30,7 +29,16 @@ import {
 
 const logger = createLogger("Raydium_liquidity_instruction");
 export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParams): TransactionInstruction {
-  const { poolInfo, poolKeys, userKeys, baseAmountIn, quoteAmountIn, fixedSide, otherAmountMin } = params;
+  const {
+    poolInfo,
+    poolKeys,
+    userKeys,
+    baseAmountIn,
+    quoteAmountIn,
+    fixedSide,
+    otherAmountMin,
+    modelDataPubKey = MODEL_DATA_PUBKEY,
+  } = params;
 
   const data = Buffer.alloc(addLiquidityLayout.span);
   addLiquidityLayout.encode(
@@ -57,7 +65,7 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
   ];
 
   if (poolInfo.pooltype.includes("StablePool")) {
-    keys.push(accountMeta({ pubkey: MODEL_DATA_PUBKEY }));
+    keys.push(accountMeta({ pubkey: modelDataPubKey }));
   }
 
   keys.push(
@@ -79,7 +87,15 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
 }
 
 export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): TransactionInstruction {
-  const { poolInfo, poolKeys: poolKeyProps, userKeys, lpAmount, baseAmountMin, quoteAmountMin } = params;
+  const {
+    poolInfo,
+    poolKeys: poolKeyProps,
+    userKeys,
+    lpAmount,
+    baseAmountMin,
+    quoteAmountMin,
+    modelDataPubKey = MODEL_DATA_PUBKEY,
+  } = params;
   const poolKeys = jsonInfo2PoolKeys(poolKeyProps);
 
   let version = 4;
@@ -111,7 +127,7 @@ export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): 
     ];
 
     if (version === 5) {
-      keys.push(accountMeta({ pubkey: MODEL_DATA_PUBKEY }));
+      keys.push(accountMeta({ pubkey: modelDataPubKey }));
     } else {
       keys.push(accountMeta({ pubkey: poolKeys.id }));
       keys.push(accountMeta({ pubkey: poolKeys.id }));
@@ -269,7 +285,13 @@ export function simulatePoolInfoInstruction(poolKeys: AmmV4Keys | AmmV5Keys): Tr
 }
 
 export function makeSwapFixedInInstruction(
-  { poolKeys: propPoolKeys, userKeys, amountIn, minAmountOut }: SwapFixedInInstructionParamsV4,
+  {
+    poolKeys: propPoolKeys,
+    userKeys,
+    amountIn,
+    minAmountOut,
+    modelDataPubKey = MODEL_DATA_PUBKEY,
+  }: SwapFixedInInstructionParamsV4,
   version: number,
 ): TransactionInstruction {
   const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
@@ -292,7 +314,7 @@ export function makeSwapFixedInInstruction(
 
   if (version === 4) keys.push(accountMeta({ pubkey: poolKeys.targetOrders }));
   keys.push(accountMeta({ pubkey: poolKeys.vault.A }), accountMeta({ pubkey: poolKeys.vault.B }));
-  if (version === 5) keys.push(accountMeta({ pubkey: MODEL_DATA_PUBKEY }));
+  if (version === 5) keys.push(accountMeta({ pubkey: modelDataPubKey }));
   keys.push(
     // serum
     accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
@@ -317,7 +339,13 @@ export function makeSwapFixedInInstruction(
 }
 
 export function makeSwapFixedOutInstruction(
-  { poolKeys: propPoolKeys, userKeys, maxAmountIn, amountOut }: SwapFixedOutInstructionParamsV4,
+  {
+    poolKeys: propPoolKeys,
+    userKeys,
+    maxAmountIn,
+    amountOut,
+    modelDataPubKey = MODEL_DATA_PUBKEY,
+  }: SwapFixedOutInstructionParamsV4,
   version: number,
 ): TransactionInstruction {
   const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
@@ -342,7 +370,7 @@ export function makeSwapFixedOutInstruction(
     accountMeta({ pubkey: poolKeys.vault.B }),
   ];
 
-  if (version === 5) keys.push(accountMeta({ pubkey: MODEL_DATA_PUBKEY }));
+  if (version === 5) keys.push(accountMeta({ pubkey: modelDataPubKey }));
 
   keys.push(
     // serum

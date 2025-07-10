@@ -138,10 +138,12 @@ export async function fetchMultipleInfo({
   poolKeysList,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   config,
+  modelDataPubKey,
 }: {
   connection: Connection;
   poolKeysList: (AmmV4Keys | AmmV5Keys)[];
   config: any;
+  modelDataPubKey?: PublicKey;
 }): Promise<
   {
     status: BN;
@@ -159,7 +161,7 @@ export async function fetchMultipleInfo({
   const loadStable = poolKeysList.find((i) => i.modelDataAccount);
   if (loadStable) {
     if (!stableLayout) {
-      stableLayout = new StableLayout({ connection });
+      stableLayout = new StableLayout({ connection, modelDataPubKey });
       await stableLayout.initStableModelLayout();
     }
   }
