@@ -2,7 +2,14 @@ import { PublicKey } from "@solana/web3.js";
 
 import { ApiV3Token } from "../../api/type";
 import { createLogger } from "../../common/logger";
-import { FARM_PROGRAM_ID_V3, FARM_PROGRAM_ID_V4, FARM_PROGRAM_ID_V5, FARM_PROGRAM_ID_V6 } from "../../common/programId";
+import {
+  DEV_FARM_PROGRAM_ID_V4,
+  FARM_PROGRAM_ID_V3,
+  FARM_PROGRAM_ID_V4,
+  FARM_PROGRAM_ID_V5,
+  FARM_PROGRAM_ID_V6,
+  UI_DEVNET_PROGRAM_ID,
+} from "../../common/programId";
 
 import {
   FarmLedgerLayout,
@@ -14,12 +21,16 @@ import {
   farmStateV5Layout,
   farmStateV6Layout,
 } from "./layout";
+import { NATIVE_MINT } from "@solana/spl-token";
 
 const logger = createLogger("Raydium_farm_config");
 
 export type FarmVersion = 3 | 4 | 5 | 6;
 export const FARM_LOCK_MINT = new PublicKey("4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R");
 export const FARM_LOCK_VAULT = new PublicKey("FrspKwj8i3pNmKwXreTveC4fu7KL5ZbGeXdZBe2XViu1");
+
+export const DEV_FARM_LOCK_MINT = NATIVE_MINT;
+export const DEV_FARM_LOCK_VAULT = new PublicKey("3TRTX4dXUpp2eqxi3tvQDFYUV7SdDJjcPE3Y4mbtftaX");
 
 /* ================= index ================= */
 // version => farm state layout
@@ -81,4 +92,8 @@ export const FARM_PROGRAM_TO_VERSION: Record<string, 3 | 4 | 5 | 6> = {
   [FARM_PROGRAM_ID_V4.toString()]: 4,
   [FARM_PROGRAM_ID_V5.toString()]: 5,
   [FARM_PROGRAM_ID_V6.toString()]: 6,
+  [UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V3.toString()]: 3,
+  [DEV_FARM_PROGRAM_ID_V4.toString()]: 4,
+  [UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V5.toString()]: 5,
+  [UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V6.toString()]: 6,
 };

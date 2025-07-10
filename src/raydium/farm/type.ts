@@ -71,6 +71,10 @@ export interface CreateFarm<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+  lockProgram?: {
+    mint: PublicKey;
+    vault: PublicKey;
+  };
 }
 
 export interface CreateFarmExtInfo {
@@ -130,16 +134,16 @@ export type FarmPoolKeys = {
   readonly upcoming: boolean;
   readonly rewardInfos: (
     | {
-      readonly rewardMint: PublicKey;
-      readonly rewardVault: PublicKey;
-    }
+        readonly rewardMint: PublicKey;
+        readonly rewardVault: PublicKey;
+      }
     | {
-      readonly rewardMint: PublicKey;
-      readonly rewardVault: PublicKey;
-      readonly rewardOpenTime: number;
-      readonly rewardEndTime: number;
-      readonly rewardPerSecond: number;
-      readonly rewardType: RewardType;
-    }
+        readonly rewardMint: PublicKey;
+        readonly rewardVault: PublicKey;
+        readonly rewardOpenTime: number;
+        readonly rewardEndTime: number;
+        readonly rewardPerSecond: number;
+        readonly rewardType: RewardType;
+      }
   )[];
 };

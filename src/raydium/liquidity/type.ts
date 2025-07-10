@@ -61,6 +61,7 @@ export interface LiquidityAddInstructionParams {
   quoteAmountIn: BigNumberish;
   otherAmountMin: BigNumberish;
   fixedSide: AmountSide;
+  modelDataPubKey?: PublicKey;
 }
 
 export interface RemoveLiquidityInstruction {
@@ -70,6 +71,7 @@ export interface RemoveLiquidityInstruction {
   lpAmount: BigNumberish;
   baseAmountMin: BigNumberish;
   quoteAmountMin: BigNumberish;
+  modelDataPubKey?: PublicKey;
 }
 
 export interface LiquidityPoolKeys {
@@ -202,6 +204,7 @@ export interface SwapFixedInInstructionParamsV4 {
   };
   amountIn: BigNumberish;
   minAmountOut: BigNumberish;
+  modelDataPubKey?: PublicKey;
 }
 
 export interface SwapFixedOutInstructionParamsV4 {
@@ -214,6 +217,7 @@ export interface SwapFixedOutInstructionParamsV4 {
   // maximum amount in
   maxAmountIn: BigNumberish;
   amountOut: BigNumberish;
+  modelDataPubKey?: PublicKey;
 }
 
 export type SwapSide = "in" | "out";
