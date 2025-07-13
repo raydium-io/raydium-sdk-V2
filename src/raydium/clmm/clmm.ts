@@ -1714,6 +1714,7 @@ export class Clmm extends ModuleBase {
                 ownerTokenAccountA,
                 this.scope.ownerPubKey,
                 mint,
+                new PublicKey(poolInfo.mintA.programId),
               ),
             ],
           });
@@ -1751,6 +1752,7 @@ export class Clmm extends ModuleBase {
                 ownerTokenAccountB,
                 this.scope.ownerPubKey,
                 mint,
+                new PublicKey(poolInfo.mintB.programId),
               ),
             ],
           });
