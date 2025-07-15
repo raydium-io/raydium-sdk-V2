@@ -3,12 +3,11 @@ import { PublicKey } from "@solana/web3.js";
 import { ApiV3Token } from "../../api/type";
 import { createLogger } from "../../common/logger";
 import {
-  DEV_FARM_PROGRAM_ID_V4,
+  DEVNET_PROGRAM_ID,
   FARM_PROGRAM_ID_V3,
   FARM_PROGRAM_ID_V4,
   FARM_PROGRAM_ID_V5,
   FARM_PROGRAM_ID_V6,
-  UI_DEVNET_PROGRAM_ID,
 } from "../../common/programId";
 
 import {
@@ -92,8 +91,8 @@ export const FARM_PROGRAM_TO_VERSION: Record<string, 3 | 4 | 5 | 6> = {
   [FARM_PROGRAM_ID_V4.toString()]: 4,
   [FARM_PROGRAM_ID_V5.toString()]: 5,
   [FARM_PROGRAM_ID_V6.toString()]: 6,
-  [UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V3.toString()]: 3,
-  [DEV_FARM_PROGRAM_ID_V4.toString()]: 4,
-  [UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V5.toString()]: 5,
-  [UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V6.toString()]: 6,
+  [DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V3.toString()]: 3,
+  [DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V4.toString()]: 4,
+  [DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V5.toString()]: 5,
+  [DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V6.toString()]: 6,
 };

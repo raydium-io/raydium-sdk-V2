@@ -1,7 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 
 import { seq, struct, u64 } from "../../marshmallow";
-import { MODEL_DATA_PUBKEY, DEV_MODEL_DATA_PUBKEY } from "@/common";
+import { MODEL_DATA_PUBKEY } from "@/common";
 
 const ELEMENT_SIZE = 50000;
 

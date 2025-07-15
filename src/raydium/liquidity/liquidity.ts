@@ -53,7 +53,7 @@ import { getAssociatedConfigId, getAssociatedPoolKeys, toAmmComputePoolInfo } fr
 
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { AMM_V4, DEV_MODEL_DATA_PUBKEY, FEE_DESTINATION_ID, OPEN_BOOK_PROGRAM, WSOLMint } from "@/common";
+import { AMM_V4, DEVNET_PROGRAM_ID, FEE_DESTINATION_ID, OPEN_BOOK_PROGRAM, WSOLMint } from "@/common";
 import { generatePubKey } from "../account";
 import { makeCreateMarketInstruction, MarketExtInfo } from "../marketV2";
 
@@ -64,7 +64,7 @@ export default class LiquidityModule extends ModuleBase {
     super(params);
     this.stableLayout = new StableLayout({
       connection: this.scope.connection,
-      modelDataPubKey: this.scope.cluster === "mainnet" ? undefined : DEV_MODEL_DATA_PUBKEY,
+      modelDataPubKey: this.scope.cluster === "mainnet" ? undefined : DEVNET_PROGRAM_ID.MODEL_DATA_PUBKEY,
     });
   }
 

@@ -9,8 +9,6 @@ export const FARM_PROGRAM_ID_V5 = new PublicKey("9KEPoZmtHUrBbhWN1v1KWLMkkvwY6WL
 // echosystem
 export const FARM_PROGRAM_ID_V6 = new PublicKey("FarmqiPv5eAj3j1GMdMCMUGXqPUvmquZtMy86QH6rzhG");
 
-export const DEV_FARM_PROGRAM_ID_V4 = new PublicKey("Ray1111111111111111111111111111111111111111");
-
 export const UTIL1216 = new PublicKey("CLaimxFqjHzgTJtAGHU47NPhg6qrc5sCnpC4tBLyABQS");
 
 export const OPEN_BOOK_PROGRAM = new PublicKey("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX");
@@ -24,7 +22,6 @@ export const CLMM_LOCK_PROGRAM_ID = new PublicKey("LockrWmn6K5twhz3y9w1dQERbmgSa
 export const CLMM_LOCK_AUTH_ID = new PublicKey("kN1kEznaF5Xbd8LYuqtEFcxzWSBk5Fv6ygX6SqEGJVy");
 
 export const MODEL_DATA_PUBKEY = new PublicKey("CDSr3ssLcRB6XYPJwAfFt18MZvEZp4LjHcvzBVZ45duo");
-export const DEV_MODEL_DATA_PUBKEY = new PublicKey("Ray1111111111111111111111111111111111111111");
 
 export const Router = new PublicKey("routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS");
 export const FEE_DESTINATION_ID = new PublicKey("7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5");
@@ -38,27 +35,16 @@ export const CREATE_CPMM_POOL_PROGRAM = new PublicKey("CPMMoo8L3F4NbTegBCKVNungg
 export const CREATE_CPMM_POOL_AUTH = new PublicKey("GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL");
 export const CREATE_CPMM_POOL_FEE_ACC = new PublicKey("DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8");
 
-export const DEV_CREATE_CPMM_POOL_PROGRAM = new PublicKey("CPMDWBwJDtYax9qW7AyRuVC19Cc4L4Vcy4n2BHAbHkCW");
-export const DEV_CREATE_CPMM_POOL_AUTH = new PublicKey("7rQ1QFNosMkUCuh7Z7fPbTHvh73b68sQYdirycEzJVuw");
-export const DEV_CREATE_CPMM_POOL_FEE_ACC = new PublicKey("G11FKBRaAkHAKuLCgLM6K6NUc9rTjPAznRCjZifrTQe2");
-
 export const LOCK_CPMM_PROGRAM = new PublicKey("LockrWmn6K5twhz3y9w1dQERbmgSaRkfnTeTKbpofwE");
-export const DEV_LOCK_CPMM_PROGRAM = new PublicKey("DLockwT7X7sxtLmGH9g5kmfcjaBtncdbUmi738m5bvQC");
 
 export const LOCK_CPMM_AUTH = new PublicKey("3f7GcQFG397GAaEnv51zR6tsTVihYRydnydDD1cXekxH");
-export const DEV_LOCK_CPMM_AUTH = new PublicKey("7AFUeLVRjBfzqK3tTGw8hN48KLQWSk6DTE8xprWdPqix");
 
 export const LAUNCHPAD_PROGRAM = new PublicKey("LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj");
 export const LAUNCHPAD_AUTH = new PublicKey("WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh");
 
-export const DEV_LAUNCHPAD_PROGRAM = new PublicKey("LanD8FpTBBvzZFXjTxsAoipkFsxPUCDB4qAqKxYDiNP");
-export const DEV_LAUNCHPAD_AUTH = new PublicKey("HYNHiyKJ3gGVFvyxJAurK7qr7P2o5J9THmvCGMdULtpW");
-
 export const LAUNCHPAD_PLATFORM = new PublicKey("4Bu96XjU84XjPDSpveTVf6LYGCkfW5FK7SNkREWcEfV4");
-export const DEV_LAUNCHPAD_PLATFORM = new PublicKey("2Jx4KTDrVSdWNazuGpcA8n3ZLTRGGBDxAWhuKe2Xcj2a");
 
 export const LAUNCHPAD_CONFIG = new PublicKey("6s1xP3hpbAfFoNtUNF8mfHsjr2Bd97JxFJRWLbL6aHuX");
-export const DEV_LAUNCHPAD_CONFIG = new PublicKey("7ZR4zD7PYfY2XxoG1Gxcy2EgEeGYrpxrwzPuwdUBssEt");
 
 export const IDO_ALL_PROGRAM = {
   IDO_PROGRAM_ID_V1,
@@ -76,6 +62,7 @@ export const ALL_PROGRAM_ID = {
   CLMM_LOCK_AUTH_ID,
 
   FARM_PROGRAM_ID_V3,
+  FARM_PROGRAM_ID_V4,
   FARM_PROGRAM_ID_V5,
   FARM_PROGRAM_ID_V6,
 
@@ -107,43 +94,6 @@ export const ALL_PROGRAM_ID = {
 export type ProgramIdConfig = Partial<typeof ALL_PROGRAM_ID>;
 
 export const DEVNET_PROGRAM_ID: typeof ALL_PROGRAM_ID = {
-  AMM_V4: new PublicKey("HWy1jotHpo6UqeQxx49dpYYdQB8wj9Qk9MdxwjLvDHB8"),
-  AMM_STABLE: new PublicKey("DDg4VmQaJV9ogWce7LpcjBA9bv22wRp5uaTPa5pGjijF"),
-
-  CLMM_PROGRAM_ID: new PublicKey("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH"),
-  CLMM_LOCK_PROGRAM_ID: new PublicKey("DLockwT7X7sxtLmGH9g5kmfcjaBtncdbUmi738m5bvQC"),
-  CLMM_LOCK_AUTH_ID: new PublicKey("8qmHNvu2Kr2C7U8mJL4Vz1vTDxMhVuXKREwU7TNoaVEo"),
-
-  FARM_PROGRAM_ID_V3: new PublicKey("85BFyr98MbCUU9MVTEgzx1nbhWACbJqLzho6zd6DZcWL"),
-  FARM_PROGRAM_ID_V5: new PublicKey("EcLzTrNg9V7qhcdyXDe2qjtPkiGzDM2UbdRaeaadU5r2"),
-  FARM_PROGRAM_ID_V6: new PublicKey("Farm2hJLcqPtPg8M4rR6DMrsRNc5TPm5Cs4bVQrMe2T7"),
-
-  OPEN_BOOK_PROGRAM: new PublicKey("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj"),
-  SERUM_PROGRAM_ID_V3: PublicKey.default,
-
-  UTIL1216: PublicKey.default,
-
-  Router: new PublicKey("BVChZ3XFEwTMUk1o9i3HAf91H6mFxSwa5X2wFAWhYPhU"),
-
-  CREATE_CPMM_POOL_PROGRAM: DEV_CREATE_CPMM_POOL_PROGRAM,
-  CREATE_CPMM_POOL_AUTH: DEV_CREATE_CPMM_POOL_AUTH,
-  CREATE_CPMM_POOL_FEE_ACC: DEV_CREATE_CPMM_POOL_FEE_ACC,
-
-  LOCK_CPMM_PROGRAM: DEV_LOCK_CPMM_PROGRAM,
-  LOCK_CPMM_AUTH: DEV_LOCK_CPMM_AUTH,
-
-  LAUNCHPAD_PROGRAM: DEV_LAUNCHPAD_PROGRAM,
-  LAUNCHPAD_AUTH: DEV_LAUNCHPAD_AUTH,
-
-  LAUNCHPAD_PLATFORM: DEV_LAUNCHPAD_PLATFORM,
-  LAUNCHPAD_CONFIG: DEV_LAUNCHPAD_CONFIG,
-
-  FEE_DESTINATION_ID: new PublicKey("3XMrhbv989VxAMi3DErLV9eJht1pHppW5LbKxe9fkEFR"),
-
-  MODEL_DATA_PUBKEY: DEV_MODEL_DATA_PUBKEY,
-};
-
-export const UI_DEVNET_PROGRAM_ID: typeof ALL_PROGRAM_ID = {
   OPEN_BOOK_PROGRAM: new PublicKey("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj"),
   SERUM_PROGRAM_ID_V3: new PublicKey("Ray1111111111111111111111111111111111111111"),
   AMM_V4: new PublicKey("DRaya7Kj3aMWQSy19kSjvmuwq9docCHofyP9kanQGaav"),
@@ -165,16 +115,17 @@ export const UI_DEVNET_PROGRAM_ID: typeof ALL_PROGRAM_ID = {
   Router: new PublicKey("DRaybByLpbUL57LJARs3j8BitTxVfzBg351EaMr5UTCd"),
 
   FARM_PROGRAM_ID_V3: new PublicKey("DRayWyrLmEW5KEeqs8kdTMMaBabapqagaBC7KWpGtJeZ"),
+  FARM_PROGRAM_ID_V4: new PublicKey("Ray1111111111111111111111111111111111111111"),
   FARM_PROGRAM_ID_V5: new PublicKey("DRayiCGSZgku1GTK6rXD6mVDdingXy6APAH1R6R5L2LC"),
   FARM_PROGRAM_ID_V6: new PublicKey("DRayzbYakXs45ELHkzH6vC3fuhQqTAnv5A68gdFuvZyZ"),
 
   LAUNCHPAD_PROGRAM: new PublicKey("DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6"),
   LAUNCHPAD_AUTH: new PublicKey("5xqNaZXX5eUi4p5HU4oz9i5QnwRNT2y6oN7yyn4qENeq"),
 
-  LAUNCHPAD_PLATFORM: DEV_LAUNCHPAD_PLATFORM,
-  LAUNCHPAD_CONFIG: DEV_LAUNCHPAD_CONFIG,
+  LAUNCHPAD_PLATFORM: new PublicKey("2Jx4KTDrVSdWNazuGpcA8n3ZLTRGGBDxAWhuKe2Xcj2a"),
+  LAUNCHPAD_CONFIG: new PublicKey("7ZR4zD7PYfY2XxoG1Gxcy2EgEeGYrpxrwzPuwdUBssEt"),
 
   FEE_DESTINATION_ID: new PublicKey("9y8ENuuZ3b19quffx9hQvRVygG5ky6snHfRvGpuSfeJy"),
 
-  MODEL_DATA_PUBKEY: DEV_MODEL_DATA_PUBKEY,
+  MODEL_DATA_PUBKEY: new PublicKey("Ray1111111111111111111111111111111111111111"),
 };

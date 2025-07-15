@@ -6,7 +6,7 @@ import { FormatFarmKeyOut } from "../../api/type";
 import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
 import { BN_ZERO } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
-import { FARM_PROGRAM_ID_V6, UI_DEVNET_PROGRAM_ID } from "@/common/programId";
+import { FARM_PROGRAM_ID_V6, DEVNET_PROGRAM_ID } from "@/common/programId";
 import { SOLMint, solToWSol, WSOLMint } from "@/common/pubKey";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
@@ -509,7 +509,7 @@ export default class Farm extends ModuleBase {
 
     if (
       farmInfo.programId !== FARM_PROGRAM_ID_V6.toString() &&
-      farmInfo.programId !== UI_DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V6.toString() &&
+      farmInfo.programId !== DEVNET_PROGRAM_ID.FARM_PROGRAM_ID_V6.toString() &&
       !ledgerInfo
     ) {
       const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
