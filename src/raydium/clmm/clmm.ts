@@ -1646,6 +1646,9 @@ export class Clmm extends ModuleBase {
     txVersion,
     computeBudgetConfig,
     feePayer,
+    lockProgram = CLMM_LOCK_PROGRAM_ID,
+    lockAuth = CLMM_LOCK_AUTH_ID,
+    clmmProgram = CLMM_PROGRAM_ID,
   }: HarvestAllRewardsParams<T>): Promise<MakeMultiTxData<T>> {
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccountRawInfos) {
@@ -1836,12 +1839,12 @@ export class Clmm extends ModuleBase {
             itemPosition.tickLower,
             itemPosition.tickUpper,
           );
-          const lockPositionId = getPdaLockClPositionIdV2(CLMM_LOCK_PROGRAM_ID, lockData.lockNftMint).publicKey;
+          const lockPositionId = getPdaLockClPositionIdV2(lockProgram, lockData.lockNftMint).publicKey;
           const harvestLockIns = ClmmInstrument.harvestLockPositionInstructionV2({
-            programId: CLMM_LOCK_PROGRAM_ID,
-            auth: CLMM_LOCK_AUTH_ID,
+            programId: lockProgram,
+            auth: lockAuth,
             lockPositionId,
-            clmmProgram: CLMM_PROGRAM_ID,
+            clmmProgram,
             lockOwner: this.scope.ownerPubKey,
             lockNftMint: lockData.lockNftMint,
             lockNftAccount,
@@ -1858,7 +1861,7 @@ export class Clmm extends ModuleBase {
             mintA: new PublicKey(poolKeys.mintA.address),
             mintB: new PublicKey(poolKeys.mintB.address),
             rewardAccounts: rewardAccountsFullInfo,
-            exTickArrayBitmap: getPdaExBitmapAccount(CLMM_PROGRAM_ID, lockData.poolId).publicKey,
+            exTickArrayBitmap: getPdaExBitmapAccount(clmmProgram, lockData.poolId).publicKey,
           });
           txBuilder.addInstruction({
             instructions: [harvestLockIns],

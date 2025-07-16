@@ -609,6 +609,10 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+
+  lockProgram?: PublicKey;
+  lockAuth?: PublicKey;
+  clmmProgram?: PublicKey;
 }
 
 export interface TickArrayBitmapExtensionType {

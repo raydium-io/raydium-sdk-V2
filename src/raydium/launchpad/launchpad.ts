@@ -125,13 +125,12 @@ export default class LaunchpadModule extends ModuleBase {
     const { publicKey: vaultB } = getPdaLaunchpadVaultId(programId, poolId, mintB);
     const { publicKey: metaId } = getPdaMetadataKey(mintA);
 
-    console.log(
+    this.logDebug(
       `create token: ${mintA.toBase58()}, mintB: ${mintB.toBase58()}, decimals A:${decimals}/B:${mintBDecimals}, config:${configId.toBase58()}`,
     );
 
     if (symbol.length > 10) this.logAndCreateError("Symbol length should shorter than 11");
     if (!uri) this.logAndCreateError("uri should not empty");
-    if (buyAmount.lte(new BN(0))) this.logAndCreateError("buy amount should gt 0:", buyAmount.toString());
 
     const supply = extraConfigs?.supply ?? LaunchpadPoolInitParam.supply;
     const totalSellA = extraConfigs?.totalSellA ?? LaunchpadPoolInitParam.totalSellA;
@@ -206,7 +205,7 @@ export default class LaunchpadModule extends ModuleBase {
         config: configInfo!,
         migrateType,
       });
-      console.log("check init params success");
+      this.logDebug("check init params success");
     } catch (e: any) {
       this.logAndCreateError(`check create mint params failed, ${e.message}`);
     }
