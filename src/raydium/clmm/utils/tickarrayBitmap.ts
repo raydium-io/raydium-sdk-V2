@@ -182,7 +182,7 @@ export class TickArrayBitmapExtensionUtils {
     const tickArrayOffsetInBitmap = this.tickArrayOffsetInBitmap(nextTickArrayStartIndex, tickSpacing);
     if (zeroForOne) {
       // tick from upper to lower
-      // find from highter bits to lower bits
+      // find from higher bits to lower bits
       const offsetBitMap = TickUtils.mergeTickArrayBitmap(tickarrayBitmap).shln(
         TICK_ARRAY_BITMAP_SIZE - 1 - tickArrayOffsetInBitmap,
       );
@@ -198,7 +198,7 @@ export class TickArrayBitmapExtensionUtils {
       }
     } else {
       // tick from lower to upper
-      // find from lower bits to highter bits
+      // find from lower bits to higher bits
       const offsetBitMap = TickUtils.mergeTickArrayBitmap(tickarrayBitmap).shrn(tickArrayOffsetInBitmap);
 
       const nextBit = isZero(512, offsetBitMap) ? null : trailingZeros(512, offsetBitMap);
