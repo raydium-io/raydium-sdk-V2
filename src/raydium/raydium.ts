@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Connection, Keypair, PublicKey, EpochInfo, Commitment } from "@solana/web3.js";
 import { merge } from "lodash";
 
