@@ -2,7 +2,8 @@ import { PublicKey, Signer } from "@solana/web3.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../type";
 import { TxVersion } from "@/common";
 import BN from "bn.js";
-import { LaunchpadPool, LaunchpadConfig, PlatformConfig, LaunchpadVesting } from "./layout";
+import { LaunchpadPool, LaunchpadConfig, PlatformConfig } from "./layout";
+import { TransferFeeConfig } from "@solana/spl-token";
 
 export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   mintA: PublicKey;
@@ -45,10 +46,14 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   extraSigners?: Signer[];
+
+  token2022?: boolean;
+  transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN };
 }
 
 export interface BuyToken<T = TxVersion.LEGACY> {
   mintA: PublicKey;
+  mintAProgram?: PublicKey;
   buyAmount: BN;
 
   programId?: PublicKey; // default mainnet
@@ -69,10 +74,20 @@ export interface BuyToken<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  transferFeeConfigA?: TransferFeeConfig | undefined;
+  skipCheckMintA?: boolean;
+}
+
+export interface BuyTokenExactOut<T = TxVersion.LEGACY>
+  extends Omit<BuyToken, "buyAmount" | "minMintAAmount" | "txVersion"> {
+  maxBuyAmount?: BN;
+  outAmount: BN;
+  txVersion?: T;
 }
 
 export interface SellToken<T = TxVersion.LEGACY> {
   mintA: PublicKey;
+  mintAProgram?: PublicKey;
   sellAmount: BN;
   slippage?: BN;
 
@@ -94,6 +109,13 @@ export interface SellToken<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  skipCheckMintA?: boolean;
+}
+
+export interface SellTokenExactOut<T = TxVersion.LEGACY> extends Omit<SellToken, "sellAmount" | "txVersion"> {
+  maxSellAmount?: BN;
+  inAmount: BN;
+  txVersion?: T;
 }
 
 export interface CreatePlatform<T = TxVersion.LEGACY> {
@@ -110,6 +132,8 @@ export interface CreatePlatform<T = TxVersion.LEGACY> {
     burnScale: BN;
   };
 
+  transferFeeExtensionAuth: PublicKey;
+  creatorFeeRate: BN;
   feeRate: BN;
   name: string;
   web: string;
@@ -128,27 +152,30 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
   platformId?: PublicKey;
 
   updateInfo:
-  | { type: "updateClaimFeeWallet"; value: PublicKey }
-  | { type: "updateFeeRate"; value: BN }
-  | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
-  | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
-  | { type: 'updateCpConfigId', value: PublicKey }
-  | {
-    type: 'updateAll', value: {
-      platformClaimFeeWallet: PublicKey,
-      platformLockNftWallet: PublicKey,
-      cpConfigId: PublicKey,
-      migrateCpLockNftScale: {
-        platformScale: BN,
-        creatorScale: BN,
-        burnScale: BN,
-      },
-      feeRate: BN,
-      name: string,
-      web: string,
-      img: string,
-    }
-  };
+    | { type: "updateClaimFeeWallet" | "updateLockNftWallet"; value: PublicKey }
+    | { type: "updateFeeRate"; value: BN }
+    | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
+    | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
+    | { type: "updateCpConfigId"; value: PublicKey }
+    | {
+        type: "updateAll";
+        value: {
+          platformClaimFeeWallet: PublicKey;
+          platformLockNftWallet: PublicKey;
+          cpConfigId: PublicKey;
+          migrateCpLockNftScale: {
+            platformScale: BN;
+            creatorScale: BN;
+            burnScale: BN;
+          };
+          feeRate: BN;
+          name: string;
+          web: string;
+          img: string;
+          transferFeeExtensionAuth: PublicKey;
+          creatorFeeRate: BN;
+        };
+      };
 
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
@@ -236,6 +263,49 @@ export interface ClaimMultiVesting<T = TxVersion.LEGACY> {
   >;
 
   computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
+export interface ClaimVaultPlatformFee<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  platformId: PublicKey;
+  mintB: PublicKey;
+  mintBProgram?: PublicKey;
+
+  claimFeeWallet?: PublicKey;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
+export interface ClaimMultipleVaultPlatformFee<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  platformList: {
+    id: PublicKey;
+    mintB: PublicKey;
+    mintBProgram?: PublicKey;
+    claimFeeWallet?: PublicKey;
+  }[];
+
+  unwrapSol?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+}
+
+export interface ClaimCreatorFee<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  mintB: PublicKey;
+  mintBProgram?: PublicKey;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;
 }

@@ -1,7 +1,8 @@
 import BN from "bn.js";
 import Decimal from "decimal.js";
+import { LaunchpadPool } from "../layout";
 import { CurveBase, PoolBaseAmount } from "./curveBase";
-import { LaunchpadPoolInfo } from "../type";
+// import { ceilDivBN } from "./fee";
 import { ceilDivBN } from "@/common";
 
 export class FixedPriceCurve extends CurveBase {
@@ -10,7 +11,7 @@ export class FixedPriceCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -29,13 +30,12 @@ export class FixedPriceCurve extends CurveBase {
   }): Decimal {
     return new Decimal(b.toString()).div(a.toString()).mul(10 ** (decimalA - decimalB));
   }
-
   static getPoolPrice({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | { virtualA: BN; virtualB: BN; realA: BN; realB: BN };
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -62,13 +62,12 @@ export class FixedPriceCurve extends CurveBase {
       .div(supply.sub(totalSell).sub(totalLockedAmount).toString())
       .mul(10 ** (decimalA - decimalB));
   }
-
   static getPoolEndPriceReal({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -92,7 +91,7 @@ export class FixedPriceCurve extends CurveBase {
     totalFundRaising: BN;
     totalLockedAmount: BN;
     migrateFee: BN;
-  }): { a: BN; b: BN; c: BN } {
+  }) {
     const supplyMinusLocked = supply.sub(totalLockedAmount);
 
     if (supplyMinusLocked.lte(new BN(0))) throw Error("invalid input 1");
@@ -101,34 +100,60 @@ export class FixedPriceCurve extends CurveBase {
     const numerator = totalFundRaising.mul(supplyMinusLocked);
     const totalSellExpect = numerator.div(denominator);
 
-    // if (!totalSell.eq(totalSellExpect)) throw Error("invalid input 2");
+    // if (!totalSell.eq(totalSellExpect)) throw Error('invalid input 2')
+
+    if (totalSellExpect.lt(new BN(0)) || totalFundRaising.lt(new BN(0))) throw Error("invalid input 0");
 
     return { a: totalSellExpect, b: totalFundRaising, c: totalSellExpect };
   }
 
-  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountOut({ amountIn: amount, initInput: poolInfo.virtualB, initOutput: poolInfo.virtualA });
   }
 
-  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountIn({ amountOut: amount, initInput: poolInfo.virtualB, initOutput: poolInfo.virtualA });
   }
 
-  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static sellExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountOut({ amountIn: amount, initInput: poolInfo.virtualA, initOutput: poolInfo.virtualB });
   }
 
-  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static sellExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountIn({ amountOut: amount, initInput: poolInfo.virtualA, initOutput: poolInfo.virtualB });
   }
 
-  static getAmountOut({ amountIn, initInput, initOutput }: { amountIn: BN; initInput: BN; initOutput: BN }): BN {
+  static getAmountOut({ amountIn, initInput, initOutput }: { amountIn: BN; initInput: BN; initOutput: BN }) {
     const numerator = initOutput.mul(amountIn);
     const amountOut = numerator.div(initInput);
     return amountOut;
   }
 
-  static getAmountIn({ amountOut, initInput, initOutput }: { amountOut: BN; initInput: BN; initOutput: BN }): BN {
+  static getAmountIn({ amountOut, initInput, initOutput }: { amountOut: BN; initInput: BN; initOutput: BN }) {
     const numerator = initInput.mul(amountOut);
     const amountIn = ceilDivBN(numerator, initOutput);
     return amountIn;

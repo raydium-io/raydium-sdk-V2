@@ -1,7 +1,6 @@
 import BN from "bn.js";
 import { LaunchpadPool } from "../layout";
 import Decimal from "decimal.js";
-import { LaunchpadPoolInfo } from "../type";
 
 export interface PoolBaseAmount {
   virtualA: BN;
@@ -16,7 +15,7 @@ export class CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -35,13 +34,12 @@ export class CurveBase {
   }): Decimal {
     throw Error();
   }
-
   static getPoolPrice({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | { virtualA: BN; virtualB: BN; realA: BN; realB: BN };
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -66,13 +64,12 @@ export class CurveBase {
   }): Decimal {
     throw Error();
   }
-
   static getPoolEndPriceReal({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -95,18 +92,43 @@ export class CurveBase {
     throw Error();
   }
 
-  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     throw Error();
   }
 
-  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     throw Error();
   }
 
-  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static sellExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     throw Error();
   }
-  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+
+  static sellExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     throw Error();
   }
 }

@@ -1,17 +1,20 @@
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { Q64 } from "./constantProductCurve";
+import { LaunchpadPool } from "../layout";
+import { Q64 } from "@/raydium/clmm";
+import { CurveBase, PoolBaseAmount } from "./curveBase";
+// import { ceilDivBN } from "./fee";
+import { ceilDivBN } from "@/common";
 import { MathLaunch } from "./func";
 import { MaxU64 } from "@/raydium/clmm";
-import { LaunchpadPoolInfo } from "../type";
-import { CurveBase, PoolBaseAmount } from "./curveBase";
+
 export class LinearPriceCurve extends CurveBase {
   static getPoolInitPriceByPool({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -30,13 +33,12 @@ export class LinearPriceCurve extends CurveBase {
   }): Decimal {
     return new Decimal(0);
   }
-
   static getPoolPrice({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | { virtualA: BN; virtualB: BN; realA: BN; realB: BN };
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -65,13 +67,12 @@ export class LinearPriceCurve extends CurveBase {
       .div(supply.sub(totalSell).sub(totalLockedAmount).toString())
       .mul(10 ** (decimalA - decimalB));
   }
-
   static getPoolEndPriceReal({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -95,7 +96,7 @@ export class LinearPriceCurve extends CurveBase {
     totalLockedAmount: BN;
     totalFundRaising: BN;
     migrateFee: BN;
-  }): { a: BN; b: BN; c: BN } {
+  }) {
     const supplyMinusLocked = supply.sub(totalLockedAmount);
     if (supplyMinusLocked.lte(new BN(0))) throw Error("supplyMinusLocked need gt 0");
     const denominator = totalFundRaising.mul(new BN(3)).sub(migrateFee);
@@ -103,7 +104,7 @@ export class LinearPriceCurve extends CurveBase {
 
     const totalSellExpect = numerator.div(denominator);
 
-    // if (!totalSell.eq(totalSellExpect)) throw Error("invalid input");
+    // if (!totalSell.eq(totalSellExpect)) throw Error('invalid input')
 
     const totalSellSquared = totalSellExpect.mul(totalSellExpect);
     const a = totalFundRaising.mul(new BN(2)).mul(Q64).div(totalSellSquared);
@@ -112,10 +113,18 @@ export class LinearPriceCurve extends CurveBase {
 
     if (!MaxU64.gt(a)) throw Error("a need lt u64 max");
 
+    if (a.lt(new BN(0)) || totalSellExpect.lt(new BN(0))) throw Error("invalid input 0");
+
     return { a, b: new BN(0), c: totalSellExpect };
   }
 
-  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     const newQuote = poolInfo.realB.add(amount);
     const termInsideSqrt = new BN(2).mul(newQuote).mul(Q64).div(poolInfo.virtualA);
     const sqrtTerm = new BN(new Decimal(termInsideSqrt.toString()).sqrt().toFixed(0));
@@ -124,26 +133,39 @@ export class LinearPriceCurve extends CurveBase {
     return amountOut;
   }
 
-  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     const newBase = poolInfo.realA.add(amount);
     const newBaseSquared = newBase.mul(newBase);
-    const { div: _newQuoteDiv, mod: _newQuoteMod } = poolInfo.virtualA.mul(newBaseSquared).divmod(new BN(2).mul(Q64));
-    const newQuote = _newQuoteMod.isZero() ? _newQuoteDiv : _newQuoteDiv.add(new BN(1));
+    const newQuote = ceilDivBN(poolInfo.virtualA.mul(newBaseSquared), new BN(2).mul(Q64));
     return newQuote.sub(poolInfo.realB);
   }
 
-  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static sellExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     const newBase = poolInfo.realA.sub(amount);
     const newBaseSquared = newBase.mul(newBase);
-
-    const { div: _newQuoteDiv, mod: _newQuoteMod } = poolInfo.virtualA.mul(newBaseSquared).divmod(new BN(2).mul(Q64));
-
-    const newQuote = _newQuoteMod.isZero() ? _newQuoteDiv : _newQuoteDiv.add(new BN(1));
-
+    const newQuote = ceilDivBN(poolInfo.virtualA.mul(newBaseSquared), new BN(2).mul(Q64));
     return poolInfo.realB.sub(newQuote);
   }
 
-  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static sellExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     const newB = poolInfo.realB.sub(amount);
     const termInsideSqrt = new BN(2).mul(newB).mul(Q64).div(poolInfo.virtualA);
 

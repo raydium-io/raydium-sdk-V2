@@ -1,7 +1,7 @@
 import { PublicKey, SystemProgram, TransactionInstruction, AccountMeta } from "@solana/web3.js";
-import { ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
-import { publicKey, str, struct, u64, u8 } from "@/marshmallow";
+import { publicKey, str, struct, u64, u8, u16 } from "@/marshmallow";
 import { RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "@/common";
 import { getPdaCpiEvent } from "./pda";
 export const anchorDataBuf = {
@@ -16,6 +16,9 @@ export const anchorDataBuf = {
   createPlatformConfig: Buffer.from([176, 90, 196, 175, 253, 113, 220, 20]),
   claimPlatformFee: Buffer.from([156, 39, 208, 135, 76, 237, 61, 72]),
   updatePlaformConfig: Buffer.from([195, 60, 76, 129, 146, 45, 67, 143]),
+  initializeWithToken2022: Buffer.from([37, 190, 126, 222, 44, 154, 171, 17]),
+  claimPlatformFeeFromVault: Buffer.from([117, 241, 198, 168, 248, 218, 80, 29]),
+  claimCreatorFee: Buffer.from([26, 97, 138, 203, 132, 171, 141, 252]),
 };
 
 export function initialize(
@@ -32,8 +35,6 @@ export function initialize(
   vaultA: PublicKey,
   vaultB: PublicKey,
   metadataId: PublicKey,
-  tokenProgramA: PublicKey,
-  tokenProgramB: PublicKey,
 
   decimals: number,
   name: string,
@@ -50,8 +51,8 @@ export function initialize(
   cliffPeriod: BN,
   unlockPeriod: BN,
 ): TransactionInstruction {
-  const dataLayout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
-  const dataLayout3 = struct([u64("totalLockedAmount"), u64("cliffPeriod"), u64("unlockPeriod")]);
+  const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
+  const dataLyaout3 = struct([u64("totalLockedAmount"), u64("cliffPeriod"), u64("unlockPeriod")]);
 
   const dataLayout21 = struct([u8("index"), u64("supply"), u64("totalFundRaisingB"), u8("migrateType")]);
   const dataLayout22 = struct([
@@ -75,8 +76,8 @@ export function initialize(
     { pubkey: vaultB, isSigner: false, isWritable: true },
     { pubkey: metadataId, isSigner: false, isWritable: true },
 
-    { pubkey: tokenProgramA, isSigner: false, isWritable: false },
-    { pubkey: tokenProgramB, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
@@ -86,15 +87,16 @@ export function initialize(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-    Buffer.from(symbol, "utf-8").length +
-    Buffer.from(uri, "utf-8").length +
-    4 * 3 +
-    1,
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
   );
-  const data3 = Buffer.alloc(dataLayout3.span);
+  const data3 = Buffer.alloc(dataLyaout3.span);
+
   const data2 = Buffer.alloc(curveParam.type === "ConstantCurve" ? dataLayout22.span : dataLayout21.span);
 
-  dataLayout1.encode({ decimals, name, symbol, uri }, data1);
+  dataLyaout1.encode({ decimals, name, symbol, uri }, data1);
   if (curveParam.type === "ConstantCurve") {
     dataLayout22.encode({ index: 0, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
   } else if (curveParam.type === "FixedCurve") {
@@ -103,7 +105,7 @@ export function initialize(
     dataLayout21.encode({ index: 2, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
   }
 
-  dataLayout3.encode({ totalLockedAmount, cliffPeriod, unlockPeriod }, data3);
+  dataLyaout3.encode({ totalLockedAmount, cliffPeriod, unlockPeriod }, data3);
 
   return new TransactionInstruction({
     keys,
@@ -111,6 +113,113 @@ export function initialize(
     data: Buffer.from([...anchorDataBuf.initialize, ...data1, ...data2, ...data3]),
   });
 }
+
+export function initializeWithToken2022(
+  programId: PublicKey,
+
+  payer: PublicKey,
+  creator: PublicKey,
+  configId: PublicKey,
+  platformId: PublicKey,
+  auth: PublicKey,
+  poolId: PublicKey,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  vaultA: PublicKey,
+  vaultB: PublicKey,
+
+  decimals: number,
+  name: string,
+  symbol: string,
+  uri: string,
+
+  curveParam: ({ type: "ConstantCurve"; totalSellA: BN } | { type: "FixedCurve" } | { type: "LinearCurve" }) & {
+    migrateType: "amm" | "cpmm";
+    supply: BN;
+    totalFundRaisingB: BN;
+  },
+
+  totalLockedAmount: BN,
+  cliffPeriod: BN,
+  unlockPeriod: BN,
+
+  transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN },
+): TransactionInstruction {
+  const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
+  const dataLyaout3 = struct([
+    u64("totalLockedAmount"),
+    u64("cliffPeriod"),
+    u64("unlockPeriod"),
+    u8("transferFeeExtensionParamsOption"),
+    struct([u16("transferFeeBasePoints"), u64("maxinumFee")]).replicate("transferFeeExtensionParams"),
+  ]);
+
+  const dataLayout21 = struct([u8("index"), u64("supply"), u64("totalFundRaisingB"), u8("migrateType")]);
+  const dataLayout22 = struct([
+    u8("index"),
+    u64("supply"),
+    u64("totalSellA"),
+    u64("totalFundRaisingB"),
+    u8("migrateType"),
+  ]);
+
+  const keys: Array<AccountMeta> = [
+    { pubkey: payer, isSigner: true, isWritable: false },
+    { pubkey: creator, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: auth, isSigner: false, isWritable: false },
+    { pubkey: poolId, isSigner: false, isWritable: true },
+    { pubkey: mintA, isSigner: true, isWritable: true },
+    { pubkey: mintB, isSigner: false, isWritable: false },
+    { pubkey: vaultA, isSigner: false, isWritable: true },
+    { pubkey: vaultB, isSigner: false, isWritable: true },
+
+    { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
+    { pubkey: programId, isSigner: false, isWritable: false },
+  ];
+
+  const data1 = Buffer.alloc(
+    Buffer.from(name, "utf-8").length +
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
+  );
+  const data3 = Buffer.alloc(dataLyaout3.span);
+
+  const data2 = Buffer.alloc(curveParam.type === "ConstantCurve" ? dataLayout22.span : dataLayout21.span);
+
+  dataLyaout1.encode({ decimals, name, symbol, uri }, data1);
+  if (curveParam.type === "ConstantCurve") {
+    dataLayout22.encode({ index: 0, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  } else if (curveParam.type === "FixedCurve") {
+    dataLayout21.encode({ index: 1, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  } else if (curveParam.type === "LinearCurve") {
+    dataLayout21.encode({ index: 2, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  }
+
+  dataLyaout3.encode(
+    {
+      totalLockedAmount,
+      cliffPeriod,
+      unlockPeriod,
+      transferFeeExtensionParamsOption: transferFeeExtensionParams ? 1 : 0,
+      transferFeeExtensionParams: transferFeeExtensionParams ?? { transferFeeBasePoints: 0, maxinumFee: new BN(0) },
+    },
+    data3,
+  );
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: Buffer.from([...anchorDataBuf.initializeWithToken2022, ...data1, ...data2, ...data3]),
+  });
+}
+
 export function buyExactInInstruction(
   programId: PublicKey,
 
@@ -128,6 +237,9 @@ export function buyExactInInstruction(
   tokenProgramA: PublicKey,
   tokenProgramB: PublicKey,
 
+  platformClaimFeeVault: PublicKey,
+  creatorClaimFeeVault: PublicKey,
+
   amountB: BN,
   minAmountA: BN,
   shareFeeRate?: BN,
@@ -135,6 +247,7 @@ export function buyExactInInstruction(
   shareFeeReceiver?: PublicKey,
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountB"), u64("minAmountA"), u64("shareFeeRate")]);
+
   const keys: Array<AccountMeta> = [
     { pubkey: owner, isSigner: true, isWritable: false },
     { pubkey: auth, isSigner: false, isWritable: false },
@@ -151,6 +264,7 @@ export function buyExactInInstruction(
 
     { pubkey: tokenProgramA, isSigner: false, isWritable: false },
     { pubkey: tokenProgramB, isSigner: false, isWritable: false },
+
     { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
     { pubkey: programId, isSigner: false, isWritable: false },
   ];
@@ -158,10 +272,11 @@ export function buyExactInInstruction(
   if (shareFeeReceiver) {
     keys.push({ pubkey: shareFeeReceiver, isSigner: false, isWritable: true });
   }
-  console.log({
-    amountB: amountB.toString(),
-    minAmountA: minAmountA.toString(),
-  });
+
+  keys.push({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
+  keys.push({ pubkey: platformClaimFeeVault, isSigner: false, isWritable: true });
+  keys.push({ pubkey: creatorClaimFeeVault, isSigner: false, isWritable: true });
+
   const data = Buffer.alloc(dataLayout.span);
   dataLayout.encode(
     {
@@ -196,6 +311,9 @@ export function buyExactOutInstruction(
   tokenProgramA: PublicKey,
   tokenProgramB: PublicKey,
 
+  platformClaimFeeVault: PublicKey,
+  creatorClaimFeeVault: PublicKey,
+
   amountA: BN,
   maxAmountB: BN,
   shareFeeRate?: BN,
@@ -228,6 +346,10 @@ export function buyExactOutInstruction(
   if (shareFeeReceiver) {
     keys.push({ pubkey: shareFeeReceiver, isSigner: false, isWritable: true });
   }
+
+  keys.push({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
+  keys.push({ pubkey: platformClaimFeeVault, isSigner: false, isWritable: true });
+  keys.push({ pubkey: creatorClaimFeeVault, isSigner: false, isWritable: true });
 
   const data = Buffer.alloc(dataLayout.span);
   dataLayout.encode(
@@ -263,6 +385,9 @@ export function sellExactInInstruction(
   tokenProgramA: PublicKey,
   tokenProgramB: PublicKey,
 
+  platformClaimFeeVault: PublicKey,
+  creatorClaimFeeVault: PublicKey,
+
   amountA: BN,
   minAmountB: BN,
   shareFeeRate?: BN,
@@ -270,6 +395,7 @@ export function sellExactInInstruction(
   shareFeeReceiver?: PublicKey,
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountA"), u64("minAmountB"), u64("shareFeeRate")]);
+
   const keys: Array<AccountMeta> = [
     { pubkey: owner, isSigner: true, isWritable: false },
     { pubkey: auth, isSigner: false, isWritable: false },
@@ -286,6 +412,7 @@ export function sellExactInInstruction(
 
     { pubkey: tokenProgramA, isSigner: false, isWritable: false },
     { pubkey: tokenProgramB, isSigner: false, isWritable: false },
+
     { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
     { pubkey: programId, isSigner: false, isWritable: false },
   ];
@@ -293,6 +420,10 @@ export function sellExactInInstruction(
   if (shareFeeReceiver) {
     keys.push({ pubkey: shareFeeReceiver, isSigner: false, isWritable: true });
   }
+
+  keys.push({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
+  keys.push({ pubkey: platformClaimFeeVault, isSigner: false, isWritable: true });
+  keys.push({ pubkey: creatorClaimFeeVault, isSigner: false, isWritable: true });
 
   const data = Buffer.alloc(dataLayout.span);
   dataLayout.encode(
@@ -328,6 +459,9 @@ export function sellExactOut(
   tokenProgramA: PublicKey,
   tokenProgramB: PublicKey,
 
+  platformClaimFeeVault: PublicKey,
+  creatorClaimFeeVault: PublicKey,
+
   amountB: BN,
   maxAmountA: BN,
   shareFeeRate?: BN,
@@ -360,6 +494,10 @@ export function sellExactOut(
   if (shareFeeReceiver) {
     keys.push({ pubkey: shareFeeReceiver, isSigner: false, isWritable: true });
   }
+
+  keys.push({ pubkey: SystemProgram.programId, isSigner: false, isWritable: false });
+  keys.push({ pubkey: platformClaimFeeVault, isSigner: false, isWritable: true });
+  keys.push({ pubkey: creatorClaimFeeVault, isSigner: false, isWritable: true });
 
   const data = Buffer.alloc(dataLayout.span);
   dataLayout.encode(
@@ -401,9 +539,8 @@ export function claimVestedToken(
 
     { pubkey: vestingRecord, isSigner: false, isWritable: true },
 
-    { pubkey: vaultA, isSigner: false, isWritable: true },
     { pubkey: userTokenAccountA, isSigner: false, isWritable: true },
-
+    { pubkey: vaultA, isSigner: false, isWritable: true },
     { pubkey: mintA, isSigner: false, isWritable: false },
     { pubkey: tokenProgramA, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -464,7 +601,7 @@ export function claimPlatformFee(
   tokenProgramB: PublicKey,
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
-    { pubkey: platformClaimFeeWallet, isSigner: true, isWritable: true },
+    { pubkey: platformClaimFeeWallet, isSigner: true, isWritable: false },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
     { pubkey: platformId, isSigner: false, isWritable: true },
@@ -493,12 +630,15 @@ export function createPlatformConfig(
 
   cpConfigId: PublicKey,
 
+  transferFeeExtensionAuth: PublicKey,
+
   migrateCpLockNftScale: {
     platformScale: BN;
     creatorScale: BN;
     burnScale: BN;
   },
   feeRate: BN,
+  creatorFeeRate: BN,
   name: string,
   web: string,
   img: string,
@@ -512,6 +652,7 @@ export function createPlatformConfig(
     str("name"),
     str("web"),
     str("img"),
+    u64("creatorFeeRate"),
   ]);
 
   const keys: Array<AccountMeta> = [
@@ -521,14 +662,15 @@ export function createPlatformConfig(
     { pubkey: platformId, isSigner: false, isWritable: true },
     { pubkey: cpConfigId, isSigner: false, isWritable: true },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: transferFeeExtensionAuth, isSigner: false, isWritable: false },
   ];
 
   const data = Buffer.alloc(
-    8 * 4 +
-    Buffer.from(name, "utf-8").length +
-    Buffer.from(web, "utf-8").length +
-    Buffer.from(img, "utf-8").length +
-    4 * 3,
+    8 * 5 +
+      Buffer.from(name, "utf-8").length +
+      Buffer.from(web, "utf-8").length +
+      Buffer.from(img, "utf-8").length +
+      4 * 3,
   );
   dataLayout.encode(
     {
@@ -539,6 +681,7 @@ export function createPlatformConfig(
       name,
       web,
       img,
+      creatorFeeRate,
     },
     data,
   );
@@ -561,23 +704,26 @@ export function updatePlatformConfig(
     | { type: "updateFeeRate"; value: BN }
     | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
     | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
-    | { type: 'updateCpConfigId', value: PublicKey }
+    | { type: "updateCpConfigId"; value: PublicKey }
     | {
-      type: 'updateAll', value: {
-        platformClaimFeeWallet: PublicKey,
-        platformLockNftWallet: PublicKey,
-        cpConfigId: PublicKey,
-        migrateCpLockNftScale: {
-          platformScale: BN,
-          creatorScale: BN,
-          burnScale: BN,
-        },
-        feeRate: BN,
-        name: string,
-        web: string,
-        img: string,
-      }
-    },
+        type: "updateAll";
+        value: {
+          platformClaimFeeWallet: PublicKey;
+          platformLockNftWallet: PublicKey;
+          cpConfigId: PublicKey;
+          migrateCpLockNftScale: {
+            platformScale: BN;
+            creatorScale: BN;
+            burnScale: BN;
+          };
+          feeRate: BN;
+          name: string;
+          web: string;
+          img: string;
+          transferFeeExtensionAuth: PublicKey;
+          creatorFeeRate: BN;
+        };
+      },
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: false },
@@ -603,46 +749,61 @@ export function updatePlatformConfig(
     dataLayout.encode({ index: 3, value: updateInfo.value }, data);
   } else if (updateInfo.type === "updateImg" || updateInfo.type === "updateName" || updateInfo.type === "updateWeb") {
     const dataLayout = struct([u8("index"), str("value")]);
-    data = Buffer.alloc(Buffer.from(updateInfo.value, 'utf-8').length + 4 + 1 * 1);
+    data = Buffer.alloc(Buffer.from(updateInfo.value, "utf-8").length + 4 + 1 * 1);
     if (updateInfo.type === "updateName") dataLayout.encode({ index: 4, value: updateInfo.value }, data);
     else if (updateInfo.type === "updateWeb") dataLayout.encode({ index: 5, value: updateInfo.value }, data);
     else if (updateInfo.type === "updateImg") dataLayout.encode({ index: 6, value: updateInfo.value }, data);
-  } else if (updateInfo.type === 'updateCpConfigId') {
-    keys.push({ pubkey: updateInfo.value, isSigner: false, isWritable: false })
+  } else if (updateInfo.type === "updateCpConfigId") {
+    keys.push({ pubkey: updateInfo.value, isSigner: false, isWritable: false });
 
-    const dataLayout = struct([u8('index')])
-    data = Buffer.alloc(dataLayout.span)
-    dataLayout.encode({ index: 7 }, data)
-  } else if (updateInfo.type === 'updateAll') {
-    console.log('Please note that this update will overwrite all data in the platform account with the new data.')
-    keys.push({ pubkey: updateInfo.value.cpConfigId, isSigner: false, isWritable: false })
+    const dataLayout = struct([u8("index")]);
+    data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ index: 7 }, data);
+  } else if (updateInfo.type === "updateAll") {
+    keys.push({ pubkey: updateInfo.value.cpConfigId, isSigner: false, isWritable: false });
 
     const dataLayout = struct([
-      u8('index'),
-      publicKey('platformClaimFeeWallet'),
-      publicKey('platformLockNftWallet'),
-      u64('platformScale'),
-      u64('creatorScale'),
-      u64('burnScale'),
+      u8("index"),
+      publicKey("platformClaimFeeWallet"),
+      publicKey("platformLockNftWallet"),
+      u64("platformScale"),
+      u64("creatorScale"),
+      u64("burnScale"),
 
-      u64('feeRate'),
-      str('name'),
-      str('web'),
-      str('img'),
-    ])
-    data = Buffer.alloc(1 + 32 + 32 + 8 * 4 + 4 * 3 + Buffer.from(updateInfo.value.name, 'utf-8').length + Buffer.from(updateInfo.value.web, 'utf-8').length + Buffer.from(updateInfo.value.img, 'utf-8').length)
-    dataLayout.encode({
-      index: 8,
-      platformClaimFeeWallet: updateInfo.value.platformClaimFeeWallet,
-      platformLockNftWallet: updateInfo.value.platformLockNftWallet,
-      platformScale: updateInfo.value.migrateCpLockNftScale.platformScale,
-      creatorScale: updateInfo.value.migrateCpLockNftScale.creatorScale,
-      burnScale: updateInfo.value.migrateCpLockNftScale.burnScale,
-      feeRate: updateInfo.value.feeRate,
-      name: updateInfo.value.name,
-      web: updateInfo.value.web,
-      img: updateInfo.value.img,
-    }, data)
+      u64("feeRate"),
+      str("name"),
+      str("web"),
+      str("img"),
+      publicKey("transferFeeExtensionAuth"),
+      u64("creatorFeeRate"),
+    ]);
+    data = Buffer.alloc(
+      1 +
+        32 +
+        32 +
+        8 * 4 +
+        4 * 3 +
+        Buffer.from(updateInfo.value.name, "utf-8").length +
+        Buffer.from(updateInfo.value.web, "utf-8").length +
+        Buffer.from(updateInfo.value.img, "utf-8").length,
+    );
+    dataLayout.encode(
+      {
+        index: 8,
+        platformClaimFeeWallet: updateInfo.value.platformClaimFeeWallet,
+        platformLockNftWallet: updateInfo.value.platformLockNftWallet,
+        platformScale: updateInfo.value.migrateCpLockNftScale.platformScale,
+        creatorScale: updateInfo.value.migrateCpLockNftScale.creatorScale,
+        burnScale: updateInfo.value.migrateCpLockNftScale.burnScale,
+        feeRate: updateInfo.value.feeRate,
+        name: updateInfo.value.name,
+        web: updateInfo.value.web,
+        img: updateInfo.value.img,
+        transferFeeExtensionAuth: updateInfo.value.transferFeeExtensionAuth,
+        creatorFeeRate: updateInfo.value.creatorFeeRate,
+      },
+      data,
+    );
   } else {
     throw Error("updateInfo params type error");
   }
@@ -651,5 +812,64 @@ export function updatePlatformConfig(
     keys,
     programId,
     data: Buffer.from([...anchorDataBuf.updatePlaformConfig, ...data]),
+  });
+}
+
+export function claimPlatformFeeFromVault(
+  programId: PublicKey,
+  platformId: PublicKey,
+  platformClaimFeeWallet: PublicKey,
+  platformClaimFeeAuth: PublicKey,
+  platformClaimFeeVault: PublicKey,
+  recipientTokenAccount: PublicKey,
+  mintB: PublicKey,
+  mintProgramB: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: platformClaimFeeWallet, isSigner: true, isWritable: true },
+    { pubkey: platformClaimFeeAuth, isSigner: false, isWritable: false },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: platformClaimFeeVault, isSigner: false, isWritable: true },
+    { pubkey: recipientTokenAccount, isSigner: false, isWritable: true },
+    { pubkey: mintB, isSigner: false, isWritable: false },
+
+    { pubkey: mintProgramB, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+  ];
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.claimPlatformFeeFromVault,
+  });
+}
+
+export function claimCreatorFee(
+  programId: PublicKey,
+
+  creator: PublicKey,
+  creatorClaimFeeAuth: PublicKey,
+  creatorClaimFeeVault: PublicKey,
+  recipientTokenAccount: PublicKey,
+  mintB: PublicKey,
+  mintProgramB: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: creator, isSigner: true, isWritable: true },
+    { pubkey: creatorClaimFeeAuth, isSigner: false, isWritable: false },
+    { pubkey: creatorClaimFeeVault, isSigner: false, isWritable: true },
+    { pubkey: recipientTokenAccount, isSigner: false, isWritable: true },
+    { pubkey: mintB, isSigner: false, isWritable: false },
+
+    { pubkey: mintProgramB, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+  ];
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.claimCreatorFee,
   });
 }

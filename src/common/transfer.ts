@@ -164,3 +164,72 @@ export function ceilDivBN(amountA: BN, amountB: BN): BN {
   }
   return quotient;
 }
+
+export function getTransferAmountFeeFromPre(
+  amount: BN,
+  feeConfig: TransferFeeConfig | undefined,
+  slot: number,
+): GetTransferAmountFee {
+  if (feeConfig === undefined) {
+    return {
+      amount,
+      fee: undefined,
+      expirationTime: undefined,
+    };
+  }
+  const epoch = Math.floor(slot / 432000);
+  const nowFeeConfig: TransferFee =
+    epoch < feeConfig.newerTransferFee.epoch ? feeConfig.olderTransferFee : feeConfig.newerTransferFee;
+  const maxFee = new BN(nowFeeConfig.maximumFee.toString());
+  const expirationTime: number | undefined =
+    epoch < feeConfig.newerTransferFee.epoch
+      ? ((Number(feeConfig.newerTransferFee.epoch) * 432000 - slot) * 400) / 1000
+      : undefined;
+  const _fee = BNDivCeil(amount.mul(new BN(nowFeeConfig.transferFeeBasisPoints)), new BN(POINT));
+  const fee = _fee.gt(maxFee) ? maxFee : _fee;
+  return {
+    amount,
+    fee,
+    expirationTime,
+  };
+}
+export function getTransferAmountFeeFromPost(
+  amount: BN,
+  feeConfig: TransferFeeConfig | undefined,
+  slot: number,
+): GetTransferAmountFee {
+  if (feeConfig === undefined) {
+    return {
+      amount,
+      fee: undefined,
+      expirationTime: undefined,
+    };
+  }
+  const epoch = Math.floor(slot / 432000);
+  const nowFeeConfig: TransferFee =
+    epoch < feeConfig.newerTransferFee.epoch ? feeConfig.olderTransferFee : feeConfig.newerTransferFee;
+  const maxFee = new BN(nowFeeConfig.maximumFee.toString());
+  const expirationTime: number | undefined =
+    epoch < feeConfig.newerTransferFee.epoch
+      ? ((Number(feeConfig.newerTransferFee.epoch) * 432000 - slot) * 400) / 1000
+      : undefined;
+  if (nowFeeConfig.transferFeeBasisPoints === POINT) {
+    const nowMaxFee = new BN(nowFeeConfig.maximumFee.toString());
+    return {
+      amount: amount.add(nowMaxFee),
+      fee: nowMaxFee,
+      expirationTime,
+    };
+  } else {
+    const _TAmount = BNDivCeil(amount.mul(new BN(POINT)), new BN(POINT - nowFeeConfig.transferFeeBasisPoints));
+    const nowMaxFee = new BN(nowFeeConfig.maximumFee.toString());
+    const TAmount = _TAmount.sub(amount).gt(nowMaxFee) ? amount.add(nowMaxFee) : _TAmount;
+    const _fee = BNDivCeil(TAmount.mul(new BN(nowFeeConfig.transferFeeBasisPoints)), new BN(POINT));
+    const fee = _fee.gt(maxFee) ? maxFee : _fee;
+    return {
+      amount: TAmount,
+      fee,
+      expirationTime,
+    };
+  }
+}

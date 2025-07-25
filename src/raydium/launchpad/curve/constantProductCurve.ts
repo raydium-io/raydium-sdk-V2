@@ -1,18 +1,16 @@
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { ceilDivBN } from "@/common";
+import { LaunchpadPool } from "../layout";
 import { CurveBase, PoolBaseAmount } from "./curveBase";
-import { Q64 } from "@/raydium/clmm";
-import { LaunchpadPoolInfo } from "../type";
-export { Q64 };
+import { ceilDivBN } from "@/common";
 
-export class LaunchPadConstantProductCurve extends CurveBase {
+export class LaunchConstantProductCurve extends CurveBase {
   static getPoolInitPriceByPool({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -31,13 +29,12 @@ export class LaunchPadConstantProductCurve extends CurveBase {
   }): Decimal {
     return new Decimal(b.toString()).div(a.toString()).mul(10 ** (decimalA - decimalB));
   }
-
   static getPoolPrice({
     poolInfo,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
   }): Decimal {
@@ -72,12 +69,16 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
     decimalA: number;
     decimalB: number;
   }): Decimal {
     const allSellToken = poolInfo.totalSellA.sub(poolInfo.realA);
     const buyAllTokenUseB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+    //  allSellToken.isZero() ? new BN(0) : this.buyExactOut({
+    //   amount: poolInfo.totalSellA.sub(poolInfo.realA),
+    //   poolInfo,
+    // })
 
     return new Decimal(poolInfo.virtualB.add(poolInfo.realB.add(buyAllTokenUseB)).toString())
       .div(poolInfo.virtualA.sub(poolInfo.realA.add(allSellToken)).toString())
@@ -96,7 +97,11 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     totalLockedAmount: BN;
     totalFundRaising: BN;
     migrateFee: BN;
-  }): { a: BN; b: BN; c: BN } {
+  }): {
+    a: BN;
+    b: BN;
+    c: BN;
+  } {
     if (supply.lte(totalSell)) throw Error("supply need gt total sell");
     const supplyMinusSellLocked = supply.sub(totalSell).sub(totalLockedAmount);
     if (supplyMinusSellLocked.lte(new BN(0))) throw Error("supplyMinusSellLocked <= 0");
@@ -104,13 +109,10 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     const tfMinusMf = totalFundRaising.sub(migrateFee);
     if (tfMinusMf.lte(new BN(0))) throw Error("tfMinusMf <= 0");
 
-    // const migratePriceX64 = tfMinusMf.mul(Q64).div(supplyMinusSellLocked);
+    // const migratePriceX64 = tfMinusMf.mul(Q64).div(supplyMinusSellLocked)
 
     const numerator = tfMinusMf.mul(totalSell).mul(totalSell).div(supplyMinusSellLocked);
     const denominator = tfMinusMf.mul(totalSell).div(supplyMinusSellLocked).sub(totalFundRaising);
-
-    if (denominator.lt(new BN(0))) throw Error("supply/totalSell/totalLockedAmount diff too high");
-
     const x0 = numerator.div(denominator);
     const y0 = totalFundRaising.mul(totalFundRaising).div(denominator);
 
@@ -123,7 +125,13 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     };
   }
 
-  static buyExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountOut({
       amountIn: amount,
       inputReserve: poolInfo.virtualB.add(poolInfo.realB),
@@ -131,7 +139,13 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     });
   }
 
-  static buyExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static buyExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountIn({
       amountOut: amount,
       inputReserve: poolInfo.virtualB.add(poolInfo.realB),
@@ -139,7 +153,13 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     });
   }
 
-  static sellExactIn({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static sellExactIn({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountOut({
       amountIn: amount,
       inputReserve: poolInfo.virtualA.sub(poolInfo.realA),
@@ -147,7 +167,13 @@ export class LaunchPadConstantProductCurve extends CurveBase {
     });
   }
 
-  static sellExactOut({ poolInfo, amount }: { poolInfo: LaunchpadPoolInfo | PoolBaseAmount; amount: BN }): BN {
+  static sellExactOut({
+    poolInfo,
+    amount,
+  }: {
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
+    amount: BN;
+  }): BN {
     return this.getAmountIn({
       amountOut: amount,
       inputReserve: poolInfo.virtualA.sub(poolInfo.realA),

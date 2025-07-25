@@ -7,12 +7,14 @@ export const LaunchpadConfig = struct([
   u16("index"),
   u64("migrateFee"),
   u64("tradeFeeRate"),
+
   u64("maxShareFeeRate"),
   u64("minSupplyA"),
   u64("maxLockRate"),
   u64("minSellRateA"),
   u64("minMigrateRateA"),
   u64("minFundRaisingB"),
+
   publicKey("mintB"),
   publicKey("protocolFeeOwner"),
   publicKey("migrateFeeOwner"),
@@ -21,7 +23,7 @@ export const LaunchpadConfig = struct([
   seq(u64(), 16),
 ]);
 
-export const LaunchpadVestingSchedule = struct([
+export const VestingSchedule = struct([
   u64("totalLockedAmount"),
   u64("cliffPeriod"),
   u64("unlockPeriod"),
@@ -44,13 +46,12 @@ export const LaunchpadPool = struct([
   u64("virtualB"),
   u64("realA"),
   u64("realB"),
-
   u64("totalFundRaisingB"),
   u64("protocolFee"),
   u64("platformFee"),
   u64("migrateFee"),
 
-  LaunchpadVestingSchedule.replicate("vestingSchedule"),
+  VestingSchedule.replicate("vestingSchedule"),
 
   publicKey("configId"),
   publicKey("platformId"),
@@ -61,7 +62,8 @@ export const LaunchpadPool = struct([
 
   publicKey("creator"),
 
-  seq(u64(), 8),
+  u8("mintProgramFlag"),
+  seq(u8(), 63),
 ]);
 
 export const LaunchpadVesting = struct([
@@ -86,6 +88,8 @@ export const PlatformConfig = struct([
   seq(u8(), 64, "name"),
   seq(u8(), 256, "web"),
   seq(u8(), 256, "img"),
-  publicKey('cpConfigId'),
-  seq(u8(), 224),
+  publicKey("cpConfigId"),
+  u64("creatorFeeRate"),
+  publicKey("transferFeeExtensionAuth"),
+  seq(u8(), 184),
 ]);

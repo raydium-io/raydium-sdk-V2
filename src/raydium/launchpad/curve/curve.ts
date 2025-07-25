@@ -1,12 +1,21 @@
+import { TransferFeeConfig } from "@solana/spl-token";
 import BN from "bn.js";
-import { LaunchPadConstantProductCurve } from "./constantProductCurve";
-import { FixedPriceCurve } from "./fixedPriceCurve";
-import { CurveBase, PoolBaseAmount } from "./curveBase";
-import { LaunchpadConfigInfo, LaunchpadPoolInfo } from "../type";
-import { FEE_RATE_DENOMINATOR_VALUE } from "@/common/fee";
-import { LinearPriceCurve } from "./linearPriceCurve";
-import { ceilDiv } from "@/common/bignumber";
 import Decimal from "decimal.js";
+import { GetTransferAmountFee } from "@/raydium/type";
+import { getTransferAmountFeeFromPre, getTransferAmountFeeFromPost } from "@/common";
+import { LaunchpadConfig, LaunchpadPool } from "../layout";
+import { LaunchConstantProductCurve } from "./constantProductCurve";
+import { CurveBase, PoolBaseAmount } from "./curveBase";
+// import { ceilDiv, FEE_RATE_DENOMINATOR_VALUE } from "./fee";
+import { ceilDiv, FEE_RATE_DENOMINATOR_VALUE } from "@/common";
+import { FixedPriceCurve } from "./fixedPriceCurve";
+import { LinearPriceCurve } from "./linearPriceCurve";
+
+export interface SwapInfoReturn {
+  amountA: GetTransferAmountFee;
+  amountB: BN;
+  splitFee: ReturnType<typeof Curve.splitFee>;
+}
 
 export class Curve {
   static getPoolCurvePointByPoolInfo({
@@ -15,7 +24,7 @@ export class Curve {
     poolInfo,
   }: {
     curveType: number;
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
     pointCount: number;
   }): {
     price: Decimal;
@@ -33,7 +42,6 @@ export class Curve {
       decimalB: poolInfo.mintDecimalsB,
     });
   }
-
   static getPoolCurvePointByInit({
     curveType,
     pointCount,
@@ -88,8 +96,11 @@ export class Curve {
         platformFeeRate: zero,
         curveType,
         shareFeeRate: zero,
+        creatorFeeRate: zero,
+        transferFeeConfigA: undefined,
+        slot: 0,
       });
-      realA = realA.add(itemBuy.amountA);
+      realA = realA.add(itemBuy.amountA.amount);
       realB = realB.add(itemBuy.amountB);
 
       const nowPoolPrice = this.getPrice({
@@ -113,7 +124,7 @@ export class Curve {
     decimalB,
     curveType,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     decimalA: number;
     decimalB: number;
     curveType: number;
@@ -137,29 +148,27 @@ export class Curve {
     const curve = this.getCurve(curveType);
     return curve.getPoolInitPriceByInit({ a, b, decimalA, decimalB });
   }
-
   static getPrice({
     poolInfo,
     curveType,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
-    curveType: number;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | { virtualA: BN; virtualB: BN; realA: BN; realB: BN };
     decimalA: number;
     decimalB: number;
+    curveType: number;
   }): Decimal {
     const curve = this.getCurve(curveType);
     return curve.getPoolPrice({ poolInfo, decimalA, decimalB });
   }
-
   static getEndPrice({
     poolInfo,
     curveType,
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
     curveType: number;
     decimalA: number;
     decimalB: number;
@@ -173,7 +182,7 @@ export class Curve {
     decimalA,
     decimalB,
   }: {
-    poolInfo: LaunchpadPoolInfo;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode>;
     curveType: number;
     decimalA: number;
     decimalB: number;
@@ -196,7 +205,7 @@ export class Curve {
     totalLockedAmount: BN;
     totalFundRaising: BN;
     decimals: number;
-    config: LaunchpadConfigInfo;
+    config: ReturnType<typeof LaunchpadConfig.decode>;
     migrateType: "amm" | "cpmm";
   }): void {
     if (Number(decimals) !== 6) throw Error("decimals = 6");
@@ -212,7 +221,7 @@ export class Curve {
     const amountMigrate = supply.sub(totalSell).sub(totalLockedAmount);
     const minAmountMigrate = supply.mul(config.minMigrateRateA).div(FEE_RATE_DENOMINATOR_VALUE);
 
-    if (amountMigrate.lt(minAmountMigrate)) throw Error("migrate lt min migrate amount");
+    if (amountMigrate.lt(minAmountMigrate)) throw Error("migrate lt min migrate amoount");
 
     const migrateAmountA = supply.sub(totalSell).sub(totalLockedAmount);
     const liquidity = new BN(new Decimal(migrateAmountA.mul(totalFundRaising).toString()).sqrt().toFixed(0));
@@ -238,19 +247,22 @@ export class Curve {
     platformFeeRate,
     curveType,
     shareFeeRate,
+    creatorFeeRate,
+    transferFeeConfigA,
+    slot,
   }: {
-    poolInfo: LaunchpadPoolInfo | (PoolBaseAmount & { totalSellA: BN; totalFundRaisingB: BN });
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | (PoolBaseAmount & { totalSellA: BN; totalFundRaisingB: BN });
     amountB: BN;
     protocolFeeRate: BN;
     platformFeeRate: BN;
     curveType: number;
     shareFeeRate: BN;
-  }): {
-    amountA: BN;
-    amountB: BN;
-    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
-  } {
-    const feeRate = protocolFeeRate.add(shareFeeRate).add(platformFeeRate);
+    creatorFeeRate: BN;
+
+    transferFeeConfigA: TransferFeeConfig | undefined;
+    slot: number;
+  }): SwapInfoReturn {
+    const feeRate = this.totalFeeRate({ protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
     const _totalFee = this.calculateFee({ amount: amountB, feeRate });
 
     const amountLessFeeB = amountB.sub(_totalFee);
@@ -266,7 +278,7 @@ export class Curve {
     let totalFee: BN;
     if (_amountA.gt(remainingAmountA)) {
       amountA = remainingAmountA;
-      // const amountLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
+
       const amountLessFeeB = curve.buyExactOut({
         poolInfo,
         amount: amountA,
@@ -280,9 +292,13 @@ export class Curve {
       totalFee = _totalFee;
     }
 
-    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
 
-    return { amountA, amountB: realAmountB, splitFee };
+    return {
+      amountA: getTransferAmountFeeFromPre(amountA, transferFeeConfigA, slot),
+      amountB: realAmountB,
+      splitFee,
+    };
   }
 
   /**
@@ -295,72 +311,79 @@ export class Curve {
     platformFeeRate,
     curveType,
     shareFeeRate,
+    creatorFeeRate,
+    transferFeeConfigA,
+    slot,
   }: {
-    poolInfo: LaunchpadPoolInfo | (PoolBaseAmount & { totalSellA: BN; totalFundRaisingB: BN });
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | (PoolBaseAmount & { totalSellA: BN; totalFundRaisingB: BN });
     amountA: BN;
     protocolFeeRate: BN;
     platformFeeRate: BN;
     curveType: number;
     shareFeeRate: BN;
-  }): {
-    amountA: BN;
-    amountB: BN;
-    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
-  } {
+    creatorFeeRate: BN;
+
+    transferFeeConfigA: TransferFeeConfig | undefined;
+    slot: number;
+  }): SwapInfoReturn {
     const remainingAmountA = poolInfo.totalSellA.sub(poolInfo.realA);
 
-    let realAmountA = amountA;
-    // const amountInLessFeeB;
+    const preAmountA = getTransferAmountFeeFromPost(amountA, transferFeeConfigA, slot);
+    let realAmountA = preAmountA.fee ? preAmountA.amount.add(preAmountA.fee) : preAmountA.amount;
     if (amountA.gt(remainingAmountA)) {
       realAmountA = remainingAmountA;
-      // amountInLessFeeB = poolInfo.totalFundRaisingB.sub(poolInfo.realB);
-    } else {
-      // const curve = this.getCurve(curveType);
-      // amountInLessFeeB = curve.buyExactOut({ poolInfo, amount: amountA });
     }
 
     const curve = this.getCurve(curveType);
-    const amountInLessFeeB = curve.buyExactOut({ poolInfo, amount: amountA });
-    const totalFeeRate = protocolFeeRate.add(shareFeeRate).add(platformFeeRate);
+    const amountInLessFeeB = curve.buyExactOut({ poolInfo, amount: realAmountA });
+
+    const totalFeeRate = this.totalFeeRate({ protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
 
     const amountB = this.calculatePreFee({ postFeeAmount: amountInLessFeeB, feeRate: totalFeeRate });
     const totalFee = amountB.sub(amountInLessFeeB);
 
-    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
 
-    return { amountA: realAmountA, amountB, splitFee };
+    return { amountA: preAmountA, amountB, splitFee };
   }
 
   static sellExactIn({
     poolInfo,
-    amountA,
+    amountA: _amountA,
     protocolFeeRate,
     platformFeeRate,
     curveType,
     shareFeeRate,
+    creatorFeeRate,
+    transferFeeConfigA,
+    slot,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     amountA: BN;
     protocolFeeRate: BN;
     platformFeeRate: BN;
     curveType: number;
     shareFeeRate: BN;
-  }): {
-    amountA: BN;
-    amountB: BN;
-    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
-  } {
+    creatorFeeRate: BN;
+
+    transferFeeConfigA: TransferFeeConfig | undefined;
+    slot: number;
+  }): SwapInfoReturn {
     const curve = this.getCurve(curveType);
 
+    const amountInfoA = getTransferAmountFeeFromPre(_amountA, transferFeeConfigA, slot);
+    const amountA = amountInfoA.fee ? amountInfoA.amount.sub(amountInfoA.fee) : amountInfoA.amount;
+
     const amountB = curve.sellExactIn({ poolInfo, amount: amountA });
+
     const totalFee = this.calculateFee({
       amount: amountB,
-      feeRate: protocolFeeRate.add(shareFeeRate).add(platformFeeRate),
+      feeRate: this.totalFeeRate({ protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate }),
     });
 
-    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
 
-    return { amountA, amountB: amountB.sub(totalFee), splitFee };
+    return { amountA: amountInfoA, amountB: amountB.sub(totalFee), splitFee };
   }
 
   static sellExactOut({
@@ -370,19 +393,22 @@ export class Curve {
     platformFeeRate,
     curveType,
     shareFeeRate,
+    creatorFeeRate,
+    transferFeeConfigA,
+    slot,
   }: {
-    poolInfo: LaunchpadPoolInfo | PoolBaseAmount;
+    poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     amountB: BN;
     protocolFeeRate: BN;
     platformFeeRate: BN;
     curveType: number;
     shareFeeRate: BN;
-  }): {
-    amountA: BN;
-    amountB: BN;
-    splitFee: { platformFee: BN; shareFee: BN; protocolFee: BN };
-  } {
-    const totalFeeRate = protocolFeeRate.add(shareFeeRate).add(platformFeeRate);
+    creatorFeeRate: BN;
+
+    transferFeeConfigA: TransferFeeConfig | undefined;
+    slot: number;
+  }): SwapInfoReturn {
+    const totalFeeRate = this.totalFeeRate({ protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
 
     const amountOutWithFeeB = this.calculatePreFee({ postFeeAmount: amountB, feeRate: totalFeeRate });
     if (poolInfo.realB.lt(amountOutWithFeeB)) throw Error("Insufficient liquidity");
@@ -394,9 +420,9 @@ export class Curve {
 
     if (amountA.gt(poolInfo.realA)) throw Error();
 
-    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate });
+    const splitFee = this.splitFee({ totalFee, protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
 
-    return { amountA, amountB, splitFee };
+    return { amountA: getTransferAmountFeeFromPost(amountA, transferFeeConfigA, slot), amountB, splitFee };
   }
 
   static splitFee({
@@ -404,18 +430,22 @@ export class Curve {
     protocolFeeRate,
     platformFeeRate,
     shareFeeRate,
+    creatorFeeRate,
   }: {
     totalFee: BN;
     protocolFeeRate: BN;
     platformFeeRate: BN;
     shareFeeRate: BN;
-  }): { platformFee: BN; shareFee: BN; protocolFee: BN } {
-    const totalFeeRate = protocolFeeRate.add(platformFeeRate).add(shareFeeRate);
+    creatorFeeRate: BN;
+  }): { platformFee: BN; shareFee: BN; protocolFee: BN; creatorFee: BN } {
+    const totalFeeRate = this.totalFeeRate({ protocolFeeRate, platformFeeRate, shareFeeRate, creatorFeeRate });
     const platformFee = totalFeeRate.isZero() ? new BN(0) : totalFee.mul(platformFeeRate).div(totalFeeRate);
     const shareFee = totalFeeRate.isZero() ? new BN(0) : totalFee.mul(shareFeeRate).div(totalFeeRate);
-    const protocolFee = totalFee.sub(platformFee).sub(shareFee);
+    const creatorFee = totalFeeRate.isZero() ? new BN(0) : totalFee.mul(creatorFeeRate).div(totalFeeRate);
 
-    return { platformFee, shareFee, protocolFee };
+    const protocolFee = totalFee.sub(platformFee).sub(shareFee).sub(creatorFee);
+
+    return { platformFee, shareFee, protocolFee, creatorFee };
   }
 
   static calculateFee({ amount, feeRate }: { amount: BN; feeRate: BN }): BN {
@@ -430,10 +460,26 @@ export class Curve {
     return numerator.add(denominator).sub(new BN(1)).div(denominator);
   }
 
+  static totalFeeRate({
+    protocolFeeRate,
+    platformFeeRate,
+    shareFeeRate,
+    creatorFeeRate,
+  }: {
+    protocolFeeRate: BN;
+    platformFeeRate: BN;
+    shareFeeRate: BN;
+    creatorFeeRate: BN;
+  }): BN {
+    const totalFeeRate = protocolFeeRate.add(platformFeeRate).add(shareFeeRate).add(creatorFeeRate);
+    if (totalFeeRate.gt(new BN(1_000_000))) throw Error("total fee rate gt 1_000_000");
+    return protocolFeeRate.add(platformFeeRate).add(shareFeeRate).add(creatorFeeRate);
+  }
+
   static getCurve(curveType: number): typeof CurveBase {
     switch (curveType) {
       case 0:
-        return LaunchPadConstantProductCurve;
+        return LaunchConstantProductCurve;
       case 1:
         return FixedPriceCurve;
       case 2:
