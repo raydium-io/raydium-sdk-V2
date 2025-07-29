@@ -1,5 +1,10 @@
 import { EpochInfo, PublicKey } from "@solana/web3.js";
-import { createTransferInstruction, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import {
+  createTransferInstruction,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  createTransferCheckedInstruction,
+} from "@solana/spl-token";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { AmmV4Keys, ApiV3Token, ClmmKeys, PoolKeys } from "@/api";
@@ -278,15 +283,30 @@ export default class TradeV2 extends ModuleBase {
 
     if (swapInfo.feeConfig !== undefined) {
       const checkTxBuilder = this.createTxBuilder();
-      checkTxBuilder.addInstruction({
-        instructions: [
-          createTransferInstruction(
+
+      // Use createTransferCheckedInstruction for Token2022, createTransferInstruction for regular tokens
+      const transferInstruction = amountIn.amount.token.isToken2022
+        ? createTransferCheckedInstruction(
+            sourceAcc,
+            amountIn.amount.token.mint, // mint parameter required for checked transfer
+            swapInfo.feeConfig.feeAccount,
+            this.scope.ownerPubKey,
+            swapInfo.feeConfig.feeAmount.toNumber(),
+            amountIn.amount.token.decimals, // decimals parameter required for checked transfer
+            [],
+            TOKEN_2022_PROGRAM_ID,
+          )
+        : createTransferInstruction(
             sourceAcc,
             swapInfo.feeConfig.feeAccount,
             this.scope.ownerPubKey,
             swapInfo.feeConfig.feeAmount.toNumber(),
-          ),
-        ],
+            [],
+            TOKEN_PROGRAM_ID,
+          );
+
+      checkTxBuilder.addInstruction({
+        instructions: [transferInstruction],
         instructionTypes: [InstructionType.TransferAmount],
       });
       checkTxBuilder.addInstruction(swapIns);
@@ -295,14 +315,7 @@ export default class TradeV2 extends ModuleBase {
         txVersion === TxVersion.V0 ? await checkTxBuilder.sizeCheckBuildV0() : await checkTxBuilder.sizeCheckBuild();
       if (transactions.length < 2) {
         txBuilder.addInstruction({
-          instructions: [
-            createTransferInstruction(
-              sourceAcc,
-              swapInfo.feeConfig.feeAccount,
-              this.scope.ownerPubKey,
-              swapInfo.feeConfig.feeAmount.toNumber(),
-            ),
-          ],
+          instructions: [transferInstruction],
           instructionTypes: [InstructionType.TransferAmount],
         });
       }
