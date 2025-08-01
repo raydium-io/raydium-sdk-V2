@@ -94,7 +94,7 @@ export class TickQuery {
       [nextTick, tickArrayAddress, tickArrayStartTickIndex] = [_nextTick, _tickArrayAddress, _tickArrayStartTickIndex];
     }
     if (nextTick == undefined) {
-      throw new Error("No invaild tickArray cache");
+      throw new Error("No invalid tickArray cache");
     }
     return { nextTick, tickArrayAddress, tickArrayStartTickIndex };
   }

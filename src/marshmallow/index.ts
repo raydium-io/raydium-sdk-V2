@@ -41,7 +41,7 @@ export class BNLayout<P extends string = ""> extends Layout<BN, P> {
 
   /** @override */
   encode(src: BN, b: Buffer, offset = 0): number {
-    if (typeof src === "number") src = new BN(src); // src will pass a number accidently in union
+    if (typeof src === "number") src = new BN(src); // src will pass a number accidentally in union
     if (this.signed) {
       src = src.toTwos(this.span * 8);
     }
