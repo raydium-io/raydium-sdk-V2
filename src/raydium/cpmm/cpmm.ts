@@ -969,6 +969,7 @@ export default class CpmmModule extends ModuleBase {
 
     const feePayer = params.feePayer || this.scope.ownerPubKey;
     const txBuilder = this.createTxBuilder(feePayer);
+    const tokenAccRecord: Record<string, PublicKey | undefined> = {};
 
     lockInfo.forEach(async (lockData) => {
       const { poolInfo, lpFeeAmount, nftMint } = lockData;
@@ -979,71 +980,79 @@ export default class CpmmModule extends ModuleBase {
       const mintAUseSOLBalance = mintA.equals(WSOLMint);
       const mintBUseSOLBalance = mintB.equals(WSOLMint);
 
-      let tokenAccountA: PublicKey | undefined = undefined;
-      let tokenAccountB: PublicKey | undefined = undefined;
+      let tokenAccountA: PublicKey | undefined = tokenAccRecord[poolInfo.mintA.address];
+      let tokenAccountB: PublicKey | undefined = tokenAccRecord[poolInfo.mintB.address];
 
-      if (mintAUseSOLBalance) {
-        const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
-          await this.scope.account.getOrCreateTokenAccount({
-            tokenProgram: poolInfo.mintA.programId,
-            mint: new PublicKey(poolInfo.mintA.address),
-            notUseTokenAccount: true,
-            owner: this.scope.ownerPubKey,
-            createInfo: {
-              payer: this.scope.ownerPubKey,
-              amount: 0,
-            },
-            skipCloseAccount: !closeWsol,
-            associatedOnly: false,
-            checkCreateATAOwner: false,
+      if (!tokenAccountA) {
+        if (mintAUseSOLBalance) {
+          const { account: _ownerTokenAccountA, instructionParams: accountAInstructions } =
+            await this.scope.account.getOrCreateTokenAccount({
+              tokenProgram: poolInfo.mintA.programId,
+              mint: new PublicKey(poolInfo.mintA.address),
+              notUseTokenAccount: true,
+              owner: this.scope.ownerPubKey,
+              createInfo: {
+                payer: this.scope.ownerPubKey,
+                amount: 0,
+              },
+              skipCloseAccount: !closeWsol,
+              associatedOnly: false,
+              checkCreateATAOwner: false,
+            });
+          tokenAccountA = _ownerTokenAccountA;
+          accountAInstructions && txBuilder.addInstruction(accountAInstructions);
+          tokenAccRecord[poolInfo.mintA.address] = _ownerTokenAccountA;
+        } else {
+          const mint = new PublicKey(poolInfo.mintA.address);
+          tokenAccountA = this.scope.account.getAssociatedTokenAccount(mint, new PublicKey(poolInfo.mintA.programId));
+          txBuilder.addInstruction({
+            instructions: [
+              createAssociatedTokenAccountIdempotentInstruction(
+                this.scope.ownerPubKey,
+                tokenAccountA,
+                this.scope.ownerPubKey,
+                mint,
+              ),
+            ],
           });
-        tokenAccountA = _ownerTokenAccountA;
-        accountAInstructions && txBuilder.addInstruction(accountAInstructions);
-      } else {
-        const mint = new PublicKey(poolInfo.mintA.address);
-        tokenAccountA = this.scope.account.getAssociatedTokenAccount(mint, new PublicKey(poolInfo.mintA.programId));
-        txBuilder.addInstruction({
-          instructions: [
-            createAssociatedTokenAccountIdempotentInstruction(
-              this.scope.ownerPubKey,
-              tokenAccountA,
-              this.scope.ownerPubKey,
-              mint,
-            ),
-          ],
-        });
+          tokenAccRecord[poolInfo.mintA.address] = tokenAccountA;
+        }
       }
 
-      if (mintBUseSOLBalance) {
-        const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
-          await this.scope.account.getOrCreateTokenAccount({
-            tokenProgram: poolInfo.mintB.programId,
-            mint: new PublicKey(poolInfo.mintB.address),
-            notUseTokenAccount: true,
-            owner: this.scope.ownerPubKey,
-            createInfo: {
-              payer: this.scope.ownerPubKey,
-              amount: 0,
-            },
-            skipCloseAccount: !closeWsol,
-            associatedOnly: false,
-            checkCreateATAOwner: false,
+      if (!tokenAccountB) {
+        if (mintBUseSOLBalance) {
+          const { account: _ownerTokenAccountB, instructionParams: accountBInstructions } =
+            await this.scope.account.getOrCreateTokenAccount({
+              tokenProgram: poolInfo.mintB.programId,
+              mint: new PublicKey(poolInfo.mintB.address),
+              notUseTokenAccount: true,
+              owner: this.scope.ownerPubKey,
+              createInfo: {
+                payer: this.scope.ownerPubKey,
+                amount: 0,
+              },
+              skipCloseAccount: !closeWsol,
+              associatedOnly: false,
+              checkCreateATAOwner: false,
+            });
+          tokenAccountB = _ownerTokenAccountB;
+          accountBInstructions && txBuilder.addInstruction(accountBInstructions);
+          tokenAccRecord[poolInfo.mintB.address] = _ownerTokenAccountB;
+        } else {
+          const mint = new PublicKey(poolInfo.mintB.address);
+          tokenAccountB = this.scope.account.getAssociatedTokenAccount(mint, new PublicKey(poolInfo.mintB.programId));
+          txBuilder.addInstruction({
+            instructions: [
+              createAssociatedTokenAccountIdempotentInstruction(
+                this.scope.ownerPubKey,
+                tokenAccountB,
+                this.scope.ownerPubKey,
+                mint,
+              ),
+            ],
           });
-        tokenAccountB = _ownerTokenAccountB;
-        accountBInstructions && txBuilder.addInstruction(accountBInstructions);
-      } else {
-        const mint = new PublicKey(poolInfo.mintB.address);
-        tokenAccountB = this.scope.account.getAssociatedTokenAccount(mint, new PublicKey(poolInfo.mintB.programId));
-        txBuilder.addInstruction({
-          instructions: [
-            createAssociatedTokenAccountIdempotentInstruction(
-              this.scope.ownerPubKey,
-              tokenAccountB,
-              this.scope.ownerPubKey,
-              mint,
-            ),
-          ],
-        });
+          tokenAccRecord[poolInfo.mintB.address] = tokenAccountB;
+        }
       }
 
       if (!tokenAccountA || !tokenAccountB)
@@ -1091,13 +1100,9 @@ export default class CpmmModule extends ModuleBase {
       });
     });
 
-    // txBuilder.addCustomComputeBudget(computeBudgetConfig);
-    // txBuilder.addTipInstruction(txTipConfig);
-
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    // return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData>;
   }
 
   public computeSwapAmount({
