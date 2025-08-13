@@ -32,18 +32,20 @@ function checkedCeilDiv(dividend: BN, rhs: BN): BN[] {
 const ZERO = new BN(0);
 
 export class ConstantProductCurve {
-  static swapWithoutFees(sourceAmount: BN, swapSourceAmount: BN, swapDestinationAmount: BN): SwapWithoutFeesResult {
-    const invariant = swapSourceAmount.mul(swapDestinationAmount);
+  static swapBaseInputWithoutFees(inputAmount: BN, inputVaultAmount: BN, onputVaultAmount: BN): BN {
+    const numerator = inputAmount.mul(onputVaultAmount);
+    const denominator = inputVaultAmount.add(inputAmount);
 
-    const newSwapSourceAmount = swapSourceAmount.add(sourceAmount);
-    const [newSwapDestinationAmount] = checkedCeilDiv(invariant, newSwapSourceAmount);
+    const outputAmount = numerator.div(denominator);
+    return outputAmount;
+  }
 
-    const destinationAmountSwapped = swapDestinationAmount.sub(newSwapDestinationAmount);
-    if (destinationAmountSwapped.isZero()) throw Error("destinationAmountSwapped is zero");
+  static swapBaseOutputWithoutFees(outputAmount: BN, inputVaultAmount: BN, onputVaultAmount: BN): BN {
+    const numerator = inputVaultAmount.mul(outputAmount);
+    const denominator = onputVaultAmount.sub(outputAmount);
+    const [inputAmount] = checkedCeilDiv(numerator, denominator);
 
-    return {
-      destinationAmountSwapped,
-    };
+    return inputAmount;
   }
 
   static lpTokensToTradingTokens(

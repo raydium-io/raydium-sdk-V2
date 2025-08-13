@@ -2,10 +2,14 @@ import { PublicKey, SystemProgram, TransactionInstruction, AccountMeta } from "@
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import BN from "bn.js";
 import { publicKey, str, struct, u64, u8, u16 } from "@/marshmallow";
-import { RENT_PROGRAM_ID, METADATA_PROGRAM_ID } from "@/common";
+import { RENT_PROGRAM_ID, METADATA_PROGRAM_ID, DEVNET_PROGRAM_ID } from "@/common";
 import { getPdaCpiEvent } from "./pda";
+import { CpmmCreatorFeeOn } from "./type";
+import { BondingCurveParam } from "./layout";
 export const anchorDataBuf = {
   initialize: Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]),
+  initializeV2: Buffer.from([67, 153, 175, 39, 218, 16, 38, 32]),
+
   buyExactIn: Buffer.from([250, 234, 13, 123, 213, 156, 19, 236]),
   buyExactOut: Buffer.from([24, 211, 116, 40, 105, 3, 153, 56]),
   sellExactIn: Buffer.from([149, 39, 222, 155, 211, 124, 152, 26]),
@@ -19,6 +23,9 @@ export const anchorDataBuf = {
   initializeWithToken2022: Buffer.from([37, 190, 126, 222, 44, 154, 171, 17]),
   claimPlatformFeeFromVault: Buffer.from([117, 241, 198, 168, 248, 218, 80, 29]),
   claimCreatorFee: Buffer.from([26, 97, 138, 203, 132, 171, 141, 252]),
+
+  updatePlatformCurveParam: Buffer.from([138, 144, 138, 250, 220, 128, 4, 57]),
+  removePlatformCurveParam: Buffer.from([27, 30, 62, 169, 93, 224, 24, 145]),
 };
 
 export function initialize(
@@ -51,6 +58,8 @@ export function initialize(
   cliffPeriod: BN,
   unlockPeriod: BN,
 ): TransactionInstruction {
+  if (programId.equals(DEVNET_PROGRAM_ID.LAUNCHPAD_PROGRAM))
+    console.log("*** launchlab initialize has been deprecated, please use initializeV2 instead! ***");
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([u64("totalLockedAmount"), u64("cliffPeriod"), u64("unlockPeriod")]);
 
@@ -114,6 +123,106 @@ export function initialize(
   });
 }
 
+export function initializeV2(
+  programId: PublicKey,
+
+  payer: PublicKey,
+  creator: PublicKey,
+  configId: PublicKey,
+  platformId: PublicKey,
+  auth: PublicKey,
+  poolId: PublicKey,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  vaultA: PublicKey,
+  vaultB: PublicKey,
+  metadataId: PublicKey,
+
+  decimals: number,
+  name: string,
+  symbol: string,
+  uri: string,
+
+  curveParam: ({ type: "ConstantCurve"; totalSellA: BN } | { type: "FixedCurve" } | { type: "LinearCurve" }) & {
+    migrateType: "amm" | "cpmm";
+    supply: BN;
+    totalFundRaisingB: BN;
+  },
+
+  totalLockedAmount: BN,
+  cliffPeriod: BN,
+  unlockPeriod: BN,
+
+  cpmmCreatorFeeOn: CpmmCreatorFeeOn,
+): TransactionInstruction {
+  const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
+  const dataLyaout3 = struct([
+    u64("totalLockedAmount"),
+    u64("cliffPeriod"),
+    u64("unlockPeriod"),
+    u8("cpmmCreatorFeeOn"),
+  ]);
+
+  const dataLayout21 = struct([u8("index"), u64("supply"), u64("totalFundRaisingB"), u8("migrateType")]);
+  const dataLayout22 = struct([
+    u8("index"),
+    u64("supply"),
+    u64("totalSellA"),
+    u64("totalFundRaisingB"),
+    u8("migrateType"),
+  ]);
+
+  const keys: Array<AccountMeta> = [
+    { pubkey: payer, isSigner: true, isWritable: false },
+    { pubkey: creator, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: auth, isSigner: false, isWritable: false },
+    { pubkey: poolId, isSigner: false, isWritable: true },
+    { pubkey: mintA, isSigner: true, isWritable: true },
+    { pubkey: mintB, isSigner: false, isWritable: false },
+    { pubkey: vaultA, isSigner: false, isWritable: true },
+    { pubkey: vaultB, isSigner: false, isWritable: true },
+    { pubkey: metadataId, isSigner: false, isWritable: true },
+
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
+    { pubkey: programId, isSigner: false, isWritable: false },
+  ];
+
+  const data1 = Buffer.alloc(
+    Buffer.from(name, "utf-8").length +
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
+  );
+  const data3 = Buffer.alloc(dataLyaout3.span);
+
+  const data2 = Buffer.alloc(curveParam.type === "ConstantCurve" ? dataLayout22.span : dataLayout21.span);
+
+  dataLyaout1.encode({ decimals, name, symbol, uri }, data1);
+  if (curveParam.type === "ConstantCurve") {
+    dataLayout22.encode({ index: 0, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  } else if (curveParam.type === "FixedCurve") {
+    dataLayout21.encode({ index: 1, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  } else if (curveParam.type === "LinearCurve") {
+    dataLayout21.encode({ index: 2, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
+  }
+
+  dataLyaout3.encode({ totalLockedAmount, cliffPeriod, unlockPeriod, cpmmCreatorFeeOn }, data3);
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: Buffer.from([...anchorDataBuf.initializeV2, ...data1, ...data2, ...data3]),
+  });
+}
+
 export function initializeWithToken2022(
   programId: PublicKey,
 
@@ -143,6 +252,7 @@ export function initializeWithToken2022(
   cliffPeriod: BN,
   unlockPeriod: BN,
 
+  cpmmCreatorFeeOn: CpmmCreatorFeeOn,
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN },
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
@@ -150,6 +260,7 @@ export function initializeWithToken2022(
     u64("totalLockedAmount"),
     u64("cliffPeriod"),
     u64("unlockPeriod"),
+    u8("cpmmCreatorFeeOn"),
     u8("transferFeeExtensionParamsOption"),
     struct([u16("transferFeeBasePoints"), u64("maxinumFee")]).replicate("transferFeeExtensionParams"),
   ]);
@@ -207,6 +318,7 @@ export function initializeWithToken2022(
       totalLockedAmount,
       cliffPeriod,
       unlockPeriod,
+      cpmmCreatorFeeOn,
       transferFeeExtensionParamsOption: transferFeeExtensionParams ? 1 : 0,
       transferFeeExtensionParams: transferFeeExtensionParams ?? { transferFeeBasePoints: 0, maxinumFee: new BN(0) },
     },
@@ -871,5 +983,55 @@ export function claimCreatorFee(
     keys,
     programId,
     data: anchorDataBuf.claimCreatorFee,
+  });
+}
+
+export function updatePlatformCurveParamInstruction(
+  programId: PublicKey,
+
+  platformAdmin: PublicKey,
+  platformId: PublicKey,
+  configId: PublicKey,
+
+  index: number,
+  params: ReturnType<typeof BondingCurveParam.decode>,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: platformAdmin, isSigner: true, isWritable: false },
+    { pubkey: platformId, isSigner: false, isWritable: true },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  const data = Buffer.alloc(2 * 2 + 8 * 6 + u8().span);
+  u8().encode(index, data);
+  BondingCurveParam.encode(params, data, 1);
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: Buffer.from([...anchorDataBuf.updatePlatformCurveParam, ...data]),
+  });
+}
+
+export function removePlatformCurveParamInstruction(
+  programId: PublicKey,
+
+  platformAdmin: PublicKey,
+  platformId: PublicKey,
+  index: number,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: platformAdmin, isSigner: true, isWritable: false },
+    { pubkey: platformId, isSigner: false, isWritable: true },
+  ];
+
+  const data = Buffer.alloc(u8().span);
+  u8().encode(index, data);
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: Buffer.from([...anchorDataBuf.removePlatformCurveParam, ...data, 1, 2]),
   });
 }

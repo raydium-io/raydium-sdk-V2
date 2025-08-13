@@ -49,6 +49,8 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
 
   token2022?: boolean;
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN };
+  creatorFeeOn?: CpmmCreatorFeeOn;
+  initV2?: boolean;
 }
 
 export interface BuyToken<T = TxVersion.LEGACY> {
@@ -313,3 +315,7 @@ export interface ClaimCreatorFee<T = TxVersion.LEGACY> {
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;
 export type LaunchpadConfigInfo = ReturnType<typeof LaunchpadConfig.decode>;
 export type LaunchpadPlatformInfo = ReturnType<typeof PlatformConfig.decode>;
+export enum CpmmCreatorFeeOn {
+  OnlyTokenB,
+  BothToken,
+}

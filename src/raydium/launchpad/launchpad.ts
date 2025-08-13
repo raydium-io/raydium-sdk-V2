@@ -6,6 +6,7 @@ import {
   getMultipleAccountsInfoWithCustomFlags,
   getATAAddress,
   MakeMultiTxData,
+  DEVNET_PROGRAM_ID,
 } from "@/common";
 import {
   BuyToken,
@@ -17,6 +18,7 @@ import {
   ClaimPlatformFee,
   ClaimVaultPlatformFee,
   ClaimVesting,
+  CpmmCreatorFeeOn,
   CreateLaunchPad,
   CreateMultipleVesting,
   CreatePlatform,
@@ -52,6 +54,7 @@ import {
   sellExactOut,
   claimPlatformFeeFromVault,
   claimCreatorFee,
+  initializeV2,
 } from "./instrument";
 import {
   NATIVE_MINT,
@@ -132,12 +135,16 @@ export default class LaunchpadModule extends ModuleBase {
 
     token2022,
     transferFeeExtensionParams,
+    creatorFeeOn = CpmmCreatorFeeOn.OnlyTokenB,
+    initV2,
     ...extraConfigs
   }: CreateLaunchPad<T>): Promise<
     MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; swapInfo: SwapInfoReturnExt }>
   > {
     const txBuilder = this.createTxBuilder(feePayer);
     authProgramId = authProgramId ?? getPdaLaunchpadAuth(programId).publicKey;
+
+    initV2 = initV2 ?? programId.equals(DEVNET_PROGRAM_ID.LAUNCHPAD_PROGRAM) ? true : false;
 
     token2022 = !!transferFeeExtensionParams;
     if (token2022) migrateType = "cpmm";
@@ -217,6 +224,7 @@ export default class LaunchpadModule extends ModuleBase {
         totalAllocatedShare: new BN(0),
       },
       mintProgramFlag: token2022 ? 1 : 0,
+      cpmmCreatorFeeOn: creatorFeeOn,
     };
 
     const initCurve = Curve.getCurve(configInfo!.curveType);
@@ -281,7 +289,47 @@ export default class LaunchpadModule extends ModuleBase {
               totalLockedAmount,
               extraConfigs?.cliffPeriod ?? new BN(0),
               extraConfigs?.unlockPeriod ?? new BN(0),
+              creatorFeeOn,
               transferFeeExtensionParams,
+            )
+          : initV2
+          ? initializeV2(
+              programId,
+              feePayer ?? this.scope.ownerPubKey,
+              this.scope.ownerPubKey,
+              configId,
+              platformId,
+              authProgramId,
+              poolId,
+              mintA,
+              mintB,
+              vaultA,
+              vaultB,
+              metaId,
+
+              decimals,
+              name,
+              symbol,
+              uri || "https://",
+
+              {
+                type:
+                  curType === 0
+                    ? "ConstantCurve"
+                    : curType === 1
+                    ? "FixedCurve"
+                    : curType === 2
+                    ? "LinearCurve"
+                    : "ConstantCurve",
+                totalSellA,
+                migrateType,
+                supply,
+                totalFundRaisingB,
+              },
+              totalLockedAmount,
+              extraConfigs?.cliffPeriod ?? new BN(0),
+              extraConfigs?.unlockPeriod ?? new BN(0),
+              creatorFeeOn,
             )
           : initialize(
               programId,

@@ -1,4 +1,4 @@
-import { publicKey, seq, struct, u16, u64, u8 } from "../../marshmallow";
+import { bool, option, publicKey, seq, struct, u16, u64, u8, u32, vec } from "../../marshmallow";
 
 export const LaunchpadConfig = struct([
   u64(),
@@ -63,7 +63,9 @@ export const LaunchpadPool = struct([
   publicKey("creator"),
 
   u8("mintProgramFlag"),
-  seq(u8(), 63),
+  u8("cpmmCreatorFeeOn"),
+
+  seq(u8(), 62),
 ]);
 
 export const LaunchpadVesting = struct([
@@ -74,6 +76,27 @@ export const LaunchpadVesting = struct([
   u64("claimedAmount"),
   u64("tokenShareAmount"),
   seq(u64(), 8),
+]);
+
+export const BondingCurveParam = struct([
+  option(u8(), "migrateType"),
+  option(u8(), "migrateCpmmFeeOn"),
+  option(u64(), "supply"),
+  option(u64(), "totalSellA"),
+  option(u64(), "totalFundRaisingB"),
+
+  option(u64(), "totalLockedAmount"),
+  option(u64(), "cliffPeriod"),
+  option(u64(), "unlockPeriod"),
+]);
+
+export const PlatformCurveParam = struct([
+  u64("epoch"),
+  u8("index"),
+  publicKey("configId"),
+
+  BondingCurveParam.replicate("bondingCurveParam"),
+  seq(u64(), 50),
 ]);
 
 export const PlatformConfig = struct([
@@ -91,5 +114,7 @@ export const PlatformConfig = struct([
   publicKey("cpConfigId"),
   u64("creatorFeeRate"),
   publicKey("transferFeeExtensionAuth"),
-  seq(u8(), 184),
+  seq(u8(), 180),
+
+  vec(PlatformCurveParam, "platformCurve"),
 ]);

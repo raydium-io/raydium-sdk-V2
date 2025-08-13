@@ -19,6 +19,7 @@ export interface CpmmConfigInfoInterface {
 
   protocolOwner: PublicKey;
   fundOwner: PublicKey;
+  creatorFeeRate: BN;
 }
 
 export interface CpmmPoolInfoInterface {
@@ -73,6 +74,31 @@ export interface CreateCpmmPoolParam<T> {
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+}
+
+export interface CreateCpmmPoolPermissionParam<T> {
+  poolId?: PublicKey;
+  programId: PublicKey;
+  poolFeeAccount: PublicKey;
+  mintA: Pick<ApiV3Token, "address" | "decimals" | "programId">;
+  mintB: Pick<ApiV3Token, "address" | "decimals" | "programId">;
+  mintAAmount: BN;
+  mintBAmount: BN;
+  startTime: BN;
+  feeConfig: ApiCpmmConfigInfo;
+
+  associatedOnly: boolean;
+  checkCreateATAOwner?: boolean;
+
+  ownerInfo: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean; // if has WSOL mint
+  };
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+  feeOn: FeeOn;
 }
 
 export interface CreateCpmmPoolAddress {
@@ -133,7 +159,7 @@ export interface CpmmSwapParams<T = TxVersion.LEGACY> {
   baseIn: boolean;
   fixedOut?: boolean;
   slippage?: number;
-  swapResult: Pick<SwapResult, "sourceAmountSwapped" | "destinationAmountSwapped">;
+  swapResult: Pick<SwapResult, "inputAmount" | "outputAmount">;
   inputAmount: BN;
 
   config?: {
@@ -275,4 +301,33 @@ export interface CpmmLockNftInfo extends CpmmLockNftBasicInfo {
       useValue: number;
     };
   };
+}
+
+export interface CollectCreatorFees<T = TxVersion.LEGACY> {
+  poolInfo: ApiV3PoolInfoStandardItemCpmm;
+  poolKeys?: CpmmKeys;
+
+  programId?: PublicKey;
+  feePayer?: PublicKey;
+  associatedOnly?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+}
+
+export interface CollectMultiCreatorFees<T = TxVersion.LEGACY> {
+  poolInfoList: ApiV3PoolInfoStandardItemCpmm[];
+
+  programId?: PublicKey;
+  feePayer?: PublicKey;
+  associatedOnly?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+}
+
+export enum FeeOn {
+  BothToken,
+  OnlyTokenA,
+  OnlyTokenB,
 }
