@@ -73,7 +73,7 @@ export function initialize(
   ]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: payer, isSigner: true, isWritable: false },
+    { pubkey: payer, isSigner: true, isWritable: true },
     { pubkey: creator, isSigner: false, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: false },
@@ -96,10 +96,10 @@ export function initialize(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -173,7 +173,7 @@ export function initializeV2(
   ]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: payer, isSigner: true, isWritable: false },
+    { pubkey: payer, isSigner: true, isWritable: true },
     { pubkey: creator, isSigner: false, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: false },
@@ -196,10 +196,10 @@ export function initializeV2(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -275,7 +275,7 @@ export function initializeWithToken2022(
   ]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: payer, isSigner: true, isWritable: false },
+    { pubkey: payer, isSigner: true, isWritable: true },
     { pubkey: creator, isSigner: false, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: false },
@@ -295,10 +295,10 @@ export function initializeWithToken2022(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -361,7 +361,7 @@ export function buyExactInInstruction(
   const dataLayout = struct([u64("amountB"), u64("minAmountA"), u64("shareFeeRate")]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: owner, isSigner: true, isWritable: false },
+    { pubkey: owner, isSigner: true, isWritable: true },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: false },
@@ -435,7 +435,7 @@ export function buyExactOutInstruction(
   const dataLayout = struct([u64("amountA"), u64("maxAmountB"), u64("shareFeeRate")]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: owner, isSigner: true, isWritable: false },
+    { pubkey: owner, isSigner: true, isWritable: true },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: false },
@@ -509,7 +509,7 @@ export function sellExactInInstruction(
   const dataLayout = struct([u64("amountA"), u64("minAmountB"), u64("shareFeeRate")]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: owner, isSigner: true, isWritable: false },
+    { pubkey: owner, isSigner: true, isWritable: true },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: false },
@@ -583,7 +583,7 @@ export function sellExactOut(
   const dataLayout = struct([u64("amountB"), u64("maxAmountA"), u64("shareFeeRate")]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: owner, isSigner: true, isWritable: false },
+    { pubkey: owner, isSigner: true, isWritable: true },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: platformId, isSigner: false, isWritable: false },
@@ -645,7 +645,7 @@ export function claimVestedToken(
   const dataLayout = struct([]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: owner, isSigner: true, isWritable: false },
+    { pubkey: owner, isSigner: true, isWritable: true },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
 
@@ -682,7 +682,7 @@ export function createVestingAccount(
   const dataLayout = struct([u64("shareAmount")]);
 
   const keys: Array<AccountMeta> = [
-    { pubkey: owner, isSigner: true, isWritable: false },
+    { pubkey: owner, isSigner: true, isWritable: true },
     { pubkey: beneficiary, isSigner: false, isWritable: true },
     { pubkey: poolId, isSigner: false, isWritable: true },
 
@@ -713,7 +713,7 @@ export function claimPlatformFee(
   tokenProgramB: PublicKey,
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
-    { pubkey: platformClaimFeeWallet, isSigner: true, isWritable: false },
+    { pubkey: platformClaimFeeWallet, isSigner: true, isWritable: true },
     { pubkey: auth, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
     { pubkey: platformId, isSigner: false, isWritable: true },
@@ -779,10 +779,10 @@ export function createPlatformConfig(
 
   const data = Buffer.alloc(
     8 * 5 +
-      Buffer.from(name, "utf-8").length +
-      Buffer.from(web, "utf-8").length +
-      Buffer.from(img, "utf-8").length +
-      4 * 3,
+    Buffer.from(name, "utf-8").length +
+    Buffer.from(web, "utf-8").length +
+    Buffer.from(img, "utf-8").length +
+    4 * 3,
   );
   dataLayout.encode(
     {
@@ -818,24 +818,24 @@ export function updatePlatformConfig(
     | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
     | { type: "updateCpConfigId"; value: PublicKey }
     | {
-        type: "updateAll";
-        value: {
-          platformClaimFeeWallet: PublicKey;
-          platformLockNftWallet: PublicKey;
-          cpConfigId: PublicKey;
-          migrateCpLockNftScale: {
-            platformScale: BN;
-            creatorScale: BN;
-            burnScale: BN;
-          };
-          feeRate: BN;
-          name: string;
-          web: string;
-          img: string;
-          transferFeeExtensionAuth: PublicKey;
-          creatorFeeRate: BN;
+      type: "updateAll";
+      value: {
+        platformClaimFeeWallet: PublicKey;
+        platformLockNftWallet: PublicKey;
+        cpConfigId: PublicKey;
+        migrateCpLockNftScale: {
+          platformScale: BN;
+          creatorScale: BN;
+          burnScale: BN;
         };
-      },
+        feeRate: BN;
+        name: string;
+        web: string;
+        img: string;
+        transferFeeExtensionAuth: PublicKey;
+        creatorFeeRate: BN;
+      };
+    },
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: false },
@@ -891,13 +891,13 @@ export function updatePlatformConfig(
     ]);
     data = Buffer.alloc(
       1 +
-        32 +
-        32 +
-        8 * 4 +
-        4 * 3 +
-        Buffer.from(updateInfo.value.name, "utf-8").length +
-        Buffer.from(updateInfo.value.web, "utf-8").length +
-        Buffer.from(updateInfo.value.img, "utf-8").length,
+      32 +
+      32 +
+      8 * 4 +
+      4 * 3 +
+      Buffer.from(updateInfo.value.name, "utf-8").length +
+      Buffer.from(updateInfo.value.web, "utf-8").length +
+      Buffer.from(updateInfo.value.img, "utf-8").length,
     );
     dataLayout.encode(
       {
@@ -997,7 +997,7 @@ export function updatePlatformCurveParamInstruction(
   params: ReturnType<typeof BondingCurveParam.decode>,
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
-    { pubkey: platformAdmin, isSigner: true, isWritable: false },
+    { pubkey: platformAdmin, isSigner: true, isWritable: true },
     { pubkey: platformId, isSigner: false, isWritable: true },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
