@@ -3,11 +3,12 @@ import BN from "bn.js";
 import Decimal from "decimal.js";
 
 import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
-import { ClmmPoolInfo, TickArrayBitmapExtensionType } from "../type";
+import { ClmmPoolInfo } from "../type";
 import { MAX_TICK, MIN_TICK } from "./constants";
 import { SqrtPriceMath, TickMath } from "./math";
 import { getPdaTickArrayAddress } from "./pda";
 import { TickQuery } from "./tickQuery";
+import { TickArrayBitmapExtensionLayout } from "../layout";
 
 export const TICK_ARRAY_SIZE = 60;
 export const TICK_ARRAY_BITMAP_SIZE = 512;
@@ -142,7 +143,7 @@ export class TickUtils {
 
   public static getInitializedTickArrayInRange(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtensionType,
+    exTickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickSpacing: number,
     tickArrayStartIndex: number,
     expectedCount: number,
@@ -171,7 +172,7 @@ export class TickUtils {
 
   public static getAllInitializedTickArrayStartIndex(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtensionType,
+    exTickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickSpacing: number,
   ): number[] {
     // find from offset 0 to 1024
@@ -188,7 +189,7 @@ export class TickUtils {
     programId: PublicKey,
     poolId: PublicKey,
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtensionType,
+    exTickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickSpacing: number,
   ): {
     tickArrayStartIndex: number;
@@ -219,7 +220,7 @@ export class TickUtils {
 
   public static searchLowBitFromStart(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtensionType,
+    exTickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     currentTickArrayBitStartIndex: number,
     expectedCount: number,
     tickSpacing: number,
@@ -247,7 +248,7 @@ export class TickUtils {
 
   public static searchHightBitFromStart(
     tickArrayBitmap: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtensionType,
+    exTickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     currentTickArrayBitStartIndex: number,
     expectedCount: number,
     tickSpacing: number,

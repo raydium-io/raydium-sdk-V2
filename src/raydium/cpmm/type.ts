@@ -6,51 +6,7 @@ import { TxVersion } from "../../common/txTool/txType";
 import { Percent } from "../../module";
 import { ComputeBudgetConfig, GetTransferAmountFee, TxTipConfig } from "../../raydium/type";
 import { SwapResult } from "./curve/calculator";
-import { CpmmPoolInfoLayout } from "./layout";
-
-export interface CpmmConfigInfoInterface {
-  bump: number;
-  disableCreatePool: boolean;
-  index: number;
-  tradeFeeRate: BN;
-  protocolFeeRate: BN;
-  fundFeeRate: BN;
-  createPoolFee: BN;
-
-  protocolOwner: PublicKey;
-  fundOwner: PublicKey;
-  creatorFeeRate: BN;
-}
-
-export interface CpmmPoolInfoInterface {
-  configId: PublicKey;
-  poolCreator: PublicKey;
-  vaultA: PublicKey;
-  vaultB: PublicKey;
-
-  mintLp: PublicKey;
-  mintA: PublicKey;
-  mintB: PublicKey;
-
-  mintProgramA: PublicKey;
-  mintProgramB: PublicKey;
-
-  observationId: PublicKey;
-
-  bump: number;
-  status: number;
-
-  lpDecimals: number;
-  mintDecimalA: number;
-  mintDecimalB: number;
-
-  lpAmount: BN;
-  protocolFeesMintA: BN;
-  protocolFeesMintB: BN;
-  fundFeesMintA: BN;
-  fundFeesMintB: BN;
-  openTime: BN;
-}
+import { CpmmConfigInfoLayout, CpmmPoolInfoLayout } from "./layout";
 
 export interface CreateCpmmPoolParam<T> {
   poolId?: PublicKey;
@@ -183,12 +139,12 @@ export interface ComputePairAmountParams {
   baseIn?: boolean;
 }
 
-export type CpmmRpcData = ReturnType<typeof CpmmPoolInfoLayout.decode> & {
+export type CpmmParsedRpcData = ReturnType<typeof CpmmPoolInfoLayout.decode> & {
   baseReserve: BN;
   quoteReserve: BN;
   vaultAAmount: BN;
   vaultBAmount: BN;
-  configInfo?: CpmmConfigInfoInterface;
+  configInfo?: ReturnType<typeof CpmmConfigInfoLayout.decode>;
   poolPrice: Decimal;
   programId: PublicKey;
 };
@@ -196,11 +152,11 @@ export type CpmmRpcData = ReturnType<typeof CpmmPoolInfoLayout.decode> & {
 export type CpmmComputeData = {
   id: PublicKey;
   version: 7;
-  configInfo: CpmmConfigInfoInterface;
+  configInfo: ReturnType<typeof CpmmConfigInfoLayout.decode>;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
   authority: PublicKey;
-} & Omit<CpmmRpcData, "configInfo" | "mintA" | "mintB">;
+} & Omit<CpmmParsedRpcData, "configInfo" | "mintA" | "mintB">;
 
 export type CpmmLockExtInfo = {
   nftMint: PublicKey;

@@ -45,7 +45,7 @@ import {
   ComputePairAmountParams,
   CpmmComputeData,
   CpmmLockExtInfo,
-  CpmmRpcData,
+  CpmmParsedRpcData,
   CpmmSwapParams,
   CreateCpmmPoolAddress,
   CreateCpmmPoolParam,
@@ -73,7 +73,7 @@ export default class CpmmModule extends ModuleBase {
     return ((await this.scope.api.fetchPoolKeysById({ idList: [poolId] })) as CpmmKeys[])[0];
   }
 
-  public async getRpcPoolInfo(poolId: string, fetchConfigInfo?: boolean): Promise<CpmmRpcData> {
+  public async getRpcPoolInfo(poolId: string, fetchConfigInfo?: boolean): Promise<CpmmParsedRpcData> {
     return (await this.getRpcPoolInfos([poolId], fetchConfigInfo))[poolId];
   }
 
@@ -81,7 +81,7 @@ export default class CpmmModule extends ModuleBase {
     poolIds: string[],
     fetchConfigInfo?: boolean,
   ): Promise<{
-    [poolId: string]: CpmmRpcData;
+    [poolId: string]: CpmmParsedRpcData;
   }> {
     const accounts = await getMultipleAccountsInfoWithCustomFlags(
       this.scope.connection,
@@ -135,7 +135,7 @@ export default class CpmmModule extends ModuleBase {
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 
-    const returnData: { [poolId: string]: CpmmRpcData } = {};
+    const returnData: { [poolId: string]: CpmmParsedRpcData } = {};
 
     for (const [id, info] of Object.entries(poolInfos)) {
       const baseReserve = vaultInfo[info.vaultA.toString()].sub(info.protocolFeesMintA).sub(info.fundFeesMintA);
@@ -160,7 +160,7 @@ export default class CpmmModule extends ModuleBase {
     pools,
     mintInfos,
   }: {
-    pools: Record<string, CpmmRpcData>;
+    pools: Record<string, CpmmParsedRpcData>;
     mintInfos: ReturnTypeFetchMultipleMintInfos;
   }): Record<string, CpmmComputeData> {
     return Object.keys(pools).reduce((acc, cur) => {
@@ -199,7 +199,7 @@ export default class CpmmModule extends ModuleBase {
   public async getPoolInfoFromRpc(poolId: string): Promise<{
     poolInfo: ApiV3PoolInfoStandardItemCpmm;
     poolKeys: CpmmKeys;
-    rpcData: CpmmRpcData;
+    rpcData: CpmmParsedRpcData;
   }> {
     const rpcData = await this.getRpcPoolInfo(poolId, true);
     const mintInfos = await fetchMultipleMintInfos({

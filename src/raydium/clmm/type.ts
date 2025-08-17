@@ -9,7 +9,7 @@ import { TokenInfo } from "../token/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 import { TickArray } from "./utils/tick";
 
-import { ClmmPositionLayout, PoolInfoLayout, LockClPositionLayoutV2 } from "./layout";
+import { ClmmPositionLayout, PoolInfoLayout, LockClPositionLayoutV2, TickArrayBitmapExtensionLayout } from "./layout";
 
 export { ApiClmmConfigInfo };
 
@@ -138,7 +138,7 @@ export interface ClmmPoolInfo {
 
   startTime: number;
 
-  exBitmapInfo: TickArrayBitmapExtensionType;
+  exBitmapInfo: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
 }
 
 export interface ComputeClmmPoolInfo {
@@ -171,7 +171,7 @@ export interface ComputeClmmPoolInfo {
 
   startTime: number;
 
-  exBitmapInfo: TickArrayBitmapExtensionType;
+  exBitmapInfo: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
   rewardInfos: ReturnType<typeof PoolInfoLayout.decode>["rewardInfos"];
 }
 
@@ -421,21 +421,6 @@ export interface HarvestLockPosition<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
-export interface ClmmPoolRewardLayoutInfo {
-  rewardState: number;
-  openTime: BN;
-  endTime: BN;
-  lastUpdateTime: BN;
-  emissionsPerSecondX64: BN;
-  rewardTotalEmissioned: BN;
-  rewardClaimed: BN;
-  tokenMint: PublicKey;
-  tokenVault: PublicKey;
-  creator: PublicKey;
-  rewardGrowthGlobalX64: BN;
-  feePayer?: PublicKey;
-}
-
 export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   poolKeys?: ClmmKeys;
@@ -615,14 +600,8 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   clmmProgram?: PublicKey;
 }
 
-export interface TickArrayBitmapExtensionType {
-  poolId: PublicKey;
-  positiveTickArrayBitmap: BN[][];
-  negativeTickArrayBitmap: BN[][];
-}
-
 export interface ReturnTypeFetchExBitmaps {
-  [exBitmapId: string]: TickArrayBitmapExtensionType;
+  [exBitmapId: string]: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
 }
 
 export interface ClosePositionExtInfo {
@@ -639,7 +618,10 @@ export interface InitRewardExtInfo {
   };
 }
 
-export type ClmmRpcData = ReturnType<typeof PoolInfoLayout.decode> & { currentPrice: number; programId: PublicKey };
+export type ClmmParsedRpcData = ReturnType<typeof PoolInfoLayout.decode> & {
+  currentPrice: number;
+  programId: PublicKey;
+};
 
 export interface ClmmLockAddress {
   positionId: PublicKey;
