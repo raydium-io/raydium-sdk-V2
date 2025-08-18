@@ -1,11 +1,11 @@
-import { PublicKey, SystemProgram, TransactionInstruction, AccountMeta } from "@solana/web3.js";
+import { DEVNET_PROGRAM_ID, METADATA_PROGRAM_ID, RENT_PROGRAM_ID } from "@/common";
+import { publicKey, str, struct, u16, u64, u8 } from "@/marshmallow";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { AccountMeta, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-import { publicKey, str, struct, u64, u8, u16 } from "@/marshmallow";
-import { RENT_PROGRAM_ID, METADATA_PROGRAM_ID, DEVNET_PROGRAM_ID } from "@/common";
+import { BondingCurveParam } from "./layout";
 import { getPdaCpiEvent } from "./pda";
 import { CpmmCreatorFeeOn } from "./type";
-import { BondingCurveParam } from "./layout";
 export const anchorDataBuf = {
   initialize: Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]),
   initializeV2: Buffer.from([67, 153, 175, 39, 218, 16, 38, 32]),
@@ -986,6 +986,9 @@ export function claimCreatorFee(
   });
 }
 
+const u8Max = 255
+const u64Max = new BN('18446744073709551615')
+
 export function updatePlatformCurveParamInstruction(
   programId: PublicKey,
 
@@ -994,18 +997,32 @@ export function updatePlatformCurveParamInstruction(
   configId: PublicKey,
 
   index: number,
-  params: ReturnType<typeof BondingCurveParam.decode>,
+  params: Partial<ReturnType<typeof BondingCurveParam.decode>>
 ): TransactionInstruction {
+
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: true },
     { pubkey: platformId, isSigner: false, isWritable: true },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-  ];
+  ]
 
-  const data = Buffer.alloc(2 * 2 + 8 * 6 + u8().span);
-  u8().encode(index, data);
-  BondingCurveParam.encode(params, data, 1);
+  const data = Buffer.alloc(1 * 2 + 8 * 6 + u8().span)
+  u8().encode(index, data)
+  BondingCurveParam.encode(
+    {
+      migrateType: params.migrateType ? params.migrateType : u8Max,
+      migrateCpmmFeeOn: params.migrateCpmmFeeOn ? params.migrateCpmmFeeOn : u8Max,
+      supply: params.supply ? params.supply : new BN(0),
+      totalSellA: params.totalSellA ? params.totalSellA : new BN(0),
+      totalFundRaisingB: params.totalFundRaisingB ? params.totalFundRaisingB : new BN(0),
+      totalLockedAmount: params.totalLockedAmount ? params.totalLockedAmount : u64Max,
+      cliffPeriod: params.cliffPeriod ? params.cliffPeriod : u64Max,
+      unlockPeriod: params.unlockPeriod ? params.unlockPeriod : u64Max,
+    },
+    data,
+    1
+  )
 
   return new TransactionInstruction({
     keys,

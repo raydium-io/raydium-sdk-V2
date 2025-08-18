@@ -1,4 +1,4 @@
-import { bool, option, publicKey, seq, struct, u16, u64, u8, u32, vec } from "../../marshmallow";
+import { publicKey, seq, struct, u16, u64, u8, vec } from "../../marshmallow";
 
 export const LaunchpadConfig = struct([
   u64(),
@@ -79,15 +79,15 @@ export const LaunchpadVesting = struct([
 ]);
 
 export const BondingCurveParam = struct([
-  option(u8(), "migrateType"),
-  option(u8(), "migrateCpmmFeeOn"),
-  option(u64(), "supply"),
-  option(u64(), "totalSellA"),
-  option(u64(), "totalFundRaisingB"),
+  u8('migrateType'),
+  u8('migrateCpmmFeeOn'),
+  u64('supply'),
+  u64('totalSellA'),
+  u64('totalFundRaisingB'),
 
-  option(u64(), "totalLockedAmount"),
-  option(u64(), "cliffPeriod"),
-  option(u64(), "unlockPeriod"),
+  u64('totalLockedAmount'),
+  u64('cliffPeriod'),
+  u64('unlockPeriod'),
 ]);
 
 export const PlatformCurveParam = struct([

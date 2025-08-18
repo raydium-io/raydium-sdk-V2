@@ -1,5 +1,5 @@
 import BN from "bn.js";
-import { RoundDirection, SwapWithoutFeesResult, TradingTokenResult } from "./calculator";
+import { RoundDirection, TradingTokenResult } from "./calculator";
 
 function checkedRem(dividend: BN, divisor: BN): BN {
   if (divisor.isZero()) throw Error("divisor is zero");
@@ -13,18 +13,10 @@ function checkedCeilDiv(dividend: BN, rhs: BN): BN[] {
 
   let quotient = dividend.div(rhs);
 
-  if (quotient.isZero()) throw Error("quotient is zero");
-
-  let remainder = checkedRem(dividend, rhs);
+  const remainder = checkedRem(dividend, rhs);
 
   if (remainder.gt(ZERO)) {
     quotient = quotient.add(new BN(1));
-
-    rhs = dividend.div(quotient);
-    remainder = checkedRem(dividend, quotient);
-    if (remainder.gt(ZERO)) {
-      rhs = rhs.add(new BN(1));
-    }
   }
   return [quotient, rhs];
 }
