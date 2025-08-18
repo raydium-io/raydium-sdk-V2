@@ -13,6 +13,7 @@ import {
   BuyTokenExactOut,
   ClaimAllPlatformFee,
   ClaimCreatorFee,
+  ClaimMultiCreatorFee,
   ClaimMultipleVaultPlatformFee,
   ClaimMultiVesting,
   ClaimPlatformFee,
@@ -1781,6 +1782,49 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData>;
+  }
+
+  public async claimMultipleCreatorFee<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    mintBList,
+    txVersion,
+    computeBudgetConfig,
+    feePayer,
+  }: ClaimMultiCreatorFee<T>): Promise<MakeMultiTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    mintBList.forEach((mint) => {
+      const mintB = mint.pubKey;
+      const mintBProgram = mint.programId ?? TOKEN_PROGRAM_ID;
+      const creatorFeeVault = getPdaCreatorVault(programId, this.scope.ownerPubKey, mintB).publicKey;
+      const creatorFeeVaultAuth = getPdaCreatorFeeVaultAuth(programId).publicKey;
+      const userTokenAccount = this.scope.account.getAssociatedTokenAccount(mintB, mintBProgram);
+
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            userTokenAccount,
+            this.scope.ownerPubKey,
+            mintB,
+            mintBProgram,
+          ),
+          claimCreatorFee(
+            programId,
+            this.scope.ownerPubKey,
+            creatorFeeVaultAuth,
+            creatorFeeVault,
+            userTokenAccount!,
+            mintB,
+            mintBProgram,
+          ),
+        ],
+      });
+    });
+
+    if (txVersion == TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async getRpcPoolInfo({

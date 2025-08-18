@@ -312,6 +312,18 @@ export interface ClaimCreatorFee<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface ClaimMultiCreatorFee<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  mintBList: {
+    pubKey: PublicKey;
+    programId?: PublicKey;
+  }[];
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;
 export type LaunchpadConfigInfo = ReturnType<typeof LaunchpadConfig.decode>;
 export type LaunchpadPlatformInfo = ReturnType<typeof PlatformConfig.decode>;
