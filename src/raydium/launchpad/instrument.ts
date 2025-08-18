@@ -897,7 +897,7 @@ export function updatePlatformConfig(
       4 * 3 +
       Buffer.from(updateInfo.value.name, "utf-8").length +
       Buffer.from(updateInfo.value.web, "utf-8").length +
-      Buffer.from(updateInfo.value.img, "utf-8").length,
+      Buffer.from(updateInfo.value.img, "utf-8").length + 32 + 8,
     );
     dataLayout.encode(
       {
