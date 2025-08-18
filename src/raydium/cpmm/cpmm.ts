@@ -1015,6 +1015,7 @@ export default class CpmmModule extends ModuleBase {
                 tokenAccountA,
                 this.scope.ownerPubKey,
                 mint,
+                new PublicKey(poolInfo.mintA.programId),
               ),
             ],
           });
@@ -1051,6 +1052,7 @@ export default class CpmmModule extends ModuleBase {
                 tokenAccountB,
                 this.scope.ownerPubKey,
                 mint,
+                new PublicKey(poolInfo.mintB.programId),
               ),
             ],
           });
@@ -1259,12 +1261,14 @@ export default class CpmmModule extends ModuleBase {
           tokenAccountA,
           this.scope.ownerPubKey,
           mintA,
+          new PublicKey(poolInfo.mintA.programId),
         ),
         createAssociatedTokenAccountIdempotentInstruction(
           this.scope.ownerPubKey,
           tokenAccountB,
           this.scope.ownerPubKey,
           mintB,
+          new PublicKey(poolInfo.mintB.programId),
         ),
       ],
     });
@@ -1334,6 +1338,7 @@ export default class CpmmModule extends ModuleBase {
               tokenAccountA,
               this.scope.ownerPubKey,
               mintA,
+              mintAProgram,
             ),
           ],
         });
@@ -1346,6 +1351,7 @@ export default class CpmmModule extends ModuleBase {
               tokenAccountB,
               this.scope.ownerPubKey,
               mintB,
+              mintBProgram,
             ),
           ],
         });
