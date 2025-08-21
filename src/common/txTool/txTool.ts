@@ -17,7 +17,7 @@ import { Api } from "../../api";
 import { ComputeBudgetConfig, SignAllTransactions, TxTipConfig } from "../../raydium/type";
 import { Cluster } from "../../solana";
 import { Owner } from "../owner";
-import { CacheLTA, getDevLookupTableCache, getMultipleLookupTableInfo, LOOKUP_TABLE_CACHE } from "./lookupTable";
+import { CacheLTA, getDevLookupTableCache, getMainLookupTableCache, getMultipleLookupTableInfo } from "./lookupTable";
 import { InstructionType, TxVersion } from "./txType";
 import {
   addComputeBudget,
@@ -519,7 +519,9 @@ export class TxBuilder {
     } = props || {};
 
     const lookupTableAddressAccount = {
-      ...(this.cluster === "devnet" ? await getDevLookupTableCache(this.connection) : LOOKUP_TABLE_CACHE),
+      ...(this.cluster === "devnet"
+        ? await getDevLookupTableCache(this.connection)
+        : await getMainLookupTableCache(this.connection)),
       ...lookupTableCache,
     };
     const allLTA = Array.from(new Set<string>([...lookupTableAddress, ...this.lookupTableAddress]));
@@ -1003,7 +1005,9 @@ export class TxBuilder {
       ...extInfo
     } = props || {};
     const lookupTableAddressAccount = {
-      ...(this.cluster === "devnet" ? await getDevLookupTableCache(this.connection) : LOOKUP_TABLE_CACHE),
+      ...(this.cluster === "devnet"
+        ? await getDevLookupTableCache(this.connection)
+        : await getMainLookupTableCache(this.connection)),
       ...lookupTableCache,
     };
     const allLTA = Array.from(new Set<string>([...this.lookupTableAddress, ...lookupTableAddress]));

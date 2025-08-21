@@ -63,11 +63,12 @@ import {
   TOKEN_PROGRAM_ID,
   TransferFeeConfig,
   createAssociatedTokenAccountIdempotentInstruction,
+  createSyncNativeInstruction,
   getTransferFeeConfig,
   unpackMint,
 } from "@solana/spl-token";
 import BN from "bn.js";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { getPdaMetadataKey } from "../clmm";
 import { LaunchpadConfig, LaunchpadPool, PlatformConfig } from "./layout";
 import { Curve, SwapInfoReturn } from "./curve/curve";
@@ -424,6 +425,7 @@ export default class LaunchpadModule extends ModuleBase {
               newerTransferFee: fee,
             }
           : undefined,
+        fromCreate: true,
       });
       txBuilder.addInstruction({ ...builder.AllTxData });
       swapInfo = { ...extInfo };
@@ -484,6 +486,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     associatedOnly = true,
     checkCreateATAOwner = false,
+    fromCreate = false,
     transferFeeConfigA: propsTransferFeeConfigA,
     skipCheckMintA = false,
   }: BuyToken<T>): Promise<MakeTxData<T, SwapInfoReturnExt>> {
@@ -507,7 +510,9 @@ export default class LaunchpadModule extends ModuleBase {
     }
 
     const userTokenAccountA = this.scope.account.getAssociatedTokenAccount(mintA, mintAProgram);
-    let userTokenAccountB: PublicKey | null = null;
+    let userTokenAccountB: PublicKey | null = fromCreate
+      ? this.scope.account.getAssociatedTokenAccount(mintB, TOKEN_PROGRAM_ID)
+      : null;
     const mintBUseSOLBalance = mintB.equals(NATIVE_MINT);
 
     txBuilder.addInstruction({
@@ -519,25 +524,45 @@ export default class LaunchpadModule extends ModuleBase {
           mintA,
           mintAProgram,
         ),
+        ...(fromCreate
+          ? [
+              createAssociatedTokenAccountIdempotentInstruction(
+                this.scope.ownerPubKey,
+                userTokenAccountB!,
+                this.scope.ownerPubKey,
+                mintB,
+                TOKEN_PROGRAM_ID,
+              ),
+              SystemProgram.transfer({
+                fromPubkey: this.scope.ownerPubKey,
+                toPubkey: userTokenAccountB!,
+                lamports: BigInt(buyAmount.toString()),
+              }),
+              createSyncNativeInstruction(userTokenAccountB!),
+            ]
+          : []),
       ],
     });
-    const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: mintB,
-        owner: this.scope.ownerPubKey,
-        createInfo: mintBUseSOLBalance
-          ? {
-              payer: this.scope.ownerPubKey!,
-              amount: buyAmount,
-            }
-          : undefined,
-        skipCloseAccount: !mintBUseSOLBalance,
-        notUseTokenAccount: mintBUseSOLBalance,
-        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
-        checkCreateATAOwner,
-      });
-    if (_ownerTokenAccountB) userTokenAccountB = _ownerTokenAccountB;
-    txBuilder.addInstruction(_tokenAccountBInstruction || {});
+
+    if (!fromCreate) {
+      const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
+        await this.scope.account.getOrCreateTokenAccount({
+          mint: mintB,
+          owner: this.scope.ownerPubKey,
+          createInfo: mintBUseSOLBalance
+            ? {
+                payer: this.scope.ownerPubKey!,
+                amount: buyAmount,
+              }
+            : undefined,
+          skipCloseAccount: !mintBUseSOLBalance,
+          notUseTokenAccount: mintBUseSOLBalance,
+          associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+          checkCreateATAOwner,
+        });
+      if (_ownerTokenAccountB) userTokenAccountB = _ownerTokenAccountB;
+      txBuilder.addInstruction(_tokenAccountBInstruction || {});
+    }
     if (userTokenAccountB === undefined)
       this.logAndCreateError(
         `cannot found mintB(${mintB.toBase58()}) token accounts`,

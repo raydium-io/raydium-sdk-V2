@@ -78,6 +78,7 @@ export interface BuyToken<T = TxVersion.LEGACY> {
   checkCreateATAOwner?: boolean;
   transferFeeConfigA?: TransferFeeConfig | undefined;
   skipCheckMintA?: boolean;
+  fromCreate?: boolean;
 }
 
 export interface BuyTokenExactOut<T = TxVersion.LEGACY>
