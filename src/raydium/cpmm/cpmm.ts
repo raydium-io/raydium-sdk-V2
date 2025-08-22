@@ -138,8 +138,14 @@ export default class CpmmModule extends ModuleBase {
     const returnData: { [poolId: string]: CpmmParsedRpcData } = {};
 
     for (const [id, info] of Object.entries(poolInfos)) {
-      const baseReserve = vaultInfo[info.vaultA.toString()].sub(info.protocolFeesMintA).sub(info.fundFeesMintA);
-      const quoteReserve = vaultInfo[info.vaultB.toString()].sub(info.protocolFeesMintB).sub(info.fundFeesMintB);
+      const baseReserve = vaultInfo[info.vaultA.toString()]
+        .sub(info.protocolFeesMintA)
+        .sub(info.fundFeesMintA)
+        .sub(info.creatorFeesMintA);
+      const quoteReserve = vaultInfo[info.vaultB.toString()]
+        .sub(info.protocolFeesMintB)
+        .sub(info.fundFeesMintB)
+        .sub(info.creatorFeesMintB);
       returnData[id] = {
         ...info,
         baseReserve,
