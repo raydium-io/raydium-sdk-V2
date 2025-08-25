@@ -58,8 +58,8 @@ export function initialize(
   cliffPeriod: BN,
   unlockPeriod: BN,
 ): TransactionInstruction {
-  if (programId.equals(DEVNET_PROGRAM_ID.LAUNCHPAD_PROGRAM))
-    console.log("*** launchlab initialize has been deprecated, please use initializeV2 instead! ***");
+  throw new Error("*** launchlab initialize has been deprecated, please use initializeV2 instead! ***");
+
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([u64("totalLockedAmount"), u64("cliffPeriod"), u64("unlockPeriod")]);
 
@@ -96,10 +96,10 @@ export function initialize(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-    Buffer.from(symbol, "utf-8").length +
-    Buffer.from(uri, "utf-8").length +
-    4 * 3 +
-    1,
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -107,6 +107,8 @@ export function initialize(
 
   dataLyaout1.encode({ decimals, name, symbol, uri }, data1);
   if (curveParam.type === "ConstantCurve") {
+    // eslint-disable-next-line
+    // @ts-ignore
     dataLayout22.encode({ index: 0, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
   } else if (curveParam.type === "FixedCurve") {
     dataLayout21.encode({ index: 1, ...curveParam, migrateType: curveParam.migrateType === "amm" ? 0 : 1 }, data2);
@@ -196,10 +198,10 @@ export function initializeV2(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-    Buffer.from(symbol, "utf-8").length +
-    Buffer.from(uri, "utf-8").length +
-    4 * 3 +
-    1,
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -295,10 +297,10 @@ export function initializeWithToken2022(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-    Buffer.from(symbol, "utf-8").length +
-    Buffer.from(uri, "utf-8").length +
-    4 * 3 +
-    1,
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -779,10 +781,10 @@ export function createPlatformConfig(
 
   const data = Buffer.alloc(
     8 * 5 +
-    Buffer.from(name, "utf-8").length +
-    Buffer.from(web, "utf-8").length +
-    Buffer.from(img, "utf-8").length +
-    4 * 3,
+      Buffer.from(name, "utf-8").length +
+      Buffer.from(web, "utf-8").length +
+      Buffer.from(img, "utf-8").length +
+      4 * 3,
   );
   dataLayout.encode(
     {
@@ -818,24 +820,24 @@ export function updatePlatformConfig(
     | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
     | { type: "updateCpConfigId"; value: PublicKey }
     | {
-      type: "updateAll";
-      value: {
-        platformClaimFeeWallet: PublicKey;
-        platformLockNftWallet: PublicKey;
-        cpConfigId: PublicKey;
-        migrateCpLockNftScale: {
-          platformScale: BN;
-          creatorScale: BN;
-          burnScale: BN;
+        type: "updateAll";
+        value: {
+          platformClaimFeeWallet: PublicKey;
+          platformLockNftWallet: PublicKey;
+          cpConfigId: PublicKey;
+          migrateCpLockNftScale: {
+            platformScale: BN;
+            creatorScale: BN;
+            burnScale: BN;
+          };
+          feeRate: BN;
+          name: string;
+          web: string;
+          img: string;
+          transferFeeExtensionAuth: PublicKey;
+          creatorFeeRate: BN;
         };
-        feeRate: BN;
-        name: string;
-        web: string;
-        img: string;
-        transferFeeExtensionAuth: PublicKey;
-        creatorFeeRate: BN;
-      };
-    },
+      },
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: false },
@@ -891,13 +893,15 @@ export function updatePlatformConfig(
     ]);
     data = Buffer.alloc(
       1 +
-      32 +
-      32 +
-      8 * 4 +
-      4 * 3 +
-      Buffer.from(updateInfo.value.name, "utf-8").length +
-      Buffer.from(updateInfo.value.web, "utf-8").length +
-      Buffer.from(updateInfo.value.img, "utf-8").length + 32 + 8,
+        32 +
+        32 +
+        8 * 4 +
+        4 * 3 +
+        Buffer.from(updateInfo.value.name, "utf-8").length +
+        Buffer.from(updateInfo.value.web, "utf-8").length +
+        Buffer.from(updateInfo.value.img, "utf-8").length +
+        32 +
+        8,
     );
     dataLayout.encode(
       {
@@ -986,8 +990,8 @@ export function claimCreatorFee(
   });
 }
 
-const u8Max = 255
-const u64Max = new BN('18446744073709551615')
+const u8Max = 255;
+const u64Max = new BN("18446744073709551615");
 
 export function updatePlatformCurveParamInstruction(
   programId: PublicKey,
@@ -997,18 +1001,17 @@ export function updatePlatformCurveParamInstruction(
   configId: PublicKey,
 
   index: number,
-  params: Partial<ReturnType<typeof BondingCurveParam.decode>>
+  params: Partial<ReturnType<typeof BondingCurveParam.decode>>,
 ): TransactionInstruction {
-
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: true },
     { pubkey: platformId, isSigner: false, isWritable: true },
     { pubkey: configId, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-  ]
+  ];
 
-  const data = Buffer.alloc(1 * 2 + 8 * 6 + u8().span)
-  u8().encode(index, data)
+  const data = Buffer.alloc(1 * 2 + 8 * 6 + u8().span);
+  u8().encode(index, data);
   BondingCurveParam.encode(
     {
       migrateType: params.migrateType ? params.migrateType : u8Max,
@@ -1021,8 +1024,8 @@ export function updatePlatformCurveParamInstruction(
       unlockPeriod: params.unlockPeriod ? params.unlockPeriod : u64Max,
     },
     data,
-    1
-  )
+    1,
+  );
 
   return new TransactionInstruction({
     keys,
