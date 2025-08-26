@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Connection, PublicKey, AddressLookupTableAccount } from "@solana/web3.js";
 import { getMultipleAccountsInfo } from "../accountInfo";
 

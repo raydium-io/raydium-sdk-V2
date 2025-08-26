@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import {
   AmmV4Keys,

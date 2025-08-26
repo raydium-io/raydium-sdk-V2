@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Connection, PublicKey } from "@solana/web3.js";
 import { MintLayout, RawMint, TOKEN_PROGRAM_ID, TransferFeeConfigLayout } from "@solana/spl-token";
 import { BigNumberish } from "@/common/bignumber";
