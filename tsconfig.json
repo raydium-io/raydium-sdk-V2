@@ -1,36 +1,36 @@
 {
   "extends": "../../tsconfig.base.json",
-
   "compilerOptions": {
     /* Project‑References */
     "composite": true,
     "declaration": true,
     "declarationMap": true,
-
     /* 输出目录 */
     "rootDir": "./src",
     "outDir": "./lib",
-
-    /* 运行时目标 */
-    "target": "ES2020",
-    "module": "commonjs",
-
     /* Lib & 类型 */
-    "lib": ["ES2020", "DOM"],   // ✅ 需要 DOM 才有 window
-    "types": ["node"],          // ✅ 需要 Node 才有 NodeJS.Timeout / Timer
-
-    /* 宽容设置 */
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ],
     "skipLibCheck": true,
-    "allowJs": true,
-    "checkJs": false,           // ✅ 不再对 .js 做类型检查
-
-    /* 路径别名（保持原来 @/*） */
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    }
   },
-
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"],
-
-  "ts-node": { "files": true }
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
+  "ts-node": {
+    "files": true
+  }
 }
