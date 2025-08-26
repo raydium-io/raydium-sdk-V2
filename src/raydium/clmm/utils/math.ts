@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 
 import { ApiV3PoolInfoConcentratedItem } from "../../../api/type";
 import { getTransferAmountFeeV2, minExpirationTime } from "../../../common/transfer";
-import { ReturnTypeGetLiquidityAmountOut, TickArrayBitmapExtensionType } from "../type";
+import { ReturnTypeGetLiquidityAmountOut } from "../type";
 import {
   BIT_PRECISION,
   Fee,
@@ -29,6 +29,7 @@ import { getPdaTickArrayAddress } from "./pda";
 import { PoolUtils } from "./pool";
 import { Tick, TickArray, TickUtils } from "./tick";
 import { TickQuery } from "./tickQuery";
+import { TickArrayBitmapExtensionLayout } from "../layout";
 
 export class MathUtil {
   public static mulDivRoundingUp(a: BN, b: BN, denominator: BN): BN {
@@ -517,7 +518,7 @@ export abstract class SwapMath {
     poolId: PublicKey,
     tickArrayCache: { [key: string]: TickArray },
     tickArrayBitmap: BN[],
-    tickarrayBitmapExtension: TickArrayBitmapExtensionType,
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     zeroForOne: boolean,
     fee: number,
     liquidity: BN,
@@ -727,7 +728,7 @@ export abstract class SwapMath {
   //   poolId: PublicKey,
   //   tickArrayCache: { [key: string]: TickArray },
   //   tickArrayBitmap: BN[],
-  //   tickarrayBitmapExtension: TickArrayBitmapExtensionType,
+  //   tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
   //   zeroForOne: boolean,
   //   fee: number,
   //   liquidity: BN,
@@ -992,11 +993,11 @@ export abstract class SwapMath {
         reachTargetPrice && !baseInput
           ? swapStep.amountOut
           : LiquidityMath.getTokenAmountAFromLiquidity(
-            sqrtPriceX64Current,
-            swapStep.sqrtPriceX64Next,
-            liquidity,
-            false,
-          );
+              sqrtPriceX64Current,
+              swapStep.sqrtPriceX64Next,
+              liquidity,
+              false,
+            );
     }
 
     if (!baseInput && swapStep.amountOut.gt(amountRemaining.mul(NEGATIVE_ONE))) {

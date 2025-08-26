@@ -165,13 +165,13 @@ export function isDecimal(val: unknown): boolean {
   return val instanceof Decimal;
 }
 
-export function recursivelyDecimalToFraction<T>(info: T): ReplaceType<T, Decimal, Fraction> {
-  // @ts-expect-error no need type for inner code
-  return isDecimal(info)
-    ? decimalToFraction(info as any)
-    : Array.isArray(info)
-    ? info.map((k) => recursivelyDecimalToFraction(k))
-    : notInnerObject(info)
-    ? Object.fromEntries(Object.entries(info as any).map(([k, v]) => [k, recursivelyDecimalToFraction(v)]))
-    : info;
-}
+// export function recursivelyDecimalToFraction<T>(info: T): ReplaceType<T, Decimal, Fraction> {
+//   // @ts-expect-error no need type for inner code
+//   return isDecimal(info)
+//     ? decimalToFraction(info as any)
+//     : Array.isArray(info)
+//     ? info.map((k) => recursivelyDecimalToFraction(k))
+//     : notInnerObject(info)
+//     ? Object.fromEntries(Object.entries(info as any).map(([k, v]) => [k, recursivelyDecimalToFraction(v)]))
+//     : info;
+// }

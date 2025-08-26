@@ -34,7 +34,7 @@ import {
   PositionInfoLayout,
 } from "./layout";
 import {
-  ClmmRpcData,
+  ClmmParsedRpcData,
   ClosePositionExtInfo,
   CollectRewardParams,
   CollectRewardsParams,
@@ -1961,7 +1961,7 @@ export class Clmm extends ModuleBase {
     }));
   }
 
-  public async getRpcClmmPoolInfo({ poolId }: { poolId: string | PublicKey }): Promise<ClmmRpcData> {
+  public async getRpcClmmPoolInfo({ poolId }: { poolId: string | PublicKey }): Promise<ClmmParsedRpcData> {
     return (await this.getRpcClmmPoolInfos({ poolIds: [poolId] }))[String(poolId)];
   }
 
@@ -1972,7 +1972,7 @@ export class Clmm extends ModuleBase {
     poolIds: (string | PublicKey)[];
     config?: { batchRequest?: boolean; chunkCount?: number };
   }): Promise<{
-    [poolId: string]: ClmmRpcData;
+    [poolId: string]: ClmmParsedRpcData;
   }> {
     const accounts = await getMultipleAccountsInfoWithCustomFlags(
       this.scope.connection,
@@ -1980,7 +1980,7 @@ export class Clmm extends ModuleBase {
       config,
     );
     const returnData: {
-      [poolId: string]: ClmmRpcData;
+      [poolId: string]: ClmmParsedRpcData;
     } = {};
     for (let i = 0; i < poolIds.length; i++) {
       const item = accounts[i];

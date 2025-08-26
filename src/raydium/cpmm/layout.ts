@@ -1,4 +1,4 @@
-import { blob, bool, publicKey, seq, struct, u16, u64, u8, u128 } from "../../marshmallow";
+import { blob, bool, publicKey, seq, struct, u16, u64, u8 } from "../../marshmallow";
 
 export const CpmmConfigInfoLayout = struct([
   blob(8),
@@ -12,7 +12,9 @@ export const CpmmConfigInfoLayout = struct([
 
   publicKey("protocolOwner"),
   publicKey("fundOwner"),
-  seq(u64(), 16),
+
+  u64("creatorFeeRate"),
+  seq(u64(), 15),
 ]);
 
 export const CpmmPoolInfoLayout = struct([
@@ -45,6 +47,15 @@ export const CpmmPoolInfoLayout = struct([
   u64("fundFeesMintA"),
   u64("fundFeesMintB"),
   u64("openTime"),
+  u64("epoch"),
 
-  seq(u64(), 32),
+  u8("feeOn"),
+  bool("enableCreatorFee"),
+  seq(u8(), 6),
+  u64("creatorFeesMintA"),
+  u64("creatorFeesMintB"),
+
+  seq(u64(), 28),
 ]);
+
+export const CpmmPermission = struct([blob(8), publicKey("configId"), seq(u64(), 30)]);

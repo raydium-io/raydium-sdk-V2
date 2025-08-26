@@ -19,7 +19,12 @@ import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { publicKey, struct } from "../../marshmallow";
 import { Price, TokenAmount } from "../../module";
-import { ClmmRpcData, ComputeClmmPoolInfo, PoolUtils, ReturnTypeFetchMultiplePoolTickArrays } from "../../raydium/clmm";
+import {
+  ClmmParsedRpcData,
+  ComputeClmmPoolInfo,
+  PoolUtils,
+  ReturnTypeFetchMultiplePoolTickArrays,
+} from "../../raydium/clmm";
 import { PoolInfoLayout } from "../../raydium/clmm/layout";
 import { CpmmPoolInfoLayout, getPdaPoolAuthority } from "../../raydium/cpmm";
 import {
@@ -620,7 +625,7 @@ export default class TradeV2 extends ModuleBase {
     mintInfos: ReturnTypeFetchMultipleMintInfos;
     ammPoolsRpcInfo: Record<string, AmmRpcData>;
     ammSimulateCache: Record<string, ComputeAmountOutParam["poolInfo"]>;
-    clmmPoolsRpcInfo: Record<string, ClmmRpcData>;
+    clmmPoolsRpcInfo: Record<string, ClmmParsedRpcData>;
     computeClmmPoolInfo: Record<string, ComputeClmmPoolInfo>;
     computePoolTickData: ReturnTypeFetchMultiplePoolTickArrays;
     computeCpmmData: Record<string, CpmmComputeData>;
@@ -1097,7 +1102,7 @@ export default class TradeV2 extends ModuleBase {
     ammRpcData = {},
   }: {
     pools: ComputePoolType[];
-    clmmRpcData?: Record<string, ClmmRpcData>;
+    clmmRpcData?: Record<string, ClmmParsedRpcData>;
     ammRpcData?: Record<string, AmmRpcData>;
   }): Promise<PoolKeys[]> {
     const clmmFetchKeys = new Set(
