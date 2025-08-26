@@ -76,6 +76,7 @@ export interface ApiCpmmConfigInfo {
   tradeFeeRate: number;
   fundFeeRate: number;
   createPoolFee: string;
+  creatorFeeRate: number;
 }
 
 export interface ApiClmmPoolsItemStatistics {

@@ -4,7 +4,7 @@ import Decimal from "decimal.js-light";
 import { ApiV3Token } from "../../../api/type";
 import { BNDivCeil } from "../../../common";
 import { ConstantProductCurve } from "./constantProduct";
-import { CpmmFee } from "./fee";
+import { CpmmFee as Fee } from "./fee";
 
 export enum RoundDirection {
   Floor,
@@ -16,11 +16,24 @@ export type SwapWithoutFeesResult = { destinationAmountSwapped: BN };
 export type TradingTokenResult = { tokenAmount0: BN; tokenAmount1: BN };
 
 export type SwapResult = {
-  newSwapDestinationAmount: BN;
-  sourceAmountSwapped: BN;
-  destinationAmountSwapped: BN;
+  newInputVaultAmount: BN;
+  newOutputVaultAmount: BN;
+  inputAmount: BN;
+  outputAmount: BN;
   tradeFee: BN;
+  protocolFee: BN;
+  fundFee: BN;
+  creatorFee: BN;
 };
+
+export enum TradeDirection {
+  ZeroForOne,
+  OneForZero,
+}
+export enum TradeDirectionOpposite {
+  OneForZero,
+  ZeroForOne,
+}
 
 export class CurveCalculator {
   static validate_supply(tokenAmount0: BN, tokenAmount1: BN): void {
@@ -28,76 +41,111 @@ export class CurveCalculator {
     if (tokenAmount1.isZero()) throw Error("tokenAmount1 is zero");
   }
 
-  static swap(sourceAmount: BN, swapSourceAmount: BN, swapDestinationAmount: BN, tradeFeeRate: BN): SwapResult {
-    const tradeFee = CpmmFee.tradingFee(sourceAmount, tradeFeeRate);
+  static swapBaseInput(
+    inputAmount: BN,
+    inputVaultAmount: BN,
+    outputVaultAmount: BN,
+    tradeFeeRate: BN,
+    creatorFeeRate: BN,
+    protocolFeeRate: BN,
+    fundFeeRate: BN,
+    isCreatorFeeOnInput: boolean,
+  ): SwapResult {
+    let creatorFee = new BN(0);
 
-    const sourceAmountLessFees = sourceAmount.sub(tradeFee);
+    const tradeFee = Fee.tradingFee(inputAmount, tradeFeeRate);
 
-    const { destinationAmountSwapped } = ConstantProductCurve.swapWithoutFees(
-      sourceAmountLessFees,
-      swapSourceAmount,
-      swapDestinationAmount,
+    let inputAmountLessFees;
+    if (isCreatorFeeOnInput) {
+      creatorFee = Fee.creatorFee(inputAmount, creatorFeeRate);
+      inputAmountLessFees = inputAmount.sub(tradeFee).sub(creatorFee);
+    } else {
+      inputAmountLessFees = inputAmount.sub(tradeFee);
+    }
+
+    const protocolFee = Fee.protocolFee(tradeFee, protocolFeeRate);
+    const fundFee = Fee.protocolFee(tradeFee, fundFeeRate);
+
+    const outputAmountSwapped = ConstantProductCurve.swapBaseInputWithoutFees(
+      inputAmountLessFees,
+      inputVaultAmount,
+      outputVaultAmount,
     );
 
+    let outputAmount;
+    if (isCreatorFeeOnInput) {
+      outputAmount = outputAmountSwapped;
+    } else {
+      creatorFee = Fee.creatorFee(outputAmountSwapped, creatorFeeRate);
+      outputAmount = outputAmountSwapped.sub(creatorFee);
+    }
+
     return {
-      newSwapDestinationAmount: swapDestinationAmount.sub(destinationAmountSwapped),
-      sourceAmountSwapped: sourceAmount,
-      destinationAmountSwapped,
+      newInputVaultAmount: inputVaultAmount.add(inputAmountLessFees),
+      newOutputVaultAmount: outputVaultAmount.sub(outputAmountSwapped),
+      inputAmount,
+      outputAmount,
       tradeFee,
+      protocolFee,
+      fundFee,
+      creatorFee,
     };
   }
 
-  static swapBaseOut({
-    poolMintA,
-    poolMintB,
-    tradeFeeRate,
-    baseReserve,
-    quoteReserve,
-    outputMint,
-    outputAmount,
-  }: {
-    poolMintA: ApiV3Token;
-    poolMintB: ApiV3Token;
-    tradeFeeRate: BN;
-    baseReserve: BN;
-    quoteReserve: BN;
-    outputMint: string | PublicKey;
-    outputAmount: BN;
-  }): {
-    amountRealOut: BN;
+  static swapBaseOutput(
+    outputAmount: BN,
+    inputVaultAmount: BN,
+    outputVaultAmount: BN,
+    tradeFeeRate: BN,
+    creatorFeeRate: BN,
+    protocolFeeRate: BN,
+    fundFeeRate: BN,
+    isCreatorFeeOnInput: boolean,
+  ): SwapResult {
+    let tradeFee;
+    let creatorFee = new BN(0);
 
-    amountIn: BN;
-    amountInWithoutFee: BN;
+    let actualOutputAmount;
 
-    tradeFee: BN;
-    priceImpact: number;
-  } {
-    const [reserveInAmount, reserveOutAmount, reserveInDecimals, reserveOutDecimals, inputMint] =
-      poolMintB.address === outputMint.toString()
-        ? [baseReserve, quoteReserve, poolMintA.decimals, poolMintB.decimals, poolMintA.address]
-        : [quoteReserve, baseReserve, poolMintB.decimals, poolMintA.decimals, poolMintB.address];
-    const currentPrice = new Decimal(reserveOutAmount.toString())
-      .div(10 ** reserveOutDecimals)
-      .div(new Decimal(reserveInAmount.toString()).div(10 ** reserveInDecimals));
-    const amountRealOut = outputAmount.gte(reserveOutAmount) ? reserveOutAmount.sub(new BN(1)) : outputAmount;
+    if (isCreatorFeeOnInput) {
+      actualOutputAmount = outputAmount;
+    } else {
+      const outAmountWithCreatorFee = Fee.calculatePreFeeAmount(outputAmount, creatorFeeRate);
+      creatorFee = outAmountWithCreatorFee.sub(outputAmount);
+      actualOutputAmount = outAmountWithCreatorFee;
+    }
 
-    const denominator = reserveOutAmount.sub(amountRealOut);
-    const amountInWithoutFee = BNDivCeil(reserveInAmount.mul(amountRealOut), denominator);
-    const amountIn = BNDivCeil(amountInWithoutFee.mul(new BN(1_000_000)), new BN(1_000_000).sub(tradeFeeRate));
-    const fee = amountIn.sub(amountInWithoutFee);
-    const executionPrice = new Decimal(amountRealOut.toString())
-      .div(10 ** reserveOutDecimals)
-      .div(new Decimal(amountIn.toString()).div(10 ** reserveInDecimals));
-    const priceImpact = currentPrice.isZero() ? 0 : executionPrice.sub(currentPrice).div(currentPrice).abs().toNumber();
+    const inputAmountSwapped = ConstantProductCurve.swapBaseOutputWithoutFees(
+      actualOutputAmount,
+      inputVaultAmount,
+      outputVaultAmount,
+    );
+
+    let inputAmount;
+    if (isCreatorFeeOnInput) {
+      const inputAmountWithFee = Fee.calculatePreFeeAmount(inputAmountSwapped, tradeFeeRate.add(creatorFeeRate));
+      const totalFee = inputAmountWithFee.sub(inputAmountSwapped);
+      creatorFee = Fee.splitCreatorFee(totalFee, tradeFeeRate, creatorFeeRate);
+      tradeFee = totalFee.sub(creatorFee);
+      inputAmount = inputAmountWithFee;
+    } else {
+      const inputAmountWithFee = Fee.calculatePreFeeAmount(inputAmountSwapped, tradeFeeRate);
+      tradeFee = inputAmountWithFee.sub(inputAmountSwapped);
+      inputAmount = inputAmountWithFee;
+    }
+
+    const protocolFee = Fee.protocolFee(tradeFee, protocolFeeRate);
+    const fundFee = Fee.fundFee(tradeFee, fundFeeRate);
 
     return {
-      amountRealOut,
-
-      amountIn,
-      amountInWithoutFee,
-
-      tradeFee: fee,
-      priceImpact,
+      newInputVaultAmount: inputVaultAmount.add(inputAmountSwapped),
+      newOutputVaultAmount: outputAmount.sub(actualOutputAmount),
+      inputAmount,
+      outputAmount,
+      tradeFee,
+      protocolFee,
+      fundFee,
+      creatorFee,
     };
   }
 }

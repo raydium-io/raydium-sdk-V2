@@ -15,7 +15,6 @@ import {
   FormatFarmKeyOut,
   AvailabilityCheckAPI3,
   PoolFetchType,
-  ExtensionsItem,
   JupToken,
 } from "./type";
 import { API_URLS, API_URL_CONFIG } from "./url";

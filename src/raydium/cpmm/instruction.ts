@@ -14,12 +14,12 @@ import {
 } from "@/common";
 import { getCpmmPdaPoolId, getCpLockPda } from "./pda";
 
-import { struct, u64, bool } from "@/marshmallow";
+import { struct, u8, u64, bool } from "@/marshmallow";
 import { ReturnTypeMakeInstructions } from "@/raydium/type";
 import { ApiV3PoolInfoStandardItemCpmm, CpmmKeys } from "@/api";
 import { getATAAddress } from "@/common";
 import { getPdaMetadataKey } from "../clmm";
-import { CpmmLockExtInfo } from "./type";
+import { CpmmLockExtInfo, FeeOn } from "./type";
 
 const logger = createLogger("Raydium_cpmm");
 const anchorDataBuf = {
@@ -30,6 +30,11 @@ const anchorDataBuf = {
   swapBaseOutput: [55, 217, 98, 86, 163, 74, 180, 173],
   lockCpLiquidity: [216, 157, 29, 78, 38, 51, 31, 26],
   collectCpFee: [8, 30, 51, 199, 209, 184, 247, 133],
+
+  createPermissionPda: Buffer.from([135, 136, 2, 216, 137, 169, 181, 202]),
+  closePermissionPda: Buffer.from([156, 84, 32, 118, 69, 135, 70, 123]),
+  initializeWithPermission: Buffer.from([63, 55, 254, 65, 49, 178, 89, 121]),
+  collectCreatorFee: Buffer.from([20, 22, 86, 123, 198, 28, 219, 132]),
 };
 
 export function makeCreateCpmmPoolInInstruction(
@@ -537,5 +542,116 @@ export function collectCpFeeInstruction({
     keys,
     programId,
     data: aData,
+  });
+}
+
+export function makeCollectCreatorFeeInstruction(
+  programId: PublicKey,
+  creator: PublicKey,
+  authority: PublicKey,
+  poolId: PublicKey,
+  configId: PublicKey,
+  vaultA: PublicKey,
+  vaultB: PublicKey,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  ownerVaultA: PublicKey,
+  ownerVaultB: PublicKey,
+  mintProgramA: PublicKey,
+  mintProgramB: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: creator, isSigner: true, isWritable: false },
+    { pubkey: authority, isSigner: false, isWritable: false },
+    { pubkey: poolId, isSigner: false, isWritable: true },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: vaultA, isSigner: false, isWritable: true },
+    { pubkey: vaultB, isSigner: false, isWritable: true },
+    { pubkey: mintA, isSigner: false, isWritable: false },
+    { pubkey: mintB, isSigner: false, isWritable: false },
+    { pubkey: ownerVaultA, isSigner: false, isWritable: true },
+    { pubkey: ownerVaultB, isSigner: false, isWritable: true },
+    { pubkey: mintProgramA, isSigner: false, isWritable: false },
+    { pubkey: mintProgramB, isSigner: false, isWritable: false },
+    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.collectCreatorFee,
+  });
+}
+
+export function initializeWithPermission(
+  programId: PublicKey,
+  payer: PublicKey,
+  creator: PublicKey,
+  configId: PublicKey,
+  authority: PublicKey,
+  poolId: PublicKey,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  lpMint: PublicKey,
+  payerVaultA: PublicKey,
+  payerVaultB: PublicKey,
+  payerLpAccount: PublicKey,
+  vaultA: PublicKey,
+  vaultB: PublicKey,
+  createPoolFeeAccount: PublicKey,
+  mintProgramA: PublicKey,
+  mintProgramB: PublicKey,
+  observationId: PublicKey,
+  permissionPda: PublicKey,
+
+  amountA: BN,
+  amountB: BN,
+  openTime: BN,
+
+  feeOn: FeeOn,
+): TransactionInstruction {
+  const dataLayout = struct([u64("amountA"), u64("amountB"), u64("openTime"), u8("feeOn")]);
+
+  const keys: Array<AccountMeta> = [
+    { pubkey: payer, isSigner: true, isWritable: false },
+    { pubkey: creator, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: authority, isSigner: false, isWritable: false },
+    { pubkey: poolId, isSigner: false, isWritable: true },
+    { pubkey: mintA, isSigner: false, isWritable: false },
+    { pubkey: mintB, isSigner: false, isWritable: false },
+    { pubkey: lpMint, isSigner: false, isWritable: true },
+    { pubkey: payerVaultA, isSigner: false, isWritable: true },
+    { pubkey: payerVaultB, isSigner: false, isWritable: true },
+    { pubkey: payerLpAccount, isSigner: false, isWritable: true },
+    { pubkey: vaultA, isSigner: false, isWritable: true },
+    { pubkey: vaultB, isSigner: false, isWritable: true },
+    { pubkey: createPoolFeeAccount, isSigner: false, isWritable: true },
+    { pubkey: observationId, isSigner: false, isWritable: true },
+    { pubkey: permissionPda, isSigner: false, isWritable: true },
+
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: mintProgramA, isSigner: false, isWritable: false },
+    { pubkey: mintProgramB, isSigner: false, isWritable: false },
+    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  const data = Buffer.alloc(dataLayout.span);
+  dataLayout.encode(
+    {
+      amountA,
+      amountB,
+      openTime,
+      feeOn,
+    },
+    data,
+  );
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: Buffer.from([...anchorDataBuf.initializeWithPermission, ...data]),
   });
 }

@@ -21,7 +21,6 @@ import Launchpad from "./launchpad/launchpad";
 
 import TokenModule from "./token/token";
 import { SignAllTransactions } from "./type";
-import { getDevLookupTableCache } from "@/common";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */

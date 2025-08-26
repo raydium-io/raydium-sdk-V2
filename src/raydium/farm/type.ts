@@ -5,6 +5,7 @@ import { TxVersion } from "../../common";
 import { BigNumberish } from "../../common/bignumber";
 import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { poolTypeV6 } from "./config";
+import { farmRewardTimeInfoLayout } from "./layout";
 
 export type RewardType = keyof typeof poolTypeV6;
 export interface APIRewardInfo {
@@ -34,13 +35,7 @@ export interface FarmRewardInfo {
   rewardType: RewardType;
 }
 
-export interface FarmRewardInfoConfig {
-  isSet: BN;
-  rewardPerSecond: BN;
-  rewardOpenTime: BN;
-  rewardEndTime: BN;
-  rewardType: BN;
-}
+export type FarmRewardInfoConfig = ReturnType<typeof farmRewardTimeInfoLayout.decode>;
 
 export interface RewardInfoKey {
   rewardMint: PublicKey;

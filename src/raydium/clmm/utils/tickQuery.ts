@@ -4,10 +4,10 @@ import BN from "bn.js";
 import { getMultipleAccountsInfo } from "../../../common";
 import { TickArrayLayout } from "../layout";
 
-import { TickArrayBitmapExtensionType } from "../type";
 import { MAX_TICK, MIN_TICK } from "./constants";
 import { getPdaTickArrayAddress } from "./pda";
 import { Tick, TICK_ARRAY_SIZE, TickArray, TickUtils } from "./tick";
+import { TickArrayBitmapExtensionLayout } from "../layout";
 
 export const FETCH_TICKARRAY_COUNT = 15;
 
@@ -26,7 +26,7 @@ export class TickQuery {
     tickCurrent: number,
     tickSpacing: number,
     tickArrayBitmapArray: BN[],
-    exTickArrayBitmap: TickArrayBitmapExtensionType,
+    exTickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
   ): Promise<{ [key: string]: TickArray }> {
     const tickArraysToFetch: PublicKey[] = [];
     const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(tickCurrent, tickSpacing);
@@ -104,7 +104,7 @@ export class TickQuery {
     tickSpacing: number,
     zeroForOne: boolean,
     tickArrayBitmap: BN[],
-    exBitmapInfo: TickArrayBitmapExtensionType,
+    exBitmapInfo: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
   ): {
     isExist: boolean;
     nextStartIndex: number;

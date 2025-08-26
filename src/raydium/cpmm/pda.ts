@@ -7,6 +7,7 @@ const POOL_SEED = Buffer.from("pool", "utf8");
 const POOL_LP_MINT_SEED = Buffer.from("pool_lp_mint", "utf8");
 const POOL_VAULT_SEED = Buffer.from("pool_vault", "utf8");
 const OBSERVATION_SEED = Buffer.from("observation", "utf8");
+const PERMISSION_SEED = Buffer.from("permission", "utf8");
 
 export function getPdaPoolAuthority(programId: PublicKey): {
   publicKey: PublicKey;
@@ -125,4 +126,14 @@ export function getCpLockPda(
   nonce: number;
 } {
   return findProgramAddress([LOCK_LIQUIDITY_SEED, mint.toBuffer()], programId);
+}
+
+export function getPdaPermissionId(
+  programId: PublicKey,
+  owner: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress([PERMISSION_SEED, owner.toBuffer()], programId);
 }

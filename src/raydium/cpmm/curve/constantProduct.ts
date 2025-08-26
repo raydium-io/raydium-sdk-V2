@@ -1,5 +1,5 @@
 import BN from "bn.js";
-import { RoundDirection, SwapWithoutFeesResult, TradingTokenResult } from "./calculator";
+import { RoundDirection, TradingTokenResult } from "./calculator";
 
 function checkedRem(dividend: BN, divisor: BN): BN {
   if (divisor.isZero()) throw Error("divisor is zero");
@@ -13,18 +13,10 @@ function checkedCeilDiv(dividend: BN, rhs: BN): BN[] {
 
   let quotient = dividend.div(rhs);
 
-  if (quotient.isZero()) throw Error("quotient is zero");
-
-  let remainder = checkedRem(dividend, rhs);
+  const remainder = checkedRem(dividend, rhs);
 
   if (remainder.gt(ZERO)) {
     quotient = quotient.add(new BN(1));
-
-    rhs = dividend.div(quotient);
-    remainder = checkedRem(dividend, quotient);
-    if (remainder.gt(ZERO)) {
-      rhs = rhs.add(new BN(1));
-    }
   }
   return [quotient, rhs];
 }
@@ -32,18 +24,20 @@ function checkedCeilDiv(dividend: BN, rhs: BN): BN[] {
 const ZERO = new BN(0);
 
 export class ConstantProductCurve {
-  static swapWithoutFees(sourceAmount: BN, swapSourceAmount: BN, swapDestinationAmount: BN): SwapWithoutFeesResult {
-    const invariant = swapSourceAmount.mul(swapDestinationAmount);
+  static swapBaseInputWithoutFees(inputAmount: BN, inputVaultAmount: BN, onputVaultAmount: BN): BN {
+    const numerator = inputAmount.mul(onputVaultAmount);
+    const denominator = inputVaultAmount.add(inputAmount);
 
-    const newSwapSourceAmount = swapSourceAmount.add(sourceAmount);
-    const [newSwapDestinationAmount] = checkedCeilDiv(invariant, newSwapSourceAmount);
+    const outputAmount = numerator.div(denominator);
+    return outputAmount;
+  }
 
-    const destinationAmountSwapped = swapDestinationAmount.sub(newSwapDestinationAmount);
-    if (destinationAmountSwapped.isZero()) throw Error("destinationAmountSwapped is zero");
+  static swapBaseOutputWithoutFees(outputAmount: BN, inputVaultAmount: BN, onputVaultAmount: BN): BN {
+    const numerator = inputVaultAmount.mul(outputAmount);
+    const denominator = onputVaultAmount.sub(outputAmount);
+    const [inputAmount] = checkedCeilDiv(numerator, denominator);
 
-    return {
-      destinationAmountSwapped,
-    };
+    return inputAmount;
   }
 
   static lpTokensToTradingTokens(
