@@ -50,6 +50,7 @@
     "jsonfile": "^6.1.0",
     "lodash": "^4.17.21",
     "toformat": "^2.0.0",
+    "tsc-alias": "^1.8.16",
     "tsconfig-paths": "^4.2.0"
   },
   "devDependencies": {
