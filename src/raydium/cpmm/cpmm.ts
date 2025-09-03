@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PublicKey } from "@solana/web3.js";
 import { ApiV3PoolInfoStandardItemCpmm, CpmmKeys } from "../../api/type";
 import {

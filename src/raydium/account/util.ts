@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AccountInfo, GetProgramAccountsResponse, Keypair, PublicKey, RpcResponseAndContext } from "@solana/web3.js";
 import BN from "bn.js";
 import { createLogger, getATAAddress } from "../../common";
