@@ -16,8 +16,9 @@ import {
   AvailabilityCheckAPI3,
   PoolFetchType,
   JupToken,
+  ApiLaunchConfig,
 } from "./type";
-import { API_URLS, API_URL_CONFIG } from "./url";
+import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
 import { PublicKey } from "@solana/web3.js";
 import { solToWSol } from "../common";
@@ -25,6 +26,7 @@ import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 const logger = createLogger("Raydium_Api");
 const poolKeysCache: Map<string, PoolKeys> = new Map();
+const cacheLaunchConfigs: Map<Cluster, ApiLaunchConfig[]> = new Map();
 
 export async function endlessRetry<T>(name: string, call: () => Promise<T>, interval = 1000): Promise<T> {
   let result: T | undefined;
@@ -63,7 +65,10 @@ export class Api {
     this.urlConfigs = urlConfigs || {};
     this.logCount = logCount || 1000;
 
-    this.api = axios.create({ baseURL: this.urlConfigs.BASE_HOST || API_URLS.BASE_HOST, timeout });
+    this.api = axios.create({
+      baseURL: this.urlConfigs.BASE_HOST || this.cluster === "devnet" ? DEV_API_URLS.BASE_HOST : API_URLS.BASE_HOST,
+      timeout,
+    });
 
     this.api.interceptors.request.use(
       (config) => {
@@ -293,5 +298,22 @@ export class Api {
       this.urlConfigs.CHECK_AVAILABILITY || API_URLS.CHECK_AVAILABILITY,
     );
     return res.data;
+  }
+
+  async fetchLaunchConfigs(): Promise<ApiLaunchConfig[]> {
+    if (cacheLaunchConfigs.get(this.cluster)?.length) {
+      return cacheLaunchConfigs.get(this.cluster)!;
+    }
+    const res = await this.api.get<{
+      id: string;
+      success: boolean;
+      data: ApiLaunchConfig[];
+    }>(
+      this.cluster === "devnet"
+        ? "https://launch-mint-v1-devnet.raydium.io/main/configs"
+        : "https://launch-mint-v1.raydium.io/main/configs",
+    );
+    cacheLaunchConfigs.set(this.cluster, res.data.data);
+    return res.data.data;
   }
 }

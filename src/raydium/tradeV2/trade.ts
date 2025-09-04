@@ -1,8 +1,15 @@
 import { EpochInfo, PublicKey } from "@solana/web3.js";
-import { createTransferInstruction, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import {
+  createTransferInstruction,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  TransferFee,
+  TransferFeeConfig,
+} from "@solana/spl-token";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { AmmV4Keys, ApiV3Token, ClmmKeys, PoolKeys } from "@/api";
+import { AmmV4Keys, ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys, PoolKeys } from "@/api";
 import {
   AMM_V4,
   BigNumberish,
@@ -20,10 +27,15 @@ import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { publicKey, struct } from "../../marshmallow";
 import { Price, TokenAmount } from "../../module";
 import {
+  ClmmInstrument,
   ClmmParsedRpcData,
   ComputeClmmPoolInfo,
+  MAX_SQRT_PRICE_X64,
+  MIN_SQRT_PRICE_X64,
   PoolUtils,
+  ReturnTypeComputeAmountOutFormat,
   ReturnTypeFetchMultiplePoolTickArrays,
+  SqrtPriceMath,
 } from "../../raydium/clmm";
 import { PoolInfoLayout } from "../../raydium/clmm/layout";
 import { CpmmPoolInfoLayout, getPdaPoolAuthority } from "../../raydium/cpmm";
@@ -33,7 +45,7 @@ import {
   liquidityStateV4Layout,
   toAmmComputePoolInfo,
 } from "../../raydium/liquidity";
-import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos } from "../../raydium/type";
+import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos, TransferAmountFee } from "../../raydium/type";
 import { closeAccountInstruction, createWSolAccountInstructions } from "../account/instruction";
 import { TokenAccount } from "../account/types";
 import { CpmmComputeData } from "../cpmm";
@@ -52,6 +64,18 @@ import {
   ReturnTypeGetAllRoute,
   RoutePathType,
 } from "./type";
+import {
+  buyExactInInstruction,
+  Curve,
+  getPdaCreatorVault,
+  getPdaLaunchpadAuth,
+  getPdaPlatformVault,
+  LaunchpadConfigInfo,
+  LaunchpadPlatformInfo,
+  LaunchpadPoolInfo,
+  PlatformConfig,
+  SwapInfoReturn,
+} from "../launchpad";
 
 const ZERO = new BN(0);
 export default class TradeV2 extends ModuleBase {
@@ -319,6 +343,387 @@ export default class TradeV2 extends ModuleBase {
         MakeMultiTxData<T>
       >;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig, address: swapIns.address }) as Promise<MakeMultiTxData<T>>;
+  }
+
+  public async swapClmmToLaunchMint<T extends TxVersion>({
+    inputMint,
+    inputAmount,
+    clmmPoolId,
+    launchPoolId,
+    priceLimit,
+    slippage = 0.01,
+    shareFeeRate = new BN(0),
+    shareFeeReceiver,
+    ownerInfo = { useSOLBalance: true },
+    checkCreateATAOwner = false,
+    computeBudgetConfig,
+    txVersion,
+  }: {
+    inputMint: string | PublicKey;
+    inputAmount: BN;
+    clmmPoolId: string | PublicKey;
+    launchPoolId: string | PublicKey;
+    priceLimit?: Decimal;
+    slippage: number; // from 0~1
+    shareFeeRate?: BN;
+    shareFeeReceiver?: PublicKey;
+    ownerInfo?: {
+      useSOLBalance?: boolean;
+      feePayer?: PublicKey;
+    };
+    checkCreateATAOwner?: boolean;
+    computeBudgetConfig?: ComputeBudgetConfig;
+    txVersion: T;
+  }): Promise<
+    MakeTxData<
+      T,
+      {
+        routes: { mint: PublicKey; amount: BN }[];
+        outAmount: BN;
+        minOutAmount: BN;
+      }
+    >
+  > {
+    const feePayer = ownerInfo?.feePayer || this.scope.ownerPubKey;
+    const epochInfo = await this.scope.fetchEpochInfo();
+
+    const {
+      clmmPoolData,
+      clmmComputeAmount: { minAmountOut: clmmMintAmountOut, remainingAccounts },
+      launchPoolInfo,
+      launchAuthProgramId,
+      launchSwapInfo,
+      outAmount,
+      minOutAmount,
+    } = await this.computeClmmToLaunchAmount({
+      inputMint,
+      inputAmount,
+      clmmPoolId,
+      launchPoolId,
+      slippage,
+      epochInfo,
+      shareFeeRate,
+    });
+    const baseIn = inputMint.toString() === clmmPoolData.poolInfo.mintA.address;
+
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && clmmPoolData.poolInfo.mintA.address === WSOLMint.toBase58();
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && clmmPoolData.poolInfo.mintB.address === WSOLMint.toBase58();
+    const tokenAccountMap: Record<string, PublicKey> = {};
+
+    let sqrtPriceLimitX64: BN;
+    if (!priceLimit || priceLimit.equals(new Decimal(0))) {
+      sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
+    } else {
+      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+        priceLimit,
+        clmmPoolData.poolInfo.mintA.decimals,
+        clmmPoolData.poolInfo.mintB.decimals,
+      );
+    }
+
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const [clmmMintA, clmmMintB] = [
+      new PublicKey(clmmPoolData.poolInfo.mintA.address),
+      new PublicKey(clmmPoolData.poolInfo.mintB.address),
+    ];
+    const [clmmMintAProgram, clmmMintBProgram] = [
+      new PublicKey(clmmPoolData.poolInfo.mintA.programId),
+      new PublicKey(clmmPoolData.poolInfo.mintB.programId),
+    ];
+
+    let ownerTokenAccountA = mintAUseSOLBalance
+      ? undefined
+      : this.scope.account.getAssociatedTokenAccount(clmmMintA, clmmMintAProgram);
+
+    let ownerTokenAccountB = mintBUseSOLBalance
+      ? undefined
+      : this.scope.account.getAssociatedTokenAccount(clmmMintB, clmmMintBProgram);
+
+    // this means mintA is wsol
+    if (!ownerTokenAccountA) {
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: clmmMintAProgram,
+        mint: clmmMintA,
+        notUseTokenAccount: true,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: false,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount: baseIn ? inputAmount : 0,
+        },
+        associatedOnly: false,
+        checkCreateATAOwner,
+      });
+      ownerTokenAccountA = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    }
+
+    // this means mintB is wsol
+    if (!ownerTokenAccountB) {
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: clmmMintBProgram,
+        mint: clmmMintB,
+        notUseTokenAccount: true,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: false,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount: baseIn ? 0 : inputAmount,
+        },
+        associatedOnly: false,
+        checkCreateATAOwner,
+      });
+      ownerTokenAccountB = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    }
+    tokenAccountMap[clmmPoolData.poolInfo.mintA.address] = ownerTokenAccountA;
+    tokenAccountMap[clmmPoolData.poolInfo.mintB.address] = ownerTokenAccountB;
+
+    if (!ownerTokenAccountA || !ownerTokenAccountB)
+      this.logAndCreateError("user do not have token account", {
+        ownerTokenAccountA,
+        ownerTokenAccountB,
+      });
+
+    txBuilder.addInstruction(
+      ClmmInstrument.makeSwapBaseInInstructions({
+        poolInfo: clmmPoolData.poolInfo,
+        poolKeys: clmmPoolData.poolKeys,
+        observationId: clmmPoolData.computePoolInfo.observationId,
+        ownerInfo: {
+          wallet: this.scope.ownerPubKey,
+          tokenAccountA: ownerTokenAccountA!,
+          tokenAccountB: ownerTokenAccountB!,
+        },
+        inputMint: new PublicKey(inputMint),
+        amountIn: inputAmount,
+        amountOutMin: clmmMintAmountOut.amount.raw,
+        sqrtPriceLimitX64,
+        remainingAccounts,
+      }),
+    );
+
+    const launchMintAProgram = launchPoolInfo.mintProgramFlag === 0 ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+    const launchTokenAccountA = this.scope.account.getAssociatedTokenAccount(launchPoolInfo.mintA, launchMintAProgram);
+    let launchTokenAccountB = tokenAccountMap[launchPoolInfo.mintB.toBase58()];
+
+    txBuilder.addInstruction({
+      instructions: [
+        createAssociatedTokenAccountIdempotentInstruction(
+          this.scope.ownerPubKey,
+          launchTokenAccountA,
+          this.scope.ownerPubKey,
+          launchPoolInfo.mintA,
+          launchMintAProgram,
+        ),
+      ],
+    });
+
+    if (!launchTokenAccountB) {
+      const mintBUseSol = launchPoolInfo.mintB.equals(WSOLMint);
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: TOKEN_PROGRAM_ID,
+        mint: launchPoolInfo.mintB,
+        notUseTokenAccount: mintBUseSol,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !mintBUseSol,
+        createInfo: mintBUseSol
+          ? {
+              payer: this.scope.ownerPubKey!,
+              amount: clmmMintAmountOut.amount.raw,
+            }
+          : undefined,
+        associatedOnly: false,
+        checkCreateATAOwner,
+      });
+      launchTokenAccountB = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    }
+
+    txBuilder.addInstruction({
+      instructions: [
+        buyExactInInstruction(
+          launchPoolInfo.programId,
+          this.scope.ownerPubKey,
+          launchAuthProgramId,
+          launchPoolInfo.configId,
+          launchPoolInfo.platformId,
+          new PublicKey(launchPoolId),
+          launchTokenAccountA,
+          launchTokenAccountB,
+          launchPoolInfo.vaultA,
+          launchPoolInfo.vaultB,
+          launchPoolInfo.mintA,
+          launchPoolInfo.mintB,
+          launchMintAProgram,
+          TOKEN_PROGRAM_ID,
+
+          getPdaPlatformVault(launchPoolInfo.programId, launchPoolInfo.platformId, launchPoolInfo.mintB).publicKey,
+          getPdaCreatorVault(launchPoolInfo.programId, launchPoolInfo.creator, launchPoolInfo.mintB).publicKey,
+
+          launchSwapInfo.amountB.lt(clmmMintAmountOut.amount.raw)
+            ? launchSwapInfo.amountB
+            : clmmMintAmountOut.amount.raw,
+          minOutAmount,
+          shareFeeRate,
+          shareFeeReceiver,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: {
+        routes: [
+          {
+            mint: new PublicKey(inputMint),
+            amount: inputAmount,
+          },
+          {
+            mint: baseIn ? clmmMintB : clmmMintA,
+            amount: clmmMintAmountOut.amount.raw,
+          },
+          {
+            mint: launchPoolInfo.mintA,
+            amount: outAmount,
+          },
+        ],
+        outAmount,
+        minOutAmount,
+      },
+    }) as Promise<
+      MakeTxData<
+        T,
+        {
+          routes: { mint: PublicKey; amount: BN }[];
+          outAmount: BN;
+          minOutAmount: BN;
+        }
+      >
+    >;
+  }
+
+  public async computeClmmToLaunchAmount({
+    inputMint,
+    inputAmount,
+    clmmPoolId,
+    launchPoolId,
+    slippage,
+    epochInfo,
+    shareFeeRate = new BN(0),
+
+    clmmPoolData: propsClmmPoolData,
+    launchPoolInfo: propsLaunchPoolInfo,
+    launchPlatformInfo: propsLaunchPlatformInfo,
+  }: {
+    clmmPoolId: string | PublicKey;
+    launchPoolId: string | PublicKey;
+    inputMint: string | PublicKey;
+    inputAmount: BN;
+    slippage: number;
+    epochInfo?: EpochInfo;
+    shareFeeRate?: BN;
+
+    clmmPoolData?: {
+      poolInfo: ApiV3PoolInfoConcentratedItem;
+      poolKeys: ClmmKeys;
+      computePoolInfo: ComputeClmmPoolInfo;
+      tickData: ReturnTypeFetchMultiplePoolTickArrays;
+    };
+    launchPoolInfo?: LaunchpadPoolInfo & { programId: PublicKey; configInfo: LaunchpadConfigInfo };
+    launchPlatformInfo?: LaunchpadPlatformInfo;
+  }): Promise<{
+    clmmPoolData: {
+      poolInfo: ApiV3PoolInfoConcentratedItem;
+      poolKeys: ClmmKeys;
+      computePoolInfo: ComputeClmmPoolInfo;
+      tickData: ReturnTypeFetchMultiplePoolTickArrays;
+    };
+    clmmComputeAmount: ReturnTypeComputeAmountOutFormat;
+    launchPoolInfo: LaunchpadPoolInfo & { programId: PublicKey; configInfo: LaunchpadConfigInfo };
+    launchAuthProgramId: PublicKey;
+    outAmount: BN;
+    minOutAmount: BN;
+    launchSwapInfo: SwapInfoReturn;
+    launchMintTransferFeeConfig?: TransferFeeConfig;
+  }> {
+    const clmmPoolData = propsClmmPoolData ?? (await this.scope.clmm.getPoolInfoFromRpc(clmmPoolId.toString()));
+    const baseIn = inputMint.toString() === clmmPoolData.poolInfo.mintA.address;
+    const tokenOut = clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"];
+    const clmmComputeAmount = await PoolUtils.computeAmountOutFormat({
+      poolInfo: clmmPoolData.computePoolInfo,
+      tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
+      amountIn: inputAmount,
+      tokenOut,
+      slippage,
+      epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
+    });
+
+    let launchPoolInfo = propsLaunchPoolInfo;
+    if (!launchPoolInfo)
+      launchPoolInfo = await this.scope.launchpad.getRpcPoolInfo({ poolId: new PublicKey(launchPoolId) });
+
+    if (tokenOut.address !== launchPoolInfo.mintB.toBase58()) throw new Error("middle amount != launch pool mintB");
+    let platformInfo = propsLaunchPlatformInfo;
+    if (!platformInfo) {
+      const data = await this.scope.connection.getAccountInfo(launchPoolInfo.platformId);
+      platformInfo = PlatformConfig.decode(data!.data);
+    }
+    const mintInfo = await this.scope.token.getTokenInfo(launchPoolInfo.mintA);
+    const authProgramId = getPdaLaunchpadAuth(launchPoolInfo.programId).publicKey;
+
+    const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
+      ? {
+          transferFeeConfigAuthority: PublicKey.default,
+          withdrawWithheldAuthority: PublicKey.default,
+          withheldAmount: BigInt(0),
+          olderTransferFee: {
+            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
+            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
+          },
+          newerTransferFee: {
+            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
+            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
+          },
+        }
+      : undefined;
+
+    const launchSwapInfo = Curve.buyExactIn({
+      poolInfo: launchPoolInfo,
+      amountB: clmmComputeAmount.minAmountOut.amount.raw,
+      protocolFeeRate: launchPoolInfo.configInfo.tradeFeeRate,
+      platformFeeRate: platformInfo.feeRate,
+      curveType: launchPoolInfo.configInfo.curveType,
+      shareFeeRate,
+      creatorFeeRate: platformInfo.creatorFeeRate,
+      transferFeeConfigA: launchMintTransferFeeConfig,
+      slot: await this.scope.connection.getSlot(),
+    });
+
+    const outAmount = launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0));
+    const decimalAmountA = new Decimal(outAmount.toString());
+
+    const SLIPPAGE_UNIT = new BN(10000);
+    const multiplier = slippage
+      ? new Decimal(SLIPPAGE_UNIT.sub(new BN(slippage * 10000)).toNumber() / SLIPPAGE_UNIT.toNumber()).clampedTo(0, 1)
+      : new Decimal(1);
+
+    return {
+      clmmPoolData,
+      clmmComputeAmount,
+
+      launchPoolInfo,
+      launchAuthProgramId: authProgramId,
+      launchMintTransferFeeConfig,
+      launchSwapInfo,
+      outAmount: launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0)),
+      minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0)),
+    };
   }
 
   // get all amm/clmm/cpmm pools data only with id and mint

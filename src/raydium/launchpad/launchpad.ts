@@ -6,7 +6,6 @@ import {
   getMultipleAccountsInfoWithCustomFlags,
   getATAAddress,
   MakeMultiTxData,
-  DEVNET_PROGRAM_ID,
 } from "@/common";
 import {
   BuyToken,
@@ -42,7 +41,6 @@ import {
   getPdaVestId,
 } from "./pda";
 import {
-  initialize,
   buyExactInInstruction,
   sellExactInInstruction,
   createPlatformConfig,
@@ -73,12 +71,14 @@ import { getPdaMetadataKey } from "../clmm";
 import { LaunchpadConfig, LaunchpadPool, PlatformConfig } from "./layout";
 import { Curve, SwapInfoReturn } from "./curve/curve";
 import Decimal from "decimal.js";
+import { ApiV3Token } from "@/api";
 
 export const LaunchpadPoolInitParam = {
   initPriceX64: new BN("515752397214619"),
   supply: new BN(1_000_000_000_000_000),
   totalSellA: new BN(793_100_000_000_000),
   totalFundRaisingB: new BN(85_000_000_000),
+  totalFundRaisingBUSD: new BN(12_500_000_000),
   totalLockedAmount: new BN("0"),
   cliffPeriod: new BN("0"),
   unlockPeriod: new BN("0"),
@@ -99,6 +99,11 @@ export const LaunchpadPoolInitParam = {
 };
 
 const SLIPPAGE_UNIT = new BN(10000);
+
+export const usdMintBSet = new Set([
+  "USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT",
+  "USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB",
+]);
 
 export interface SwapInfoReturnExt extends SwapInfoReturn {
   decimalOutAmount: Decimal;
@@ -170,9 +175,13 @@ export default class LaunchpadModule extends ModuleBase {
     if (symbol.length > 10) this.logAndCreateError("Symbol length should shorter than 11");
     if (!uri) this.logAndCreateError("uri should not empty");
 
-    const supply = extraConfigs?.supply ?? LaunchpadPoolInitParam.supply;
-    const totalSellA = extraConfigs?.totalSellA ?? LaunchpadPoolInitParam.totalSellA;
-    const totalFundRaisingB = extraConfigs?.totalFundRaisingB ?? LaunchpadPoolInitParam.totalFundRaisingB;
+    const configs = await this.scope.api.fetchLaunchConfigs();
+    const apiConfig = configs.find((c) => c.key.pubKey === configId.toBase58())!;
+
+    const supply = extraConfigs?.supply ?? new BN(apiConfig.defaultParams.supplyInit);
+    const totalSellA = extraConfigs?.totalSellA ?? new BN(apiConfig.defaultParams.totalSellA);
+
+    const totalFundRaisingB = extraConfigs?.totalFundRaisingB ?? new BN(apiConfig.defaultParams.totalFundRaisingB);
     const totalLockedAmount = extraConfigs?.totalLockedAmount ?? new BN(0);
 
     let defaultPlatformFeeRate = platformFeeRate;
@@ -191,12 +200,19 @@ export default class LaunchpadModule extends ModuleBase {
       migrateFee: configInfo!.migrateFee,
     });
 
+    let mintBInfo: ApiV3Token | undefined;
+    try {
+      mintBInfo = await this.scope.token.getTokenInfo(mintB);
+    } catch {
+      this.logDebug("can not get mintB info from getTokenInfo");
+    }
+
     const poolInfo: LaunchpadPoolInfo = {
       epoch: new BN(896),
       bump: 254,
       status: 0,
       mintDecimalsA: decimals,
-      mintDecimalsB: mintBDecimals,
+      mintDecimalsB: mintBInfo?.decimals ?? mintBDecimals,
       supply,
       totalSellA,
       mintA: new PublicKey(mintA),
@@ -469,10 +485,13 @@ export default class LaunchpadModule extends ModuleBase {
     }
 
     const userTokenAccountA = this.scope.account.getAssociatedTokenAccount(mintA, mintAProgram);
-    let userTokenAccountB: PublicKey | null = fromCreate
+
+    const isMintBSol = mintB.equals(NATIVE_MINT);
+    const useAta = fromCreate && isMintBSol;
+    let userTokenAccountB: PublicKey | null = useAta
       ? this.scope.account.getAssociatedTokenAccount(mintB, TOKEN_PROGRAM_ID)
       : null;
-    const mintBUseSOLBalance = mintB.equals(NATIVE_MINT);
+    const mintBUseSOLBalance = isMintBSol;
 
     txBuilder.addInstruction({
       instructions: [
@@ -483,7 +502,7 @@ export default class LaunchpadModule extends ModuleBase {
           mintA,
           mintAProgram,
         ),
-        ...(fromCreate
+        ...(useAta
           ? [
               createAssociatedTokenAccountIdempotentInstruction(
                 this.scope.ownerPubKey,
@@ -503,7 +522,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    if (!fromCreate) {
+    if (!useAta) {
       const { account: _ownerTokenAccountB, instructionParams: _tokenAccountBInstruction } =
         await this.scope.account.getOrCreateTokenAccount({
           mint: mintB,
@@ -593,7 +612,6 @@ export default class LaunchpadModule extends ModuleBase {
         ],
       });
     }
-
     txBuilder.addInstruction({
       instructions: [
         buyExactInInstruction(
@@ -625,7 +643,6 @@ export default class LaunchpadModule extends ModuleBase {
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
-
     return txBuilder.versionBuild<SwapInfoReturnExt>({
       txVersion,
       extInfo: {
@@ -1815,7 +1832,7 @@ export default class LaunchpadModule extends ModuleBase {
     poolId,
   }: {
     poolId: PublicKey;
-  }): Promise<LaunchpadPoolInfo & { configInfo: LaunchpadConfigInfo }> {
+  }): Promise<LaunchpadPoolInfo & { programId: PublicKey; configInfo: LaunchpadConfigInfo }> {
     const data = await this.getRpcPoolsInfo({ poolIdList: [poolId] });
 
     return data.poolInfoMap[poolId.toBase58()];
@@ -1832,6 +1849,7 @@ export default class LaunchpadModule extends ModuleBase {
       string,
       LaunchpadPoolInfo & {
         poolId: PublicKey;
+        programId: PublicKey;
         configInfo: LaunchpadConfigInfo;
       }
     >;
@@ -1842,16 +1860,18 @@ export default class LaunchpadModule extends ModuleBase {
       config,
     );
 
-    const poolInfoMap: { [poolId: string]: LaunchpadPoolInfo & { poolId: PublicKey } } = {};
+    const poolInfoMap: { [poolId: string]: LaunchpadPoolInfo & { poolId: PublicKey; programId: PublicKey } } = {};
     const configKeys: PublicKey[] = [];
 
     for (let i = 0; i < poolIdList.length; i++) {
       const item = accounts[i];
+
       if (item === null || !item.accountInfo) throw Error("fetch pool info error: " + poolIdList[i].toBase58());
       const poolInfo = LaunchpadPool.decode(item.accountInfo.data);
       poolInfoMap[poolIdList[i].toBase58()] = {
         ...poolInfo,
-        poolId: item.accountInfo.owner,
+        poolId: poolIdList[i],
+        programId: item.accountInfo.owner,
       };
       configKeys.push(poolInfo.configId);
     }

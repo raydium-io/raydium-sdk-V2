@@ -72,10 +72,24 @@ export const API_URLS = {
   PRIORITY_FEE: "/main/auto-fee",
 
   CPMM_LOCK: "https://dynamic-ipfs.raydium.io/lock/cpmm/position",
+
+  LAUNCH_AUTH_HOST: "https://launch-auth-v1.raydium.io",
+  LAUNCH_COMMENT_HOST: "hhttps://launch-forum-v1.raydium.io",
+  LAUNCH_HISTORY_HOST: "https://launch-history-v1.raydium.io",
+  LAUNCH_MINT_HOST: "https://launch-mint-v1.raydium.io",
 };
 
 export const DEV_API_URLS = {
   ...API_URLS,
+  BASE_HOST: "https://api-v3-devnet.raydium.io",
+  OWNER_BASE_HOST: "https://owner-v1-devnet.raydium.io",
+  SWAP_HOST: "https://transaction-v1-devnet.raydium.io",
+  CPMM_LOCK: "https://dynamic-ipfs-devnet.raydium.io/lock/cpmm/position",
+
+  LAUNCH_AUTH_HOST: "https://launch-auth-v1-devnet.raydium.io",
+  LAUNCH_COMMENT_HOST: "https://launch-forum-v1-devnet.raydium.io",
+  LAUNCH_HISTORY_HOST: "https://launch-history-v1-devnet.raydium.io",
+  LAUNCH_MINT_HOST: "https://launch-mint-v1-devnet.raydium.io",
 };
 
 export type API_URL_CONFIG = Partial<typeof API_URLS>;

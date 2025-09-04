@@ -541,3 +541,32 @@ export type FarmPositionData = Record<
     >
   >
 >;
+
+export interface ApiLaunchConfig {
+  key: {
+    name: string;
+    pubKey: string;
+    epoch: number;
+    curveType: number;
+    index: number;
+    migrateFee: string;
+    tradeFeeRate: string;
+    maxShareFeeRate: string;
+    minSupplyA: string;
+    maxLockRate: string;
+    minSellRateA: string;
+    minMigrateRateA: string;
+    minFundRaisingB: string;
+    protocolFeeOwner: string;
+    migrateFeeOwner: string;
+    migrateToAmmWallet: string;
+    migrateToCpmmWallet: string;
+    mintB: string;
+  };
+  mintInfoB: ApiV3Token;
+  defaultParams: {
+    supplyInit: string;
+    totalFundRaisingB: string;
+    totalSellA: string;
+  };
+}
