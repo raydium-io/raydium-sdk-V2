@@ -611,7 +611,7 @@ export default class TradeV2 extends ModuleBase {
     inputAmount,
     clmmPoolId,
     launchPoolId,
-    slippage,
+    slippage: propsSlippage,
     epochInfo,
     shareFeeRate = new BN(0),
 
@@ -650,7 +650,17 @@ export default class TradeV2 extends ModuleBase {
     launchSwapInfo: SwapInfoReturn;
     launchMintTransferFeeConfig?: TransferFeeConfig;
   }> {
+    // split slippage for clmm swap and launch buy
+    const slippage =
+      propsSlippage > 0
+        ? new Decimal(propsSlippage).div(2).toDecimalPlaces(4, Decimal.ROUND_DOWN).toNumber()
+        : propsSlippage;
     const clmmPoolData = propsClmmPoolData ?? (await this.scope.clmm.getPoolInfoFromRpc(clmmPoolId.toString()));
+    if (
+      inputMint.toString() !== clmmPoolData.poolInfo.mintA.address &&
+      inputMint.toString() !== clmmPoolData.poolInfo.mintB.address
+    )
+      throw new Error("input mint does not match clmm pool mints, please check");
     const baseIn = inputMint.toString() === clmmPoolData.poolInfo.mintA.address;
     const tokenOut = clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"];
     const clmmComputeAmount = await PoolUtils.computeAmountOutFormat({
@@ -666,7 +676,8 @@ export default class TradeV2 extends ModuleBase {
     if (!launchPoolInfo)
       launchPoolInfo = await this.scope.launchpad.getRpcPoolInfo({ poolId: new PublicKey(launchPoolId) });
 
-    if (tokenOut.address !== launchPoolInfo.mintB.toBase58()) throw new Error("middle amount != launch pool mintB");
+    if (tokenOut.address !== launchPoolInfo.mintB.toBase58())
+      throw new Error(`clmm swap mint(${tokenOut.address}) != launch pool mintB(${launchPoolInfo.mintB.toBase58()})`);
     let platformInfo = propsLaunchPlatformInfo;
     if (!platformInfo) {
       const data = await this.scope.connection.getAccountInfo(launchPoolInfo.platformId);
