@@ -775,9 +775,6 @@ export default class Farm extends ModuleBase {
     const version = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
     if (version !== 6) this.logAndCreateError("invalid farm version", version);
 
-    // const rewardInfoIdx = farmInfo.rewardInfos.findIndex((item) =>
-    //   item.mint.address === SOLMint.toString() ? new PublicKey(TOKEN_WSOL.address) : withdrawMint,
-    // );
     const rewardInfo = farmKeys.rewardInfos.find((r) => solToWSol(r.mint.address).equals(solToWSol(withdrawMint)));
     if (!rewardInfo) this.logAndCreateError("withdraw mint error", "rewardInfos", farmInfo);
 
@@ -805,7 +802,7 @@ export default class Farm extends ModuleBase {
         mint: withdrawMint,
       });
 
-      if (selectUserRewardToken === null) {
+      if (!selectUserRewardToken) {
         userRewardToken = await this.scope.account.getAssociatedTokenAccount(withdrawMint);
         txBuilder.addInstruction({
           instructions: [
@@ -832,6 +829,7 @@ export default class Farm extends ModuleBase {
       userRewardToken,
       owner: this.scope.ownerPubKey,
     });
+
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder

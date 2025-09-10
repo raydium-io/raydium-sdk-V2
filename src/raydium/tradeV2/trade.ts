@@ -358,6 +358,12 @@ export default class TradeV2 extends ModuleBase {
     slippage = 0.01,
     shareFeeRate = new BN(0),
     shareFeeReceiver,
+
+    launchPlatformInfo,
+    slot,
+    mintInfo,
+    epochInfo: propsEpochInfo,
+
     ownerInfo = { useSOLBalance: true },
     checkCreateATAOwner = false,
     computeBudgetConfig,
@@ -369,9 +375,15 @@ export default class TradeV2 extends ModuleBase {
     clmmPoolId: string | PublicKey;
     launchPoolId: string | PublicKey;
     priceLimit?: Decimal;
+    epochInfo?: EpochInfo;
     slippage: number; // from 0~1
     shareFeeRate?: BN;
     shareFeeReceiver?: PublicKey;
+
+    launchPlatformInfo?: Pick<LaunchpadPlatformInfo, "feeRate" | "creatorFeeRate">;
+    slot?: number;
+    mintInfo?: ApiV3Token;
+
     ownerInfo?: {
       useSOLBalance?: boolean;
       feePayer?: PublicKey;
@@ -390,7 +402,7 @@ export default class TradeV2 extends ModuleBase {
     >
   > {
     const feePayer = ownerInfo?.feePayer || this.scope.ownerPubKey;
-    const epochInfo = await this.scope.fetchEpochInfo();
+    const epochInfo = propsEpochInfo ?? (await this.scope.fetchEpochInfo());
 
     const {
       clmmPoolData,
@@ -409,6 +421,9 @@ export default class TradeV2 extends ModuleBase {
       slippage,
       epochInfo,
       shareFeeRate,
+      launchPlatformInfo,
+      slot,
+      mintInfo,
     });
     const baseIn = inputMint.toString() === clmmPoolData.poolInfo.mintA.address;
 
@@ -437,52 +452,6 @@ export default class TradeV2 extends ModuleBase {
       new PublicKey(clmmPoolData.poolInfo.mintA.programId),
       new PublicKey(clmmPoolData.poolInfo.mintB.programId),
     ];
-
-    // let ownerTokenAccountA = mintAUseSOLBalance
-    //   ? undefined
-    //   : this.scope.account.getAssociatedTokenAccount(clmmMintA, clmmMintAProgram);
-
-    // let ownerTokenAccountB = mintBUseSOLBalance
-    //   ? undefined
-    //   : this.scope.account.getAssociatedTokenAccount(clmmMintB, clmmMintBProgram);
-
-    //     // this means mintA is wsol
-    // if (!ownerTokenAccountA) {
-    //   const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-    //     tokenProgram: clmmMintAProgram,
-    //     mint: clmmMintA,
-    //     notUseTokenAccount: true,
-    //     owner: this.scope.ownerPubKey,
-    //     skipCloseAccount: false,
-    //     createInfo: {
-    //       payer: ownerInfo.feePayer || this.scope.ownerPubKey,
-    //       amount: baseIn ? inputAmount : 0,
-    //     },
-    //     associatedOnly: false,
-    //     checkCreateATAOwner,
-    //   });
-    //   ownerTokenAccountA = account!;
-    //   instructionParams && txBuilder.addInstruction(instructionParams);
-    // }
-
-    // // this means mintB is wsol
-    // if (!ownerTokenAccountB) {
-    //   const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-    //     tokenProgram: clmmMintBProgram,
-    //     mint: clmmMintB,
-    //     notUseTokenAccount: true,
-    //     owner: this.scope.ownerPubKey,
-    //     skipCloseAccount: false,
-    //     createInfo: {
-    //       payer: ownerInfo.feePayer || this.scope.ownerPubKey,
-    //       amount: baseIn ? 0 : inputAmount,
-    //     },
-    //     associatedOnly: false,
-    //     checkCreateATAOwner,
-    //   });
-    //   ownerTokenAccountB = account!;
-    //   instructionParams && txBuilder.addInstruction(instructionParams);
-    // }
 
     const ownerTokenAccountA = this.scope.account.getAssociatedTokenAccount(clmmMintA, clmmMintAProgram);
     const ownerTokenAccountB = this.scope.account.getAssociatedTokenAccount(clmmMintB, clmmMintBProgram);
@@ -678,6 +647,8 @@ export default class TradeV2 extends ModuleBase {
     clmmPoolData: propsClmmPoolData,
     launchPoolInfo: propsLaunchPoolInfo,
     launchPlatformInfo: propsLaunchPlatformInfo,
+    slot,
+    mintInfo: propsMintInfo,
   }: {
     clmmPoolId: string | PublicKey;
     launchPoolId: string | PublicKey;
@@ -695,7 +666,9 @@ export default class TradeV2 extends ModuleBase {
       tickData: ReturnTypeFetchMultiplePoolTickArrays;
     };
     launchPoolInfo?: LaunchpadPoolInfo & { programId: PublicKey; configInfo: LaunchpadConfigInfo };
-    launchPlatformInfo?: LaunchpadPlatformInfo;
+    launchPlatformInfo?: Pick<LaunchpadPlatformInfo, "feeRate" | "creatorFeeRate">;
+    slot?: number;
+    mintInfo?: ApiV3Token;
   }): Promise<{
     clmmPoolData: {
       poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -704,6 +677,7 @@ export default class TradeV2 extends ModuleBase {
       tickData: ReturnTypeFetchMultiplePoolTickArrays;
     };
     clmmComputeAmount: { maxClmmAmountIn: BN; clmmAmountOut: BN; remainingAccounts: PublicKey[] };
+    clmmComputeInfo: ReturnTypeComputeAmountOutBaseOut | ReturnTypeComputeAmountOutFormat;
     launchPoolInfo: LaunchpadPoolInfo & { programId: PublicKey; configInfo: LaunchpadConfigInfo };
     launchAuthProgramId: PublicKey;
     outAmount: BN;
@@ -754,7 +728,7 @@ export default class TradeV2 extends ModuleBase {
       const data = await this.scope.connection.getAccountInfo(launchPoolInfo.platformId);
       platformInfo = PlatformConfig.decode(data!.data);
     }
-    const mintInfo = await this.scope.token.getTokenInfo(launchPoolInfo.mintA);
+    const mintInfo = propsMintInfo ?? (await this.scope.token.getTokenInfo(launchPoolInfo.mintA));
     const authProgramId = getPdaLaunchpadAuth(launchPoolInfo.programId).publicKey;
 
     const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
@@ -788,7 +762,7 @@ export default class TradeV2 extends ModuleBase {
       shareFeeRate,
       creatorFeeRate: platformInfo.creatorFeeRate,
       transferFeeConfigA: launchMintTransferFeeConfig,
-      slot: await this.scope.connection.getSlot(),
+      slot: slot ?? (await this.scope.connection.getSlot()),
     });
 
     const outAmount = launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0));
@@ -808,6 +782,7 @@ export default class TradeV2 extends ModuleBase {
         clmmAmountOut: launchBuyAmount,
         remainingAccounts: clmmComputeAmount.remainingAccounts,
       },
+      clmmComputeInfo: clmmComputeAmount,
 
       launchPoolInfo,
       launchAuthProgramId: authProgramId,

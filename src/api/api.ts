@@ -66,7 +66,7 @@ export class Api {
     this.logCount = logCount || 1000;
 
     this.api = axios.create({
-      baseURL: this.urlConfigs.BASE_HOST || this.cluster === "devnet" ? DEV_API_URLS.BASE_HOST : API_URLS.BASE_HOST,
+      baseURL: this.urlConfigs.BASE_HOST || (this.cluster === "devnet" ? DEV_API_URLS.BASE_HOST : API_URLS.BASE_HOST),
       timeout,
     });
 
