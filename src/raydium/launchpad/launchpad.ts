@@ -541,9 +541,9 @@ export default class LaunchpadModule extends ModuleBase {
       if (_ownerTokenAccountB) userTokenAccountB = _ownerTokenAccountB;
       txBuilder.addInstruction(_tokenAccountBInstruction || {});
     }
-    if (userTokenAccountB === undefined)
+    if (!userTokenAccountB)
       this.logAndCreateError(
-        `cannot found mintB(${mintB.toBase58()}) token accounts`,
+        `cannot found mintB(${mintB.toBase58()}) buy token accounts`,
         "tokenAccounts",
         this.scope.account.tokenAccounts,
       );

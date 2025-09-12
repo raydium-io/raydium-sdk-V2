@@ -1172,9 +1172,6 @@ export default class TradeV2 extends ModuleBase {
       epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
     });
 
-    clmmComputeAmount.amountOut.amount;
-    clmmComputeAmount.minAmountOut;
-
     return {
       clmmPoolData,
       clmmComputeAmount,
