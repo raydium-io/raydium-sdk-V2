@@ -2,7 +2,7 @@ import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } 
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import { AmmV4Keys, AmmV5Keys } from "@/api/type";
-import { BN_ONE, BN_ZERO, MODEL_DATA_PUBKEY, parseBigNumberish } from "@/common";
+import { AMM_V4, BN_ONE, BN_ZERO, MODEL_DATA_PUBKEY, parseBigNumberish } from "@/common";
 import { createLogger } from "@/common/logger";
 import { accountMeta, RENT_PROGRAM_ID } from "@/common/pubKey";
 import { InstructionType } from "@/common/txTool/txType";
@@ -392,6 +392,122 @@ export function makeSwapFixedOutInstruction(
     keys,
     data,
   });
+}
+
+export function swapBaseInV2Instruction(
+  programId: PublicKey,
+  poolId: PublicKey,
+  auth: PublicKey,
+  vaultA: PublicKey,
+  vaultB: PublicKey,
+  ownerTokenIn: PublicKey,
+  ownerTokenOut: PublicKey,
+  owner: PublicKey,
+  amountIn: BN,
+  minAmountOut: BN,
+): TransactionInstruction {
+  const dataLayout = struct([u8("instructionId"), u64("amountIn"), u64("minAmountOut")]);
+  const data = Buffer.alloc(dataLayout.span);
+  dataLayout.encode(
+    {
+      instructionId: 16,
+      amountIn,
+      minAmountOut,
+    },
+    data,
+  );
+  const keys = [
+    // amm
+    { pubkey: TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
+    { pubkey: poolId, isWritable: true, isSigner: false },
+    { pubkey: auth, isWritable: false, isSigner: false },
+    { pubkey: vaultA, isWritable: true, isSigner: false },
+    { pubkey: vaultB, isWritable: true, isSigner: false },
+    { pubkey: ownerTokenIn, isWritable: true, isSigner: false },
+    { pubkey: ownerTokenOut, isWritable: true, isSigner: false },
+    { pubkey: owner, isWritable: false, isSigner: true },
+  ];
+  return new TransactionInstruction({
+    programId,
+    keys,
+    data,
+  });
+}
+export function swapBaseOutV2Instruction(
+  programId: PublicKey,
+  poolId: PublicKey,
+  auth: PublicKey,
+  vaultA: PublicKey,
+  vaultB: PublicKey,
+  ownerTokenIn: PublicKey,
+  ownerTokenOut: PublicKey,
+  onwer: PublicKey,
+  maxAmountIn: BN,
+  amountOut: BN,
+): TransactionInstruction {
+  const dataLayout = struct([u8("instructionId"), u64("maxAmountIn"), u64("amountOut")]);
+  const data = Buffer.alloc(dataLayout.span);
+  dataLayout.encode(
+    {
+      instructionId: 17,
+      maxAmountIn,
+      amountOut,
+    },
+    data,
+  );
+  const keys = [
+    { pubkey: TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
+    { pubkey: poolId, isWritable: true, isSigner: false },
+    { pubkey: auth, isWritable: false, isSigner: false },
+    { pubkey: vaultA, isWritable: true, isSigner: false },
+    { pubkey: vaultB, isWritable: true, isSigner: false },
+    // user
+    { pubkey: ownerTokenIn, isWritable: true, isSigner: false },
+    { pubkey: ownerTokenOut, isWritable: true, isSigner: false },
+    { pubkey: onwer, isWritable: false, isSigner: true },
+  ];
+  return new TransactionInstruction({
+    programId,
+    keys,
+    data,
+  });
+}
+
+export function makeAMMSwapV2Instruction(params: SwapInstructionParams): TransactionInstruction {
+  const { poolKeys, version, userKeys, amountIn, amountOut, fixedSide } = params;
+  if (version === 4) {
+    if (fixedSide === "in") {
+      return swapBaseInV2Instruction(
+        new PublicKey(poolKeys.programId),
+        new PublicKey(poolKeys.id),
+        new PublicKey(poolKeys.authority),
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        userKeys.tokenAccountIn,
+        userKeys.tokenAccountOut,
+        userKeys.owner,
+        new BN(amountIn.toString()),
+        new BN(amountOut.toString()),
+      );
+    } else if (fixedSide === "out") {
+      return swapBaseOutV2Instruction(
+        new PublicKey(poolKeys.programId),
+        new PublicKey(poolKeys.id),
+        new PublicKey(poolKeys.authority),
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        userKeys.tokenAccountIn,
+        userKeys.tokenAccountOut,
+        userKeys.owner,
+        new BN(amountIn.toString()),
+        new BN(amountOut.toString()),
+      );
+    }
+    logger.logWithError("invalid params", "params", params);
+  }
+
+  logger.logWithError("invalid version, only support pool v4", "poolKeys.version", version);
+  throw new Error("invalid version");
 }
 
 export function makeAMMSwapInstruction(params: SwapInstructionParams): TransactionInstruction {

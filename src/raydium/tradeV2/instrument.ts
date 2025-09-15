@@ -21,7 +21,7 @@ import {
   ONE,
   getPdaExBitmapAccount,
 } from "../clmm";
-import { makeAMMSwapInstruction } from "../liquidity/instruction";
+import { makeAMMSwapInstruction, makeAMMSwapV2Instruction } from "../liquidity/instruction";
 
 import { AmmV4Keys, AmmV5Keys, ApiV3PoolInfoItem, ClmmKeys, CpmmKeys, PoolKeys } from "../../api/type";
 import { makeSwapCpmmBaseInInstruction } from "../../raydium/cpmm";
@@ -603,18 +603,31 @@ export function makeSwapInstruction({
       return {
         signers: [],
         instructions: [
-          makeAMMSwapInstruction({
-            poolKeys: _poolKey,
-            version: swapInfo.poolInfo[0].pooltype.includes("StablePool") ? 5 : 4,
-            userKeys: {
-              tokenAccountIn: ownerInfo.sourceToken,
-              tokenAccountOut: ownerInfo.destinationToken,
-              owner: ownerInfo.wallet,
-            },
-            amountIn: swapInfo.amountIn.amount.raw,
-            amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
-            fixedSide: "in",
-          }),
+          swapInfo.poolInfo[0].pooltype.includes("StablePool")
+            ? makeAMMSwapInstruction({
+                poolKeys: _poolKey,
+                version: swapInfo.poolInfo[0].pooltype.includes("StablePool") ? 5 : 4,
+                userKeys: {
+                  tokenAccountIn: ownerInfo.sourceToken,
+                  tokenAccountOut: ownerInfo.destinationToken,
+                  owner: ownerInfo.wallet,
+                },
+                amountIn: swapInfo.amountIn.amount.raw,
+                amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
+                fixedSide: "in",
+              })
+            : makeAMMSwapV2Instruction({
+                poolKeys: _poolKey,
+                version: swapInfo.poolInfo[0].pooltype.includes("StablePool") ? 5 : 4,
+                userKeys: {
+                  tokenAccountIn: ownerInfo.sourceToken,
+                  tokenAccountOut: ownerInfo.destinationToken,
+                  owner: ownerInfo.wallet,
+                },
+                amountIn: swapInfo.amountIn.amount.raw,
+                amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
+                fixedSide: "in",
+              }),
         ],
         lookupTableAddress: _poolKey.lookupTableAccount ? [_poolKey.lookupTableAccount] : [],
         instructionTypes: [

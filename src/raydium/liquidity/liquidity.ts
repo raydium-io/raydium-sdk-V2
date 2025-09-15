@@ -32,8 +32,10 @@ import { LIQUIDITY_FEES_DENOMINATOR, LIQUIDITY_FEES_NUMERATOR } from "./constant
 import {
   createPoolV4InstructionV2,
   makeAMMSwapInstruction,
+  makeAMMSwapV2Instruction,
   makeAddLiquidityInstruction,
   removeLiquidityInstruction,
+  swapBaseInV2Instruction,
 } from "./instruction";
 import { createPoolFeeLayout, liquidityStateV4Layout } from "./layout";
 import { StableLayout, getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice } from "./stable";
@@ -1339,18 +1341,31 @@ export default class LiquidityModule extends ModuleBase {
 
     txBuilder.addInstruction({
       instructions: [
-        makeAMMSwapInstruction({
-          version,
-          poolKeys,
-          userKeys: {
-            tokenAccountIn: _tokenAccountIn!,
-            tokenAccountOut: _tokenAccountOut!,
-            owner: this.scope.ownerPubKey,
-          },
-          amountIn,
-          amountOut,
-          fixedSide,
-        }),
+        version === 4
+          ? makeAMMSwapV2Instruction({
+              version,
+              poolKeys,
+              userKeys: {
+                tokenAccountIn: _tokenAccountIn!,
+                tokenAccountOut: _tokenAccountOut!,
+                owner: this.scope.ownerPubKey,
+              },
+              amountIn,
+              amountOut,
+              fixedSide,
+            })
+          : makeAMMSwapInstruction({
+              version,
+              poolKeys,
+              userKeys: {
+                tokenAccountIn: _tokenAccountIn!,
+                tokenAccountOut: _tokenAccountOut!,
+                owner: this.scope.ownerPubKey,
+              },
+              amountIn,
+              amountOut,
+              fixedSide,
+            }),
       ],
       instructionTypes: [version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV5SwapBaseIn],
     });
