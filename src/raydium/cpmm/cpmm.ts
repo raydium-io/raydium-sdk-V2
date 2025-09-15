@@ -1397,11 +1397,13 @@ export default class CpmmModule extends ModuleBase {
     amountIn,
     outputMint,
     slippage,
+    swapBaseIn = true,
   }: {
     pool: CpmmComputeData;
     amountIn: BN;
     outputMint: string | PublicKey;
     slippage: number;
+    swapBaseIn?: boolean;
   }): {
     allTrade: boolean;
     amountIn: BN;
@@ -1413,7 +1415,7 @@ export default class CpmmModule extends ModuleBase {
   } {
     const isBaseIn = outputMint.toString() === pool.mintB.address;
     const isCreatorFeeOnInput = pool.feeOn === FeeOn.BothToken || pool.feeOn === FeeOn.OnlyTokenB;
-    const swapResult = isBaseIn
+    const swapResult = swapBaseIn
       ? CurveCalculator.swapBaseInput(
           amountIn,
           isBaseIn ? pool.baseReserve : pool.quoteReserve,
