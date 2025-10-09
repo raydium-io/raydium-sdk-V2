@@ -174,19 +174,98 @@ export type ApiV3Token = {
 };
 
 export type JupToken = {
-  address: string;
+  id: string;
   name: string;
   symbol: string;
   decimals: number;
-  logoURI: string;
+  icon: string;
+  circSupply: number;
+  totalSupply: number;
+  tokenProgram: string;
+  mintAuthority: string | undefined;
+  freezeAuthority: string | undefined;
+  firstPool: {
+    id: string;
+    createdAt: string;
+  };
+  holderCount: number;
+  audit: {
+    mintAuthorityDisabled: boolean;
+    freezeAuthorityDisabled: boolean;
+    topHoldersPercentage: number;
+  };
+  apy: {
+    jupEarn: number;
+  };
+
+  organicScore: number;
+  organicScoreLabel: string;
+  isVerified: boolean;
   tags: string[];
-  daily_volume: number;
-  created_at: string;
-  freeze_authority: string | null;
-  mint_authority: string | null;
-  permanent_delegate: string | null;
-  minted_at: string;
-  extensions: ExtensionsItem;
+  fdv: number;
+  mcap: number;
+  usdPrice: number;
+  priceBlockId: number;
+  liquidity: number;
+  stats5m: {
+    priceChange: number;
+    liquidityChange: number;
+    volumeChange: number;
+    buyVolume: number;
+    sellVolume: number;
+    buyOrganicVolume: number;
+    sellOrganicVolume: number;
+    numBuys: number;
+    numSells: number;
+    numTraders: number;
+    numOrganicBuyers: number;
+    numNetBuyers: number;
+  };
+  stats1h: {
+    priceChange: number;
+    liquidityChange: number;
+    volumeChange: number;
+    buyVolume: number;
+    sellVolume: number;
+    buyOrganicVolume: number;
+    sellOrganicVolume: number;
+    numBuys: number;
+    numSells: number;
+    numTraders: number;
+    numOrganicBuyers: number;
+    numNetBuyers: number;
+  };
+  stats6h: {
+    priceChange: number;
+    liquidityChange: number;
+    volumeChange: number;
+    buyVolume: number;
+    sellVolume: number;
+    buyOrganicVolume: number;
+    sellOrganicVolume: number;
+    numBuys: number;
+    numSells: number;
+    numTraders: number;
+    numOrganicBuyers: number;
+    numNetBuyers: number;
+  };
+  stats24h: {
+    priceChange: number;
+    liquidityChange: number;
+    volumeChange: number;
+    buyVolume: number;
+    sellVolume: number;
+    buyOrganicVolume: number;
+    sellOrganicVolume: number;
+    numBuys: number;
+    numSells: number;
+    numTraders: number;
+    numOrganicBuyers: number;
+    numNetBuyers: number;
+  };
+  ctLikes: number;
+  smartCtLikes: number;
+  updatedAt: string;
 };
 
 export type ApiV3TokenRes = {

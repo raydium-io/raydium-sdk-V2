@@ -194,7 +194,14 @@ export class Api {
     return r.map((t) => ({
       ...t,
       chainId: 101,
-      programId: t.tags.includes("token-2022") ? TOKEN_2022_PROGRAM_ID.toBase58() : TOKEN_PROGRAM_ID.toBase58(),
+      programId: t.tokenProgram,
+      address: t.id,
+      logoURI: t.icon,
+      extensions: {},
+      freeze_authority: null,
+      permanent_delegate: null,
+      mint_authority: t.mintAuthority || null,
+      minted_at: Date.now().toString(),
     }));
   }
 
