@@ -1,17 +1,35 @@
-# http://editorconfig.org
+# EditorConfig settings for consistent code style across all environments.
+# Reference: http://editorconfig.org
+
+# Denotes that this is the root file of the configuration.
 root = true
 
+# --- Global Settings for All Files (Default Configuration) ---
 [*]
+# Ensure all files use UTF-8 character encoding.
 charset = utf-8
+# Use Unix-style line endings (LF).
 end_of_line = lf
+# Indentation depth is set to 2 spaces.
 indent_size = 2
+# Use space characters instead of tabs for indentation.
 indent_style = space
+# Ensure all files end with a single newline character.
 insert_final_newline = true
+# Maximum line length is strictly enforced at 80 characters (traditional standard).
 max_line_length = 80
+# Automatically remove any whitespace characters at the end of a line.
 trim_trailing_whitespace = true
 
+# --- Specific Overrides ---
+
+# Markdown files (.md):
+# Trailing whitespace is often needed in Markdown to create hard line breaks (<br>),
+# so automatic trimming is disabled for this file type.
 [*.md]
 trim_trailing_whitespace = false
 
+# JSON files (.json):
+# JSON files typically should not have a final newline character to be parsable as clean text payloads.
 [*.json]
 insert_final_newline = false
