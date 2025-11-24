@@ -1,17 +1,33 @@
 # http://editorconfig.org
+
+# Global setting indicating that this is the root EditorConfig file.
 root = true
 
+# --- Global Settings for All Files (*) ---
 [*]
+# Ensure consistent character encoding across all files.
 charset = utf-8
+# Use Unix-style line endings (LF) to prevent issues in cross-platform development.
 end_of_line = lf
+# Indent with 2 spaces. This is the common standard for most JavaScript/TypeScript and configuration files.
 indent_size = 2
+# Use spaces instead of tabs for indentation.
 indent_style = space
+# Ensure files end with a single newline character.
 insert_final_newline = true
+# Enforce maximum line length for improved readability and side-by-side comparison.
+# NOTE: While 80 is traditional, some teams prefer 100 or 120 for modern contexts.
 max_line_length = 80
+# Automatically remove whitespace characters at the end of a line.
 trim_trailing_whitespace = true
 
+# --- Markdown File Overrides (.md) ---
 [*.md]
+# Trailing whitespace is often used for creating line breaks in Markdown, 
+# so automatic trimming is disabled for these files.
 trim_trailing_whitespace = false
 
+# --- JSON File Overrides (.json) ---
 [*.json]
+# Many tools and systems prefer that JSON files do NOT end with a final newline.
 insert_final_newline = false
