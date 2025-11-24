@@ -1,9 +1,34 @@
+/**
+ * TypeDoc Configuration File
+ * Used to generate API documentation from TypeScript source files.
+ */
 {
+  // --- Input Settings ---
   "entryPoints": [
     "./src"
   ],
-  "githubPages": false,
+  // The entry point resolution method. "packages" is often used in monorepos.
+  "entryPointStrategy": "resolve", 
+  
+  // --- Output Settings ---
+  // Suggested: Use a specific directory like 'docs/api' instead of 'dist' 
+  // to prevent conflicts with JS bundle outputs (e.g., from Vite/Webpack).
+  "out": "docs/api",
+  
+  // If true, the output directory is cleaned before generation. Recommended.
+  "cleanOutputDir": true,
+
+  // --- Style and Presentation ---
+  "theme": "default", 
+  "name": "Project Core API Documentation",
   "hideGenerator": true,
-  "out": "dist",
-  "preserveWatchOutput": true
+  "githubPages": false,
+
+  // --- Build & Development ---
+  // How modules are displayed (e.g., "modules" or "external")
+  "includeVersion": true,
+  "preserveWatchOutput": true,
+  
+  // Specify which external modules to include in the output.
+  "excludeExternals": true
 }
