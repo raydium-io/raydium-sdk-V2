@@ -1,29 +1,62 @@
 {
+  // --- Core Editor Settings ---
+
+  // Enable automatic formatting upon saving a file.
   "editor.formatOnSave": true,
+  // Set Prettier as the default formatter for all supported languages.
   "editor.defaultFormatter": "esbenp.prettier-vscode",
+  // Use 2 spaces for tab size, which is standard in many JS/TS projects.
   "editor.tabSize": 2,
-  // format flow
-  "editor.codeActionsOnSave": ["source.formatDocument", "source.organizeImports.sortImports"],
+
+  // --- Formatting and Import Management Flow ---
+
+  // Execute specific code actions on save.
+  "editor.codeActionsOnSave": [
+    // Format the entire document (triggered by "editor.formatOnSave": true)
+    "source.formatDocument",
+    
+    // NOTE: Removed "source.organizeImports.sortImports" to prevent conflicts
+    // with tsImportSorter/Prettier when organizing imports.
+    "source.fixAll.eslint" // Ensure ESLint fixes are applied on save
+  ],
+
+  // --- Language Specific Settings (ESLint) ---
+  
+  // Enable ESLint validation only for TypeScript files.
   "eslint.validate": ["typescript"],
-  // https://marketplace.visualstudio.com/items?itemName=dozerg.tsimportsorter
+
+  // --- tsImportSorter Configuration (Import Ordering) ---
+  
+  // Custom grouping rules for import statements.
+  // Standard recommended flow: External -> Aliases -> Relative paths
   "tsImportSorter.configuration.groupRules": [
-    ["^@\\w", "^\\w"],
-    ["^@/"],
-    ["^\\.\\."],
-    ["^\\."],
+    // 1. External dependencies (e.g., node_modules: @scope, standard packages)
+    ["^@\\w", "^\\w"], 
+    // 2. Path aliases (e.g., @/components)
+    ["^@/"], 
+    // 3. Parent relative paths (e.g., ../../...)
+    ["^\\.\\."], 
+    // 4. Sibling/current directory relative paths (e.g., ./...)
+    ["^\\."], 
+    // 5. Special flag group (often for side-effect imports, though not common)
     { "flags": "scripts" }
   ],
+  // Keep unused imports matching the pattern (here, keeping all unused imports, often useful for type imports).
   "tsImportSorter.configuration.keepUnused": [".*"],
+  // Disable wrapping/line-break limits in import statements (0 = no limit).
   "tsImportSorter.configuration.wrappingStyle": {
     "maxNamesPerWrappedLine": 0,
     "maxBindingNamesPerLine": 0,
     "maxDefaultAndBindingNamesPerLine": 0
   },
-  // aaron-bond.better-comments
+
+  // --- Better Comments Configuration (aaron-bond.better-comments) ---
+  
+  // Enable styling for comments spanning multiple lines.
   "better-comments.multilineComments": true,
   "better-comments.tags": [
     {
-      "tag": "!",
+      "tag": "!", // Highlight: Critical/Error/Attention
       "color": "#FF2D00",
       "strikethrough": false,
       "underline": false,
@@ -32,7 +65,7 @@
       "italic": false
     },
     {
-      "tag": "?",
+      "tag": "?", // Highlight: Question/Review
       "color": "#3498DB",
       "strikethrough": false,
       "underline": false,
@@ -41,7 +74,7 @@
       "italic": false
     },
     {
-      "tag": "//",
+      "tag": "//", // Highlight: Strikethrough for completed/deprecated code sections
       "color": "#474747",
       "strikethrough": true,
       "underline": false,
@@ -50,7 +83,7 @@
       "italic": false
     },
     {
-      "tag": "todo",
+      "tag": "todo", // Highlight: Future task/TODO
       "color": "#FF8C00",
       "strikethrough": false,
       "underline": false,
@@ -59,7 +92,7 @@
       "italic": false
     },
     {
-      "tag": "*",
+      "tag": "*", // Highlight: Standard comment/Documentation
       "color": "#98C379",
       "strikethrough": false,
       "underline": false,
