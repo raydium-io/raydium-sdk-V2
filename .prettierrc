@@ -1,19 +1,35 @@
 {
-  "arrowParens": "always",
-  "bracketSpacing": true,
-  "eslintIntegration": true,
-  "overrides": [
-    {
-      "files": ".prettierrc",
-      "options": {
-        "parser": "typescript"
-      }
-    }
-  ],
+  // --- Core Styling ---
+  
+  // Maximum line length allowed. Common values are 80 or 120.
   "printWidth": 120,
-  "semi": true,
-  "singleQuote": false,
+  
+  // Specify the number of spaces per indentation-level.
   "tabWidth": 2,
+  
+  // Use spaces instead of tabs for indentation.
+  "useTabs": false,
+  
+  // Print semicolons at the end of statements.
+  "semi": true,
+  
+  // Use double quotes instead of single quotes.
+  "singleQuote": false,
+  
+  // Print trailing commas wherever possible (e.g., in objects, arrays, and function calls).
   "trailingComma": "all",
-  "useTabs": false
+  
+  // Include parentheses around a sole arrow function parameter. E.g., (x) => x
+  "arrowParens": "always",
+  
+  // Print spaces between brackets in object literals. E.g., { foo: bar } vs {foo: bar}.
+  "bracketSpacing": true
+
+  // --- Integration (Removed) ---
+  
+  // NOTE: "eslintIntegration": true is removed as it's deprecated since Prettier v2.0.
+  // Integration with ESLint should be handled in .eslintrc using eslint-config-prettier.
+  
+  // NOTE: The 'overrides' block is removed assuming this is a simple JSON config file 
+  // where the default JSON parser is sufficient.
 }
