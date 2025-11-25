@@ -1,19 +1,42 @@
 {
+  // --- Line Width and Indentation ---
+  
+  // Maximum line length before Prettier wraps the code.
+  "printWidth": 120,
+  // Number of spaces per indentation level.
+  "tabWidth": 2,
+  // Use spaces instead of tabs for indentation (standard practice).
+  "useTabs": false,
+
+  // --- Quotes and Punctuation ---
+  
+  // Use single quotes instead of double quotes where possible (Recommended for JS/TS clarity).
+  "singleQuote": true,
+  // Print semi-colons at the end of statements.
+  "semi": true,
+  // Trailing commas wherever valid (Aesthetic/functional best practice for cleaner diffs).
+  "trailingComma": "all",
+  
+  // --- Formatting Rules ---
+  
+  // Always include parentheses around arrow function parameters, even for single argument.
   "arrowParens": "always",
+  // Include spaces between brackets in object literals.
   "bracketSpacing": true,
-  "eslintIntegration": true,
+  
+  // NOTE: "eslintIntegration" is deprecated in Prettier v2+. Modern integration relies on ESLint plugins/configs.
+  
+  // --- File Overrides ---
+  
+  // Specific formatting options for certain file paths.
   "overrides": [
     {
+      // Target the prettier configuration file itself.
       "files": ".prettierrc",
       "options": {
-        "parser": "typescript"
+        // Use the JavaScript parser for JSON/JS configuration files.
+        "parser": "json"
       }
     }
-  ],
-  "printWidth": 120,
-  "semi": true,
-  "singleQuote": false,
-  "tabWidth": 2,
-  "trailingComma": "all",
-  "useTabs": false
+  ]
 }
