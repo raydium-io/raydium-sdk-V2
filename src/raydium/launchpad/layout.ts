@@ -65,7 +65,9 @@ export const LaunchpadPool = struct([
   u8("mintProgramFlag"),
   u8("cpmmCreatorFeeOn"),
 
-  seq(u8(), 62),
+  u64('platformVestingShare'),
+
+  seq(u8(), 54),
 ]);
 
 export const LaunchpadVesting = struct([
@@ -114,7 +116,11 @@ export const PlatformConfig = struct([
   publicKey("cpConfigId"),
   u64("creatorFeeRate"),
   publicKey("transferFeeExtensionAuth"),
-  seq(u8(), 180),
+
+  publicKey('platformVestingWallet'),
+  u64('platformVestingScale'),
+
+  seq(u8(), 140),
 
   vec(PlatformCurveParam, "platformCurve"),
 ]);

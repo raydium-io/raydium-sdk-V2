@@ -36,6 +36,7 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   shareFeeRate?: BN;
   shareFeeReceiver?: PublicKey;
   platformFeeRate?: BN; // for preload usage
+  platformVestingScale?: BN; // for preload usage
 
   createOnly?: boolean;
 
@@ -126,6 +127,7 @@ export interface CreatePlatform<T = TxVersion.LEGACY> {
   platformAdmin: PublicKey;
   platformClaimFeeWallet: PublicKey;
   platformLockNftWallet: PublicKey;
+  platformVestingWallet: PublicKey;
   cpConfigId: PublicKey;
 
   migrateCpLockNftScale: {
@@ -140,6 +142,7 @@ export interface CreatePlatform<T = TxVersion.LEGACY> {
   name: string;
   web: string;
   img: string;
+  platformVestingScale?: BN;
 
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
@@ -159,11 +162,14 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
     | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
     | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
     | { type: "updateCpConfigId"; value: PublicKey }
+    | { type: "updateVestingWallet"; value: PublicKey }
+    | { type: "updatePlatformVestingScale"; value: BN }
     | {
         type: "updateAll";
         value: {
           platformClaimFeeWallet: PublicKey;
           platformLockNftWallet: PublicKey;
+          platformVestingWallet: PublicKey;
           cpConfigId: PublicKey;
           migrateCpLockNftScale: {
             platformScale: BN;
@@ -176,6 +182,7 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
           img: string;
           transferFeeExtensionAuth: PublicKey;
           creatorFeeRate: BN;
+          platformVestingScale: BN;
         };
       };
 
@@ -185,6 +192,20 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface CreatePlatformVestingAccount<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  platformVestingWallet: PublicKey;
+  beneficiary: PublicKey;
+  platformId: PublicKey;
+  poolId: PublicKey;
+  vestingRecord?: PublicKey;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
 export interface ClaimPlatformFee<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   authProgramId?: PublicKey;

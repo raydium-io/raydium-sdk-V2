@@ -22,6 +22,7 @@ import {
   CreateLaunchPad,
   CreateMultipleVesting,
   CreatePlatform,
+  CreatePlatformVestingAccount,
   CreateVesting,
   LaunchpadConfigInfo,
   LaunchpadPoolInfo,
@@ -54,6 +55,7 @@ import {
   claimPlatformFeeFromVault,
   claimCreatorFee,
   initializeV2,
+  createPlatformVestingAccountIns,
 } from "./instrument";
 import {
   NATIVE_MINT,
@@ -129,6 +131,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     configInfo: propConfigInfo,
     platformFeeRate,
+    platformVestingScale,
     txVersion,
     computeBudgetConfig,
     txTipConfig,
@@ -184,12 +187,21 @@ export default class LaunchpadModule extends ModuleBase {
     const totalFundRaisingB = extraConfigs?.totalFundRaisingB ?? new BN(apiConfig.defaultParams.totalFundRaisingB);
     const totalLockedAmount = extraConfigs?.totalLockedAmount ?? new BN(0);
 
-    let defaultPlatformFeeRate = platformFeeRate;
-    if (!platformFeeRate) {
-      const platformData = await this.scope.connection.getAccountInfo(platformId);
-      if (!platformData) this.logAndCreateError("platform id not found:", platformId.toString());
-      defaultPlatformFeeRate = PlatformConfig.decode(platformData!.data).feeRate;
-    }
+    // let defaultPlatformFeeRate = platformFeeRate;
+    // let defaultPlatformVestingScale = platformVestingScale;
+    // if (!platformFeeRate) {
+    //   const platformData = await this.scope.connection.getAccountInfo(platformId);
+    //   if (!platformData) this.logAndCreateError("platform id not found:", platformId.toString());
+    //   const platform = PlatformConfig.decode(platformData!.data);
+    //   defaultPlatformVestingScale = platform.platformVestingScale;
+    //   defaultPlatformFeeRate = platform.feeRate;
+    // }
+
+    const platformData = await this.scope.connection.getAccountInfo(platformId);
+    if (!platformData) this.logAndCreateError("platform id not found:", platformId.toString());
+    const platform = PlatformConfig.decode(platformData!.data);
+    const defaultPlatformVestingScale = platform.platformVestingScale;
+    const defaultPlatformFeeRate = platform.feeRate;
 
     const curve = Curve.getCurve(configInfo!.curveType);
     const initParam = curve.getInitParam({
@@ -240,6 +252,7 @@ export default class LaunchpadModule extends ModuleBase {
       },
       mintProgramFlag: token2022 ? 1 : 0,
       cpmmCreatorFeeOn: creatorFeeOn,
+      platformVestingShare: defaultPlatformVestingScale ?? new BN(0),
     };
 
     const initCurve = Curve.getCurve(configInfo!.curveType);
@@ -1210,6 +1223,7 @@ export default class LaunchpadModule extends ModuleBase {
     platformAdmin,
     platformClaimFeeWallet,
     platformLockNftWallet,
+    platformVestingWallet,
     cpConfigId,
     migrateCpLockNftScale,
     transferFeeExtensionAuth,
@@ -1218,6 +1232,7 @@ export default class LaunchpadModule extends ModuleBase {
     name,
     web,
     img,
+    platformVestingScale = new BN(0), // max: 1_000_000 = 100%
     txVersion,
     computeBudgetConfig,
     txTipConfig,
@@ -1234,6 +1249,7 @@ export default class LaunchpadModule extends ModuleBase {
           platformAdmin,
           platformClaimFeeWallet,
           platformLockNftWallet,
+          platformVestingWallet,
           platformId,
 
           cpConfigId,
@@ -1247,6 +1263,7 @@ export default class LaunchpadModule extends ModuleBase {
           name,
           web,
           img,
+          platformVestingScale,
         ),
       ],
     });
@@ -1286,6 +1303,44 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData>;
+  }
+
+  public async createPlatformVestingAccount<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+
+    platformVestingWallet,
+    beneficiary,
+    platformId,
+    poolId,
+    vestingRecord: propsVestingRecord,
+
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: CreatePlatformVestingAccount<T>): Promise<MakeTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const vestingRecord = propsVestingRecord ?? getPdaVestId(programId, poolId, beneficiary).publicKey;
+
+    txBuilder.addInstruction({
+      instructions: [
+        createPlatformVestingAccountIns(
+          programId,
+          platformVestingWallet,
+          beneficiary,
+          platformId,
+          poolId,
+          vestingRecord,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
   }
 
   public async claimPlatformFee<T extends TxVersion>({
