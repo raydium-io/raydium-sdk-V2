@@ -26,6 +26,8 @@ export const anchorDataBuf = {
 
   updatePlatformCurveParam: Buffer.from([138, 144, 138, 250, 220, 128, 4, 57]),
   removePlatformCurveParam: Buffer.from([27, 30, 62, 169, 93, 224, 24, 145]),
+
+  createPlatformVestingAccount: Buffer.from([146, 71, 173, 69, 98, 19, 15, 106]),
 };
 
 export function initialize(
@@ -96,10 +98,10 @@ export function initialize(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -198,10 +200,10 @@ export function initializeV2(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -297,10 +299,10 @@ export function initializeWithToken2022(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -740,6 +742,7 @@ export function createPlatformConfig(
   platformAdmin: PublicKey,
   platformClaimFeeWallet: PublicKey,
   platformLockNftWallet: PublicKey,
+  platformVestingWallet: PublicKey,
   platformId: PublicKey,
 
   cpConfigId: PublicKey,
@@ -756,6 +759,7 @@ export function createPlatformConfig(
   name: string,
   web: string,
   img: string,
+  platformVestingScale: BN,
 ): TransactionInstruction {
   const dataLayout = struct([
     u64("platformScale"),
@@ -767,6 +771,8 @@ export function createPlatformConfig(
     str("web"),
     str("img"),
     u64("creatorFeeRate"),
+
+    u64('platformVestingScale'),
   ]);
 
   const keys: Array<AccountMeta> = [
@@ -777,14 +783,15 @@ export function createPlatformConfig(
     { pubkey: cpConfigId, isSigner: false, isWritable: true },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     { pubkey: transferFeeExtensionAuth, isSigner: false, isWritable: false },
+    { pubkey: platformVestingWallet, isSigner: false, isWritable: false },
   ];
 
   const data = Buffer.alloc(
-    8 * 5 +
-      Buffer.from(name, "utf-8").length +
-      Buffer.from(web, "utf-8").length +
-      Buffer.from(img, "utf-8").length +
-      4 * 3,
+    8 * 6 +
+    Buffer.from(name, "utf-8").length +
+    Buffer.from(web, "utf-8").length +
+    Buffer.from(img, "utf-8").length +
+    4 * 3,
   );
   dataLayout.encode(
     {
@@ -796,6 +803,7 @@ export function createPlatformConfig(
       web,
       img,
       creatorFeeRate,
+      platformVestingScale,
     },
     data,
   );
@@ -819,25 +827,29 @@ export function updatePlatformConfig(
     | { type: "updateName" | "updateImg" | "updateWeb"; value: string }
     | { type: "migrateCpLockNftScale"; value: { platformScale: BN; creatorScale: BN; burnScale: BN } }
     | { type: "updateCpConfigId"; value: PublicKey }
+    | { type: 'updateVestingWallet', value: PublicKey }
+    | { type: 'updatePlatformVestingScale', value: BN }
     | {
-        type: "updateAll";
-        value: {
-          platformClaimFeeWallet: PublicKey;
-          platformLockNftWallet: PublicKey;
-          cpConfigId: PublicKey;
-          migrateCpLockNftScale: {
-            platformScale: BN;
-            creatorScale: BN;
-            burnScale: BN;
-          };
-          feeRate: BN;
-          name: string;
-          web: string;
-          img: string;
-          transferFeeExtensionAuth: PublicKey;
-          creatorFeeRate: BN;
+      type: "updateAll";
+      value: {
+        platformClaimFeeWallet: PublicKey;
+        platformLockNftWallet: PublicKey;
+        platformVestingWallet: PublicKey;
+        cpConfigId: PublicKey;
+        migrateCpLockNftScale: {
+          platformScale: BN;
+          creatorScale: BN;
+          burnScale: BN;
         };
-      },
+        feeRate: BN;
+        name: string;
+        web: string;
+        img: string;
+        transferFeeExtensionAuth: PublicKey;
+        creatorFeeRate: BN;
+        platformVestingScale: BN;
+      };
+    },
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: false },
@@ -890,24 +902,28 @@ export function updatePlatformConfig(
       str("img"),
       publicKey("transferFeeExtensionAuth"),
       u64("creatorFeeRate"),
+      u64('platformVestingScale'),
+      publicKey('platformVestingWallet'),
     ]);
     data = Buffer.alloc(
       1 +
-        32 +
-        32 +
-        8 * 4 +
-        4 * 3 +
-        Buffer.from(updateInfo.value.name, "utf-8").length +
-        Buffer.from(updateInfo.value.web, "utf-8").length +
-        Buffer.from(updateInfo.value.img, "utf-8").length +
-        32 +
-        8,
+      32 +
+      32 +
+      32 +
+      8 * 5 +
+      4 * 3 +
+      Buffer.from(updateInfo.value.name, "utf-8").length +
+      Buffer.from(updateInfo.value.web, "utf-8").length +
+      Buffer.from(updateInfo.value.img, "utf-8").length +
+      32 +
+      8,
     );
     dataLayout.encode(
       {
         index: 8,
         platformClaimFeeWallet: updateInfo.value.platformClaimFeeWallet,
         platformLockNftWallet: updateInfo.value.platformLockNftWallet,
+        platformVestingWallet: updateInfo.value.platformVestingWallet,
         platformScale: updateInfo.value.migrateCpLockNftScale.platformScale,
         creatorScale: updateInfo.value.migrateCpLockNftScale.creatorScale,
         burnScale: updateInfo.value.migrateCpLockNftScale.burnScale,
@@ -917,9 +933,19 @@ export function updatePlatformConfig(
         img: updateInfo.value.img,
         transferFeeExtensionAuth: updateInfo.value.transferFeeExtensionAuth,
         creatorFeeRate: updateInfo.value.creatorFeeRate,
+        platformVestingScale: updateInfo.value.platformVestingScale,
       },
       data,
     );
+
+  } else if (updateInfo.type === 'updateVestingWallet') {
+    const dataLayout = struct([u8('index'), publicKey('value')])
+    data = Buffer.alloc(dataLayout.span)
+    dataLayout.encode({ index: 9, value: updateInfo.value }, data)
+  } else if (updateInfo.type === 'updatePlatformVestingScale') {
+    const dataLayout = struct([u8('index'), u64('value')])
+    data = Buffer.alloc(dataLayout.span)
+    dataLayout.encode({ index: 10, value: updateInfo.value }, data)
   } else {
     throw Error("updateInfo params type error");
   }
@@ -1054,4 +1080,32 @@ export function removePlatformCurveParamInstruction(
     programId,
     data: Buffer.from([...anchorDataBuf.removePlatformCurveParam, ...data, 1, 2]),
   });
+}
+
+export function createPlatformVestingAccount(
+  programId: PublicKey,
+
+  platformVestingWallet: PublicKey,
+  beneficiary: PublicKey,
+  platformId: PublicKey,
+  poolId: PublicKey,
+
+  vestingRecord: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: platformVestingWallet, isSigner: true, isWritable: true },
+    { pubkey: beneficiary, isSigner: false, isWritable: true },
+    { pubkey: platformId, isSigner: false, isWritable: true },
+    { pubkey: poolId, isSigner: false, isWritable: true },
+
+    { pubkey: vestingRecord, isSigner: false, isWritable: true },
+
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ]
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.createVestingAccount,
+  })
 }
