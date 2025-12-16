@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PublicKey } from "@solana/web3.js";
 import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 

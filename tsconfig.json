@@ -1,25 +1,35 @@
 {
-  "extends": "@tsconfig/node14/tsconfig.json",
-
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "es6",
-    "lib": ["es2019", "DOM"],
-    "outDir": "./lib",
-    "allowJs": true,
-    "checkJs": true,
+    /* Project‑References */
+    "composite": true,
     "declaration": true,
     "declarationMap": true,
-    "noImplicitAny": false,
-    "esModuleInterop": true,
-    "sourceMap": true,
-    "jsx": "react",
+    /* 输出目录 */
+    "rootDir": "./src",
+    "outDir": "./lib",
+    /* Lib & 类型 */
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     }
   },
-  "include": ["./src/**/*"],
-  "exclude": ["node_modules"],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
   "ts-node": {
     "files": true
   }

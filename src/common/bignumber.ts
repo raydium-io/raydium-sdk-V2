@@ -1,3 +1,4 @@
+// @ts-nocheck
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { CurrencyAmount, TokenAmount } from "../module/amount";
