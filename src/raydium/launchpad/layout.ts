@@ -120,7 +120,9 @@ export const PlatformConfig = struct([
   publicKey('platformVestingWallet'),
   u64('platformVestingScale'),
 
-  seq(u8(), 140),
+  publicKey("platformCpCreator"),
+
+  seq(u8(), 108),
 
   vec(PlatformCurveParam, "platformCurve"),
 ]);
