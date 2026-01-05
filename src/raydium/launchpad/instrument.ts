@@ -1,4 +1,4 @@
-import { DEVNET_PROGRAM_ID, METADATA_PROGRAM_ID, RENT_PROGRAM_ID } from "@/common";
+import { METADATA_PROGRAM_ID, RENT_PROGRAM_ID } from "@/common";
 import { publicKey, str, struct, u16, u64, u8 } from "@/marshmallow";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AccountMeta, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
@@ -829,6 +829,7 @@ export function updatePlatformConfig(
     | { type: "updateCpConfigId"; value: PublicKey }
     | { type: "updateVestingWallet"; value: PublicKey }
     | { type: "updatePlatformVestingScale"; value: BN }
+    | { type: "updatePlatformCpCreator"; value: PublicKey }
     | {
         type: "updateAll";
         value: {
@@ -945,6 +946,10 @@ export function updatePlatformConfig(
     const dataLayout = struct([u8("index"), u64("value")]);
     data = Buffer.alloc(dataLayout.span);
     dataLayout.encode({ index: 10, value: updateInfo.value }, data);
+  } else if (updateInfo.type === "updatePlatformCpCreator") {
+    const dataLayout = struct([u8("index"), publicKey("value")]);
+    data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ index: 11, value: updateInfo.value }, data);
   } else {
     throw Error("updateInfo params type error");
   }

@@ -164,6 +164,7 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
     | { type: "updateCpConfigId"; value: PublicKey }
     | { type: "updateVestingWallet"; value: PublicKey }
     | { type: "updatePlatformVestingScale"; value: BN }
+    | { type: "updatePlatformCpCreator"; value: PublicKey }
     | {
         type: "updateAll";
         value: {
