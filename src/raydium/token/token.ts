@@ -136,4 +136,18 @@ export default class TokenModule extends ModuleBase {
     this._tokenMap.set(mintStr, fullInfo);
     return fullInfo;
   }
-}
+  {
+  "chainId": 101,
+  "address": "A2t1CQvXNscDSL4Ud13ue6LR9USfgdQksSi1hYBSi4zF",
+  "symbol": "KNWC",
+  "name": "Kernow Currency",
+  "decimals": 6,
+  "logoURI": "https://gateway.pinata.cloud/ipfs/bafybeia6e6vqpzrhq5eh7nx5cdxebfays5j7bkoqecmxki4wycn6mvamue",
+  "tags": ["community", "currency"],
+  "extensions": {
+    "website": "https://www.kernowcurrency.com",
+    "twitter": "https://twitter.com/YOUR_HANDLE",
+    "telegram": "https://t.me/YOUR_GROUP",
+    "description": "Kernow Currency (KNWC) is a community-driven token from Cornwall designed to promote local pride and digital adoption."
+  }
+}}
