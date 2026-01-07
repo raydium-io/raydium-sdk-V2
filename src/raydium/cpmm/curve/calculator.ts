@@ -139,7 +139,7 @@ export class CurveCalculator {
 
     return {
       newInputVaultAmount: inputVaultAmount.add(inputAmountSwapped),
-      newOutputVaultAmount: outputAmount.sub(actualOutputAmount),
+      newOutputVaultAmount: outputVaultAmount.sub(actualOutputAmount),
       inputAmount,
       outputAmount,
       tradeFee,
