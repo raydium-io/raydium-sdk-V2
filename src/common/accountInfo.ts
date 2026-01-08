@@ -1,148 +1,168 @@
 import { AccountInfo, Commitment, Connection, PublicKey } from "@solana/web3.js";
 import { ReturnTypeFetchMultipleMintInfos } from "../raydium/type";
-import { WSOLMint, chunkArray, solToWSol } from "./";
-import { createLogger } from "./logger";
+import { WSOLMint, chunkArray, solToWSol } from "./"; // Assuming utility functions are defined here
+import { createLogger } from "./logger"; // Assuming logger utility is defined here
 import { MINT_SIZE, TOKEN_PROGRAM_ID, getTransferFeeConfig, unpackMint } from "@solana/spl-token";
 
-interface MultipleAccountsJsonRpcResponse {
-  jsonrpc: string;
-  id: string;
-  error?: {
-    code: number;
-    message: string;
-  };
-  result: {
-    context: { slot: number };
-    value: { data: Array<string>; executable: boolean; lamports: number; owner: string; rentEpoch: number }[];
-  };
+// --- Type Definitions for External Use and Internal RPC Response ---
+
+/**
+ * Configuration options for fetching multiple accounts info.
+ * batchRequest is deprecated due to reliance on private RPC methods.
+ */
+export interface GetMultipleAccountsInfoConfig {
+    /** @deprecated: Use standard chunking/parallel requests instead of internal RPC batching. */
+    batchRequest?: boolean;
+    commitment?: Commitment;
+    /** Number of public keys per single RPC call. Default is 100. */
+    chunkCount?: number;
 }
 
-export interface GetMultipleAccountsInfoConfig {
-  batchRequest?: boolean;
-  commitment?: Commitment;
-  chunkCount?: number;
+/**
+ * Defines the structure for fetching accounts with custom associated data.
+ */
+export interface PublicKeyWithCustomFlag {
+    pubkey: PublicKey;
+    [key: string]: any;
 }
 
 const logger = createLogger("Raydium_accountInfo_util");
 
+/**
+ * Fetches information for multiple accounts using chunking to manage RPC limits.
+ * Avoids internal/private RPC methods for stability.
+ *
+ * @param connection The Solana Connection object.
+ * @param publicKeys An array of PublicKey objects to fetch.
+ * @param config Configuration options, including commitment and chunk size.
+ * @returns A flattened array of AccountInfo or null for each input key.
+ */
 export async function getMultipleAccountsInfo(
-  connection: Connection,
-  publicKeys: PublicKey[],
-  config?: GetMultipleAccountsInfoConfig,
+    connection: Connection,
+    publicKeys: PublicKey[],
+    config?: GetMultipleAccountsInfoConfig,
 ): Promise<(AccountInfo<Buffer> | null)[]> {
-  const {
-    batchRequest,
-    commitment = "confirmed",
-    chunkCount = 100,
-  } = {
-    batchRequest: false,
-    ...config,
-  };
+    const {
+        commitment = "confirmed",
+        chunkCount = 100,
+    } = {
+        // batchRequest logic removed due to relying on private methods
+        ...config,
+    };
 
-  const chunkedKeys = chunkArray(publicKeys, chunkCount);
-  let results: (AccountInfo<Buffer> | null)[][] = new Array(chunkedKeys.length).fill([]);
-
-  if (batchRequest) {
-    const batch = chunkedKeys.map((keys) => {
-      const args = connection._buildArgs([keys.map((key) => key.toBase58())], commitment, "base64");
-      return {
-        methodName: "getMultipleAccounts",
-        args,
-      };
-    });
-
-    const _batch = chunkArray(batch, 10);
-
-    const unsafeResponse: MultipleAccountsJsonRpcResponse[] = await (
-      await Promise.all(_batch.map(async (i) => await (connection as any)._rpcBatchRequest(i)))
-    ).flat();
-    results = unsafeResponse.map((unsafeRes: MultipleAccountsJsonRpcResponse) => {
-      if (unsafeRes.error)
-        logger.logWithError(`failed to get info for multiple accounts, RPC_ERROR, ${unsafeRes.error.message}`);
-
-      return unsafeRes.result.value.map((accountInfo) => {
-        if (accountInfo) {
-          const { data, executable, lamports, owner, rentEpoch } = accountInfo;
-
-          if (data.length !== 2 && data[1] !== "base64") logger.logWithError(`info must be base64 encoded, RPC_ERROR`);
-
-          return {
-            data: Buffer.from(data[0], "base64"),
-            executable,
-            lamports,
-            owner: new PublicKey(owner),
-            rentEpoch,
-          };
-        }
-        return null;
-      });
-    });
-  } else {
-    try {
-      results = (await Promise.all(
-        chunkedKeys.map((keys) => connection.getMultipleAccountsInfo(keys, commitment)),
-      )) as (AccountInfo<Buffer> | null)[][];
-    } catch (error) {
-      if (error instanceof Error) {
-        logger.logWithError(`failed to get info for multiple accounts, RPC_ERROR, ${error.message}`);
-      }
+    if (publicKeys.length === 0) {
+        return [];
     }
-  }
+    
+    // Chunk the keys to adhere to RPC request limits.
+    const chunkedKeys = chunkArray(publicKeys, chunkCount);
+    let results: (AccountInfo<Buffer> | null)[] = [];
 
-  return results.flat();
+    try {
+        // Use Promise.all to fetch chunks in parallel, leveraging the standard RPC method.
+        const chunkResults = await Promise.all(
+            chunkedKeys.map((keys) => connection.getMultipleAccountsInfo(keys, commitment)),
+        );
+        
+        // Flatten the array of arrays back into a single list of results.
+        results = chunkResults.flat();
+    } catch (error) {
+        // Catch network or generic RPC errors during the standard request process.
+        if (error instanceof Error) {
+            logger.error(`Failed to get info for multiple accounts due to RPC error: ${error.message}`);
+        } else {
+            logger.error(`An unknown error occurred while fetching accounts: ${error}`);
+        }
+    }
+
+    return results;
 }
 
-export async function getMultipleAccountsInfoWithCustomFlags<T extends { pubkey: PublicKey }>(
-  connection: Connection,
-  publicKeysWithCustomFlag: T[],
-  config?: GetMultipleAccountsInfoConfig,
+/**
+ * Fetches account information and merges it with custom flags provided in the input.
+ *
+ * @param connection The Solana Connection object.
+ * @param publicKeysWithCustomFlag Array of objects containing PublicKey and custom data.
+ * @param config Configuration options.
+ * @returns Array of merged objects, including the fetched accountInfo.
+ */
+export async function getMultipleAccountsInfoWithCustomFlags<T extends PublicKeyWithCustomFlag>(
+    connection: Connection,
+    publicKeysWithCustomFlag: T[],
+    config?: GetMultipleAccountsInfoConfig,
 ): Promise<({ accountInfo: AccountInfo<Buffer> | null } & T)[]> {
-  const multipleAccountsInfo = await getMultipleAccountsInfo(
-    connection,
-    publicKeysWithCustomFlag.map((o) => o.pubkey),
-    config,
-  );
+    const multipleAccountsInfo = await getMultipleAccountsInfo(
+        connection,
+        publicKeysWithCustomFlag.map((o) => o.pubkey),
+        config,
+    );
 
-  return publicKeysWithCustomFlag.map((o, idx) => ({ ...o, accountInfo: multipleAccountsInfo[idx] }));
+    // Map the results back to the original objects, attaching the account info.
+    return publicKeysWithCustomFlag.map((o, idx) => ({ ...o, accountInfo: multipleAccountsInfo[idx] }));
 }
+
+// --- Token Program specific constants ---
 
 export enum AccountType {
-  Uninitialized,
-  Mint,
-  Account,
+    Uninitialized,
+    Mint,
+    Account,
 }
 export const ACCOUNT_TYPE_SIZE = 1;
 
+/**
+ * Fetches multiple Mint Account Infos, processes the data using SPL-Token utilities,
+ * and maps WSOL to a default Public Key (for Raydium specific use cases).
+ *
+ * @param connection The Solana Connection object.
+ * @param mints Array of Mint PublicKeys.
+ * @param config Configuration options.
+ * @returns An object mapping Mint Public Key string to its parsed Mint information.
+ */
 export async function fetchMultipleMintInfos({
-  connection,
-  mints,
-  config,
-}: {
-  connection: Connection;
-  mints: PublicKey[];
-  config?: { batchRequest?: boolean };
-}): Promise<ReturnTypeFetchMultipleMintInfos> {
-  if (mints.length === 0) return {};
-  const mintInfos = await getMultipleAccountsInfoWithCustomFlags(
     connection,
-    mints.map((i) => ({ pubkey: solToWSol(i) })),
+    mints,
     config,
-  );
+}: {
+    connection: Connection;
+    mints: PublicKey[];
+    config?: { batchRequest?: boolean };
+}): Promise<ReturnTypeFetchMultipleMintInfos> {
+    if (mints.length === 0) return {};
+    
+    // 1. Fetch account info for all mints (wrapping SOL to WSOL if necessary for consistency).
+    const mintInfosWithFlags = await getMultipleAccountsInfoWithCustomFlags(
+        connection,
+        mints.map((i) => ({ pubkey: solToWSol(i) })),
+        config,
+    );
 
-  const mintK: ReturnTypeFetchMultipleMintInfos = {};
-  for (const i of mintInfos) {
-    if (!i.accountInfo || i.accountInfo.data.length < MINT_SIZE) {
-      console.log("invalid mint account", i.pubkey.toBase58());
-      continue;
+    const mintK: ReturnTypeFetchMultipleMintInfos = {};
+    for (const i of mintInfosWithFlags) {
+        // 2. Validate account info
+        if (!i.accountInfo || i.accountInfo.data.length < MINT_SIZE) {
+            logger.warn(`Invalid or uninitialized mint account found: ${i.pubkey.toBase58()}. Skipping.`);
+            continue;
+        }
+        
+        // 3. Unpack Mint data using the standard SPL utility.
+        const unpackedMint = unpackMint(i.pubkey, i.accountInfo, i.accountInfo.owner);
+        
+        // 4. Store the unpacked mint info.
+        mintK[i.pubkey.toString()] = {
+            ...unpackedMint,
+            programId: i.accountInfo.owner || TOKEN_PROGRAM_ID,
+            feeConfig: getTransferFeeConfig(unpackedMint) ?? undefined,
+        };
     }
-    const t = unpackMint(i.pubkey, i.accountInfo, i.accountInfo?.owner);
-    mintK[i.pubkey.toString()] = {
-      ...t,
-      programId: i.accountInfo?.owner || TOKEN_PROGRAM_ID,
-      feeConfig: getTransferFeeConfig(t) ?? undefined,
-    };
-  }
-  mintK[PublicKey.default.toBase58()] = mintK[WSOLMint.toBase58()];
+    
+    // 5. Raydium specific alias: Map the default PublicKey to the WSOL Mint info.
+    // This is a common pattern in Solana AMM environments where PublicKey.default represents SOL/WSOL.
+    if (mintK[WSOLMint.toBase58()]) {
+        mintK[PublicKey.default.toBase58()] = mintK[WSOLMint.toBase58()];
+    } else {
+        logger.warn("WSOL mint information was not successfully fetched or parsed.");
+    }
 
-  return mintK;
+    return mintK;
 }
