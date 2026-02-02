@@ -1,15 +1,3 @@
-import { EpochInfo, PublicKey, SystemProgram } from "@solana/web3.js";
-import {
-  createTransferInstruction,
-  TOKEN_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID,
-  createAssociatedTokenAccountIdempotentInstruction,
-  TransferFee,
-  TransferFeeConfig,
-  createSyncNativeInstruction,
-} from "@solana/spl-token";
-import BN from "bn.js";
-import Decimal from "decimal.js";
 import { AmmV4Keys, ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys, PoolKeys } from "@/api";
 import {
   AMM_V4,
@@ -25,19 +13,26 @@ import {
 } from "@/common";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  createSyncNativeInstruction,
+  createTransferInstruction,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  TransferFeeConfig
+} from "@solana/spl-token";
+import { EpochInfo, PublicKey, SystemProgram } from "@solana/web3.js";
+import BN from "bn.js";
+import Decimal from "decimal.js";
 import { publicKey, struct } from "../../marshmallow";
 import { Price, TokenAmount } from "../../module";
 import {
   ClmmInstrument,
   ClmmParsedRpcData,
   ComputeClmmPoolInfo,
-  MAX_SQRT_PRICE_X64,
-  MIN_SQRT_PRICE_X64,
-  PoolUtils,
   ReturnTypeComputeAmountOutBaseOut,
   ReturnTypeComputeAmountOutFormat,
   ReturnTypeFetchMultiplePoolTickArrays,
-  SqrtPriceMath,
 } from "../../raydium/clmm";
 import { PoolInfoLayout } from "../../raydium/clmm/layout";
 import { CpmmPoolInfoLayout, getPdaPoolAuthority } from "../../raydium/cpmm";
@@ -47,10 +42,26 @@ import {
   liquidityStateV4Layout,
   toAmmComputePoolInfo,
 } from "../../raydium/liquidity";
-import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos, TransferAmountFee } from "../../raydium/type";
+import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos } from "../../raydium/type";
 import { closeAccountInstruction, createWSolAccountInstructions } from "../account/instruction";
 import { TokenAccount } from "../account/types";
+import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from "../clmm/libraries/constants";
+import { PoolUtils } from "../clmm/libraries/pool";
+import { priceToSqrtPriceX64 } from "../clmm/libraries/tickMath";
 import { CpmmComputeData } from "../cpmm";
+import {
+  buyExactInInstruction,
+  Curve,
+  getPdaCreatorVault,
+  getPdaLaunchpadAuth,
+  getPdaPlatformVault,
+  LaunchpadConfigInfo,
+  LaunchpadPlatformInfo,
+  LaunchpadPoolInfo,
+  PlatformConfig,
+  sellExactInInstruction,
+  SwapInfoReturn,
+} from "../launchpad";
 import { AmmRpcData } from "../liquidity";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { Market, MARKET_STATE_LAYOUT_V3 } from "../serum";
@@ -66,19 +77,6 @@ import {
   ReturnTypeGetAllRoute,
   RoutePathType,
 } from "./type";
-import {
-  buyExactInInstruction,
-  Curve,
-  getPdaCreatorVault,
-  getPdaLaunchpadAuth,
-  getPdaPlatformVault,
-  LaunchpadConfigInfo,
-  LaunchpadPlatformInfo,
-  LaunchpadPoolInfo,
-  PlatformConfig,
-  sellExactInInstruction,
-  SwapInfoReturn,
-} from "../launchpad";
 
 const ZERO = new BN(0);
 export default class TradeV2 extends ModuleBase {
@@ -229,9 +227,9 @@ export default class TradeV2 extends ModuleBase {
         skipCloseAccount: !useSolBalance,
         createInfo: useSolBalance
           ? {
-              payer: this.scope.ownerPubKey,
-              amount: amountIn.amount.raw,
-            }
+            payer: this.scope.ownerPubKey,
+            amount: amountIn.amount.raw,
+          }
           : undefined,
         associatedOnly: useSolBalance ? false : ownerInfo.associatedOnly,
         checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
@@ -368,6 +366,7 @@ export default class TradeV2 extends ModuleBase {
     checkCreateATAOwner = false,
     computeBudgetConfig,
     txVersion,
+    blockTimestamp,
   }: {
     inputMint: string | PublicKey;
     inputAmount: BN;
@@ -391,6 +390,7 @@ export default class TradeV2 extends ModuleBase {
     checkCreateATAOwner?: boolean;
     computeBudgetConfig?: ComputeBudgetConfig;
     txVersion: T;
+    blockTimestamp: number,
   }): Promise<
     MakeTxData<
       T,
@@ -424,6 +424,7 @@ export default class TradeV2 extends ModuleBase {
       launchPlatformInfo,
       slot,
       mintInfo,
+      blockTimestamp,
     });
     const baseIn = inputMint.toString() === clmmPoolData.poolInfo.mintA.address;
 
@@ -435,7 +436,8 @@ export default class TradeV2 extends ModuleBase {
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
-      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+
+      sqrtPriceLimitX64 = priceToSqrtPriceX64(
         priceLimit,
         clmmPoolData.poolInfo.mintA.decimals,
         clmmPoolData.poolInfo.mintB.decimals,
@@ -500,35 +502,35 @@ export default class TradeV2 extends ModuleBase {
     txBuilder.addInstruction(
       fixClmmOut
         ? ClmmInstrument.makeSwapBaseOutInstructions({
-            poolInfo: clmmPoolData.poolInfo,
-            poolKeys: clmmPoolData.poolKeys,
-            observationId: clmmPoolData.computePoolInfo.observationId,
-            ownerInfo: {
-              wallet: this.scope.ownerPubKey,
-              tokenAccountA: ownerTokenAccountA!,
-              tokenAccountB: ownerTokenAccountB!,
-            },
-            outputMint: baseIn ? clmmMintB : clmmMintA,
-            amountOut: clmmAmountOut,
-            amountInMax: maxClmmAmountIn,
-            sqrtPriceLimitX64,
-            remainingAccounts,
-          })
+          poolInfo: clmmPoolData.poolInfo,
+          poolKeys: clmmPoolData.poolKeys,
+          observationId: clmmPoolData.computePoolInfo.observationId,
+          ownerInfo: {
+            wallet: this.scope.ownerPubKey,
+            tokenAccountA: ownerTokenAccountA!,
+            tokenAccountB: ownerTokenAccountB!,
+          },
+          outputMint: baseIn ? clmmMintB : clmmMintA,
+          amountOut: clmmAmountOut,
+          amountInMax: maxClmmAmountIn,
+          sqrtPriceLimitX64,
+          remainingAccounts,
+        })
         : ClmmInstrument.makeSwapBaseInInstructions({
-            poolInfo: clmmPoolData.poolInfo,
-            poolKeys: clmmPoolData.poolKeys,
-            observationId: clmmPoolData.computePoolInfo.observationId,
-            ownerInfo: {
-              wallet: this.scope.ownerPubKey,
-              tokenAccountA: ownerTokenAccountA!,
-              tokenAccountB: ownerTokenAccountB!,
-            },
-            inputMint: new PublicKey(inputMint),
-            amountIn: inputAmount,
-            amountOutMin: clmmAmountOut,
-            sqrtPriceLimitX64,
-            remainingAccounts,
-          }),
+          poolInfo: clmmPoolData.poolInfo,
+          poolKeys: clmmPoolData.poolKeys,
+          observationId: clmmPoolData.computePoolInfo.observationId,
+          ownerInfo: {
+            wallet: this.scope.ownerPubKey,
+            tokenAccountA: ownerTokenAccountA!,
+            tokenAccountB: ownerTokenAccountB!,
+          },
+          inputMint: new PublicKey(inputMint),
+          amountIn: inputAmount,
+          amountOutMin: clmmAmountOut,
+          sqrtPriceLimitX64,
+          remainingAccounts,
+        }),
     );
 
     const launchMintAProgram = launchPoolInfo.mintProgramFlag === 0 ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
@@ -557,9 +559,9 @@ export default class TradeV2 extends ModuleBase {
         skipCloseAccount: !mintBUseSol,
         createInfo: mintBUseSol
           ? {
-              payer: this.scope.ownerPubKey!,
-              amount: clmmAmountOut,
-            }
+            payer: this.scope.ownerPubKey!,
+            amount: clmmAmountOut,
+          }
           : undefined,
         associatedOnly: false,
         checkCreateATAOwner,
@@ -649,6 +651,7 @@ export default class TradeV2 extends ModuleBase {
     launchPlatformInfo: propsLaunchPlatformInfo,
     slot,
     mintInfo: propsMintInfo,
+    blockTimestamp,
   }: {
     clmmPoolId: string | PublicKey;
     launchPoolId: string | PublicKey;
@@ -669,6 +672,7 @@ export default class TradeV2 extends ModuleBase {
     launchPlatformInfo?: Pick<LaunchpadPlatformInfo, "feeRate" | "creatorFeeRate">;
     slot?: number;
     mintInfo?: ApiV3Token;
+    blockTimestamp: number,
   }): Promise<{
     clmmPoolData: {
       poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -701,21 +705,23 @@ export default class TradeV2 extends ModuleBase {
 
     const clmmComputeAmount = fixClmmOut
       ? await PoolUtils.computeAmountIn({
-          poolInfo: clmmPoolData.computePoolInfo,
-          tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
-          amountOut: inputAmount,
-          baseMint: new PublicKey(clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"].address),
-          slippage,
-          epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
-        })
+        poolInfo: clmmPoolData.computePoolInfo,
+        tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
+        amountOut: inputAmount,
+        baseMint: new PublicKey(clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"].address),
+        slippage,
+        epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
+        blockTimestamp,
+      })
       : await PoolUtils.computeAmountOutFormat({
-          poolInfo: clmmPoolData.computePoolInfo,
-          tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
-          amountIn: inputAmount,
-          tokenOut,
-          slippage,
-          epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
-        });
+        poolInfo: clmmPoolData.computePoolInfo,
+        tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
+        amountIn: inputAmount,
+        tokenOut,
+        slippage,
+        epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
+        blockTimestamp,
+      });
 
     let launchPoolInfo = propsLaunchPoolInfo;
     if (!launchPoolInfo)
@@ -733,20 +739,20 @@ export default class TradeV2 extends ModuleBase {
 
     const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
       ? {
-          transferFeeConfigAuthority: PublicKey.default,
-          withdrawWithheldAuthority: PublicKey.default,
-          withheldAmount: BigInt(0),
-          olderTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-          },
-          newerTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-          },
-        }
+        transferFeeConfigAuthority: PublicKey.default,
+        withdrawWithheldAuthority: PublicKey.default,
+        withheldAmount: BigInt(0),
+        olderTransferFee: {
+          epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+          maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
+          transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
+        },
+        newerTransferFee: {
+          epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+          maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
+          transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
+        },
+      }
       : undefined;
 
     const launchBuyAmount = fixClmmOut
@@ -805,6 +811,7 @@ export default class TradeV2 extends ModuleBase {
     checkCreateATAOwner = false,
     computeBudgetConfig,
     txVersion,
+    blockTimestamp,
   }: {
     inputAmount: BN;
     clmmPoolId: string | PublicKey;
@@ -820,6 +827,7 @@ export default class TradeV2 extends ModuleBase {
     checkCreateATAOwner?: boolean;
     computeBudgetConfig?: ComputeBudgetConfig;
     txVersion: T;
+    blockTimestamp: number,
   }): Promise<
     MakeTxData<
       T,
@@ -849,6 +857,7 @@ export default class TradeV2 extends ModuleBase {
       slippage,
       epochInfo,
       shareFeeRate,
+      blockTimestamp,
     });
 
     const txBuilder = this.createTxBuilder(feePayer);
@@ -925,7 +934,7 @@ export default class TradeV2 extends ModuleBase {
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
-      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+      sqrtPriceLimitX64 = priceToSqrtPriceX64(
         priceLimit,
         clmmPoolData.poolInfo.mintA.decimals,
         clmmPoolData.poolInfo.mintB.decimals,
@@ -1061,6 +1070,7 @@ export default class TradeV2 extends ModuleBase {
     clmmPoolData: propsClmmPoolData,
     launchPoolInfo: propsLaunchPoolInfo,
     launchPlatformInfo: propsLaunchPlatformInfo,
+    blockTimestamp,
   }: {
     clmmPoolId: string | PublicKey;
     launchPoolId: string | PublicKey;
@@ -1077,6 +1087,7 @@ export default class TradeV2 extends ModuleBase {
     };
     launchPoolInfo?: LaunchpadPoolInfo & { programId: PublicKey; configInfo: LaunchpadConfigInfo };
     launchPlatformInfo?: LaunchpadPlatformInfo;
+    blockTimestamp: number,
   }): Promise<{
     clmmPoolData: {
       poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -1125,20 +1136,20 @@ export default class TradeV2 extends ModuleBase {
 
     const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
       ? {
-          transferFeeConfigAuthority: PublicKey.default,
-          withdrawWithheldAuthority: PublicKey.default,
-          withheldAmount: BigInt(0),
-          olderTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-          },
-          newerTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-          },
-        }
+        transferFeeConfigAuthority: PublicKey.default,
+        withdrawWithheldAuthority: PublicKey.default,
+        withheldAmount: BigInt(0),
+        olderTransferFee: {
+          epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+          maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
+          transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
+        },
+        newerTransferFee: {
+          epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+          maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
+          transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
+        },
+      }
       : undefined;
 
     const launchSwapInfo = Curve.sellExactIn({
@@ -1170,6 +1181,7 @@ export default class TradeV2 extends ModuleBase {
       tokenOut,
       slippage,
       epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
+      blockTimestamp,
     });
 
     return {
@@ -1651,6 +1663,7 @@ export default class TradeV2 extends ModuleBase {
     chainTime,
     epochInfo,
     feeConfig,
+    blockTimestamp,
   }: {
     directPath: ComputePoolType[];
     routePathDict: ComputeRoutePathType;
@@ -1669,6 +1682,7 @@ export default class TradeV2 extends ModuleBase {
       feeBps: BN;
       feeAccount: PublicKey;
     };
+    blockTimestamp: number,
   }): ComputeAmountOutLayout[] {
     const _amountInFee =
       feeConfig === undefined
@@ -1680,9 +1694,9 @@ export default class TradeV2 extends ModuleBase {
       feeConfig === undefined
         ? undefined
         : {
-            feeAmount: _amountInFee,
-            feeAccount: feeConfig.feeAccount,
-          };
+          feeAmount: _amountInFee,
+          feeAccount: feeConfig.feeAccount,
+        };
     const outputToken = {
       ...propOutputToken,
       address: solToWSol(propOutputToken.address).toString(),
@@ -1700,6 +1714,7 @@ export default class TradeV2 extends ModuleBase {
             slippage,
             outputToken,
             amountIn,
+            blockTimestamp,
           }),
           feeConfig: _inFeeConfig,
         });
@@ -1736,6 +1751,7 @@ export default class TradeV2 extends ModuleBase {
                 slippage,
                 outputToken: routeToken,
                 amountIn,
+                blockTimestamp,
               }),
             };
           } catch (e: any) {
@@ -1764,6 +1780,7 @@ export default class TradeV2 extends ModuleBase {
             slippage,
             outputToken,
             amountIn: routeAmountIn,
+            blockTimestamp,
           });
           outRoute.push({
             ...outC,
@@ -1787,9 +1804,9 @@ export default class TradeV2 extends ModuleBase {
             remainingAccounts: [maxFirstIn.data.remainingAccounts[0], outC.remainingAccounts[0]],
             minMiddleAmountFee: outC.amountOut.fee?.raw
               ? new TokenAmount(
-                  (maxFirstIn.data.amountOut.amount as TokenAmount).token,
-                  (maxFirstIn.data.amountOut.fee?.raw ?? ZERO).add(outC.amountOut.fee?.raw ?? ZERO),
-                )
+                (maxFirstIn.data.amountOut.amount as TokenAmount).token,
+                (maxFirstIn.data.amountOut.fee?.raw ?? ZERO).add(outC.amountOut.fee?.raw ?? ZERO),
+              )
               : undefined,
             middleToken: (maxFirstIn.data.amountOut.amount as TokenAmount).token,
             poolReady: maxFirstIn.data.poolReady && outC.poolReady,
@@ -1824,6 +1841,7 @@ export default class TradeV2 extends ModuleBase {
     slippage,
     outputToken,
     amountIn,
+    blockTimestamp,
   }: {
     itemPool: ComputePoolType;
     tickCache: ReturnTypeFetchMultiplePoolTickArrays;
@@ -1833,6 +1851,7 @@ export default class TradeV2 extends ModuleBase {
     amountIn: TokenAmount;
     outputToken: ApiV3Token;
     slippage: number;
+    blockTimestamp: number,
   }): ComputeAmountOutAmmLayout {
     if (itemPool.version === 6) {
       const {
@@ -1855,6 +1874,7 @@ export default class TradeV2 extends ModuleBase {
         slippage,
         epochInfo,
         catchLiquidityInsufficient: true,
+        blockTimestamp,
       });
       return {
         allTrade,

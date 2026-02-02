@@ -1,11 +1,11 @@
-import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { BN_ZERO } from "@/common/bignumber";
 import { MakeMultiTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { generatePubKey } from "../account/util";
+import { BN_ZERO } from "../clmm";
 import ModuleBase from "../moduleBase";
 import { makeCreateMarketInstruction } from "./instrument";
 

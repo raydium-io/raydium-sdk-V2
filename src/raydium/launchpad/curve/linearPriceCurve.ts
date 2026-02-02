@@ -1,12 +1,11 @@
+import { Q64, U64_MAX } from "@/raydium/clmm";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { LaunchpadPool } from "../layout";
-import { Q64 } from "@/raydium/clmm";
 import { CurveBase, PoolBaseAmount } from "./curveBase";
 // import { ceilDivBN } from "./fee";
 import { ceilDivBN } from "@/common";
 import { MathLaunch } from "./func";
-import { MaxU64 } from "@/raydium/clmm";
 
 export class LinearPriceCurve extends CurveBase {
   static getPoolInitPriceByPool({
@@ -111,7 +110,7 @@ export class LinearPriceCurve extends CurveBase {
 
     if (!a.gt(new BN(0))) throw Error("a need gt 0");
 
-    if (!MaxU64.gt(a)) throw Error("a need lt u64 max");
+    if (!U64_MAX.gt(a)) throw Error("a need lt u64 max");
 
     if (a.lt(new BN(0)) || totalSellExpect.lt(new BN(0))) throw Error("invalid input 0");
 

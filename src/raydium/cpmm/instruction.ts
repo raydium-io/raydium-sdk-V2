@@ -3,7 +3,7 @@ import BN from "bn.js";
 import { AccountMeta, PublicKey, TransactionInstruction, Signer, Keypair, SystemProgram } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
-  MEMO_PROGRAM_ID2,
+  MEMO_PROGRAM_ID,
   RENT_PROGRAM_ID,
   SYSTEM_PROGRAM_ID,
   METADATA_PROGRAM_ID,
@@ -197,7 +197,7 @@ export function makeWithdrawCpmmInInstruction(
     { pubkey: mintA, isSigner: false, isWritable: false },
     { pubkey: mintB, isSigner: false, isWritable: false },
     { pubkey: lpMint, isSigner: false, isWritable: true },
-    { pubkey: MEMO_PROGRAM_ID2, isSigner: false, isWritable: false },
+    { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
   ];
 
   const data = Buffer.alloc(dataLayout.span);
@@ -527,7 +527,7 @@ export function collectCpFeeInstruction({
     // { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-    { pubkey: MEMO_PROGRAM_ID2, isSigner: false, isWritable: false },
+    { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
   ];
   const dataLayout = struct([u64("lpFeeAmount")]);
   const data = Buffer.alloc(dataLayout.span);

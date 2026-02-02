@@ -1,25 +1,25 @@
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import {
+  ALL_PROGRAM_ID,
   InstructionType,
   LIQUIDITY_POOL_PROGRAM_ID_V5_MODEL,
-  MEMO_PROGRAM_ID2,
+
+  MEMO_PROGRAM_ID,
+
   accountMeta,
-  jsonInfo2PoolKeys,
   getATAAddress,
-  ALL_PROGRAM_ID,
+  jsonInfo2PoolKeys,
 } from "@/common";
 import { seq, struct, u128, u64, u8 } from "../../marshmallow";
 import {
+  BN_ONE,
   ClmmInstrument,
   MAX_SQRT_PRICE_X64,
-  MAX_SQRT_PRICE_X64_SUB_ONE,
   MIN_SQRT_PRICE_X64,
-  MIN_SQRT_PRICE_X64_ADD_ONE,
-  ONE,
-  getPdaExBitmapAccount,
+  getPdaExBitmapAccount
 } from "../clmm";
 import { makeAMMSwapInstruction, makeAMMSwapV2Instruction } from "../liquidity/instruction";
 
@@ -117,13 +117,13 @@ export function route1Instruction(
         { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
         ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
           ? [
-              { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
-              { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
-            ]
+            { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
+            { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+          ]
           : [
-              { pubkey: poolKey.id, isSigner: false, isWritable: true },
-              { pubkey: poolKey.id, isSigner: false, isWritable: true },
-            ]),
+            { pubkey: poolKey.id, isSigner: false, isWritable: true },
+            { pubkey: poolKey.id, isSigner: false, isWritable: true },
+          ]),
       ],
     );
   }
@@ -233,13 +233,13 @@ export function route2Instruction(
         { pubkey: poolKey.marketEventQueue, isSigner: false, isWritable: true },
         ...(poolKey.marketProgramId.toString() === "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
           ? [
-              { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
-              { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
-            ]
+            { pubkey: poolKey.marketBaseVault, isSigner: false, isWritable: true },
+            { pubkey: poolKey.marketQuoteVault, isSigner: false, isWritable: true },
+          ]
           : [
-              { pubkey: poolKey.id, isSigner: false, isWritable: true },
-              { pubkey: poolKey.id, isSigner: false, isWritable: true },
-            ]),
+            { pubkey: poolKey.id, isSigner: false, isWritable: true },
+            { pubkey: poolKey.id, isSigner: false, isWritable: true },
+          ]),
       ],
     );
   }
@@ -441,7 +441,7 @@ export function routeInstruction(
       keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? _poolKey.vault.A : _poolKey.vault.B) }));
       keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? _poolKey.vault.B : _poolKey.vault.A) }));
       keys.push(accountMeta({ pubkey: new PublicKey(_poolInfo.observationId) })); //todo
-      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID2 }));
+      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID }));
       keys.push(
         accountMeta({
           pubkey: getPdaExBitmapAccount(new PublicKey(_poolInfo.programId), new PublicKey(_poolInfo.id)).publicKey,
@@ -527,13 +527,13 @@ function clmmPriceLimitX64InsData(x64Price: string | undefined, inputIsA: boolea
   if (x64Price) {
     if (inputIsA) {
       const _m = new BN(x64Price).div(new BN(25));
-      return _m.gt(MIN_SQRT_PRICE_X64_ADD_ONE) ? _m : MIN_SQRT_PRICE_X64_ADD_ONE;
+      return _m.gt(MIN_SQRT_PRICE_X64.add(BN_ONE)) ? _m : MIN_SQRT_PRICE_X64.add(BN_ONE);
     } else {
       const _m = new BN(x64Price).mul(new BN(25));
-      return _m.lt(MAX_SQRT_PRICE_X64_SUB_ONE) ? _m : MAX_SQRT_PRICE_X64_SUB_ONE;
+      return _m.lt(MAX_SQRT_PRICE_X64.sub(BN_ONE)) ? _m : MAX_SQRT_PRICE_X64.sub(BN_ONE);
     }
   } else {
-    return inputIsA ? MIN_SQRT_PRICE_X64_ADD_ONE : MAX_SQRT_PRICE_X64_SUB_ONE;
+    return inputIsA ? MIN_SQRT_PRICE_X64.add(BN_ONE) : MAX_SQRT_PRICE_X64.sub(BN_ONE);
   }
 }
 
@@ -548,8 +548,8 @@ export function makeSwapInstruction({
       const poolKeys = swapInfo.poolKey[0] as ClmmKeys;
       const _poolKey = jsonInfo2PoolKeys(poolKeys);
       const sqrtPriceLimitX64 = inputMint.equals(_poolKey.mintA.address)
-        ? MIN_SQRT_PRICE_X64.add(ONE)
-        : MAX_SQRT_PRICE_X64.sub(ONE);
+        ? MIN_SQRT_PRICE_X64.add(BN_ONE)
+        : MAX_SQRT_PRICE_X64.sub(BN_ONE);
 
       return ClmmInstrument.makeSwapBaseInInstructions({
         poolInfo: poolKeys,
@@ -605,29 +605,29 @@ export function makeSwapInstruction({
         instructions: [
           swapInfo.poolInfo[0].pooltype.includes("StablePool")
             ? makeAMMSwapInstruction({
-                poolKeys: _poolKey,
-                version: swapInfo.poolInfo[0].pooltype.includes("StablePool") ? 5 : 4,
-                userKeys: {
-                  tokenAccountIn: ownerInfo.sourceToken,
-                  tokenAccountOut: ownerInfo.destinationToken,
-                  owner: ownerInfo.wallet,
-                },
-                amountIn: swapInfo.amountIn.amount.raw,
-                amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
-                fixedSide: "in",
-              })
+              poolKeys: _poolKey,
+              version: swapInfo.poolInfo[0].pooltype.includes("StablePool") ? 5 : 4,
+              userKeys: {
+                tokenAccountIn: ownerInfo.sourceToken,
+                tokenAccountOut: ownerInfo.destinationToken,
+                owner: ownerInfo.wallet,
+              },
+              amountIn: swapInfo.amountIn.amount.raw,
+              amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
+              fixedSide: "in",
+            })
             : makeAMMSwapV2Instruction({
-                poolKeys: _poolKey,
-                version: swapInfo.poolInfo[0].pooltype.includes("StablePool") ? 5 : 4,
-                userKeys: {
-                  tokenAccountIn: ownerInfo.sourceToken,
-                  tokenAccountOut: ownerInfo.destinationToken,
-                  owner: ownerInfo.wallet,
-                },
-                amountIn: swapInfo.amountIn.amount.raw,
-                amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
-                fixedSide: "in",
-              }),
+              poolKeys: _poolKey,
+              version: swapInfo.poolInfo[0].pooltype.includes("StablePool") ? 5 : 4,
+              userKeys: {
+                tokenAccountIn: ownerInfo.sourceToken,
+                tokenAccountOut: ownerInfo.destinationToken,
+                owner: ownerInfo.wallet,
+              },
+              amountIn: swapInfo.amountIn.amount.raw,
+              amountOut: swapInfo.minAmountOut.amount.raw.sub(swapInfo.minAmountOut.fee?.raw ?? new BN(0)),
+              fixedSide: "in",
+            }),
         ],
         lookupTableAddress: _poolKey.lookupTableAccount ? [_poolKey.lookupTableAccount] : [],
         instructionTypes: [
@@ -774,7 +774,7 @@ export function swapBaseInAutoAccount({
       keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.A : poolKey.vault.B) }));
       keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.B : poolKey.vault.A) }));
       keys.push(accountMeta({ pubkey: new PublicKey(poolKey.observationId) }));
-      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID2, isWritable: false }));
+      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID, isWritable: false }));
       keys.push(accountMeta({ pubkey: new PublicKey(poolKey.exBitmapAccount) }));
       clmmPriceLimit.push(clmmPriceLimitX64InsData(_routeInfo.lastPoolPriceX64, inputIsA));
       for (const item of _routeInfo.remainingAccounts ?? []) {
@@ -931,7 +931,7 @@ export function swapBaseOutAutoAccount({
       keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.A : poolKey.vault.B) }));
       keys.push(accountMeta({ pubkey: new PublicKey(inputIsA ? poolKey.vault.B : poolKey.vault.A) }));
       keys.push(accountMeta({ pubkey: new PublicKey(poolKey.observationId) }));
-      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID2, isWritable: false }));
+      keys.push(accountMeta({ pubkey: MEMO_PROGRAM_ID, isWritable: false }));
       keys.push(accountMeta({ pubkey: new PublicKey(poolKey.exBitmapAccount) }));
       clmmPriceLimit.push(clmmPriceLimitX64InsData(_routeInfo.lastPoolPriceX64, inputIsA));
       for (const item of _routeInfo.remainingAccounts ?? []) {

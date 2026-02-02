@@ -7,13 +7,10 @@ import { Percent } from "../module/percent";
 import { Price } from "../module/price";
 import { Token } from "../module/token";
 import { SplToken, TokenJson } from "../raydium/token/type";
-import { ReplaceType } from "../raydium/type";
 import { parseBigNumberish } from "./constant";
 import { mul } from "./fractionUtil";
-import { notInnerObject } from "./utility";
+import { BN_ZERO } from "@/raydium";
 
-export const BN_ZERO = new BN(0);
-export const BN_ONE = new BN(1);
 export const BN_TWO = new BN(2);
 export const BN_THREE = new BN(3);
 export const BN_FIVE = new BN(5);

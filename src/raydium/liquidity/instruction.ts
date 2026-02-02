@@ -1,15 +1,17 @@
-import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } from "@solana/web3.js";
 
 import { AmmV4Keys, AmmV5Keys } from "@/api/type";
-import { AMM_V4, BN_ONE, BN_ZERO, MODEL_DATA_PUBKEY, parseBigNumberish } from "@/common";
+import { MODEL_DATA_PUBKEY, parseBigNumberish } from "@/common";
 import { createLogger } from "@/common/logger";
 import { accountMeta, RENT_PROGRAM_ID } from "@/common/pubKey";
 import { InstructionType } from "@/common/txTool/txType";
 import { struct, u64, u8 } from "@/marshmallow";
 
-import BN from "bn.js";
+
 import { jsonInfo2PoolKeys } from "@/common/utility";
+import BN from "bn.js";
+import { BN_ONE, BN_ZERO } from "../clmm";
 import { InstructionReturn } from "../type";
 import {
   addLiquidityLayout,

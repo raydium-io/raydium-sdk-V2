@@ -1,62 +1,78 @@
-import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
-import BN from "bn.js";
-import { ReturnTypeMakeInstructions } from "@/raydium/type";
 import { ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "@/api/type";
 import {
   InstructionType,
   MEMO_PROGRAM_ID,
-  MEMO_PROGRAM_ID2,
   METADATA_PROGRAM_ID,
   RENT_PROGRAM_ID,
   createLogger,
-  getATAAddress,
-  parseBigNumberish,
+  getATAAddress
 } from "@/common";
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { bool, s32, struct, u128, u64, u8 } from "@/marshmallow";
-import { ClmmPositionLayout, ObservationInfoLayout } from "./layout";
-import {
-  ClmmPoolPersonalPosition,
-  ClosePositionExtInfo,
-  InitRewardExtInfo,
-  ManipulateLiquidityExtInfo,
-  OpenPositionFromBaseExtInfo,
-  OpenPositionFromLiquidityExtInfo,
-  ClmmLockAddress,
-} from "./type";
+import { ReturnTypeMakeInstructions } from "@/raydium/type";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import BN from "bn.js";
+import { ObservationLayout, PersonalPositionLayout } from "./layout";
 import {
   getPdaExBitmapAccount,
+  getPdaLockClPositionIdV2,
   getPdaLockPositionId,
   getPdaMetadataKey,
   getPdaObservationAccount,
   getPdaOperationAccount,
   getPdaPersonalPositionAddress,
   getPdaPoolId,
-  getPdaPoolRewardVaulId,
+  getPdaPoolRewardVaultId,
   getPdaPoolVaultId,
   getPdaProtocolPositionAddress,
-  getPdaTickArrayAddress,
-  getPdaLockClPositionIdV2,
-  getPdaMintExAccount,
-} from "./utils/pda";
-import { PoolUtils } from "./utils/pool";
-import { TickUtils } from "./utils/tick";
-import { ZERO } from "./utils/constants";
-ObservationInfoLayout.span; // do not delete this line
+  getPdaTickArrayAddress
+} from "./libraries/pda";
+import {
+  ClmmLockAddress,
+  ClmmPoolPersonalPosition,
+  ClosePositionExtInfo,
+  InitRewardExtInfo,
+  ManipulateLiquidityExtInfo,
+  OpenPositionFromBaseExtInfo,
+  OpenPositionFromLiquidityExtInfo,
+} from "./type";
+
+import { sha256 } from 'js-sha256';
+import { BN_ZERO } from "./libraries/constants";
+import { isOverflowDefaultTickarrayBitmap } from "./libraries/tickArrayBitmap";
+import { getTickArrayStartIndex } from "./libraries/tickMath";
+
+function getAnchorByte(ixName: string): Buffer {
+  const preimage = `global:${ixName}`;
+  return Buffer.from(sha256.digest(preimage)).slice(0, 8);
+}
+
+ObservationLayout.span; // do not delete this line
 
 const logger = createLogger("Raydium_Clmm");
 
-const anchorDataBuf = {
-  createPool: [233, 146, 209, 142, 207, 104, 64, 188],
-  initReward: [95, 135, 192, 196, 242, 129, 230, 68],
-  setRewardEmissions: [112, 52, 167, 75, 32, 201, 211, 137],
-  openPosition: [77, 184, 74, 214, 112, 86, 241, 199],
-  openPositionWithTokenEx: [77, 255, 174, 82, 125, 29, 201, 46],
-  closePosition: [123, 134, 81, 0, 49, 68, 98, 98],
-  increaseLiquidity: [133, 29, 89, 223, 69, 238, 176, 10],
-  decreaseLiquidity: [58, 127, 188, 62, 79, 82, 196, 96],
-  swap: [43, 4, 237, 11, 26, 201, 30, 98], // [248, 198, 158, 145, 225, 117, 135, 200],
-  collectReward: [18, 237, 166, 197, 34, 16, 213, 144],
+const insId = {
+  createPool: getAnchorByte('create_pool'),
+  createCustomizablePool: getAnchorByte('create_customizable_pool'),
+
+  openPositionV2: getAnchorByte('open_position_v2'),
+  openPositionWithToken22Nft: getAnchorByte('open_position_with_token22_nft'),
+  closePosition: getAnchorByte('close_position'),
+  increaseLiquidityV2: getAnchorByte('increase_liquidity_v2'),
+  decreaseLiquidityV2: getAnchorByte('decrease_liquidity_v2'),
+
+  initializeReward: getAnchorByte('initialize_reward'),
+  setRewardParams: getAnchorByte('set_reward_params'),
+  updateRewardInfos: getAnchorByte('update_reward_infos'),
+  collectRemainingRewards: getAnchorByte('collect_remaining_rewards'),
+
+  swapV2: getAnchorByte('swap_v2'),
+
+  openLimitOrder: getAnchorByte('open_limit_order'),
+  increaseLimitOrder: getAnchorByte('increase_limit_order'),
+  decreaseLimitOrder: getAnchorByte('decrease_limit_order'),
+  settleLimitOrder: getAnchorByte('settle_limit_order'),
+  closeLimitOrder: getAnchorByte('close_limit_order'),
 };
 
 const lockInsDataBuf = [188, 37, 179, 131, 82, 150, 84, 73];
@@ -82,16 +98,19 @@ export class ClmmInstrument {
     ammConfigId: PublicKey,
     observationId: PublicKey,
     mintA: PublicKey,
-    mintVaultA: PublicKey,
+    vaultA: PublicKey,
     mintProgramIdA: PublicKey,
     mintB: PublicKey,
-    mintVaultB: PublicKey,
+    vaultB: PublicKey,
     mintProgramIdB: PublicKey,
-    exTickArrayBitmap: PublicKey,
+    tickArrayBitmap: PublicKey,
     sqrtPriceX64: BN,
-    extendMintAccount?: PublicKey[],
+    supperMintEx: PublicKey[] | undefined,
   ): TransactionInstruction {
-    const dataLayout = struct([u128("sqrtPriceX64"), u64("zero")]);
+    const dataLayout = struct([
+      u128("sqrtPriceX64"),
+      u64("startTime"),
+    ]);
 
     const keys = [
       { pubkey: poolCreator, isSigner: true, isWritable: true },
@@ -99,26 +118,817 @@ export class ClmmInstrument {
       { pubkey: poolId, isSigner: false, isWritable: true },
       { pubkey: mintA, isSigner: false, isWritable: false },
       { pubkey: mintB, isSigner: false, isWritable: false },
-      { pubkey: mintVaultA, isSigner: false, isWritable: true },
-      { pubkey: mintVaultB, isSigner: false, isWritable: true },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
       { pubkey: observationId, isSigner: false, isWritable: true },
-      { pubkey: exTickArrayBitmap, isSigner: false, isWritable: true },
+      { pubkey: tickArrayBitmap, isSigner: false, isWritable: true },
       { pubkey: mintProgramIdA, isSigner: false, isWritable: false },
       { pubkey: mintProgramIdB, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-      ...(extendMintAccount?.map((k) => ({ pubkey: k, isSigner: false, isWritable: false })) || []),
+      ...(supperMintEx ?? []).map(i => ({ pubkey: i, isSigner: false, isWritable: false })),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ sqrtPriceX64, startTime: BN_ZERO }, data);
+    const aData = Buffer.from([...insId.createPool, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static createCustomizablePoolInstruction(
+    programId: PublicKey,
+    poolId: PublicKey,
+    poolCreator: PublicKey,
+    ammConfig: PublicKey,
+    mintA: PublicKey,
+    mintB: PublicKey,
+    vaultA: PublicKey,
+    vaultB: PublicKey,
+    observationId: PublicKey,
+    tickArrayBitmap: PublicKey,
+    mintProgramIdA: PublicKey,
+    mintProgramIdB: PublicKey,
+    sqrtPriceX64: BN,
+    collectFeeOn: number,
+    supperMintEx: PublicKey[],
+    dynamicFeeConfig?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u128("sqrtPriceX64"),
+      u8("collectFeeOn"),
+      bool("enableDynamicFee"),
+    ]);
+
+    const keys = [
+      { pubkey: poolCreator, isSigner: true, isWritable: true },
+      { pubkey: ammConfig, isSigner: false, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: mintA, isSigner: false, isWritable: false },
+      { pubkey: mintB, isSigner: false, isWritable: false },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
+      { pubkey: observationId, isSigner: false, isWritable: true },
+      { pubkey: tickArrayBitmap, isSigner: false, isWritable: true },
+      { pubkey: mintProgramIdA, isSigner: false, isWritable: false },
+      { pubkey: mintProgramIdB, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+      ...supperMintEx.map(i => ({ pubkey: i, isSigner: false, isWritable: false })),
+      ...(dynamicFeeConfig ? [{ pubkey: dynamicFeeConfig, isSigner: false, isWritable: false }] : []),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ sqrtPriceX64, collectFeeOn, enableDynamicFee: dynamicFeeConfig !== undefined }, data);
+    const aData = Buffer.from([...insId.createCustomizablePool, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static initializeRewardInstruction(
+    programId: PublicKey,
+    rewardFunder: PublicKey,
+    poolId: PublicKey,
+    operationId: PublicKey,
+    ammConfigId: PublicKey,
+
+    funderTokenAccount: PublicKey,
+    tokenProgramId: PublicKey,
+    rewardTokenMint: PublicKey,
+    rewardTokenVault: PublicKey,
+
+    openTime: BN,
+    endTime: BN,
+    emissionsPerSecondX64: BN,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u64("openTime"),
+      u64("endTime"),
+      u128("emissionsPerSecondX64"),
+    ]);
+
+    const keys = [
+      { pubkey: rewardFunder, isSigner: true, isWritable: true },
+      { pubkey: funderTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: ammConfigId, isSigner: false, isWritable: false },
+
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: operationId, isSigner: false, isWritable: false },
+      { pubkey: rewardTokenMint, isSigner: false, isWritable: false },
+      { pubkey: rewardTokenVault, isSigner: false, isWritable: true },
+
+      { pubkey: tokenProgramId, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ openTime, endTime, emissionsPerSecondX64 }, data);
+    const aData = Buffer.from([...insId.initializeReward, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static updateRewardInfosInstruction(
+    programId: PublicKey,
+    poolId: PublicKey,
+  ): TransactionInstruction {
+    const keys = [
+      { pubkey: poolId, isSigner: false, isWritable: true },
+    ];
+
+    const aData = Buffer.from([...insId.updateRewardInfos]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static setRewardParamsInstruction(
+    programId: PublicKey,
+    authority: PublicKey,
+    poolId: PublicKey,
+    operationId: PublicKey,
+    ammConfigId: PublicKey,
+
+    ownerTokenAccount: PublicKey,
+    rewardVault: PublicKey,
+    rewardMint: PublicKey,
+
+    rewardIndex: number,
+    openTime: BN,
+    endTime: BN,
+    emissionsPerSecondX64: BN,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u8("rewardIndex"),
+      u128("emissionsPerSecondX64"),
+      u64("openTime"),
+      u64("endTime"),
+    ]);
+
+    const keys = [
+      { pubkey: authority, isSigner: true, isWritable: false },
+      { pubkey: ammConfigId, isSigner: false, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: operationId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+
+      { pubkey: rewardVault, isSigner: false, isWritable: true },
+      { pubkey: ownerTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: rewardMint, isSigner: false, isWritable: true },
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ rewardIndex, emissionsPerSecondX64, openTime, endTime }, data);
+    const aData = Buffer.from([...insId.setRewardParams, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static closePositionInstruction(
+    programId: PublicKey,
+    nftOwner: PublicKey,
+    positionNftMint: PublicKey,
+    positionNftAccount: PublicKey,
+    personalPosition: PublicKey,
+    nft2022?: boolean,
+  ): TransactionInstruction {
+    const keys = [
+      { pubkey: nftOwner, isSigner: true, isWritable: true },
+      { pubkey: positionNftMint, isSigner: false, isWritable: true },
+      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
+
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: nft2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+
+    const aData = Buffer.from([...insId.closePosition]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static openPositionV2Instruction(
+    programId: PublicKey,
+    payer: PublicKey,
+    poolId: PublicKey,
+    positionNftOwner: PublicKey,
+    positionNftMint: PublicKey,
+    positionNftAccount: PublicKey,
+    metadataAccount: PublicKey,
+    protocolPosition: PublicKey,
+    tickArrayLower: PublicKey,
+    tickArrayUpper: PublicKey,
+    personalPosition: PublicKey,
+    ownerVaultA: PublicKey,
+    ownerVaultB: PublicKey,
+    vaultA: PublicKey,
+    vaultB: PublicKey,
+    mintA: PublicKey,
+    mintB: PublicKey,
+    tickLower: number,
+    tickUpper: number,
+    tickArrayLowerStart: number,
+    tickArrayUpperStart: number,
+    liquidity: BN,
+    amountMaxA: BN,
+    amountMaxB: BN,
+    withMetadata: boolean,
+    baseFlag: boolean | null,
+
+    exTickArrayBitmap?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      s32("tickLower"),
+      s32("tickUpper"),
+      s32("tickArrayLowerStart"),
+      s32("tickArrayUpperStart"),
+      u128("liquidity"),
+      u64("amountMaxA"),
+      u64("amountMaxB"),
+      bool("withMetadata"),
+      u8("optionBaseFlag"),
+      bool("baseFlag"),
+    ]);
+
+    const keys = [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: positionNftOwner, isSigner: false, isWritable: false },
+      { pubkey: positionNftMint, isSigner: true, isWritable: true },
+      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
+      { pubkey: metadataAccount, isSigner: false, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: false },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultA, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultB, isSigner: false, isWritable: true },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
+      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: mintA, isSigner: false, isWritable: false },
+      { pubkey: mintB, isSigner: false, isWritable: false },
+
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
     ];
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(
       {
-        sqrtPriceX64,
-        zero: ZERO,
+        tickLower,
+        tickUpper,
+        tickArrayLowerStart,
+        tickArrayUpperStart,
+        liquidity,
+        amountMaxA,
+        amountMaxB,
+        withMetadata,
+        optionBaseFlag: baseFlag !== null ? 1 : 0,
+        baseFlag: baseFlag ?? false,
       },
-      data,
+      data
     );
-    const aData = Buffer.from([...anchorDataBuf.createPool, ...data]);
+    const aData = Buffer.from([...insId.openPositionV2, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static increaseLiquidityV2Instruction(
+    programId: PublicKey,
+    nftOwner: PublicKey,
+    nftAccount: PublicKey,
+    personalPosition: PublicKey,
+
+    poolId: PublicKey,
+    protocolPosition: PublicKey,
+    tickArrayLower: PublicKey,
+    tickArrayUpper: PublicKey,
+    ownerVaultA: PublicKey,
+    ownerVaultB: PublicKey,
+    vaultA: PublicKey,
+    vaultB: PublicKey,
+    mintA: PublicKey,
+    mintB: PublicKey,
+
+    liquidity: BN,
+    amountMaxA: BN,
+    amountMaxB: BN,
+    baseFlag: boolean | null,
+
+    exTickArrayBitmap?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u128("liquidity"),
+      u64("amountMaxA"),
+      u64("amountMaxB"),
+      u8("optionBaseFlag"),
+      bool("baseFlag"),
+    ]);
+
+    const keys = [
+      { pubkey: nftOwner, isSigner: true, isWritable: false },
+      { pubkey: nftAccount, isSigner: false, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: false },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultA, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultB, isSigner: false, isWritable: true },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: mintA, isSigner: false, isWritable: false },
+      { pubkey: mintB, isSigner: false, isWritable: false },
+
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
+      {
+        liquidity,
+        amountMaxA,
+        amountMaxB,
+        optionBaseFlag: baseFlag !== null ? 1 : 0,
+        baseFlag: baseFlag ?? false,
+      },
+      data
+    );
+    const aData = Buffer.from([...insId.increaseLiquidityV2, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static decreaseLiquidityV2Instruction(
+    programId: PublicKey,
+    nftOwner: PublicKey,
+    nftAccount: PublicKey,
+    personalPosition: PublicKey,
+
+    poolId: PublicKey,
+    protocolPosition: PublicKey,
+    tickArrayLower: PublicKey,
+    tickArrayUpper: PublicKey,
+    ownerVaultA: PublicKey,
+    ownerVaultB: PublicKey,
+    vaultA: PublicKey,
+    vaultB: PublicKey,
+    mintA: PublicKey,
+    mintB: PublicKey,
+    rewardAccounts: {
+      poolRewardVault: PublicKey;
+      ownerRewardVault: PublicKey;
+      rewardMint: PublicKey;
+    }[],
+
+    liquidity: BN,
+    amountMinA: BN,
+    amountMinB: BN,
+
+    exTickArrayBitmap?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u128("liquidity"),
+      u64("amountMinA"),
+      u64("amountMinB"),
+    ]);
+
+    const keys = [
+      { pubkey: nftOwner, isSigner: true, isWritable: false },
+      { pubkey: nftAccount, isSigner: false, isWritable: false },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: false },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultA, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultB, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: mintA, isSigner: false, isWritable: false },
+      { pubkey: mintB, isSigner: false, isWritable: false },
+
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+      ...rewardAccounts
+        .map((i) => [
+          { pubkey: i.poolRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.ownerRewardVault, isSigner: false, isWritable: true },
+          { pubkey: i.rewardMint, isSigner: false, isWritable: false },
+        ])
+        .flat(),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ liquidity, amountMinA, amountMinB }, data);
+    const aData = Buffer.from([...insId.decreaseLiquidityV2, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static swapV2Instruction(
+    programId: PublicKey,
+    payer: PublicKey,
+    poolId: PublicKey,
+    ammConfig: PublicKey,
+    inputTokenAccount: PublicKey,
+    outputTokenAccount: PublicKey,
+    inputVault: PublicKey,
+    outputVault: PublicKey,
+    inputTokenMint: PublicKey,
+    outputTokenMint: PublicKey,
+    tickArray: PublicKey[],
+    observationId: PublicKey,
+    amount: BN,
+    otherAmountThreshold: BN,
+    sqrtPriceLimitX64: BN,
+    isBaseInput: boolean,
+
+    tickArrayBitmapExtension?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u64("amount"),
+      u64("otherAmountThreshold"),
+      u128("sqrtPriceLimitX64"),
+      bool("isBaseInput"),
+    ]);
+
+    const keys = [
+      { pubkey: payer, isSigner: true, isWritable: false },
+      { pubkey: ammConfig, isSigner: false, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: inputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: outputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: inputVault, isSigner: false, isWritable: true },
+      { pubkey: outputVault, isSigner: false, isWritable: true },
+      { pubkey: observationId, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: inputTokenMint, isSigner: false, isWritable: false },
+      { pubkey: outputTokenMint, isSigner: false, isWritable: false },
+
+      ...(tickArrayBitmapExtension ? [{ pubkey: tickArrayBitmapExtension, isSigner: false, isWritable: true }] : []),
+      ...tickArray.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ amount, otherAmountThreshold, sqrtPriceLimitX64, isBaseInput }, data);
+    const aData = Buffer.from([...insId.swapV2, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static collectRemainingRewardsInstruction(
+    programId: PublicKey,
+    rewardFunder: PublicKey,
+    poolId: PublicKey,
+    funderTokenAccount: PublicKey,
+    rewardTokenVault: PublicKey,
+    rewardMint: PublicKey,
+    rewardIndex: number,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u8("rewardIndex"),
+    ]);
+
+    const keys = [
+      { pubkey: rewardFunder, isSigner: true, isWritable: false },
+      { pubkey: funderTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: rewardTokenVault, isSigner: false, isWritable: true },
+      { pubkey: rewardMint, isSigner: false, isWritable: false },
+
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ rewardIndex }, data);
+    const aData = Buffer.from([...insId.collectRemainingRewards, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static openPositionWithToken22NftInstruction(
+    programId: PublicKey,
+    payer: PublicKey,
+    poolId: PublicKey,
+    positionNftOwner: PublicKey,
+    positionNftMint: PublicKey,
+    positionNftAccount: PublicKey,
+    protocolPosition: PublicKey,
+    tickArrayLower: PublicKey,
+    tickArrayUpper: PublicKey,
+    personalPosition: PublicKey,
+    ownerVaultA: PublicKey,
+    ownerVaultB: PublicKey,
+    vaultA: PublicKey,
+    vaultB: PublicKey,
+    mintA: PublicKey,
+    mintB: PublicKey,
+    tickLower: number,
+    tickUpper: number,
+    tickArrayLowerStart: number,
+    tickArrayUpperStart: number,
+    liquidity: BN,
+    amountMaxA: BN,
+    amountMaxB: BN,
+    withMetadata: boolean,
+    baseFlag: boolean | null,
+
+    exTickArrayBitmap?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      s32("tickLower"),
+      s32("tickUpper"),
+      s32("tickArrayLowerStart"),
+      s32("tickArrayUpperStart"),
+      u128("liquidity"),
+      u64("amountMaxA"),
+      u64("amountMaxB"),
+      bool("withMetadata"),
+      u8("optionBaseFlag"),
+      bool("baseFlag"),
+    ]);
+
+    const keys = [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: positionNftOwner, isSigner: false, isWritable: false },
+      { pubkey: positionNftMint, isSigner: true, isWritable: true },
+      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: protocolPosition, isSigner: false, isWritable: false },
+      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+      { pubkey: personalPosition, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultA, isSigner: false, isWritable: true },
+      { pubkey: ownerVaultB, isSigner: false, isWritable: true },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
+      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: mintA, isSigner: false, isWritable: false },
+      { pubkey: mintB, isSigner: false, isWritable: false },
+      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
+      {
+        tickLower,
+        tickUpper,
+        tickArrayLowerStart,
+        tickArrayUpperStart,
+        liquidity,
+        amountMaxA,
+        amountMaxB,
+        withMetadata,
+        optionBaseFlag: baseFlag !== null ? 1 : 0,
+        baseFlag: baseFlag ?? false,
+      },
+      data
+    );
+    const aData = Buffer.from([...insId.openPositionWithToken22Nft, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static openLimitOrderInstruction(
+    programId: PublicKey,
+    payer: PublicKey,
+    poolId: PublicKey,
+    tickArray: PublicKey,
+    limitOrder: PublicKey,
+    inputTokenAccount: PublicKey,
+    inputVault: PublicKey,
+    inputVaultMint: PublicKey,
+    inputTokenProgram: PublicKey,
+    zeroForOne: boolean,
+    tickIndex: number,
+    amount: BN,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      bool("zeroForOne"),
+      s32("tickIndex"),
+      u64("amount"),
+    ]);
+
+    const keys = [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: tickArray, isSigner: false, isWritable: true },
+      { pubkey: limitOrder, isSigner: false, isWritable: true },
+      { pubkey: inputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: inputVault, isSigner: false, isWritable: true },
+      { pubkey: inputVaultMint, isSigner: false, isWritable: false },
+      { pubkey: inputTokenProgram, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ zeroForOne, tickIndex, amount }, data);
+    const aData = Buffer.from([...insId.openLimitOrder, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static increaseLimitOrderInstruction(
+    programId: PublicKey,
+    owner: PublicKey,
+    poolId: PublicKey,
+    tickArray: PublicKey,
+    limitOrder: PublicKey,
+    inputTokenAccount: PublicKey,
+    inputVault: PublicKey,
+    inputVaultMint: PublicKey,
+    inputTokenProgram: PublicKey,
+    amount: BN,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u64("amount"),
+    ]);
+
+    const keys = [
+      { pubkey: owner, isSigner: true, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: false },
+      { pubkey: tickArray, isSigner: false, isWritable: true },
+      { pubkey: limitOrder, isSigner: false, isWritable: true },
+      { pubkey: inputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: inputVault, isSigner: false, isWritable: true },
+      { pubkey: inputVaultMint, isSigner: false, isWritable: false },
+      { pubkey: inputTokenProgram, isSigner: false, isWritable: false },
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ amount }, data);
+    const aData = Buffer.from([...insId.increaseLimitOrder, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static decreaseLimitOrderInstruction(
+    programId: PublicKey,
+    owner: PublicKey,
+    poolId: PublicKey,
+    tickArray: PublicKey,
+    limitOrder: PublicKey,
+    inputTokenAccount: PublicKey,
+    outputTokenAccount: PublicKey,
+    inputVault: PublicKey,
+    outputVault: PublicKey,
+    inputVaultMint: PublicKey,
+    outputVaultMint: PublicKey,
+    amount: BN,
+    amountMin: BN,
+    tickArrayBitmap?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([
+      u64("amount"),
+      u64("amountMin"),
+    ]);
+
+    const keys = [
+      { pubkey: owner, isSigner: true, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: tickArray, isSigner: false, isWritable: true },
+      { pubkey: limitOrder, isSigner: false, isWritable: true },
+      { pubkey: inputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: outputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: inputVault, isSigner: false, isWritable: true },
+      { pubkey: outputVault, isSigner: false, isWritable: true },
+      { pubkey: inputVaultMint, isSigner: false, isWritable: false },
+      { pubkey: outputVaultMint, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      ...(tickArrayBitmap ? [{ pubkey: tickArrayBitmap, isSigner: false, isWritable: true }] : []),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ amount, amountMin }, data);
+    const aData = Buffer.from([...insId.decreaseLimitOrder, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static settleLimitOrderInstruction(
+    programId: PublicKey,
+    signer: PublicKey,
+    poolId: PublicKey,
+    tickArray: PublicKey,
+    limitOrder: PublicKey,
+    outputTokenAccount: PublicKey,
+    outputVault: PublicKey,
+    outputVaultMint: PublicKey,
+    outputTokenProgram: PublicKey,
+  ): TransactionInstruction {
+    const keys = [
+      { pubkey: signer, isSigner: true, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: tickArray, isSigner: false, isWritable: true },
+      { pubkey: limitOrder, isSigner: false, isWritable: true },
+      { pubkey: outputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: outputVault, isSigner: false, isWritable: true },
+      { pubkey: outputVaultMint, isSigner: false, isWritable: false },
+      { pubkey: outputTokenProgram, isSigner: false, isWritable: false },
+    ];
+
+    const aData = Buffer.from([...insId.settleLimitOrder]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static closeLimitOrderInstruction(
+    programId: PublicKey,
+    signer: PublicKey,
+    rentReceiver: PublicKey,
+    limitOrder: PublicKey,
+  ): TransactionInstruction {
+    const keys = [
+      { pubkey: signer, isSigner: true, isWritable: false },
+      { pubkey: rentReceiver, isSigner: false, isWritable: true },
+      { pubkey: limitOrder, isSigner: false, isWritable: true },
+    ];
+
+    const aData = Buffer.from([...insId.closeLimitOrder]);
 
     return new TransactionInstruction({
       keys,
@@ -173,207 +983,6 @@ export class ClmmInstrument {
     };
   }
 
-  static openPositionFromLiquidityInstruction(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftMint: PublicKey,
-    positionNftAccount: PublicKey,
-    metadataAccount: PublicKey,
-    protocolPosition: PublicKey,
-    tickArrayLower: PublicKey,
-    tickArrayUpper: PublicKey,
-    personalPosition: PublicKey,
-    ownerTokenAccountA: PublicKey,
-    ownerTokenAccountB: PublicKey,
-    tokenVaultA: PublicKey,
-    tokenVaultB: PublicKey,
-    tokenMintA: PublicKey,
-    tokenMintB: PublicKey,
-
-    tickLowerIndex: number,
-    tickUpperIndex: number,
-    tickArrayLowerStartIndex: number,
-    tickArrayUpperStartIndex: number,
-    liquidity: BN,
-    amountMaxA: BN,
-    amountMaxB: BN,
-    withMetadata: "create" | "no-create",
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([
-      s32("tickLowerIndex"),
-      s32("tickUpperIndex"),
-      s32("tickArrayLowerStartIndex"),
-      s32("tickArrayUpperStartIndex"),
-      u128("liquidity"),
-      u64("amountMaxA"),
-      u64("amountMaxB"),
-      bool("withMetadata"),
-      u8("optionBaseFlag"),
-      bool("baseFlag"),
-    ]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-    ];
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: positionNftOwner, isSigner: false, isWritable: false },
-      { pubkey: positionNftMint, isSigner: true, isWritable: true },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
-      { pubkey: metadataAccount, isSigner: false, isWritable: true },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: protocolPosition, isSigner: false, isWritable: true },
-      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
-      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultA, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultB, isSigner: false, isWritable: true },
-
-      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: tokenMintA, isSigner: false, isWritable: false },
-      { pubkey: tokenMintB, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        tickLowerIndex,
-        tickUpperIndex,
-        tickArrayLowerStartIndex,
-        tickArrayUpperStartIndex,
-        liquidity,
-        amountMaxA,
-        amountMaxB,
-        withMetadata: withMetadata === "create",
-        baseFlag: false,
-        optionBaseFlag: 0,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.openPosition, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
-  }
-
-  static openPositionFromLiquidityInstruction22(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftMint: PublicKey,
-    positionNftAccount: PublicKey,
-    protocolPosition: PublicKey,
-    tickArrayLower: PublicKey,
-    tickArrayUpper: PublicKey,
-    personalPosition: PublicKey,
-    ownerTokenAccountA: PublicKey,
-    ownerTokenAccountB: PublicKey,
-    tokenVaultA: PublicKey,
-    tokenVaultB: PublicKey,
-    tokenMintA: PublicKey,
-    tokenMintB: PublicKey,
-
-    tickLowerIndex: number,
-    tickUpperIndex: number,
-    tickArrayLowerStartIndex: number,
-    tickArrayUpperStartIndex: number,
-    liquidity: BN,
-    amountMaxA: BN,
-    amountMaxB: BN,
-    withMetadata: "create" | "no-create",
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([
-      s32("tickLowerIndex"),
-      s32("tickUpperIndex"),
-      s32("tickArrayLowerStartIndex"),
-      s32("tickArrayUpperStartIndex"),
-      u128("liquidity"),
-      u64("amountMaxA"),
-      u64("amountMaxB"),
-      bool("withMetadata"),
-      u8("optionBaseFlag"),
-      bool("baseFlag"),
-    ]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-    ];
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: positionNftOwner, isSigner: false, isWritable: false },
-      { pubkey: positionNftMint, isSigner: true, isWritable: true },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: protocolPosition, isSigner: false, isWritable: true },
-      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
-      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultA, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultB, isSigner: false, isWritable: true },
-
-      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: tokenMintA, isSigner: false, isWritable: false },
-      { pubkey: tokenMintB, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        tickLowerIndex,
-        tickUpperIndex,
-        tickArrayLowerStartIndex,
-        tickArrayUpperStartIndex,
-        liquidity,
-        amountMaxA,
-        amountMaxB,
-        withMetadata: withMetadata === "create",
-        baseFlag: false,
-        optionBaseFlag: 0,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.openPositionWithTokenEx, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
-  }
-
   static async openPositionInstructions({
     poolInfo,
     poolKeys,
@@ -417,8 +1026,8 @@ export class ClmmInstrument {
       nftMintAccount = _k.publicKey;
     }
 
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.config.tickSpacing);
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.config.tickSpacing);
+    const tickArrayLowerStartIndex = getTickArrayStartIndex(tickLower, poolInfo.config.tickSpacing);
+    const tickArrayUpperStartIndex = getTickArrayStartIndex(tickUpper, poolInfo.config.tickSpacing);
 
     const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
     const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
@@ -431,73 +1040,75 @@ export class ClmmInstrument {
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(programId, id, tickLower, tickUpper);
 
     const ins = nft2022
-      ? this.openPositionFromLiquidityInstruction22(
-          programId,
-          ownerInfo.feePayer,
-          id,
-          ownerInfo.wallet,
-          nftMintAccount,
-          positionNftAccount,
-          protocolPosition,
-          tickArrayLower,
-          tickArrayUpper,
-          personalPosition,
-          ownerInfo.tokenAccountA,
-          ownerInfo.tokenAccountB,
-          new PublicKey(poolKeys.vault.A),
-          new PublicKey(poolKeys.vault.B),
-          new PublicKey(poolInfo.mintA.address),
-          new PublicKey(poolInfo.mintB.address),
+      ? this.openPositionWithToken22NftInstruction(
+        programId,
+        ownerInfo.feePayer,
+        id,
+        ownerInfo.wallet,
+        nftMintAccount,
+        positionNftAccount,
+        protocolPosition,
+        tickArrayLower,
+        tickArrayUpper,
+        personalPosition,
+        ownerInfo.tokenAccountA,
+        ownerInfo.tokenAccountB,
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        new PublicKey(poolInfo.mintA.address),
+        new PublicKey(poolInfo.mintB.address),
 
-          tickLower,
-          tickUpper,
+        tickLower,
+        tickUpper,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+        liquidity,
+        amountMaxA,
+        amountMaxB,
+        withMetadata === 'create',
+        null,
+        isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
-          liquidity,
-          amountMaxA,
-          amountMaxB,
-          withMetadata,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
-            tickArrayLowerStartIndex,
-            tickArrayUpperStartIndex,
-          ])
-            ? getPdaExBitmapAccount(programId, id).publicKey
-            : undefined,
-        )
-      : this.openPositionFromLiquidityInstruction(
-          programId,
-          ownerInfo.feePayer,
-          id,
-          ownerInfo.wallet,
-          nftMintAccount,
-          positionNftAccount,
-          metadataAccount,
-          protocolPosition,
-          tickArrayLower,
-          tickArrayUpper,
-          personalPosition,
-          ownerInfo.tokenAccountA,
-          ownerInfo.tokenAccountB,
-          new PublicKey(poolKeys.vault.A),
-          new PublicKey(poolKeys.vault.B),
-          new PublicKey(poolInfo.mintA.address),
-          new PublicKey(poolInfo.mintB.address),
+        ])
+          ? getPdaExBitmapAccount(programId, id).publicKey
+          : undefined,
+      )
+      : this.openPositionV2Instruction(
+        programId,
+        ownerInfo.feePayer,
+        id,
+        ownerInfo.wallet,
+        nftMintAccount,
+        positionNftAccount,
+        metadataAccount,
+        protocolPosition,
+        tickArrayLower,
+        tickArrayUpper,
+        personalPosition,
+        ownerInfo.tokenAccountA,
+        ownerInfo.tokenAccountB,
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        new PublicKey(poolInfo.mintA.address),
+        new PublicKey(poolInfo.mintB.address),
 
-          tickLower,
-          tickUpper,
+        tickLower,
+        tickUpper,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+        liquidity,
+        amountMaxA,
+        amountMaxB,
+        withMetadata === 'create',
+        null,
+        isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
-          liquidity,
-          amountMaxA,
-          amountMaxB,
-          withMetadata,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
-            tickArrayLowerStartIndex,
-            tickArrayUpperStartIndex,
-          ])
-            ? getPdaExBitmapAccount(programId, id).publicKey
-            : undefined,
-        );
+        ])
+          ? getPdaExBitmapAccount(programId, id).publicKey
+          : undefined,
+      );
 
     return {
       signers,
@@ -561,8 +1172,8 @@ export class ClmmInstrument {
       nftMintAccount = _k.publicKey;
     }
 
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.config.tickSpacing);
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.config.tickSpacing);
+    const tickArrayLowerStartIndex = getTickArrayStartIndex(tickLower, poolInfo.config.tickSpacing);
+    const tickArrayUpperStartIndex = getTickArrayStartIndex(tickUpper, poolInfo.config.tickSpacing);
 
     const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
     const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
@@ -575,79 +1186,83 @@ export class ClmmInstrument {
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(programId, id, tickLower, tickUpper);
 
     const ins = nft2022
-      ? this.openPositionFromBaseInstruction22(
-          programId,
-          ownerInfo.feePayer,
-          id,
-          ownerInfo.wallet,
-          nftMintAccount,
-          positionNftAccount,
-          protocolPosition,
-          tickArrayLower,
-          tickArrayUpper,
-          personalPosition,
-          ownerInfo.tokenAccountA,
-          ownerInfo.tokenAccountB,
-          new PublicKey(poolKeys.vault.A),
-          new PublicKey(poolKeys.vault.B),
-          new PublicKey(poolInfo.mintA.address),
-          new PublicKey(poolInfo.mintB.address),
+      ? this.openPositionWithToken22NftInstruction(
+        programId,
+        ownerInfo.feePayer,
+        id,
+        ownerInfo.wallet,
+        nftMintAccount,
+        positionNftAccount,
+        protocolPosition,
+        tickArrayLower,
+        tickArrayUpper,
+        personalPosition,
+        ownerInfo.tokenAccountA,
+        ownerInfo.tokenAccountB,
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        new PublicKey(poolInfo.mintA.address),
+        new PublicKey(poolInfo.mintB.address),
 
-          tickLower,
-          tickUpper,
+        tickLower,
+        tickUpper,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+
+        BN_ZERO,
+        base === 'MintA' ? baseAmount : otherAmountMax,
+        base === 'MintA' ? otherAmountMax : baseAmount,
+
+        withMetadata === 'create',
+
+        base === 'MintA',
+
+        isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
+        ])
+          ? getPdaExBitmapAccount(programId, id).publicKey
+          : undefined,
+      )
+      : this.openPositionV2Instruction(
+        programId,
+        ownerInfo.feePayer,
+        id,
+        ownerInfo.wallet,
+        nftMintAccount,
+        positionNftAccount,
+        metadataAccount,
+        protocolPosition,
+        tickArrayLower,
+        tickArrayUpper,
+        personalPosition,
+        ownerInfo.tokenAccountA,
+        ownerInfo.tokenAccountB,
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        new PublicKey(poolInfo.mintA.address),
+        new PublicKey(poolInfo.mintB.address),
 
-          withMetadata,
+        tickLower,
+        tickUpper,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
 
-          base,
-          baseAmount,
+        BN_ZERO,
+        base === 'MintA' ? baseAmount : otherAmountMax,
+        base === 'MintA' ? otherAmountMax : baseAmount,
 
-          otherAmountMax,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
-            tickArrayLowerStartIndex,
-            tickArrayUpperStartIndex,
-          ])
-            ? getPdaExBitmapAccount(programId, id).publicKey
-            : undefined,
-        )
-      : this.openPositionFromBaseInstruction(
-          programId,
-          ownerInfo.feePayer,
-          id,
-          ownerInfo.wallet,
-          nftMintAccount,
-          positionNftAccount,
-          metadataAccount,
-          protocolPosition,
-          tickArrayLower,
-          tickArrayUpper,
-          personalPosition,
-          ownerInfo.tokenAccountA,
-          ownerInfo.tokenAccountB,
-          new PublicKey(poolKeys.vault.A),
-          new PublicKey(poolKeys.vault.B),
-          new PublicKey(poolInfo.mintA.address),
-          new PublicKey(poolInfo.mintB.address),
+        withMetadata === 'create',
 
-          tickLower,
-          tickUpper,
+        base === 'MintA',
+
+        isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
-
-          withMetadata,
-
-          base,
-          baseAmount,
-
-          otherAmountMax,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
-            tickArrayLowerStartIndex,
-            tickArrayUpperStartIndex,
-          ])
-            ? getPdaExBitmapAccount(programId, id).publicKey
-            : undefined,
-        );
+        ])
+          ? getPdaExBitmapAccount(programId, id).publicKey
+          : undefined,
+      );
 
     return {
       address: {
@@ -664,211 +1279,6 @@ export class ClmmInstrument {
       instructionTypes: [InstructionType.ClmmOpenPosition],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
-  }
-
-  static openPositionFromBaseInstruction(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftMint: PublicKey,
-    positionNftAccount: PublicKey,
-    metadataAccount: PublicKey,
-    protocolPosition: PublicKey,
-    tickArrayLower: PublicKey,
-    tickArrayUpper: PublicKey,
-    personalPosition: PublicKey,
-    ownerTokenAccountA: PublicKey,
-    ownerTokenAccountB: PublicKey,
-    tokenVaultA: PublicKey,
-    tokenVaultB: PublicKey,
-    tokenMintA: PublicKey,
-    tokenMintB: PublicKey,
-
-    tickLowerIndex: number,
-    tickUpperIndex: number,
-    tickArrayLowerStartIndex: number,
-    tickArrayUpperStartIndex: number,
-
-    withMetadata: "create" | "no-create",
-    base: "MintA" | "MintB",
-    baseAmount: BN,
-
-    otherAmountMax: BN,
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([
-      s32("tickLowerIndex"),
-      s32("tickUpperIndex"),
-      s32("tickArrayLowerStartIndex"),
-      s32("tickArrayUpperStartIndex"),
-      u128("liquidity"),
-      u64("amountMaxA"),
-      u64("amountMaxB"),
-      bool("withMetadata"),
-      u8("optionBaseFlag"),
-      bool("baseFlag"),
-    ]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-    ];
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: positionNftOwner, isSigner: false, isWritable: false },
-      { pubkey: positionNftMint, isSigner: true, isWritable: true },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
-      { pubkey: metadataAccount, isSigner: false, isWritable: true },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: protocolPosition, isSigner: false, isWritable: true },
-      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
-      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultA, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultB, isSigner: false, isWritable: true },
-
-      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: tokenMintA, isSigner: false, isWritable: false },
-      { pubkey: tokenMintB, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        tickLowerIndex,
-        tickUpperIndex,
-        tickArrayLowerStartIndex,
-        tickArrayUpperStartIndex,
-        liquidity: new BN(0),
-        amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
-        amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
-        withMetadata: withMetadata === "create",
-        baseFlag: base === "MintA",
-        optionBaseFlag: 1,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.openPosition, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
-  }
-
-  static openPositionFromBaseInstruction22(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftMint: PublicKey,
-    positionNftAccount: PublicKey,
-    protocolPosition: PublicKey,
-    tickArrayLower: PublicKey,
-    tickArrayUpper: PublicKey,
-    personalPosition: PublicKey,
-    ownerTokenAccountA: PublicKey,
-    ownerTokenAccountB: PublicKey,
-    tokenVaultA: PublicKey,
-    tokenVaultB: PublicKey,
-    tokenMintA: PublicKey,
-    tokenMintB: PublicKey,
-
-    tickLowerIndex: number,
-    tickUpperIndex: number,
-    tickArrayLowerStartIndex: number,
-    tickArrayUpperStartIndex: number,
-
-    withMetadata: "create" | "no-create",
-    base: "MintA" | "MintB",
-    baseAmount: BN,
-
-    otherAmountMax: BN,
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([
-      s32("tickLowerIndex"),
-      s32("tickUpperIndex"),
-      s32("tickArrayLowerStartIndex"),
-      s32("tickArrayUpperStartIndex"),
-      u128("liquidity"),
-      u64("amountMaxA"),
-      u64("amountMaxB"),
-      bool("withMetadata"),
-      u8("optionBaseFlag"),
-      bool("baseFlag"),
-    ]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-    ];
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: positionNftOwner, isSigner: false, isWritable: false },
-      { pubkey: positionNftMint, isSigner: true, isWritable: true },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: protocolPosition, isSigner: false, isWritable: true },
-      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
-      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultA, isSigner: false, isWritable: true },
-      { pubkey: tokenVaultB, isSigner: false, isWritable: true },
-
-      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: tokenMintA, isSigner: false, isWritable: false },
-      { pubkey: tokenMintB, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        tickLowerIndex,
-        tickUpperIndex,
-        tickArrayLowerStartIndex,
-        tickArrayUpperStartIndex,
-        liquidity: new BN(0),
-        amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
-        amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
-        withMetadata: withMetadata === "create",
-        baseFlag: base === "MintA",
-        optionBaseFlag: 1,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.openPositionWithTokenEx, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
   }
 
   static async openPositionFromLiquidityInstructions({
@@ -913,8 +1323,8 @@ export class ClmmInstrument {
 
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
 
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, poolInfo.config.tickSpacing);
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, poolInfo.config.tickSpacing);
+    const tickArrayLowerStartIndex = getTickArrayStartIndex(tickLower, poolInfo.config.tickSpacing);
+    const tickArrayUpperStartIndex = getTickArrayStartIndex(tickUpper, poolInfo.config.tickSpacing);
 
     const { publicKey: tickArrayLower } = getPdaTickArrayAddress(programId, id, tickArrayLowerStartIndex);
     const { publicKey: tickArrayUpper } = getPdaTickArrayAddress(programId, id, tickArrayUpperStartIndex);
@@ -927,73 +1337,75 @@ export class ClmmInstrument {
     const { publicKey: protocolPosition } = getPdaProtocolPositionAddress(programId, id, tickLower, tickUpper);
 
     const ins = nft2022
-      ? this.openPositionFromLiquidityInstruction22(
-          programId,
-          ownerInfo.wallet,
-          id,
-          ownerInfo.wallet,
-          nftMintAccount,
-          positionNftAccount,
-          protocolPosition,
-          tickArrayLower,
-          tickArrayUpper,
-          personalPosition,
-          ownerInfo.tokenAccountA,
-          ownerInfo.tokenAccountB,
-          new PublicKey(poolKeys.vault.A),
-          new PublicKey(poolKeys.vault.B),
-          new PublicKey(poolKeys.mintA.address),
-          new PublicKey(poolKeys.mintB.address),
+      ? this.openPositionWithToken22NftInstruction(
+        programId,
+        ownerInfo.wallet,
+        id,
+        ownerInfo.wallet,
+        nftMintAccount,
+        positionNftAccount,
+        protocolPosition,
+        tickArrayLower,
+        tickArrayUpper,
+        personalPosition,
+        ownerInfo.tokenAccountA,
+        ownerInfo.tokenAccountB,
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        new PublicKey(poolKeys.mintA.address),
+        new PublicKey(poolKeys.mintB.address),
 
-          tickLower,
-          tickUpper,
+        tickLower,
+        tickUpper,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+        liquidity,
+        amountMaxA,
+        amountMaxB,
+        withMetadata === 'create',
+        null,
+        isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
-          liquidity,
-          amountMaxA,
-          amountMaxB,
-          withMetadata,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
-            tickArrayLowerStartIndex,
-            tickArrayUpperStartIndex,
-          ])
-            ? getPdaExBitmapAccount(programId, id).publicKey
-            : undefined,
-        )
-      : this.openPositionFromLiquidityInstruction(
-          programId,
-          ownerInfo.wallet,
-          id,
-          ownerInfo.wallet,
-          nftMintAccount,
-          positionNftAccount,
-          metadataAccount,
-          protocolPosition,
-          tickArrayLower,
-          tickArrayUpper,
-          personalPosition,
-          ownerInfo.tokenAccountA,
-          ownerInfo.tokenAccountB,
-          new PublicKey(poolKeys.vault.A),
-          new PublicKey(poolKeys.vault.B),
-          new PublicKey(poolKeys.mintA.address),
-          new PublicKey(poolKeys.mintB.address),
+        ])
+          ? getPdaExBitmapAccount(programId, id).publicKey
+          : undefined,
+      )
+      : this.openPositionV2Instruction(
+        programId,
+        ownerInfo.wallet,
+        id,
+        ownerInfo.wallet,
+        nftMintAccount,
+        positionNftAccount,
+        metadataAccount,
+        protocolPosition,
+        tickArrayLower,
+        tickArrayUpper,
+        personalPosition,
+        ownerInfo.tokenAccountA,
+        ownerInfo.tokenAccountB,
+        new PublicKey(poolKeys.vault.A),
+        new PublicKey(poolKeys.vault.B),
+        new PublicKey(poolKeys.mintA.address),
+        new PublicKey(poolKeys.mintB.address),
 
-          tickLower,
-          tickUpper,
+        tickLower,
+        tickUpper,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+        liquidity,
+        amountMaxA,
+        amountMaxB,
+        withMetadata === 'create',
+        null,
+        isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
-          liquidity,
-          amountMaxA,
-          amountMaxB,
-          withMetadata,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
-            tickArrayLowerStartIndex,
-            tickArrayUpperStartIndex,
-          ])
-            ? getPdaExBitmapAccount(programId, id).publicKey
-            : undefined,
-        );
+        ])
+          ? getPdaExBitmapAccount(programId, id).publicKey
+          : undefined,
+      );
 
     return {
       address: {
@@ -1012,38 +1424,6 @@ export class ClmmInstrument {
     };
   }
 
-  static closePositionInstruction(
-    programId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftMint: PublicKey,
-    positionNftAccount: PublicKey,
-    personalPosition: PublicKey,
-    nft2022?: boolean,
-  ): TransactionInstruction {
-    const dataLayout = struct([]);
-
-    const keys = [
-      { pubkey: positionNftOwner, isSigner: true, isWritable: true },
-      { pubkey: positionNftMint, isSigner: false, isWritable: true },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: nft2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode({}, data);
-
-    const aData = Buffer.from([...anchorDataBuf.closePosition, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
-  }
-
   static closePositionInstructions({
     poolInfo,
     poolKeys,
@@ -1053,7 +1433,7 @@ export class ClmmInstrument {
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
-    ownerPosition: ClmmPositionLayout;
+    ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
     ownerInfo: {
       wallet: PublicKey;
     };
@@ -1090,84 +1470,6 @@ export class ClmmInstrument {
     };
   }
 
-  static increasePositionFromLiquidityInstruction(
-    programId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftAccount: PublicKey,
-    personalPosition: PublicKey,
-
-    poolId: PublicKey,
-    protocolPosition: PublicKey,
-    tickArrayLower: PublicKey,
-    tickArrayUpper: PublicKey,
-    ownerTokenAccountA: PublicKey,
-    ownerTokenAccountB: PublicKey,
-    mintVaultA: PublicKey,
-    mintVaultB: PublicKey,
-    mintMintA: PublicKey,
-    mintMintB: PublicKey,
-
-    liquidity: BN,
-    amountMaxA: BN,
-    amountMaxB: BN,
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([
-      u128("liquidity"),
-      u64("amountMaxA"),
-      u64("amountMaxB"),
-      u8("optionBaseFlag"),
-      bool("baseFlag"),
-    ]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-    ];
-
-    const keys = [
-      { pubkey: positionNftOwner, isSigner: true, isWritable: false },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: false },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: protocolPosition, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
-      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
-      { pubkey: mintVaultA, isSigner: false, isWritable: true },
-      { pubkey: mintVaultB, isSigner: false, isWritable: true },
-
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: mintMintA, isSigner: false, isWritable: false },
-      { pubkey: mintMintB, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        liquidity,
-        amountMaxA,
-        amountMaxB,
-        optionBaseFlag: 0,
-        baseFlag: false,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.increaseLiquidity, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
-  }
-
   static increasePositionFromLiquidityInstructions({
     poolInfo,
     poolKeys,
@@ -1180,7 +1482,7 @@ export class ClmmInstrument {
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
-    ownerPosition: ClmmPositionLayout;
+    ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
 
     ownerInfo: {
       wallet: PublicKey;
@@ -1194,11 +1496,11 @@ export class ClmmInstrument {
     nft2022?: boolean;
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayLowerStartIndex = getTickArrayStartIndex(
       ownerPosition.tickLower,
       poolInfo.config.tickSpacing,
     );
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayUpperStartIndex = getTickArrayStartIndex(
       ownerPosition.tickUpper,
       poolInfo.config.tickSpacing,
     );
@@ -1218,7 +1520,7 @@ export class ClmmInstrument {
       ownerPosition.tickUpper,
     );
 
-    const ins = this.increasePositionFromLiquidityInstruction(
+    const ins = this.increaseLiquidityV2Instruction(
       programId,
       ownerInfo.wallet,
       positionNftAccount,
@@ -1237,7 +1539,9 @@ export class ClmmInstrument {
       liquidity,
       amountMaxA,
       amountMaxB,
-      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
+
+      null,
+      isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
         tickArrayLowerStartIndex,
         tickArrayUpperStartIndex,
       ])
@@ -1287,11 +1591,11 @@ export class ClmmInstrument {
     nft2022?: boolean;
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayLowerStartIndex = getTickArrayStartIndex(
       ownerPosition.tickLower,
       poolInfo.config.tickSpacing,
     );
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayUpperStartIndex = getTickArrayStartIndex(
       ownerPosition.tickUpper,
       poolInfo.config.tickSpacing,
     );
@@ -1320,7 +1624,7 @@ export class ClmmInstrument {
         protocolPosition,
       },
       instructions: [
-        this.increasePositionFromBaseInstruction(
+        this.increaseLiquidityV2Instruction(
           programId,
           ownerInfo.wallet,
           positionNftAccount,
@@ -1336,11 +1640,13 @@ export class ClmmInstrument {
           new PublicKey(poolInfo.mintA.address),
           new PublicKey(poolInfo.mintB.address),
 
-          base,
-          baseAmount,
+          BN_ZERO,
+          base === 'MintA' ? baseAmount : otherAmountMax,
+          base === 'MintA' ? otherAmountMax : baseAmount,
 
-          otherAmountMax,
-          PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
+          base === 'MintA',
+
+          isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
             tickArrayLowerStartIndex,
             tickArrayUpperStartIndex,
           ])
@@ -1352,169 +1658,6 @@ export class ClmmInstrument {
       instructionTypes: [InstructionType.ClmmIncreasePosition],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
-  }
-
-  static increasePositionFromBaseInstruction(
-    programId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftAccount: PublicKey,
-    personalPosition: PublicKey,
-
-    poolId: PublicKey,
-    protocolPosition: PublicKey,
-    tickArrayLower: PublicKey,
-    tickArrayUpper: PublicKey,
-    ownerTokenAccountA: PublicKey,
-    ownerTokenAccountB: PublicKey,
-    mintVaultA: PublicKey,
-    mintVaultB: PublicKey,
-    mintMintA: PublicKey,
-    mintMintB: PublicKey,
-
-    base: "MintA" | "MintB",
-    baseAmount: BN,
-
-    otherAmountMax: BN,
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([
-      u128("liquidity"),
-      u64("amountMaxA"),
-      u64("amountMaxB"),
-      u8("optionBaseFlag"),
-      bool("baseFlag"),
-    ]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-    ];
-
-    const keys = [
-      { pubkey: positionNftOwner, isSigner: true, isWritable: false },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: false },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: protocolPosition, isSigner: false, isWritable: true },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
-      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
-      { pubkey: mintVaultA, isSigner: false, isWritable: true },
-      { pubkey: mintVaultB, isSigner: false, isWritable: true },
-
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: mintMintA, isSigner: false, isWritable: false },
-      { pubkey: mintMintB, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        liquidity: new BN(0),
-        amountMaxA: base === "MintA" ? baseAmount : otherAmountMax,
-        amountMaxB: base === "MintA" ? otherAmountMax : baseAmount,
-        baseFlag: base === "MintA",
-        optionBaseFlag: 1,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.increaseLiquidity, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
-  }
-
-  static decreaseLiquidityInstruction(
-    programId: PublicKey,
-    positionNftOwner: PublicKey,
-    positionNftAccount: PublicKey,
-    personalPosition: PublicKey,
-
-    poolId: PublicKey,
-    protocolPosition: PublicKey,
-    tickArrayLower: PublicKey,
-    tickArrayUpper: PublicKey,
-    ownerTokenAccountA: PublicKey,
-    ownerTokenAccountB: PublicKey,
-    mintVaultA: PublicKey,
-    mintVaultB: PublicKey,
-    mintMintA: PublicKey,
-    mintMintB: PublicKey,
-    rewardAccounts: {
-      poolRewardVault: PublicKey;
-      ownerRewardVault: PublicKey;
-      rewardMint: PublicKey;
-    }[],
-
-    liquidity: BN,
-    amountMinA: BN,
-    amountMinB: BN,
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([u128("liquidity"), u64("amountMinA"), u64("amountMinB")]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-      ...rewardAccounts
-        .map((i) => [
-          { pubkey: i.poolRewardVault, isSigner: false, isWritable: true },
-          { pubkey: i.ownerRewardVault, isSigner: false, isWritable: true },
-          { pubkey: i.rewardMint, isSigner: false, isWritable: false },
-        ])
-        .flat(),
-    ];
-
-    const keys = [
-      { pubkey: positionNftOwner, isSigner: true, isWritable: false },
-      { pubkey: positionNftAccount, isSigner: false, isWritable: false },
-      { pubkey: personalPosition, isSigner: false, isWritable: true },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: protocolPosition, isSigner: false, isWritable: true },
-      { pubkey: mintVaultA, isSigner: false, isWritable: true },
-      { pubkey: mintVaultB, isSigner: false, isWritable: true },
-      { pubkey: tickArrayLower, isSigner: false, isWritable: true },
-      { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
-
-      { pubkey: ownerTokenAccountA, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccountB, isSigner: false, isWritable: true },
-
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: mintMintA, isSigner: false, isWritable: false },
-      { pubkey: mintMintB, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        liquidity,
-        amountMinA,
-        amountMinB,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.decreaseLiquidity, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
   }
 
   static decreaseLiquidityInstructions({
@@ -1530,7 +1673,7 @@ export class ClmmInstrument {
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
-    ownerPosition: ClmmPositionLayout;
+    ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
     ownerInfo: {
       wallet: PublicKey;
       tokenAccountA: PublicKey;
@@ -1545,11 +1688,11 @@ export class ClmmInstrument {
     nft2022?: boolean;
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [poolProgramId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayLowerStartIndex = getTickArrayStartIndex(
       ownerPosition.tickLower,
       poolInfo.config.tickSpacing,
     );
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayUpperStartIndex = getTickArrayStartIndex(
       ownerPosition.tickUpper,
       poolInfo.config.tickSpacing,
     );
@@ -1581,7 +1724,7 @@ export class ClmmInstrument {
     }
 
     const ins: TransactionInstruction[] = [];
-    const decreaseIns = this.decreaseLiquidityInstruction(
+    const decreaseIns = this.decreaseLiquidityV2Instruction(
       poolProgramId,
       ownerInfo.wallet,
       positionNftAccount,
@@ -1601,7 +1744,7 @@ export class ClmmInstrument {
       liquidity,
       amountMinA,
       amountMinB,
-      PoolUtils.isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
+      isOverflowDefaultTickarrayBitmap(poolInfo.config.tickSpacing, [
         tickArrayLowerStartIndex,
         tickArrayUpperStartIndex,
       ])
@@ -1623,81 +1766,6 @@ export class ClmmInstrument {
       instructionTypes: [InstructionType.ClmmDecreasePosition],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
-  }
-
-  static swapInstruction(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-    ammConfigId: PublicKey,
-    inputTokenAccount: PublicKey,
-    outputTokenAccount: PublicKey,
-    inputVault: PublicKey,
-    outputVault: PublicKey,
-    inputMint: PublicKey,
-    outputMint: PublicKey,
-    tickArray: PublicKey[],
-    observationId: PublicKey,
-
-    amount: BN,
-    otherAmountThreshold: BN,
-    sqrtPriceLimitX64: BN,
-    isBaseInput: boolean,
-
-    exTickArrayBitmap?: PublicKey,
-  ): TransactionInstruction {
-    const dataLayout = struct([
-      u64("amount"),
-      u64("otherAmountThreshold"),
-      u128("sqrtPriceLimitX64"),
-      bool("isBaseInput"),
-    ]);
-
-    const remainingAccounts = [
-      ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
-      ...tickArray.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
-    ];
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: false },
-      { pubkey: ammConfigId, isSigner: false, isWritable: false },
-
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: inputTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: outputTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: inputVault, isSigner: false, isWritable: true },
-      { pubkey: outputVault, isSigner: false, isWritable: true },
-
-      { pubkey: observationId, isSigner: false, isWritable: true },
-
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: inputMint, isSigner: false, isWritable: false },
-      { pubkey: outputMint, isSigner: false, isWritable: false },
-
-      ...remainingAccounts,
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        amount,
-        otherAmountThreshold,
-        sqrtPriceLimitX64,
-        isBaseInput,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.swap, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
   }
 
   static makeSwapBaseInInstructions({
@@ -1735,7 +1803,7 @@ export class ClmmInstrument {
     const isInputMintA = poolInfo.mintA.address === inputMint.toString();
 
     const ins = [
-      this.swapInstruction(
+      this.swapV2Instruction(
         programId,
         ownerInfo.wallet,
 
@@ -1803,7 +1871,7 @@ export class ClmmInstrument {
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
     const isInputMintA = poolInfo.mintA.address === outputMint.toBase58();
     const ins = [
-      this.swapInstruction(
+      this.swapV2Instruction(
         programId,
         ownerInfo.wallet,
 
@@ -1837,58 +1905,6 @@ export class ClmmInstrument {
     };
   }
 
-  static initRewardInstruction(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-    operationId: PublicKey,
-    ammConfigId: PublicKey,
-
-    ownerTokenAccount: PublicKey,
-    rewardProgramId: PublicKey,
-    rewardMint: PublicKey,
-    rewardVault: PublicKey,
-
-    openTime: number,
-    endTime: number,
-    emissionsPerSecondX64: BN,
-  ): TransactionInstruction {
-    const dataLayout = struct([u64("openTime"), u64("endTime"), u128("emissionsPerSecondX64")]);
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: ownerTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: ammConfigId, isSigner: false, isWritable: false },
-
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: operationId, isSigner: false, isWritable: true },
-      { pubkey: rewardMint, isSigner: false, isWritable: false },
-      { pubkey: rewardVault, isSigner: false, isWritable: true },
-
-      { pubkey: rewardProgramId, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        openTime: parseBigNumberish(openTime),
-        endTime: parseBigNumberish(endTime),
-        emissionsPerSecondX64,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.initReward, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
-  }
-
   static initRewardInstructions({
     poolInfo,
     poolKeys,
@@ -1910,10 +1926,10 @@ export class ClmmInstrument {
     };
   }): ReturnTypeMakeInstructions<InitRewardExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
-    const poolRewardVault = getPdaPoolRewardVaulId(programId, id, rewardInfo.mint).publicKey;
+    const poolRewardVault = getPdaPoolRewardVaultId(programId, id, rewardInfo.mint).publicKey;
     const operationId = getPdaOperationAccount(programId).publicKey;
     const ins = [
-      this.initRewardInstruction(
+      this.initializeRewardInstruction(
         programId,
         ownerInfo.wallet,
         id,
@@ -1925,8 +1941,8 @@ export class ClmmInstrument {
         rewardInfo.mint,
         poolRewardVault,
 
-        rewardInfo.openTime,
-        rewardInfo.endTime,
+        new BN(rewardInfo.openTime),
+        new BN(rewardInfo.endTime),
         rewardInfo.emissionsPerSecondX64,
       ),
     ];
@@ -1937,58 +1953,6 @@ export class ClmmInstrument {
       instructionTypes: [InstructionType.ClmmInitReward],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
-  }
-
-  static setRewardInstruction(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-    operationId: PublicKey,
-    ammConfigId: PublicKey,
-
-    ownerTokenAccount: PublicKey,
-    rewardVault: PublicKey,
-    rewardMint: PublicKey,
-
-    rewardIndex: number,
-    openTime: number,
-    endTime: number,
-    emissionsPerSecondX64: BN,
-  ): TransactionInstruction {
-    const dataLayout = struct([u8("rewardIndex"), u128("emissionsPerSecondX64"), u64("openTime"), u64("endTime")]);
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: ammConfigId, isSigner: false, isWritable: false },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: operationId, isSigner: false, isWritable: true },
-
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-
-      { pubkey: rewardVault, isSigner: false, isWritable: true },
-      { pubkey: ownerTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: rewardMint, isSigner: false, isWritable: true },
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        rewardIndex,
-        emissionsPerSecondX64,
-        openTime: parseBigNumberish(openTime),
-        endTime: parseBigNumberish(endTime),
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.setRewardEmissions, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
   }
 
   static setRewardInstructions({
@@ -2028,7 +1992,7 @@ export class ClmmInstrument {
     const operationId = getPdaOperationAccount(programId).publicKey;
 
     const ins = [
-      this.setRewardInstruction(
+      this.setRewardParamsInstruction(
         programId,
         ownerInfo.wallet,
         id,
@@ -2040,8 +2004,8 @@ export class ClmmInstrument {
         rewardMint!,
 
         rewardIndex!,
-        rewardInfo.openTime,
-        rewardInfo.endTime,
+        new BN(rewardInfo.openTime),
+        new BN(rewardInfo.endTime),
         rewardInfo.emissionsPerSecondX64,
       ),
     ];
@@ -2052,47 +2016,6 @@ export class ClmmInstrument {
       instructionTypes: [InstructionType.ClmmSetReward],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     };
-  }
-
-  static collectRewardInstruction(
-    programId: PublicKey,
-    payer: PublicKey,
-    poolId: PublicKey,
-
-    ownerTokenAccount: PublicKey,
-    rewardVault: PublicKey,
-    rewardMint: PublicKey,
-
-    rewardIndex: number,
-  ): TransactionInstruction {
-    const dataLayout = struct([u8("rewardIndex")]);
-
-    const keys = [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: ownerTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: poolId, isSigner: false, isWritable: true },
-      { pubkey: rewardVault, isSigner: false, isWritable: true },
-      { pubkey: rewardMint, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
-    ];
-
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        rewardIndex,
-      },
-      data,
-    );
-
-    const aData = Buffer.from([...anchorDataBuf.collectReward, ...data]);
-
-    return new TransactionInstruction({
-      keys,
-      programId,
-      data: aData,
-    });
   }
 
   static collectRewardInstructions({
@@ -2122,7 +2045,7 @@ export class ClmmInstrument {
       logger.logWithError("reward mint check error", "no reward mint", poolInfo.rewardDefaultInfos);
 
     const ins = [
-      this.collectRewardInstruction(
+      this.collectRemainingRewardsInstruction(
         programId,
         ownerInfo.wallet,
         id,
@@ -2323,7 +2246,7 @@ export class ClmmInstrument {
     poolKeys: ClmmKeys;
     programId: PublicKey;
     authProgramId: PublicKey;
-    ownerPosition: ClmmPositionLayout;
+    ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
     owner: PublicKey;
     ownerRewardAccounts: PublicKey[];
     userVaultA: PublicKey;
@@ -2331,11 +2254,11 @@ export class ClmmInstrument {
   }): TransactionInstruction {
     const [poolProgramId, poolId] = [new PublicKey(props.poolKeys.programId), new PublicKey(props.poolKeys.id)];
 
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayLowerStartIndex = getTickArrayStartIndex(
       props.ownerPosition.tickLower,
       props.poolKeys.config.tickSpacing,
     );
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayUpperStartIndex = getTickArrayStartIndex(
       props.ownerPosition.tickUpper,
       props.poolKeys.config.tickSpacing,
     );
@@ -2391,7 +2314,7 @@ export class ClmmInstrument {
       { pubkey: props.userVaultB, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: MEMO_PROGRAM_ID2, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: new PublicKey(props.poolKeys.mintA.address), isSigner: false, isWritable: false },
       { pubkey: new PublicKey(props.poolKeys.mintB.address), isSigner: false, isWritable: false },
       ...remainingAccounts,
@@ -2484,7 +2407,7 @@ export class ClmmInstrument {
       { pubkey: userVaultB, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: MEMO_PROGRAM_ID2, isSigner: false, isWritable: false },
+      { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: mintA, isSigner: false, isWritable: false },
       { pubkey: mintB, isSigner: false, isWritable: false },
       ...remainingAccounts,

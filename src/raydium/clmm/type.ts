@@ -7,9 +7,8 @@ import { Fraction, Percent, Price, TokenAmount } from "../../module";
 import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { TokenInfo } from "../token/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
-import { TickArray } from "./utils/tick";
 
-import { ClmmPositionLayout, PoolInfoLayout, LockClPositionLayoutV2, TickArrayBitmapExtensionLayout } from "./layout";
+import { LockClPositionLayoutV2, PersonalPositionLayout, PoolInfoLayout, RewardInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout } from "./layout";
 
 export { ApiClmmConfigInfo };
 
@@ -33,18 +32,7 @@ export interface ClmmConfigInfo {
   description: string;
 }
 
-export interface ClmmPoolRewardInfo {
-  rewardState: number;
-  openTime: BN;
-  endTime: BN;
-  lastUpdateTime: BN;
-  emissionsPerSecondX64: BN;
-  rewardTotalEmissioned: BN;
-  rewardClaimed: BN;
-  tokenMint: PublicKey;
-  tokenVault: PublicKey;
-  creator: PublicKey;
-  rewardGrowthGlobalX64: BN;
+export type ClmmPoolRewardInfo = ReturnType<typeof RewardInfoLayout.decode> & {
   perSecond: Decimal;
   remainingRewards: undefined | BN;
   tokenProgramId: PublicKey;
@@ -142,6 +130,7 @@ export interface ClmmPoolInfo {
 }
 
 export interface ComputeClmmPoolInfo {
+  accInfo: ReturnType<typeof PoolInfoLayout.decode>,
   id: PublicKey;
   version: 6;
   mintA: ApiV3Token;
@@ -282,7 +271,7 @@ export interface ReturnTypeComputeAmountOutBaseOut {
 }
 
 export interface ReturnTypeFetchMultiplePoolTickArrays {
-  [poolId: string]: { [key: string]: TickArray };
+  [poolId: string]: { [key: string]: ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey } };
 }
 
 export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
@@ -335,7 +324,7 @@ export interface UserPositionAccount {
 export interface IncreasePositionFromLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   poolKeys?: ClmmKeys;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   ownerInfo: {
     useSOLBalance?: boolean;
   };
@@ -372,7 +361,7 @@ export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
 export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   poolKeys?: ClmmKeys;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint
     closePosition?: boolean;
@@ -395,7 +384,7 @@ export interface LockPosition<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   authProgramId?: PublicKey;
   poolProgramId?: PublicKey;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   payer?: PublicKey;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
@@ -491,7 +480,7 @@ export interface OpenPositionFromLiquidityExtInfo {
 
 export interface GetAmountParams {
   poolInfo: ApiV3PoolInfoConcentratedItem;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   liquidity: BN;
   slippage: number;
   add: boolean;
@@ -581,7 +570,7 @@ export interface CollectRewardsParams<T = TxVersion.LEGACY> extends Omit<Collect
 
 export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   allPoolInfo: Record<string, ApiV3PoolInfoConcentratedItem>;
-  allPositions: Record<string, ClmmPositionLayout[]>;
+  allPositions: Record<string, ReturnType<typeof PersonalPositionLayout.decode>[]>;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean;
