@@ -1,4 +1,4 @@
-import { blob, bool, i128, i64, publicKey, s32, seq, struct, u128, u16, u32, u64, u8 } from "../../marshmallow"
+import { blob, bool, i128, i64, publicKey, s32, seq, struct, u128, u16, u32, u64, u8 } from "../../marshmallow";
 import {
   EXTENSION_TICKARRAY_BITMAP_SIZE,
   OBSERVATION_NUM,
@@ -6,7 +6,7 @@ import {
   REWARD_NUM,
   TICK_ARRAY_SIZE,
   WHITE_MINT_SIZE_USIZE,
-} from "./libraries/constants"
+} from "./libraries/constants";
 
 export const ClmmConfigLayout = struct([
   blob(8),
@@ -20,10 +20,9 @@ export const ClmmConfigLayout = struct([
   seq(u32(), 1),
   publicKey("fundOwner"),
   seq(u64(), 3),
-])
+]);
 
-
-export const ObservationItemLayout = struct([u32("blockTimestamp"), i64("tickCumulative"), seq(u64(), 4),])
+export const ObservationItemLayout = struct([u32("blockTimestamp"), i64("tickCumulative"), seq(u64(), 4)]);
 
 export const ObservationLayout = struct([
   blob(8),
@@ -33,8 +32,7 @@ export const ObservationLayout = struct([
   publicKey("poolId"),
   seq(ObservationItemLayout, OBSERVATION_NUM, "observations"),
   seq(u64(), 4),
-])
-
+]);
 
 export const DynamicFeeInfoLayout = struct([
   u16("filterPeriod"),
@@ -47,7 +45,7 @@ export const DynamicFeeInfoLayout = struct([
   u32("volatilityAccumulator"),
   u64("lastUpdateTimestamp"),
   seq(u8(), 46),
-])
+]);
 
 export const RewardInfoLayout = struct([
   u8("state"),
@@ -61,11 +59,11 @@ export const RewardInfoLayout = struct([
   publicKey("vault"),
   publicKey("creator"),
   u128("growthGlobalX64"),
-])
+]);
 
 export const PoolInfoLayout = struct([
   blob(8),
-  u8('bump'),
+  u8("bump"),
   publicKey("configId"),
   publicKey("creator"),
   publicKey("mintA"),
@@ -112,11 +110,11 @@ export const PoolInfoLayout = struct([
   u64("startTime"),
   u64("recentEpoch"),
 
-  DynamicFeeInfoLayout.replicate('dynamicFeeInfo'),
+  DynamicFeeInfoLayout.replicate("dynamicFeeInfo"),
   seq(u64(), 16),
-])
+]);
 
-export const PositionRewardInfoLayout = struct([u128("growthInsideLastX64"), u64("rewardAmountOwed")])
+export const PositionRewardInfoLayout = struct([u128("growthInsideLastX64"), u64("rewardAmountOwed")]);
 export const PersonalPositionLayout = struct([
   blob(8),
   u8("bump"),
@@ -134,7 +132,7 @@ export const PersonalPositionLayout = struct([
   seq(PositionRewardInfoLayout, REWARD_NUM, "rewardInfos"),
   u64("recentEpoch"),
   seq(u64(), 7),
-])
+]);
 
 export const ProtocolPositionLayout = struct([
   blob(8),
@@ -150,8 +148,7 @@ export const ProtocolPositionLayout = struct([
   seq(u128(), REWARD_NUM, "rewardGrowthInside"),
   u64("recentEpoch"),
   seq(u64(), 7),
-])
-
+]);
 
 export const TickLayout = struct([
   s32("tick"),
@@ -168,7 +165,7 @@ export const TickLayout = struct([
   u64("unsettledFilledOrdersZeroForOne"),
   u64("unsettledFilledOrdersOneForZero"),
   seq(u8(), 4),
-])
+]);
 
 export const TickArrayLayout = struct([
   blob(8),
@@ -178,14 +175,14 @@ export const TickArrayLayout = struct([
   u8("initializedTickCount"),
   u64("recentEpoch"),
   seq(u8(), 107),
-])
+]);
 
 export const OperationLayout = struct([
   blob(8),
   u8("bump"),
   seq(publicKey(), OPERATION_SIZE_USIZE, "operationOwners"),
   seq(publicKey(), WHITE_MINT_SIZE_USIZE, "whitelistMints"),
-])
+]);
 
 export const LimitOrderLayout = struct([
   blob(8),
@@ -197,7 +194,7 @@ export const LimitOrderLayout = struct([
   u64("totalAmount"),
   u64("filledAmount"),
   seq(u64(), 6),
-])
+]);
 
 export const TickArrayBitmapExtensionLayout = struct([
   blob(8),
@@ -215,7 +212,7 @@ export const DynamicFeeConfigLayout = struct([
   u32("dynamicFeeControl"),
   u32("maxVolatilityAccumulator"),
   seq(u64(), 8),
-])
+]);
 
 export const LockPositionLayout = struct([
   u64(),
@@ -238,3 +235,5 @@ export const LockClPositionLayoutV2 = struct([
   u64("recentEpoch"),
   seq(u64(), 8),
 ]);
+
+export type ClmmPositionLayout = ReturnType<typeof PersonalPositionLayout.decode>;

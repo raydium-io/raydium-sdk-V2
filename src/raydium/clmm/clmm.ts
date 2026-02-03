@@ -2728,19 +2728,12 @@ export class Clmm extends ModuleBase {
     };
   }
 
-  public async getPoolInfoFromRpc(
-    poolId: string,
-    config?: {
-      fetchTickArray?: boolean;
-      zeroForOne?: boolean;
-    },
-  ): Promise<{
+  public async getPoolInfoFromRpc(poolId: string): Promise<{
     rpcPoolInfo: ClmmParsedRpcData;
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
     computePoolInfo: ComputeClmmPoolInfo;
     tickData: ReturnTypeFetchMultiplePoolTickArrays;
-    remainingAccounts: PublicKey[];
     tickArrays: ReturnType<typeof TickArrayLayout.decode>[];
   }> {
     const rpcData = await this.getRpcClmmPoolInfo({ poolId });
@@ -2787,52 +2780,30 @@ export class Clmm extends ModuleBase {
         })),
     };
 
-    const poolIdPub = new PublicKey(poolId);
-    const programId = rpcData.programId;
-    // Get tick arrays needed for swap
-    const tickArrayStart = getTickArrayStartIndex(rpcData.tickCurrent, rpcData.tickSpacing);
-    const tickArray0 = getPdaTickArrayAddress(programId, poolIdPub, tickArrayStart).publicKey;
-    // Get adjacent tick arrays (for potential cross-tick swaps)
-    const ticksPerArray = rpcData.tickSpacing * 60;
-    const tickArray1 = getPdaTickArrayAddress(programId, poolIdPub, tickArrayStart - ticksPerArray).publicKey;
-    const tickArray2 = getPdaTickArrayAddress(programId, poolIdPub, tickArrayStart + ticksPerArray).publicKey;
-    const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolIdPub).publicKey;
-
-    const tickArrays = config?.fetchTickArray
-      ? await fetchTickArrays(
-          programId,
-          this.scope.connection,
-          poolIdPub,
-          rpcData.tickCurrent,
-          rpcData.tickSpacing,
-          config?.zeroForOne ?? true,
-        )
-      : [];
-
     return {
       poolInfo,
       poolKeys,
       computePoolInfo: computeClmmPoolInfo[poolId],
       tickData: computePoolTickData,
       rpcPoolInfo: rpcData,
-      remainingAccounts: [tickArray0, tickArray1, tickArray2, tickArrayBitmapExtension],
-      tickArrays,
+      tickArrays: Object.values(computePoolTickData[poolId]),
     };
   }
 
-  public async getSwapPoolInfo(poolId: string | PublicKey): Promise<{
-    poolInfo: ClmmParsedRpcData;
-    config: ReturnType<typeof ClmmConfigLayout.decode>;
+  public async getSwapPoolInfo(
+    poolId: string | PublicKey,
+    zeroForOne = true,
+  ): Promise<{
+    poolInfo: SimpleClmmPoolInfo;
+    rpcData: ClmmParsedRpcData;
+    configInfo: ReturnType<typeof ClmmConfigLayout.decode>;
     remainingAccounts: PublicKey[];
+    tickArrays: ReturnType<typeof TickArrayLayout.decode>[];
   }> {
-    const rpcData = await this.getRpcClmmPoolInfo({ poolId });
+    const { poolInfo, rpcData } = await this.getSimplePoolInfo(poolId);
 
-    const configData = await this.scope.connection.getAccountInfo(rpcData.configId);
-    if (!configData) {
-      throw new Error("AMM Config not found");
-    }
-
-    const config = ClmmConfigLayout.decode(configData.data);
+    const res = await this.scope.connection.getAccountInfo(rpcData.configId);
+    const configInfo = ClmmConfigLayout.decode(res!.data);
 
     const poolIdPub = new PublicKey(poolId);
     const programId = rpcData.programId;
@@ -2845,10 +2816,21 @@ export class Clmm extends ModuleBase {
     const tickArray2 = getPdaTickArrayAddress(programId, poolIdPub, tickArrayStart + ticksPerArray).publicKey;
     const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolIdPub).publicKey;
 
+    const tickArrays = await fetchTickArrays(
+      programId,
+      this.scope.connection,
+      poolIdPub,
+      rpcData.tickCurrent,
+      rpcData.tickSpacing,
+      zeroForOne,
+    );
+
     return {
-      poolInfo: rpcData,
-      config,
+      poolInfo,
+      rpcData,
+      configInfo,
       remainingAccounts: [tickArray0, tickArray1, tickArray2, tickArrayBitmapExtension],
+      tickArrays,
     };
   }
 
