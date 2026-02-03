@@ -11,3 +11,4 @@ export * from "./swapSimulator";
 export * from "./tickMath";
 export * from "./tickArrayBitmap";
 export * from "./utils";
+export * from "./orderMath";

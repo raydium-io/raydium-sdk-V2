@@ -27,6 +27,7 @@ import { MakeTransaction } from "../type";
 import { ClmmInstrument } from "./instrument";
 import {
   ClmmConfigLayout,
+  LimitOrderLayout,
   LockClPositionLayoutV2,
   OperationLayout,
   PersonalPositionLayout,
@@ -46,10 +47,12 @@ import {
   getPdaAmmConfigId,
   getPdaDynamicFeeConfigAddress,
   getPdaExBitmapAccount,
+  getPdaLimitOrderAddress,
   getPdaLockClPositionIdV2,
   getPdaMintExAccount,
   getPdaOperationAccount,
   getPdaPersonalPositionAddress,
+  getPdaPoolVaultId,
   getPdaProtocolPositionAddress,
   getPdaTickArrayAddress,
 } from "./libraries/pda";
@@ -60,19 +63,23 @@ import {
   priceToTick,
   roundTickDown,
   sqrtPriceX64ToPrice,
+  tickToPrice,
 } from "./libraries/tickMath";
 import {
   ClmmLockAddress,
   ClmmParsedRpcData,
+  CloseLimitOrder,
   ClosePositionExtInfo,
   CollectRewardParams,
   CollectRewardsParams,
   ComputeClmmPoolInfo,
   CreateConcentratedPool,
   CreateCustomizablePool,
+  DecreaseLimitOrder,
   DecreaseLiquidity,
   HarvestAllRewardsParams,
   HarvestLockPosition,
+  IncreaseLimitOrder,
   IncreasePositionFromBase,
   IncreasePositionFromLiquidity,
   InitRewardExtInfo,
@@ -80,6 +87,7 @@ import {
   InitRewardsParams,
   LockPosition,
   ManipulateLiquidityExtInfo,
+  OpenLimitOrder,
   OpenPositionFromBase,
   OpenPositionFromBaseExtInfo,
   OpenPositionFromLiquidity,
@@ -87,6 +95,8 @@ import {
   ReturnTypeFetchMultiplePoolTickArrays,
   SetRewardParams,
   SetRewardsParams,
+  SettleLimitOrder,
+  SimpleClmmPoolInfo,
 } from "./type";
 
 export class Clmm extends ModuleBase {
@@ -237,9 +247,6 @@ export class Clmm extends ModuleBase {
       : [mint1, mint2, initialPrice];
 
     const initialPriceX64 = priceToSqrtPriceX64(initPrice, mintA.decimals, mintB.decimals);
-    // const initialTick = priceToTick(new Decimal(initialPriceX64.toString()), mintA.decimals, mintB.decimals);
-    // const alignedTick = roundTickDown(initialTick, ammConfig.tickSpacing);
-    // const verifyPrice = sqrtPriceX64ToPrice(initialPriceX64, mintA.decimals, mintB.decimals);
 
     const { address } = await ClmmInstrument.createPoolInstructions({
       connection: this.scope.connection,
@@ -370,7 +377,7 @@ export class Clmm extends ModuleBase {
 
   public async openPositionFromBase<T extends TxVersion>({
     poolInfo,
-    poolKeys: propPoolKeys,
+    poolKeys: propsPoolKeys,
     ownerInfo,
     tickLower,
     tickUpper,
@@ -447,8 +454,8 @@ export class Clmm extends ModuleBase {
         ownerTokenAccountA: ownerTokenAccountA?.toBase58(),
         ownerTokenAccountB: ownerTokenAccountB?.toBase58(),
       });
+    const poolKeys = propsPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id.toString()))!;
 
-    const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id));
     const insInfo = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo,
       poolKeys,
@@ -554,7 +561,7 @@ export class Clmm extends ModuleBase {
     if (ownerTokenAccountA === undefined || ownerTokenAccountB === undefined)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
-    const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id));
+    const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id.toString()));
 
     const makeOpenPositionInstructions = await ClmmInstrument.openPositionFromLiquidityInstructions({
       poolInfo,
@@ -1541,6 +1548,501 @@ export class Clmm extends ModuleBase {
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
 
+  public async openLimitOrder<T extends TxVersion>({
+    poolInfo,
+    baseIn = true,
+    orderTick,
+    amount,
+    ownerInfo = {
+      useSOLBalance: true,
+    },
+    associatedOnly = true,
+    feePayer,
+    computeBudgetConfig,
+    txTipConfig,
+    txVersion,
+  }: OpenLimitOrder<T>): Promise<MakeTxData<T, { limitOrder: PublicKey }>> {
+    const poolId = new PublicKey(poolInfo.id);
+    const programId = new PublicKey(poolInfo.programId);
+    const inputMint = baseIn ? new PublicKey(poolInfo.mintA.address) : new PublicKey(poolInfo.mintB.address);
+    const inputMintProgram = new PublicKey(poolInfo[baseIn ? "mintA" : "mintB"].programId);
+    const isInputSol = inputMint.equals(WSOLMint);
+    const inputUseSolBalance = ownerInfo.useSOLBalance && isInputSol;
+
+    const txBuilder = this.createTxBuilder();
+
+    let ownerInputTokenAccount: PublicKey | undefined =
+      inputUseSolBalance || !associatedOnly
+        ? undefined
+        : getATAAddress(this.scope.ownerPubKey, inputMint, inputMintProgram).publicKey;
+
+    if (!ownerInputTokenAccount) {
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: inputMintProgram,
+        mint: inputMint,
+        notUseTokenAccount: inputUseSolBalance,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !inputUseSolBalance,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount,
+        },
+        associatedOnly: !inputUseSolBalance,
+      });
+      ownerInputTokenAccount = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    } else {
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            ownerInputTokenAccount,
+            this.scope.ownerPubKey,
+            inputMint,
+            inputMintProgram,
+          ),
+        ],
+      });
+    }
+
+    const limitOrder = getPdaLimitOrderAddress(programId, this.scope.ownerPubKey, poolId, orderTick, baseIn).publicKey;
+    const tickArrayStart = getTickArrayStartIndex(orderTick, poolInfo.config.tickSpacing);
+    const tickArray = getPdaTickArrayAddress(programId, poolId, tickArrayStart).publicKey;
+    const inputVault = getPdaPoolVaultId(
+      programId,
+      poolId,
+      new PublicKey(poolInfo[baseIn ? "mintA" : "mintB"].address),
+    ).publicKey;
+
+    txBuilder.addInstruction({
+      instructions: [
+        ClmmInstrument.openLimitOrderInstruction(
+          programId,
+          feePayer || this.scope.ownerPubKey,
+          poolId,
+          tickArray,
+          limitOrder,
+          ownerInputTokenAccount,
+          inputVault,
+          inputMint,
+          inputMintProgram,
+          baseIn,
+          orderTick,
+          amount,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: {
+        limitOrder,
+      },
+    }) as Promise<MakeTxData<T, { limitOrder: PublicKey }>>;
+  }
+
+  public async increaseLimitOrder<T extends TxVersion>({
+    poolInfo,
+    limitOrder,
+    amount,
+    ownerInfo = {
+      useSOLBalance: true,
+    },
+    associatedOnly = true,
+    feePayer,
+    computeBudgetConfig,
+    txTipConfig,
+    txVersion,
+  }: IncreaseLimitOrder<T>): Promise<MakeTxData<T>> {
+    const poolId = new PublicKey(poolInfo.id);
+    const programId = new PublicKey(poolInfo.programId);
+    const data = await this.scope.connection.getAccountInfo(limitOrder);
+    if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
+    const limitOrderData = LimitOrderLayout.decode(data!.data);
+    const inputMint = limitOrderData.zeroForOne
+      ? new PublicKey(poolInfo.mintA.address)
+      : new PublicKey(poolInfo.mintB.address);
+    const inputMintProgram = new PublicKey(poolInfo[limitOrderData.zeroForOne ? "mintA" : "mintB"].programId);
+    const isInputSol = inputMint.equals(WSOLMint);
+    const inputUseSolBalance = ownerInfo.useSOLBalance && isInputSol;
+
+    const txBuilder = this.createTxBuilder();
+
+    let ownerInputTokenAccount: PublicKey | undefined =
+      inputUseSolBalance || !associatedOnly
+        ? undefined
+        : getATAAddress(this.scope.ownerPubKey, inputMint, inputMintProgram).publicKey;
+
+    if (!ownerInputTokenAccount) {
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: inputMintProgram,
+        mint: inputMint,
+        notUseTokenAccount: inputUseSolBalance,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !inputUseSolBalance,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount,
+        },
+        associatedOnly: !inputUseSolBalance,
+      });
+      ownerInputTokenAccount = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    } else {
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            ownerInputTokenAccount,
+            this.scope.ownerPubKey,
+            inputMint,
+            inputMintProgram,
+          ),
+        ],
+      });
+    }
+
+    const inputVault = getPdaPoolVaultId(
+      programId,
+      poolId,
+      new PublicKey(poolInfo[limitOrderData.zeroForOne ? "mintA" : "mintB"].address),
+    ).publicKey;
+
+    const tickArrayStart = getTickArrayStartIndex(limitOrderData.tickIndex, poolInfo.config.tickSpacing);
+    const tickArray = getPdaTickArrayAddress(programId, poolId, tickArrayStart).publicKey;
+
+    txBuilder.addInstruction({
+      instructions: [
+        ClmmInstrument.increaseLimitOrderInstruction(
+          programId,
+          feePayer || this.scope.ownerPubKey,
+          limitOrderData.poolId,
+          tickArray,
+          limitOrder,
+          ownerInputTokenAccount,
+          inputVault,
+          inputMint,
+          inputMintProgram,
+          amount,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
+  }
+
+  public async decreaseLimitOrder<T extends TxVersion>({
+    poolInfo,
+    limitOrder,
+    amount,
+    slippage = 0,
+    ownerInfo = {
+      useSOLBalance: true,
+    },
+    associatedOnly = true,
+    feePayer,
+    computeBudgetConfig,
+    txTipConfig,
+    txVersion,
+  }: DecreaseLimitOrder<T>): Promise<MakeTxData<T>> {
+    const poolId = new PublicKey(poolInfo.id);
+    const programId = new PublicKey(poolInfo.programId);
+    const data = await this.scope.connection.getAccountInfo(limitOrder);
+    if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
+    const limitOrderData = LimitOrderLayout.decode(data!.data);
+
+    const amountMin = amount.muln(10000 - slippage).divn(10000);
+    const unfulfilledAmount = limitOrderData.totalAmount.sub(limitOrderData.filledAmount);
+    if (unfulfilledAmount.isZero() || amount.gt(unfulfilledAmount))
+      this.logAndCreateError(`amount should be less than unfulfilled amount: ${unfulfilledAmount.toString()}`);
+
+    const [inputMint, outputMint] = limitOrderData.zeroForOne
+      ? [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)]
+      : [new PublicKey(poolInfo.mintB.address), new PublicKey(poolInfo.mintA.address)];
+    const [inputMintProgram, outputMintProgram] = limitOrderData.zeroForOne
+      ? [new PublicKey(poolInfo.mintA.programId), new PublicKey(poolInfo.mintB.programId)]
+      : [new PublicKey(poolInfo.mintB.programId), new PublicKey(poolInfo.mintA.programId)];
+    const [isInputSol, isOutputSol] = [inputMint.equals(WSOLMint), outputMint.equals(WSOLMint)];
+    const [inputUseSolBalance, outputUseSolBalance] = [
+      ownerInfo.useSOLBalance && isInputSol,
+      ownerInfo.useSOLBalance && isOutputSol,
+    ];
+
+    const txBuilder = this.createTxBuilder();
+
+    let ownerInputTokenAccount: PublicKey | undefined =
+      inputUseSolBalance || !associatedOnly
+        ? undefined
+        : getATAAddress(this.scope.ownerPubKey, inputMint, inputMintProgram).publicKey;
+
+    let ownerOutputTokenAccount: PublicKey | undefined =
+      outputUseSolBalance || !associatedOnly
+        ? undefined
+        : getATAAddress(this.scope.ownerPubKey, outputMint, outputMintProgram).publicKey;
+
+    if (!ownerInputTokenAccount) {
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: inputMintProgram,
+        mint: inputMint,
+        notUseTokenAccount: inputUseSolBalance,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !inputUseSolBalance,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount: 0,
+        },
+        associatedOnly: !inputUseSolBalance,
+      });
+      ownerInputTokenAccount = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    } else {
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            ownerInputTokenAccount,
+            this.scope.ownerPubKey,
+            inputMint,
+            inputMintProgram,
+          ),
+        ],
+      });
+    }
+
+    if (!ownerOutputTokenAccount) {
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: outputMintProgram,
+        mint: outputMint,
+        notUseTokenAccount: outputUseSolBalance,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !outputUseSolBalance,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount: 0,
+        },
+        associatedOnly: !outputUseSolBalance,
+      });
+      ownerOutputTokenAccount = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    } else {
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            ownerOutputTokenAccount,
+            this.scope.ownerPubKey,
+            outputMint,
+            outputMintProgram,
+          ),
+        ],
+      });
+    }
+
+    const [inputVault, outputVault] = [
+      getPdaPoolVaultId(programId, poolId, inputMint).publicKey,
+      getPdaPoolVaultId(programId, poolId, outputMint).publicKey,
+    ];
+
+    const tickArrayStart = getTickArrayStartIndex(limitOrderData.tickIndex, poolInfo.config.tickSpacing);
+    const tickArray = getPdaTickArrayAddress(programId, poolId, tickArrayStart).publicKey;
+
+    txBuilder.addInstruction({
+      instructions: [
+        ClmmInstrument.decreaseLimitOrderInstruction(
+          programId,
+          feePayer || this.scope.ownerPubKey,
+          poolId,
+          tickArray,
+          limitOrder,
+          ownerInputTokenAccount,
+          ownerOutputTokenAccount,
+          inputVault,
+          outputVault,
+          inputMint,
+          outputMint,
+          amount,
+          amountMin,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
+  }
+
+  public async closeLimitOrder<T extends TxVersion>({
+    programId = CLMM_PROGRAM_ID,
+    limitOrder,
+    autoWithdraw,
+    slippage = 0,
+    feePayer,
+    computeBudgetConfig,
+    txTipConfig,
+    txVersion,
+  }: CloseLimitOrder<T>): Promise<MakeTxData<T>> {
+    const data = await this.scope.connection.getAccountInfo(limitOrder);
+    if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
+    const limitOrderData = LimitOrderLayout.decode(data!.data);
+    const unfulfilledAmount = limitOrderData.totalAmount.sub(limitOrderData.filledAmount);
+    if (!autoWithdraw && !unfulfilledAmount.isZero())
+      this.logAndCreateError(
+        `unfulfilled amount should be 0 (${unfulfilledAmount.toString()} remaining), please withdraw first or set autoWithdraw: true`,
+      );
+
+    const txBuilder = this.createTxBuilder();
+
+    if (autoWithdraw && !unfulfilledAmount.isZero()) {
+      const { poolInfo } = await this.getSimplePoolInfo(limitOrderData.poolId);
+      const { builder } = await this.decreaseLimitOrder({
+        poolInfo,
+        limitOrder,
+        amount: unfulfilledAmount,
+        slippage,
+        txVersion: TxVersion.V0,
+      });
+
+      txBuilder.addInstruction({
+        instructions: builder.allInstructions,
+      });
+    }
+
+    txBuilder.addInstruction({
+      instructions: [
+        ClmmInstrument.closeLimitOrderInstruction(
+          programId,
+          feePayer || this.scope.ownerPubKey,
+          this.scope.ownerPubKey,
+          limitOrder,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
+  }
+
+  public async settleLimitOrder<T extends TxVersion>({
+    limitOrder,
+    feePayer,
+    ownerInfo = {
+      useSOLBalance: true,
+    },
+    associatedOnly = true,
+    computeBudgetConfig,
+    txTipConfig,
+    txVersion,
+  }: SettleLimitOrder<T>): Promise<MakeTxData<T>> {
+    const data = await this.scope.connection.getAccountInfo(limitOrder);
+    if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
+    const limitOrderData = LimitOrderLayout.decode(data!.data);
+    const poolInfo = await this.getRpcClmmPoolInfo({ poolId: limitOrderData.poolId });
+
+    const outputMint = limitOrderData.zeroForOne ? poolInfo.mintB : poolInfo.mintA;
+
+    // // Check if order has any filled amount to settle
+    // if (limitOrderData.filledAmount.isZero()) {
+    //   console.log("\n⚠ Order has not been filled yet.");
+    //   console.log("The pool price must cross the order tick for the order to be filled.");
+
+    //   // Check if order is fillable
+    //   if (limitOrderData.zeroForOne) {
+    //     // Sell order: filled when price goes above order tick
+    //     if (poolInfo.tickCurrent < limitOrderData.tickIndex) {
+    //       this.logAndCreateError(
+    //         `Current price is below order price. Order will fill when price rises above ${orderPrice.toFixed(6)}`,
+    //       );
+    //     } else {
+    //       this.logAndCreateError("Price has crossed order tick. Order may have been partially filled.");
+    //     }
+    //   } else {
+    //     // Buy order: filled when price goes below order tick
+    //     if (poolInfo.tickCurrent > limitOrderData.tickIndex) {
+    //       this.logAndCreateError(
+    //         `Current price is above order price. Order will fill when price drops below ${orderPrice.toFixed(6)}`,
+    //       );
+    //     } else {
+    //       this.logAndCreateError("Price has crossed order tick. Order may have been partially filled.");
+    //     }
+    //   }
+    // }
+
+    const txBuilder = this.createTxBuilder();
+    const isOutputSol = outputMint.equals(WSOLMint);
+    const outputUseSolBalance = ownerInfo.useSOLBalance && isOutputSol;
+    const outputMintProgram = new PublicKey(
+      isOutputSol ? TOKEN_PROGRAM_ID : (await this.scope.token.getTokenInfo(outputMint)).programId,
+    );
+
+    let ownerOutputTokenAccount: PublicKey | undefined =
+      outputUseSolBalance || !associatedOnly
+        ? undefined
+        : getATAAddress(this.scope.ownerPubKey, outputMint, outputMintProgram).publicKey;
+
+    if (!ownerOutputTokenAccount) {
+      const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+        tokenProgram: outputMintProgram,
+        mint: outputMint,
+        notUseTokenAccount: outputUseSolBalance,
+        owner: this.scope.ownerPubKey,
+        skipCloseAccount: !outputUseSolBalance,
+        createInfo: {
+          payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+          amount: 0,
+        },
+        associatedOnly: !outputUseSolBalance,
+      });
+      ownerOutputTokenAccount = account!;
+      instructionParams && txBuilder.addInstruction(instructionParams);
+    } else {
+      txBuilder.addInstruction({
+        instructions: [
+          createAssociatedTokenAccountIdempotentInstruction(
+            this.scope.ownerPubKey,
+            ownerOutputTokenAccount,
+            this.scope.ownerPubKey,
+            outputMint,
+            outputMintProgram,
+          ),
+        ],
+      });
+    }
+
+    const tickArrayStart = getTickArrayStartIndex(limitOrderData.tickIndex, poolInfo.tickSpacing);
+    txBuilder.addInstruction({
+      instructions: [
+        ClmmInstrument.settleLimitOrderInstruction(
+          poolInfo.programId,
+          feePayer || this.scope.ownerPubKey,
+          limitOrderData.poolId,
+          getPdaTickArrayAddress(poolInfo.programId, limitOrderData.poolId, tickArrayStart).publicKey,
+          limitOrder,
+          ownerOutputTokenAccount,
+          getPdaPoolVaultId(poolInfo.programId, limitOrderData.poolId, outputMint).publicKey,
+          outputMint,
+          outputMintProgram,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
+  }
+
   public async swap<T extends TxVersion>({
     poolInfo,
     poolKeys: propPoolKeys,
@@ -2347,6 +2849,35 @@ export class Clmm extends ModuleBase {
       poolInfo: rpcData,
       config,
       remainingAccounts: [tickArray0, tickArray1, tickArray2, tickArrayBitmapExtension],
+    };
+  }
+
+  public async getSimplePoolInfo(poolId: string | PublicKey): Promise<{
+    poolInfo: SimpleClmmPoolInfo;
+    rpcData: ClmmParsedRpcData;
+  }> {
+    const rpcData = await this.getRpcClmmPoolInfo({ poolId });
+    const mintDataRes = await this.scope.connection.getMultipleAccountsInfo([rpcData.mintA, rpcData.mintB]);
+
+    return {
+      poolInfo: {
+        id: poolId,
+        programId: rpcData.programId,
+        mintA: {
+          address: rpcData.mintA,
+          programId: mintDataRes[0]!.owner,
+          decimals: rpcData.mintDecimalsA,
+        },
+        mintB: {
+          address: rpcData.mintB,
+          programId: mintDataRes[1]!.owner,
+          decimals: rpcData.mintDecimalsB,
+        },
+        config: {
+          tickSpacing: rpcData.tickSpacing,
+        },
+      },
+      rpcData,
     };
   }
 }

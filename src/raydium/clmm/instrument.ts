@@ -29,6 +29,7 @@ import {
   ManipulateLiquidityExtInfo,
   OpenPositionFromBaseExtInfo,
   OpenPositionFromLiquidityExtInfo,
+  SimpleClmmPoolInfo,
 } from "./type";
 
 import { sha256 } from "js-sha256";
@@ -1117,8 +1118,14 @@ export class ClmmInstrument {
     getEphemeralSigners,
     nft2022,
   }: {
-    poolInfo: ApiV3PoolInfoConcentratedItem;
-    poolKeys: ClmmKeys;
+    poolInfo: SimpleClmmPoolInfo;
+    poolKeys: {
+      vault: {
+        A: string | PublicKey;
+        B: string | PublicKey;
+      };
+      lookupTableAccount?: string;
+    };
     ownerInfo: {
       feePayer: PublicKey;
       wallet: PublicKey;
@@ -1273,7 +1280,7 @@ export class ClmmInstrument {
     getEphemeralSigners,
     nft2022,
   }: {
-    poolInfo: ApiV3PoolInfoConcentratedItem;
+    poolInfo: SimpleClmmPoolInfo;
     poolKeys: ClmmKeys;
     ownerInfo: {
       wallet: PublicKey;

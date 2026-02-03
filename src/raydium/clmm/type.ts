@@ -425,8 +425,14 @@ export interface HarvestLockPosition<T = TxVersion.LEGACY> {
 }
 
 export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
-  poolInfo: ApiV3PoolInfoConcentratedItem;
-  poolKeys?: ClmmKeys;
+  poolInfo: SimpleClmmPoolInfo;
+  poolKeys?: {
+    vault: {
+      A: string | PublicKey;
+      B: string | PublicKey;
+    };
+    lookupTableAccount?: string;
+  };
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
   };
@@ -460,7 +466,7 @@ export interface OpenPositionFromBaseExtInfo {
 }
 
 export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
-  poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolInfo: SimpleClmmPoolInfo;
   poolKeys?: ClmmKeys;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
@@ -628,6 +634,22 @@ export type ClmmParsedRpcData = ReturnType<typeof PoolInfoLayout.decode> & {
   programId: PublicKey;
 };
 
+export interface SimpleClmmPoolInfo {
+  id: string | PublicKey;
+  programId: string | PublicKey;
+  mintA: {
+    address: string | PublicKey;
+    programId: string | PublicKey;
+    decimals: number;
+  };
+  mintB: {
+    address: string | PublicKey;
+    programId: string | PublicKey;
+    decimals: number;
+  };
+  config: { tickSpacing: number };
+}
+
 export interface ClmmLockAddress {
   positionId: PublicKey;
   lockPositionId: PublicKey;
@@ -635,4 +657,73 @@ export interface ClmmLockAddress {
   lockNftMint: PublicKey;
   positionNftAccount: PublicKey;
   metadataAccount: PublicKey;
+}
+
+export interface OpenLimitOrder<T = TxVersion.LEGACY> {
+  poolInfo: SimpleClmmPoolInfo;
+  baseIn?: boolean;
+  orderTick: number;
+  amount: BN;
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+}
+
+export interface IncreaseLimitOrder<T = TxVersion.LEGACY> {
+  poolInfo: SimpleClmmPoolInfo;
+  limitOrder: PublicKey;
+  amount: BN;
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+}
+
+export interface DecreaseLimitOrder<T = TxVersion.LEGACY> extends IncreaseLimitOrder<T> {
+  /** 0~1000 means 0.01% ~ 100% */
+  slippage?: number;
+}
+
+export interface CloseLimitOrder<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  limitOrder: PublicKey;
+  autoWithdraw?: boolean;
+  /** 0~1000 means 0.01% ~ 100% */
+  slippage?: number;
+
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+}
+
+export interface SettleLimitOrder<T = TxVersion.LEGACY> {
+  limitOrder: PublicKey;
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
 }
