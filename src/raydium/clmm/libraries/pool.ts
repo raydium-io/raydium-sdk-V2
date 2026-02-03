@@ -1,14 +1,13 @@
-import { ApiV3PoolInfoConcentratedItem } from "@/api"
-import { PublicKey } from "@solana/web3.js"
-import BN from "bn.js"
-import { PoolInfoLayout, RewardInfoLayout, TickLayout } from "../layout"
-import { ComputeClmmPoolInfo } from "../type"
-import { mulDivFloor, x64ToDecimal } from "./bigNum"
-import { BN_ZERO, Q64, TICK_ARRAY_BITMAP_SIZE } from "./constants"
+import { ApiV3PoolInfoConcentratedItem } from "@/api";
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import { PoolInfoLayout, RewardInfoLayout, TickLayout } from "../layout";
+import { ComputeClmmPoolInfo } from "../type";
+import { mulDivFloor, x64ToDecimal } from "./bigNum";
+import { BN_ZERO, Q64, TICK_ARRAY_BITMAP_SIZE } from "./constants";
 
-
-import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token"
-import { Connection, EpochInfo } from "@solana/web3.js"
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import { Connection, EpochInfo } from "@solana/web3.js";
 
 import {
   ClmmPoolInfo,
@@ -19,10 +18,10 @@ import {
   ReturnTypeFetchExBitmaps,
   ReturnTypeFetchMultiplePoolTickArrays,
   ReturnTypeGetLiquidityAmountOut,
-  SDKParsedConcentratedInfo
-} from "../type"
+  SDKParsedConcentratedInfo,
+} from "../type";
 
-import { ApiV3Token } from "@/api/type"
+import { ApiV3Token } from "@/api/type";
 
 import {
   getMultipleAccountsInfo,
@@ -30,22 +29,25 @@ import {
   getTransferAmountFeeV2,
   minExpirationTime,
   solToWSol,
-} from "@/common"
-import { Percent, Price, Token, TokenAmount } from "@/module"
-import { TokenAccountRaw } from "@/raydium/account/types"
-import Decimal from "decimal.js"
+} from "@/common";
+import { Percent, Price, Token, TokenAmount } from "@/module";
+import { TokenAccountRaw } from "@/raydium/account/types";
+import Decimal from "decimal.js";
+import { PersonalPositionLayout, TickArrayBitmapExtensionLayout, TickArrayLayout } from "../layout";
+import { MAX_SQRT_PRICE_X64, MAX_TICK, MIN_SQRT_PRICE_X64, MIN_TICK } from "./constants";
 import {
-  PersonalPositionLayout,
-  TickArrayBitmapExtensionLayout,
-  TickArrayLayout
-} from "../layout"
-import { MAX_SQRT_PRICE_X64, MAX_TICK, MIN_SQRT_PRICE_X64, MIN_TICK } from "./constants"
-import { getAmountsFromLiquidityWithSlippage, getAmountsOutFromLiquidity, getLiquidityFromAmountA, getLiquidityFromAmountB, getAmountsForLiquidity as lGetAmountsForLiquidity, getLiquidityFromAmounts as lGetLiquidityFromAmounts } from "./liquidityMath"
-import { getPdaExBitmapAccount, getPdaPersonalPositionAddress, getPdaTickArrayAddress } from "./pda"
-import { PositionUtils } from "./position"
-import { swapInternal } from "./swapSimulator"
-import { TickArrayBitmap, TickArrayBitmapExtensionUtils, TickQuery, TickUtils } from "./tickArrayBitmap"
-import { getSqrtPriceAtTick, priceToSqrtPriceX64, sqrtPriceX64ToPrice } from "./tickMath"
+  getAmountsFromLiquidityWithSlippage,
+  getAmountsOutFromLiquidity,
+  getLiquidityFromAmountA,
+  getLiquidityFromAmountB,
+  getAmountsForLiquidity as lGetAmountsForLiquidity,
+  getLiquidityFromAmounts as lGetLiquidityFromAmounts,
+} from "./liquidityMath";
+import { getPdaExBitmapAccount, getPdaPersonalPositionAddress, getPdaTickArrayAddress } from "./pda";
+import { PositionUtils } from "./position";
+import { swapInternal } from "./swapSimulator";
+import { TickArrayBitmap, TickArrayBitmapExtensionUtils, TickQuery, TickUtils } from "./tickArrayBitmap";
+import { getSqrtPriceAtTick, priceToSqrtPriceX64, sqrtPriceX64ToPrice } from "./tickMath";
 
 export class PoolUtils {
   public static getOutputAmountAndRemainAccounts(
@@ -75,15 +77,7 @@ export class PoolUtils {
 
     allNeededAccounts.push(nextAccountMeta);
 
-    const {
-      amountIn,
-      amountOut,
-      feeAmount,
-      sqrtPriceX64,
-      tickCurrent,
-      liquidityEnd,
-      crossedTicks,
-    } = swapInternal(
+    const { amountIn, amountOut, feeAmount, sqrtPriceX64, tickCurrent, liquidityEnd, crossedTicks } = swapInternal(
       poolInfo.accInfo,
       Object.values(tickArrayCache),
       poolInfo.ammConfig.fundFeeRate,
@@ -93,7 +87,7 @@ export class PoolUtils {
 
       true,
       blockTimestamp,
-    )
+    );
     // const {
     //   allTrade,
     //   amountCalculated: outputAmount,
@@ -117,7 +111,9 @@ export class PoolUtils {
     //   sqrtPriceLimitX64,
     //   catchLiquidityInsufficient,
     // );
-    allNeededAccounts.push(...crossedTicks.map(i => getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, i).publicKey));
+    allNeededAccounts.push(
+      ...crossedTicks.map((i) => getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, i).publicKey),
+    );
     return {
       allTrade: amountIn.eq(inputAmount),
       expectedAmountOut: amountOut,
@@ -179,15 +175,7 @@ export class PoolUtils {
     // );
     // allNeededAccounts.push(...reaminAccounts);
 
-    const {
-      amountIn,
-      amountOut,
-      feeAmount,
-      sqrtPriceX64,
-      tickCurrent,
-      liquidityEnd,
-      crossedTicks,
-    } = swapInternal(
+    const { amountIn, amountOut, feeAmount, sqrtPriceX64, tickCurrent, liquidityEnd, crossedTicks } = swapInternal(
       poolInfo.accInfo,
       Object.values(tickArrayCache),
       poolInfo.ammConfig.fundFeeRate,
@@ -197,9 +185,16 @@ export class PoolUtils {
 
       false,
       blockTimestamp,
-    )
-    allNeededAccounts.push(...crossedTicks.map(i => getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, i).publicKey));
-    return { expectedAmountIn: amountIn, remainingAccounts: allNeededAccounts, executionPrice: sqrtPriceX64, feeAmount };
+    );
+    allNeededAccounts.push(
+      ...crossedTicks.map((i) => getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, i).publicKey),
+    );
+    return {
+      expectedAmountIn: amountIn,
+      remainingAccounts: allNeededAccounts,
+      executionPrice: sqrtPriceX64,
+      feeAmount,
+    };
   }
 
   public static getFirstInitializedTickArray(
@@ -212,15 +207,15 @@ export class PoolUtils {
       poolInfo.tickCurrent,
     ])
       ? TickArrayBitmapExtensionUtils.checkTickArrayIsInit(
-        TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
-        poolInfo.tickSpacing,
-        poolInfo.exBitmapInfo,
-      )
+          TickQuery.getArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing),
+          poolInfo.tickSpacing,
+          poolInfo.exBitmapInfo,
+        )
       : TickUtils.checkTickArrayIsInitialized(
-        TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
-        poolInfo.tickCurrent,
-        poolInfo.tickSpacing,
-      );
+          TickUtils.mergeTickArrayBitmap(poolInfo.tickArrayBitmap),
+          poolInfo.tickCurrent,
+          poolInfo.tickSpacing,
+        );
 
     if (isInitialized) {
       const { publicKey: address } = getPdaTickArrayAddress(poolInfo.programId, poolInfo.id, startIndex);
@@ -254,19 +249,19 @@ export class PoolUtils {
 
     const result: number[] = !BN_ZEROForOne
       ? TickUtils.searchLowBitFromStart(
-        poolInfo.tickArrayBitmap,
-        poolInfo.exBitmapInfo,
-        currentOffset - 1,
-        1,
-        poolInfo.tickSpacing,
-      )
+          poolInfo.tickArrayBitmap,
+          poolInfo.exBitmapInfo,
+          currentOffset - 1,
+          1,
+          poolInfo.tickSpacing,
+        )
       : TickUtils.searchHightBitFromStart(
-        poolInfo.tickArrayBitmap,
-        poolInfo.exBitmapInfo,
-        currentOffset + 1,
-        1,
-        poolInfo.tickSpacing,
-      );
+          poolInfo.tickArrayBitmap,
+          poolInfo.exBitmapInfo,
+          currentOffset + 1,
+          1,
+          poolInfo.tickSpacing,
+        );
 
     return result.length > 0 ? { isExist: true, nextStartIndex: result[0] } : { isExist: false, nextStartIndex: 0 };
   }
@@ -274,11 +269,11 @@ export class PoolUtils {
   public static nextInitializedTickArrayStartIndex(
     poolInfo:
       | {
-        tickCurrent: number;
-        tickSpacing: number;
-        tickArrayBitmap: BN[];
-        exBitmapInfo: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
-      }
+          tickCurrent: number;
+          tickSpacing: number;
+          tickArrayBitmap: BN[];
+          exBitmapInfo: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
+        }
       | ClmmPoolInfo,
     lastTickArrayStartIndex: number,
     BN_ZEROForOne: boolean,
@@ -353,8 +348,7 @@ export class PoolUtils {
     for (let i = 0; i < rewardInfos.length; i++) {
       const _itemReward = rewardInfos[i];
       const apiRewardProgram =
-        apiPoolInfo.rewardDefaultInfos[i]?.mint.programId ??
-        (await connection.getAccountInfo(_itemReward.mint))?.owner;
+        apiPoolInfo.rewardDefaultInfos[i]?.mint.programId ?? (await connection.getAccountInfo(_itemReward.mint))?.owner;
       if (apiRewardProgram === undefined) throw Error("get new reward mint info error");
 
       const itemReward: ClmmPoolRewardInfo = {
@@ -677,7 +671,7 @@ export class PoolUtils {
     slippage: number;
     priceLimit?: Decimal;
     catchLiquidityInsufficient: boolean;
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): ReturnTypeComputeAmountOut {
     let sqrtPriceLimitX64: BN;
     const isBaseIn = baseMint.toBase58() === poolInfo.mintA.address;
@@ -688,11 +682,7 @@ export class PoolUtils {
     if (priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = isBaseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
-      sqrtPriceLimitX64 = priceToSqrtPriceX64(
-        priceLimit,
-        poolInfo.mintA.decimals,
-        poolInfo.mintB.decimals,
-      );
+      sqrtPriceLimitX64 = priceToSqrtPriceX64(priceLimit, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
     }
 
     const realAmountIn = getTransferAmountFeeV2(amountIn, baseFeeConfig, epochInfo, false);
@@ -715,11 +705,7 @@ export class PoolUtils {
 
     const amountOut = getTransferAmountFeeV2(_expectedAmountOut, outFeeConfig, epochInfo, false);
 
-    const _executionPrice = sqrtPriceX64ToPrice(
-      _executionPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
+    const _executionPrice = sqrtPriceX64ToPrice(_executionPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
     const executionPrice = isBaseIn ? _executionPrice : new Decimal(1).div(_executionPrice);
 
     const _minAmountOut = _expectedAmountOut
@@ -767,7 +753,7 @@ export class PoolUtils {
     tokenOut: ApiV3Token;
     slippage: number;
     epochInfo: EpochInfo;
-    blockTimestamp: number,
+    blockTimestamp: number;
     catchLiquidityInsufficient?: boolean;
   }): ReturnTypeComputeAmountOutFormat {
     const baseIn = _tokenOut.address === poolInfo.mintB.address;
@@ -873,7 +859,7 @@ export class PoolUtils {
     amountOut: BN;
     slippage: number;
     priceLimit?: Decimal;
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): ReturnTypeComputeAmountOutBaseOut {
     const isBaseIn = baseMint.toBase58() === poolInfo.mintA.address;
     const feeConfigs = {
@@ -885,11 +871,7 @@ export class PoolUtils {
     if (priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = !isBaseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
-      sqrtPriceLimitX64 = priceToSqrtPriceX64(
-        priceLimit,
-        poolInfo.mintA.decimals,
-        poolInfo.mintB.decimals,
-      );
+      sqrtPriceLimitX64 = priceToSqrtPriceX64(priceLimit, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
     }
 
     const realAmountOut = getTransferAmountFeeV2(amountOut, feeConfigs[baseMint.toString()], epochInfo, true);
@@ -918,11 +900,7 @@ export class PoolUtils {
     //   true,
     // );
 
-    const _executionPrice = sqrtPriceX64ToPrice(
-      _executionPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
+    const _executionPrice = sqrtPriceX64ToPrice(_executionPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
     const executionPrice = isBaseIn ? _executionPrice : new Decimal(1).div(_executionPrice);
 
     const _maxAmountIn = _expectedAmountIn
@@ -1054,27 +1032,25 @@ export class PoolUtils {
     const sqrtPriceX64A = getSqrtPriceAtTick(positionTickLowerIndex);
     const sqrtPriceX64B = getSqrtPriceAtTick(positionTickUpperIndex);
 
-    const { amountSlippageA: poolLiquidityA, amountSlippageB: poolLiquidityB } =
-      getAmountsFromLiquidityWithSlippage(
-        sqrtPriceX64,
-        sqrtPriceX64A,
-        sqrtPriceX64B,
-        poolLiquidity,
-        false,
-        false,
-        0,
-      );
+    const { amountSlippageA: poolLiquidityA, amountSlippageB: poolLiquidityB } = getAmountsFromLiquidityWithSlippage(
+      sqrtPriceX64,
+      sqrtPriceX64A,
+      sqrtPriceX64B,
+      poolLiquidity,
+      false,
+      false,
+      0,
+    );
 
-    const { amountSlippageA: userLiquidityA, amountSlippageB: userLiquidityB } =
-      getAmountsFromLiquidityWithSlippage(
-        sqrtPriceX64,
-        sqrtPriceX64A,
-        sqrtPriceX64B,
-        liquidity,
-        false,
-        false,
-        0,
-      );
+    const { amountSlippageA: userLiquidityA, amountSlippageB: userLiquidityB } = getAmountsFromLiquidityWithSlippage(
+      sqrtPriceX64,
+      sqrtPriceX64A,
+      sqrtPriceX64B,
+      liquidity,
+      false,
+      false,
+      0,
+    );
 
     const poolTvl = new Decimal(poolLiquidityA.toString())
       .div(new Decimal(10).pow(mintDecimalsA))
@@ -1162,18 +1138,13 @@ export class PoolUtils {
 
     let liquidity: BN;
     if (sqrtPriceX64.lte(sqrtPriceX64A)) {
-      liquidity = inputA
-        ? getLiquidityFromAmountA(sqrtPriceX64A, sqrtPriceX64B, _amount)
-        : new BN(0);
+      liquidity = inputA ? getLiquidityFromAmountA(sqrtPriceX64A, sqrtPriceX64B, _amount) : new BN(0);
     } else if (sqrtPriceX64.lte(sqrtPriceX64B)) {
-
       const liquidity0 = getLiquidityFromAmountA(sqrtPriceX64, sqrtPriceX64B, _amount);
       const liquidity1 = getLiquidityFromAmountB(sqrtPriceX64A, sqrtPriceX64, _amount);
       liquidity = inputA ? liquidity0 : liquidity1;
     } else {
-      liquidity = inputA
-        ? new BN(0)
-        : getLiquidityFromAmountB(sqrtPriceX64A, sqrtPriceX64B, _amount);
+      liquidity = inputA ? new BN(0) : getLiquidityFromAmountB(sqrtPriceX64A, sqrtPriceX64B, _amount);
     }
 
     const amountFromLiquidity = await PoolUtils.getAmountsFromLiquidity({
@@ -1279,7 +1250,7 @@ export class PoolUtils {
       batchRequest: false,
     });
 
-    const kv: Record<string, ComputeClmmPoolInfo> = {}
+    const kv: Record<string, ComputeClmmPoolInfo> = {};
 
     return poolList.reduce(
       (acc, cur) => ({
@@ -1326,64 +1297,6 @@ export class PoolUtils {
       })
     )[poolInfo.id];
   }
-}
-
-export function getLiquidityFromAmounts({
-  poolInfo,
-  tickLower,
-  tickUpper,
-  amountA,
-  amountB,
-  slippage,
-  add,
-  epochInfo,
-  amountHasFee,
-}: {
-  poolInfo: ApiV3PoolInfoConcentratedItem;
-  tickLower: number;
-  tickUpper: number;
-  amountA: BN;
-  amountB: BN;
-  slippage: number;
-  add: boolean;
-  epochInfo: EpochInfo;
-  amountHasFee: boolean;
-}): ReturnTypeGetLiquidityAmountOut {
-  const [_tickLower, _tickUpper, _amountA, _amountB] =
-    tickLower < tickUpper ? [tickLower, tickUpper, amountA, amountB] : [tickUpper, tickLower, amountB, amountA];
-  const sqrtPriceX64 = priceToSqrtPriceX64(
-    new Decimal(poolInfo.price),
-    poolInfo.mintA.decimals,
-    poolInfo.mintB.decimals,
-  );
-  const sqrtPriceX64A = getSqrtPriceAtTick(_tickLower);
-  const sqrtPriceX64B = getSqrtPriceAtTick(_tickUpper);
-
-  const [amountFeeA, amountFeeB] = [
-    getTransferAmountFeeV2(_amountA, poolInfo.mintA.extensions?.feeConfig, epochInfo, !amountHasFee),
-    getTransferAmountFeeV2(_amountB, poolInfo.mintB.extensions?.feeConfig, epochInfo, !amountHasFee),
-  ];
-
-
-  const liquidity = lGetLiquidityFromAmounts(
-    sqrtPriceX64,
-    sqrtPriceX64A,
-    sqrtPriceX64B,
-    amountFeeA.amount.sub(amountFeeA.fee ?? BN_ZERO),
-    amountFeeB.amount.sub(amountFeeB.fee ?? BN_ZERO),
-  );
-
-
-  return getAmountsOutFromLiquidity({
-    poolInfo,
-    tickLower,
-    tickUpper,
-    liquidity,
-    slippage,
-    add,
-    epochInfo,
-    amountAddFee: !amountHasFee,
-  });
 }
 
 const mockRewardData = {

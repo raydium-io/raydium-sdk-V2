@@ -7,11 +7,11 @@ import {
   RENT_PROGRAM_ID,
   SYSTEM_PROGRAM_ID,
   METADATA_PROGRAM_ID,
-  createLogger,
   CREATE_CPMM_POOL_PROGRAM,
   CREATE_CPMM_POOL_AUTH,
   InstructionType,
 } from "@/common";
+import { createLogger } from "@/common/logger";
 import { getCpmmPdaPoolId, getCpLockPda } from "./pda";
 
 import { struct, u8, u64, bool } from "@/marshmallow";

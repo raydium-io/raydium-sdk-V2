@@ -8,7 +8,15 @@ import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { TokenInfo } from "../token/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 
-import { LockClPositionLayoutV2, PersonalPositionLayout, PoolInfoLayout, RewardInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout } from "./layout";
+import {
+  LockClPositionLayoutV2,
+  PersonalPositionLayout,
+  PoolInfoLayout,
+  RewardInfoLayout,
+  TickArrayBitmapExtensionLayout,
+  TickArrayLayout,
+} from "./layout";
+import { CollectFeeOn } from "./libraries";
 
 export { ApiClmmConfigInfo };
 
@@ -36,7 +44,7 @@ export type ClmmPoolRewardInfo = ReturnType<typeof RewardInfoLayout.decode> & {
   perSecond: Decimal;
   remainingRewards: undefined | BN;
   tokenProgramId: PublicKey;
-}
+};
 export interface ClmmPoolInfo {
   id: PublicKey;
   mintA: {
@@ -130,7 +138,7 @@ export interface ClmmPoolInfo {
 }
 
 export interface ComputeClmmPoolInfo {
-  accInfo: ReturnType<typeof PoolInfoLayout.decode>,
+  accInfo: ReturnType<typeof PoolInfoLayout.decode>;
   id: PublicKey;
   version: 6;
   mintA: ApiV3Token;
@@ -289,6 +297,12 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface CreateCustomizablePool<T = TxVersion.LEGACY>
+  extends Omit<CreateConcentratedPool<T>, "getObserveState"> {
+  collectFeeOn?: CollectFeeOn;
+  enableDynamicFee?: boolean;
+}
+
 export interface UserPositionAccount {
   /** transform to SDK function, should not used directlly in UI */
   sdkParsed: ClmmPoolPersonalPosition;
@@ -419,9 +433,10 @@ export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   tickLower: number;
   tickUpper: number;
 
-  base: "MintA" | "MintB";
+  base?: "MintA" | "MintB" | null;
   baseAmount: BN;
   otherAmountMax: BN;
+  liquidity: BN;
 
   nft2022?: boolean;
   associatedOnly?: boolean;
@@ -452,6 +467,7 @@ export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
   };
   amountMaxA: BN;
   amountMaxB: BN;
+  base?: "MintA" | "MintB" | null;
   tickLower: number;
   tickUpper: number;
   liquidity: BN;

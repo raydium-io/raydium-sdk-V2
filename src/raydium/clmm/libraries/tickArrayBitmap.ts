@@ -1,94 +1,87 @@
-import { ApiV3PoolInfoConcentratedItem } from "@/api"
-import { getMultipleAccountsInfo } from "@/common"
-import { Connection, PublicKey } from "@solana/web3.js"
-import BN from "bn.js"
-import Decimal from "decimal.js"
-import { PoolInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout, TickLayout } from "../layout"
-import { ClmmPoolInfo } from "../type"
-import { clearBit, isBitSet, leastSignificantBit, mostSignificantBit, setBit } from "./bigNum"
-import { MAX_TICK, MIN_TICK, TICK_ARRAY_BITMAP_SIZE, TICK_ARRAY_SIZE } from "./constants"
-import { getPdaTickArrayAddress } from "./pda"
-import { getSqrtPriceAtTick, getTickArrayStartIndex, getTickAtSqrtPrice, priceToSqrtPriceX64, sqrtPriceX64ToPrice } from "./tickMath"
+import { ApiV3PoolInfoConcentratedItem } from "@/api";
+import { getMultipleAccountsInfo } from "@/common";
+import { Connection, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import Decimal from "decimal.js";
+import { PoolInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout, TickLayout } from "../layout";
+import { ClmmPoolInfo } from "../type";
+import { clearBit, isBitSet, leastSignificantBit, mostSignificantBit, setBit } from "./bigNum";
+import { MAX_TICK, MIN_TICK, TICK_ARRAY_BITMAP_SIZE, TICK_ARRAY_SIZE } from "./constants";
+import { getPdaTickArrayAddress } from "./pda";
+import {
+  getSqrtPriceAtTick,
+  getTickArrayStartIndex,
+  getTickAtSqrtPrice,
+  priceToSqrtPriceX64,
+  sqrtPriceX64ToPrice,
+} from "./tickMath";
 
-export const POOL_BITMAP_POSITIVE_ARRAYS = 8
-export const POOL_BITMAP_NEGATIVE_ARRAYS = 8
-export const EXTENSION_BITMAP_ARRAYS = 14
+export const POOL_BITMAP_POSITIVE_ARRAYS = 8;
+export const POOL_BITMAP_NEGATIVE_ARRAYS = 8;
+export const EXTENSION_BITMAP_ARRAYS = 14;
 
 export function getTickArrayOffsetIndex(tickArrayStartIndex: number, tickSpacing: number): number {
-  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE
-  return Math.floor(tickArrayStartIndex / ticksPerArray)
+  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE;
+  return Math.floor(tickArrayStartIndex / ticksPerArray);
 }
 
 export function getBitmapPosition(
   tickArrayStartIndex: number,
-  tickSpacing: number
+  tickSpacing: number,
 ): { wordIndex: number; bitIndex: number; isPositive: boolean } {
-  const offsetIndex = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing)
-  const isPositive = offsetIndex >= 0
+  const offsetIndex = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing);
+  const isPositive = offsetIndex >= 0;
 
-  const absOffset = Math.abs(offsetIndex)
+  const absOffset = Math.abs(offsetIndex);
 
   if (isPositive) {
     return {
       wordIndex: Math.floor(absOffset / 64),
       bitIndex: absOffset % 64,
       isPositive: true,
-    }
+    };
   } else {
-    const negIndex = -offsetIndex - 1
+    const negIndex = -offsetIndex - 1;
     return {
       wordIndex: Math.floor(negIndex / 64),
       bitIndex: negIndex % 64,
       isPositive: false,
-    }
+    };
   }
 }
 
-export function isTickArrayInitialized(
-  bitmap: BN[],
-  tickArrayStartIndex: number,
-  tickSpacing: number
-): boolean {
-  const { wordIndex, bitIndex, isPositive } = getBitmapPosition(tickArrayStartIndex, tickSpacing)
+export function isTickArrayInitialized(bitmap: BN[], tickArrayStartIndex: number, tickSpacing: number): boolean {
+  const { wordIndex, bitIndex, isPositive } = getBitmapPosition(tickArrayStartIndex, tickSpacing);
 
   if (wordIndex >= bitmap.length) {
-    return false
+    return false;
   }
 
-  return isBitSet(bitmap[wordIndex], bitIndex)
+  return isBitSet(bitmap[wordIndex], bitIndex);
 }
 
-export function setTickArrayInitialized(
-  bitmap: BN[],
-  tickArrayStartIndex: number,
-  tickSpacing: number
-): BN[] {
-  const { wordIndex, bitIndex } = getBitmapPosition(tickArrayStartIndex, tickSpacing)
+export function setTickArrayInitialized(bitmap: BN[], tickArrayStartIndex: number, tickSpacing: number): BN[] {
+  const { wordIndex, bitIndex } = getBitmapPosition(tickArrayStartIndex, tickSpacing);
 
   if (wordIndex >= bitmap.length) {
-    throw new Error("Tick array index out of bitmap range")
+    throw new Error("Tick array index out of bitmap range");
   }
 
-  const newBitmap = [...bitmap]
-  newBitmap[wordIndex] = setBit(bitmap[wordIndex], bitIndex)
-  return newBitmap
+  const newBitmap = [...bitmap];
+  newBitmap[wordIndex] = setBit(bitmap[wordIndex], bitIndex);
+  return newBitmap;
 }
 
-
-export function clearTickArrayInitialized(
-  bitmap: BN[],
-  tickArrayStartIndex: number,
-  tickSpacing: number
-): BN[] {
-  const { wordIndex, bitIndex } = getBitmapPosition(tickArrayStartIndex, tickSpacing)
+export function clearTickArrayInitialized(bitmap: BN[], tickArrayStartIndex: number, tickSpacing: number): BN[] {
+  const { wordIndex, bitIndex } = getBitmapPosition(tickArrayStartIndex, tickSpacing);
 
   if (wordIndex >= bitmap.length) {
-    throw new Error("Tick array index out of bitmap range")
+    throw new Error("Tick array index out of bitmap range");
   }
 
-  const newBitmap = [...bitmap]
-  newBitmap[wordIndex] = clearBit(bitmap[wordIndex], bitIndex)
-  return newBitmap
+  const newBitmap = [...bitmap];
+  newBitmap[wordIndex] = clearBit(bitmap[wordIndex], bitIndex);
+  return newBitmap;
 }
 
 export function nextInitializedTickArrayStartIndex(
@@ -96,25 +89,15 @@ export function nextInitializedTickArrayStartIndex(
   negativeBitmap: BN[],
   tickArrayStartIndex: number,
   tickSpacing: number,
-  zeroForOne: boolean
+  zeroForOne: boolean,
 ): { found: boolean; startIndex: number } {
-  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE
-  const currentOffset = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing)
+  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE;
+  const currentOffset = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing);
 
   if (zeroForOne) {
-    return searchNegativeDirection(
-      positiveBitmap,
-      negativeBitmap,
-      currentOffset,
-      ticksPerArray
-    )
+    return searchNegativeDirection(positiveBitmap, negativeBitmap, currentOffset, ticksPerArray);
   } else {
-    return searchPositiveDirection(
-      positiveBitmap,
-      negativeBitmap,
-      currentOffset,
-      ticksPerArray
-    )
+    return searchPositiveDirection(positiveBitmap, negativeBitmap, currentOffset, ticksPerArray);
   }
 }
 
@@ -122,211 +105,196 @@ function searchNegativeDirection(
   positiveBitmap: BN[],
   negativeBitmap: BN[],
   startOffset: number,
-  ticksPerArray: number
+  ticksPerArray: number,
 ): { found: boolean; startIndex: number } {
-  let searchOffset = startOffset - 1
+  let searchOffset = startOffset - 1;
 
   if (searchOffset >= 0) {
-    const result = searchBitmapBackward(positiveBitmap, searchOffset)
+    const result = searchBitmapBackward(positiveBitmap, searchOffset);
     if (result.found) {
-      return { found: true, startIndex: result.offset * ticksPerArray }
+      return { found: true, startIndex: result.offset * ticksPerArray };
     }
-    searchOffset = -1
+    searchOffset = -1;
   }
 
-  const negIndex = -searchOffset - 1
-  const result = searchBitmapForward(negativeBitmap, negIndex)
+  const negIndex = -searchOffset - 1;
+  const result = searchBitmapForward(negativeBitmap, negIndex);
   if (result.found) {
-    return { found: true, startIndex: -(result.offset + 1) * ticksPerArray }
+    return { found: true, startIndex: -(result.offset + 1) * ticksPerArray };
   }
 
-  return { found: false, startIndex: 0 }
+  return { found: false, startIndex: 0 };
 }
-
 
 function searchPositiveDirection(
   positiveBitmap: BN[],
   negativeBitmap: BN[],
   startOffset: number,
-  ticksPerArray: number
+  ticksPerArray: number,
 ): { found: boolean; startIndex: number } {
-  let searchOffset = startOffset + 1
+  let searchOffset = startOffset + 1;
 
   if (searchOffset < 0) {
-    const negIndex = -searchOffset - 1
-    const result = searchBitmapBackward(negativeBitmap, negIndex)
+    const negIndex = -searchOffset - 1;
+    const result = searchBitmapBackward(negativeBitmap, negIndex);
     if (result.found) {
-      return { found: true, startIndex: -(result.offset + 1) * ticksPerArray }
+      return { found: true, startIndex: -(result.offset + 1) * ticksPerArray };
     }
-    searchOffset = 0
+    searchOffset = 0;
   }
 
-  const result = searchBitmapForward(positiveBitmap, searchOffset)
+  const result = searchBitmapForward(positiveBitmap, searchOffset);
   if (result.found) {
-    return { found: true, startIndex: result.offset * ticksPerArray }
+    return { found: true, startIndex: result.offset * ticksPerArray };
   }
 
-  return { found: false, startIndex: 0 }
+  return { found: false, startIndex: 0 };
 }
 
-function searchBitmapForward(
-  bitmap: BN[],
-  startOffset: number
-): { found: boolean; offset: number } {
-  const startWord = Math.floor(startOffset / 64)
-  const startBit = startOffset % 64
+function searchBitmapForward(bitmap: BN[], startOffset: number): { found: boolean; offset: number } {
+  const startWord = Math.floor(startOffset / 64);
+  const startBit = startOffset % 64;
 
   for (let wordIndex = startWord; wordIndex < bitmap.length; wordIndex++) {
-    const word = bitmap[wordIndex]
-    if (word.isZero()) continue
+    const word = bitmap[wordIndex];
+    if (word.isZero()) continue;
 
-    let masked = word
+    let masked = word;
     if (wordIndex === startWord && startBit > 0) {
-      const mask = new BN(1).shln(startBit).subn(1)
-      masked = word.and(mask.notn(64))
+      const mask = new BN(1).shln(startBit).subn(1);
+      masked = word.and(mask.notn(64));
     }
 
     if (!masked.isZero()) {
-      const bit = leastSignificantBit(masked)
+      const bit = leastSignificantBit(masked);
       if (bit >= 0) {
-        return { found: true, offset: wordIndex * 64 + bit }
+        return { found: true, offset: wordIndex * 64 + bit };
       }
     }
   }
 
-  return { found: false, offset: 0 }
+  return { found: false, offset: 0 };
 }
 
-
-function searchBitmapBackward(
-  bitmap: BN[],
-  startOffset: number
-): { found: boolean; offset: number } {
-  const startWord = Math.min(Math.floor(startOffset / 64), bitmap.length - 1)
-  const startBit = startOffset % 64
+function searchBitmapBackward(bitmap: BN[], startOffset: number): { found: boolean; offset: number } {
+  const startWord = Math.min(Math.floor(startOffset / 64), bitmap.length - 1);
+  const startBit = startOffset % 64;
 
   for (let wordIndex = startWord; wordIndex >= 0; wordIndex--) {
-    const word = bitmap[wordIndex]
-    if (word.isZero()) continue
+    const word = bitmap[wordIndex];
+    if (word.isZero()) continue;
 
-    let masked = word
+    let masked = word;
     if (wordIndex === startWord) {
-      const mask = new BN(1).shln(startBit + 1).subn(1)
-      masked = word.and(mask)
+      const mask = new BN(1).shln(startBit + 1).subn(1);
+      masked = word.and(mask);
     }
 
     if (!masked.isZero()) {
-      const bit = mostSignificantBit(masked)
+      const bit = mostSignificantBit(masked);
       if (bit >= 0) {
-        return { found: true, offset: wordIndex * 64 + bit }
+        return { found: true, offset: wordIndex * 64 + bit };
       }
     }
   }
 
-  return { found: false, offset: 0 }
+  return { found: false, offset: 0 };
 }
-
 
 export function needsExtensionBitmap(tickArrayStartIndex: number, tickSpacing: number): boolean {
-  const offsetIndex = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing)
-  const absOffset = Math.abs(offsetIndex)
+  const offsetIndex = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing);
+  const absOffset = Math.abs(offsetIndex);
 
-
-  return absOffset >= TICK_ARRAY_BITMAP_SIZE
+  return absOffset >= TICK_ARRAY_BITMAP_SIZE;
 }
-
 
 export function getExtensionBitmapPosition(
   tickArrayStartIndex: number,
-  tickSpacing: number
+  tickSpacing: number,
 ): { sectionIndex: number; wordIndex: number; bitIndex: number; isPositive: boolean } {
-  const offsetIndex = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing)
-  const isPositive = offsetIndex >= 0
-  const absOffset = Math.abs(offsetIndex)
+  const offsetIndex = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing);
+  const isPositive = offsetIndex >= 0;
+  const absOffset = Math.abs(offsetIndex);
 
-  const extensionOffset = absOffset - TICK_ARRAY_BITMAP_SIZE
+  const extensionOffset = absOffset - TICK_ARRAY_BITMAP_SIZE;
 
-  const bitsPerSection = 8 * 64
+  const bitsPerSection = 8 * 64;
 
-  const sectionIndex = Math.floor(extensionOffset / bitsPerSection)
-  const sectionOffset = extensionOffset % bitsPerSection
-  const wordIndex = Math.floor(sectionOffset / 64)
-  const bitIndex = sectionOffset % 64
+  const sectionIndex = Math.floor(extensionOffset / bitsPerSection);
+  const sectionOffset = extensionOffset % bitsPerSection;
+  const wordIndex = Math.floor(sectionOffset / 64);
+  const bitIndex = sectionOffset % 64;
 
-  return { sectionIndex, wordIndex, bitIndex, isPositive }
+  return { sectionIndex, wordIndex, bitIndex, isPositive };
 }
 
 export function isTickArrayInitializedInExtension(
   extensionBitmap: BN[][],
   tickArrayStartIndex: number,
   tickSpacing: number,
-  isPositive: boolean
+  isPositive: boolean,
 ): boolean {
-  const pos = getExtensionBitmapPosition(tickArrayStartIndex, tickSpacing)
+  const pos = getExtensionBitmapPosition(tickArrayStartIndex, tickSpacing);
 
   if (pos.sectionIndex >= extensionBitmap.length) {
-    return false
+    return false;
   }
 
-  const section = extensionBitmap[pos.sectionIndex]
+  const section = extensionBitmap[pos.sectionIndex];
   if (pos.wordIndex >= section.length) {
-    return false
+    return false;
   }
 
-  return isBitSet(section[pos.wordIndex], pos.bitIndex)
+  return isBitSet(section[pos.wordIndex], pos.bitIndex);
 }
 
-export function getInitializedTickArrays(
-  positiveBitmap: BN[],
-  negativeBitmap: BN[],
-  tickSpacing: number
-): number[] {
-  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE
-  const result: number[] = []
+export function getInitializedTickArrays(positiveBitmap: BN[], negativeBitmap: BN[], tickSpacing: number): number[] {
+  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE;
+  const result: number[] = [];
 
   for (let wordIndex = 0; wordIndex < positiveBitmap.length; wordIndex++) {
-    const word = positiveBitmap[wordIndex]
-    if (word.isZero()) continue
+    const word = positiveBitmap[wordIndex];
+    if (word.isZero()) continue;
 
     for (let bit = 0; bit < 64; bit++) {
       if (isBitSet(word, bit)) {
-        const offset = wordIndex * 64 + bit
-        result.push(offset * ticksPerArray)
+        const offset = wordIndex * 64 + bit;
+        result.push(offset * ticksPerArray);
       }
     }
   }
 
   for (let wordIndex = 0; wordIndex < negativeBitmap.length; wordIndex++) {
-    const word = negativeBitmap[wordIndex]
-    if (word.isZero()) continue
+    const word = negativeBitmap[wordIndex];
+    if (word.isZero()) continue;
 
     for (let bit = 0; bit < 64; bit++) {
       if (isBitSet(word, bit)) {
-        const offset = -(wordIndex * 64 + bit + 1)
-        result.push(offset * ticksPerArray)
+        const offset = -(wordIndex * 64 + bit + 1);
+        result.push(offset * ticksPerArray);
       }
     }
   }
 
-  return result.sort((a, b) => a - b)
+  return result.sort((a, b) => a - b);
 }
 
 export function isCurrentTickInInitializedArray(
   tick: number,
   tickSpacing: number,
   positiveBitmap: BN[],
-  negativeBitmap: BN[]
+  negativeBitmap: BN[],
 ): boolean {
-  const tickArrayStart = getTickArrayStartIndex(tick, tickSpacing)
-  const { wordIndex, bitIndex, isPositive } = getBitmapPosition(tickArrayStart, tickSpacing)
+  const tickArrayStart = getTickArrayStartIndex(tick, tickSpacing);
+  const { wordIndex, bitIndex, isPositive } = getBitmapPosition(tickArrayStart, tickSpacing);
 
-  const bitmap = isPositive ? positiveBitmap : negativeBitmap
+  const bitmap = isPositive ? positiveBitmap : negativeBitmap;
 
   if (wordIndex >= bitmap.length) {
-    return false
+    return false;
   }
 
-  return isBitSet(bitmap[wordIndex], bitIndex)
+  return isBitSet(bitmap[wordIndex], bitIndex);
 }
 
 export function getSwapTickArrayAddresses(
@@ -335,36 +303,38 @@ export function getSwapTickArrayAddresses(
   pool: ReturnType<typeof PoolInfoLayout.decode>,
   zeroForOne: boolean,
   count: number,
-  exBitmapExtension?: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>
+  exBitmapExtension?: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
 ): { address: PublicKey; startIndex: number }[] {
-  const tickSpacing = pool.tickSpacing
+  const tickSpacing = pool.tickSpacing;
 
-  const tickArrayBitmap = pool.tickArrayBitmap
-  const positiveBitmap = tickArrayBitmap.slice(0, 8)
-  const negativeBitmap = tickArrayBitmap.slice(8, 16)
+  const tickArrayBitmap = pool.tickArrayBitmap;
+  const positiveBitmap = tickArrayBitmap.slice(0, 8);
+  const negativeBitmap = tickArrayBitmap.slice(8, 16);
 
-  const positiveExBitmap = exBitmapExtension?.positiveTickArrayBitmap
-  const negativeExBitmap = exBitmapExtension?.negativeTickArrayBitmap
+  const positiveExBitmap = exBitmapExtension?.positiveTickArrayBitmap;
+  const negativeExBitmap = exBitmapExtension?.negativeTickArrayBitmap;
 
-  const result: { address: PublicKey; startIndex: number }[] = []
+  const result: { address: PublicKey; startIndex: number }[] = [];
 
-  const currentStartIndex = getTickArrayStartIndex(pool.tickCurrent, tickSpacing)
+  const currentStartIndex = getTickArrayStartIndex(pool.tickCurrent, tickSpacing);
 
-  if (isTickArrayInitializedFull(
-    currentStartIndex,
-    tickSpacing,
-    positiveBitmap,
-    negativeBitmap,
-    positiveExBitmap,
-    negativeExBitmap
-  )) {
+  if (
+    isTickArrayInitializedFull(
+      currentStartIndex,
+      tickSpacing,
+      positiveBitmap,
+      negativeBitmap,
+      positiveExBitmap,
+      negativeExBitmap,
+    )
+  ) {
     result.push({
       address: getPdaTickArrayAddress(programId, poolId, currentStartIndex).publicKey,
       startIndex: currentStartIndex,
-    })
+    });
   }
 
-  let searchStartIndex = currentStartIndex
+  let searchStartIndex = currentStartIndex;
   while (result.length < count) {
     const next = nextInitializedTickArrayFull(
       positiveBitmap,
@@ -373,24 +343,24 @@ export function getSwapTickArrayAddresses(
       negativeExBitmap,
       searchStartIndex,
       tickSpacing,
-      zeroForOne
-    )
+      zeroForOne,
+    );
 
     if (!next.found) {
-      break
+      break;
     }
 
-    if (!result.some(r => r.startIndex === next.startIndex)) {
+    if (!result.some((r) => r.startIndex === next.startIndex)) {
       result.push({
         address: getPdaTickArrayAddress(programId, poolId, next.startIndex).publicKey,
         startIndex: next.startIndex,
-      })
+      });
     }
 
-    searchStartIndex = next.startIndex
+    searchStartIndex = next.startIndex;
   }
 
-  return result
+  return result;
 }
 
 function isTickArrayInitializedFull(
@@ -399,46 +369,45 @@ function isTickArrayInitializedFull(
   positiveBitmap: BN[],
   negativeBitmap: BN[],
   positiveExBitmap?: BN[][],
-  negativeExBitmap?: BN[][]
+  negativeExBitmap?: BN[][],
 ): boolean {
-
   if (!needsExtensionBitmap(tickArrayStartIndex, tickSpacing)) {
-    return isTickArrayInitializedInPool(tickArrayStartIndex, tickSpacing, positiveBitmap, negativeBitmap)
+    return isTickArrayInitializedInPool(tickArrayStartIndex, tickSpacing, positiveBitmap, negativeBitmap);
   }
 
   if (!positiveExBitmap || !negativeExBitmap) {
-    return false
+    return false;
   }
 
-  const pos = getExtensionBitmapPosition(tickArrayStartIndex, tickSpacing)
-  const exBitmap = pos.isPositive ? positiveExBitmap : negativeExBitmap
+  const pos = getExtensionBitmapPosition(tickArrayStartIndex, tickSpacing);
+  const exBitmap = pos.isPositive ? positiveExBitmap : negativeExBitmap;
 
   if (pos.sectionIndex >= exBitmap.length) {
-    return false
+    return false;
   }
 
-  const section = exBitmap[pos.sectionIndex]
+  const section = exBitmap[pos.sectionIndex];
   if (pos.wordIndex >= section.length) {
-    return false
+    return false;
   }
 
-  return isBitSet(section[pos.wordIndex], pos.bitIndex)
+  return isBitSet(section[pos.wordIndex], pos.bitIndex);
 }
 
 function isTickArrayInitializedInPool(
   tickArrayStartIndex: number,
   tickSpacing: number,
   positiveBitmap: BN[],
-  negativeBitmap: BN[]
+  negativeBitmap: BN[],
 ): boolean {
-  const { wordIndex, bitIndex, isPositive } = getBitmapPosition(tickArrayStartIndex, tickSpacing)
-  const bitmap = isPositive ? positiveBitmap : negativeBitmap
+  const { wordIndex, bitIndex, isPositive } = getBitmapPosition(tickArrayStartIndex, tickSpacing);
+  const bitmap = isPositive ? positiveBitmap : negativeBitmap;
 
   if (wordIndex >= bitmap.length) {
-    return false
+    return false;
   }
 
-  return isBitSet(bitmap[wordIndex], bitIndex)
+  return isBitSet(bitmap[wordIndex], bitIndex);
 }
 
 function nextInitializedTickArrayFull(
@@ -448,22 +417,22 @@ function nextInitializedTickArrayFull(
   negativeExBitmap: BN[][] | undefined,
   tickArrayStartIndex: number,
   tickSpacing: number,
-  zeroForOne: boolean
+  zeroForOne: boolean,
 ): { found: boolean; startIndex: number } {
   const poolResult = nextInitializedTickArrayStartIndex(
     positiveBitmap,
     negativeBitmap,
     tickArrayStartIndex,
     tickSpacing,
-    zeroForOne
-  )
+    zeroForOne,
+  );
 
   if (poolResult.found) {
-    return poolResult
+    return poolResult;
   }
 
   if (!positiveExBitmap || !negativeExBitmap) {
-    return { found: false, startIndex: 0 }
+    return { found: false, startIndex: 0 };
   }
 
   return nextInitializedTickArrayInExtension(
@@ -471,8 +440,8 @@ function nextInitializedTickArrayFull(
     negativeExBitmap,
     tickArrayStartIndex,
     tickSpacing,
-    zeroForOne
-  )
+    zeroForOne,
+  );
 }
 
 function nextInitializedTickArrayInExtension(
@@ -480,30 +449,23 @@ function nextInitializedTickArrayInExtension(
   negativeExBitmap: BN[][],
   tickArrayStartIndex: number,
   tickSpacing: number,
-  zeroForOne: boolean
+  zeroForOne: boolean,
 ): { found: boolean; startIndex: number } {
-  const currentOffset = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing)
+  const currentOffset = getTickArrayOffsetIndex(tickArrayStartIndex, tickSpacing);
 
-  const absOffset = Math.abs(currentOffset)
+  const absOffset = Math.abs(currentOffset);
   if (absOffset < TICK_ARRAY_BITMAP_SIZE) {
-
-    const startExtOffset = TICK_ARRAY_BITMAP_SIZE
+    const startExtOffset = TICK_ARRAY_BITMAP_SIZE;
     return searchExtensionBitmap(
       positiveExBitmap,
       negativeExBitmap,
       zeroForOne ? -startExtOffset : startExtOffset,
       tickSpacing,
-      zeroForOne
-    )
+      zeroForOne,
+    );
   }
 
-  return searchExtensionBitmap(
-    positiveExBitmap,
-    negativeExBitmap,
-    currentOffset,
-    tickSpacing,
-    zeroForOne
-  )
+  return searchExtensionBitmap(positiveExBitmap, negativeExBitmap, currentOffset, tickSpacing, zeroForOne);
 }
 
 function searchExtensionBitmap(
@@ -511,27 +473,26 @@ function searchExtensionBitmap(
   negativeExBitmap: BN[][],
   startOffset: number,
   tickSpacing: number,
-  zeroForOne: boolean
+  zeroForOne: boolean,
 ): { found: boolean; startIndex: number } {
-  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE
-  const bitsPerSection = 8 * 64
+  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE;
+  const bitsPerSection = 8 * 64;
 
   if (zeroForOne) {
-    const searchOffset = startOffset - 1
+    const searchOffset = startOffset - 1;
 
     if (searchOffset < 0) {
-      const negOffset = -searchOffset - 1
+      const negOffset = -searchOffset - 1;
       if (negOffset >= TICK_ARRAY_BITMAP_SIZE) {
-
-        const extOffset = negOffset - TICK_ARRAY_BITMAP_SIZE
+        const extOffset = negOffset - TICK_ARRAY_BITMAP_SIZE;
         for (let section = Math.floor(extOffset / bitsPerSection); section < negativeExBitmap.length; section++) {
-          const sectionWords = negativeExBitmap[section]
+          const sectionWords = negativeExBitmap[section];
           for (let word = 0; word < sectionWords.length; word++) {
             if (!sectionWords[word].isZero()) {
               for (let bit = 0; bit < 64; bit++) {
                 if (isBitSet(sectionWords[word], bit)) {
-                  const foundOffset = TICK_ARRAY_BITMAP_SIZE + section * bitsPerSection + word * 64 + bit
-                  return { found: true, startIndex: -(foundOffset + 1) * ticksPerArray }
+                  const foundOffset = TICK_ARRAY_BITMAP_SIZE + section * bitsPerSection + word * 64 + bit;
+                  return { found: true, startIndex: -(foundOffset + 1) * ticksPerArray };
                 }
               }
             }
@@ -540,17 +501,17 @@ function searchExtensionBitmap(
       }
     }
   } else {
-    const searchOffset = startOffset + 1
+    const searchOffset = startOffset + 1;
     if (searchOffset >= TICK_ARRAY_BITMAP_SIZE) {
-      const extOffset = searchOffset - TICK_ARRAY_BITMAP_SIZE
+      const extOffset = searchOffset - TICK_ARRAY_BITMAP_SIZE;
       for (let section = Math.floor(extOffset / bitsPerSection); section < positiveExBitmap.length; section++) {
-        const sectionWords = positiveExBitmap[section]
+        const sectionWords = positiveExBitmap[section];
         for (let word = 0; word < sectionWords.length; word++) {
           if (!sectionWords[word].isZero()) {
             for (let bit = 0; bit < 64; bit++) {
               if (isBitSet(sectionWords[word], bit)) {
-                const foundOffset = TICK_ARRAY_BITMAP_SIZE + section * bitsPerSection + word * 64 + bit
-                return { found: true, startIndex: foundOffset * ticksPerArray }
+                const foundOffset = TICK_ARRAY_BITMAP_SIZE + section * bitsPerSection + word * 64 + bit;
+                return { found: true, startIndex: foundOffset * ticksPerArray };
               }
             }
           }
@@ -559,42 +520,41 @@ function searchExtensionBitmap(
     }
   }
 
-  return { found: false, startIndex: 0 }
+  return { found: false, startIndex: 0 };
 }
-
 
 export function getSwapTickArrayStartIndices(
   pool: ReturnType<typeof PoolInfoLayout.decode>,
   zeroForOne: boolean,
   count: number,
-  exBitmapExtension?: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>
+  exBitmapExtension?: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
 ): number[] {
-  const tickSpacing = pool.tickSpacing
+  const tickSpacing = pool.tickSpacing;
 
-  const tickArrayBitmap = pool.tickArrayBitmap
-  const positiveBitmap = tickArrayBitmap.slice(0, 8)
-  const negativeBitmap = tickArrayBitmap.slice(8, 16)
+  const tickArrayBitmap = pool.tickArrayBitmap;
+  const positiveBitmap = tickArrayBitmap.slice(0, 8);
+  const negativeBitmap = tickArrayBitmap.slice(8, 16);
 
-  const positiveExBitmap = exBitmapExtension?.positiveTickArrayBitmap
-  const negativeExBitmap = exBitmapExtension?.negativeTickArrayBitmap
+  const positiveExBitmap = exBitmapExtension?.positiveTickArrayBitmap;
+  const negativeExBitmap = exBitmapExtension?.negativeTickArrayBitmap;
 
-  const result: number[] = []
-  const currentStartIndex = getTickArrayStartIndex(pool.tickCurrent, tickSpacing)
+  const result: number[] = [];
+  const currentStartIndex = getTickArrayStartIndex(pool.tickCurrent, tickSpacing);
 
-
-  if (isTickArrayInitializedFull(
-    currentStartIndex,
-    tickSpacing,
-    positiveBitmap,
-    negativeBitmap,
-    positiveExBitmap,
-    negativeExBitmap
-  )) {
-    result.push(currentStartIndex)
+  if (
+    isTickArrayInitializedFull(
+      currentStartIndex,
+      tickSpacing,
+      positiveBitmap,
+      negativeBitmap,
+      positiveExBitmap,
+      negativeExBitmap,
+    )
+  ) {
+    result.push(currentStartIndex);
   }
 
-
-  let searchStartIndex = currentStartIndex
+  let searchStartIndex = currentStartIndex;
   while (result.length < count) {
     const next = nextInitializedTickArrayFull(
       positiveBitmap,
@@ -603,57 +563,56 @@ export function getSwapTickArrayStartIndices(
       negativeExBitmap,
       searchStartIndex,
       tickSpacing,
-      zeroForOne
-    )
+      zeroForOne,
+    );
 
     if (!next.found) {
-      break
+      break;
     }
 
     if (!result.includes(next.startIndex)) {
-      result.push(next.startIndex)
+      result.push(next.startIndex);
     }
 
-    searchStartIndex = next.startIndex
+    searchStartIndex = next.startIndex;
   }
 
-  return result
+  return result;
 }
 
 function tickRange(tickSpacing: number): {
-  maxTickBoundary: number
-  minTickBoundary: number
+  maxTickBoundary: number;
+  minTickBoundary: number;
 } {
-  let maxTickBoundary = tickSpacing * TICK_ARRAY_SIZE * TICK_ARRAY_BITMAP_SIZE
-  let minTickBoundary = -maxTickBoundary
+  let maxTickBoundary = tickSpacing * TICK_ARRAY_SIZE * TICK_ARRAY_BITMAP_SIZE;
+  let minTickBoundary = -maxTickBoundary;
 
   if (maxTickBoundary > MAX_TICK) {
-    maxTickBoundary = getTickArrayStartIndex(MAX_TICK, tickSpacing) + TICK_ARRAY_SIZE * tickSpacing
+    maxTickBoundary = getTickArrayStartIndex(MAX_TICK, tickSpacing) + TICK_ARRAY_SIZE * tickSpacing;
   }
   if (minTickBoundary < MIN_TICK) {
-    minTickBoundary = getTickArrayStartIndex(MIN_TICK, tickSpacing)
+    minTickBoundary = getTickArrayStartIndex(MIN_TICK, tickSpacing);
   }
-  return { maxTickBoundary, minTickBoundary }
+  return { maxTickBoundary, minTickBoundary };
 }
 
-
 export function isOverflowDefaultTickarrayBitmap(tickSpacing: number, tickarrayStartIndexs: number[]): boolean {
-  const { maxTickBoundary, minTickBoundary } = tickRange(tickSpacing)
+  const { maxTickBoundary, minTickBoundary } = tickRange(tickSpacing);
 
   for (const tickIndex of tickarrayStartIndexs) {
-    const tickarrayStartIndex = getTickArrayStartIndex(tickIndex, tickSpacing)
+    const tickarrayStartIndex = getTickArrayStartIndex(tickIndex, tickSpacing);
 
     if (tickarrayStartIndex >= maxTickBoundary || tickarrayStartIndex < minTickBoundary) {
-      return true
+      return true;
     }
   }
 
-  return false
+  return false;
 }
 
-type Tick = ReturnType<typeof TickLayout.decode>
+type Tick = ReturnType<typeof TickLayout.decode>;
 
-export const FETCH_TICKARRAY_COUNT = 7
+export const FETCH_TICKARRAY_COUNT = 7;
 export class TickQuery {
   public static async getTickArrays(
     connection: Connection,
@@ -862,7 +821,6 @@ export class TickQuery {
     return TICK_ARRAY_SIZE * tickSpacing;
   }
 }
-
 
 export class TickArrayBitmapExtensionUtils {
   public static getBitmapOffset(tickIndex: number, tickSpacing: number): number {
@@ -1170,7 +1128,9 @@ export class TickUtils {
     return result;
   }
 
-  public static getAllInitializedTickInTickArray(tickArray: ReturnType<typeof TickArrayLayout.decode>): ReturnType<typeof TickLayout.decode>[] {
+  public static getAllInitializedTickInTickArray(
+    tickArray: ReturnType<typeof TickArrayLayout.decode>,
+  ): ReturnType<typeof TickLayout.decode>[] {
     return tickArray.ticks.filter((i) => i.liquidityGross.gtn(0));
   }
 
@@ -1266,7 +1226,10 @@ export class TickUtils {
     return null;
   }
 
-  public static firstInitializedTick(tickArrayCurrent: ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey }, zeroForOne: boolean): Tick {
+  public static firstInitializedTick(
+    tickArrayCurrent: ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey },
+    zeroForOne: boolean,
+  ): Tick {
     if (zeroForOne) {
       let i = TICK_ARRAY_SIZE - 1;
       while (i >= 0) {
@@ -1298,11 +1261,7 @@ export class TickUtils {
     baseIn: boolean;
   }): ReturnTypeGetTickPrice {
     const tickSqrtPriceX64 = getSqrtPriceAtTick(tick);
-    const tickPrice = sqrtPriceX64ToPrice(
-      tickSqrtPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
+    const tickPrice = sqrtPriceX64ToPrice(tickSqrtPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
 
     return baseIn
       ? { tick, price: tickPrice, tickSqrtPriceX64 }
@@ -1327,11 +1286,7 @@ export class TickUtils {
       poolInfo.mintB.decimals,
     );
     const tickSqrtPriceX64 = getSqrtPriceAtTick(tick);
-    const tickPrice = sqrtPriceX64ToPrice(
-      tickSqrtPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
+    const tickPrice = sqrtPriceX64ToPrice(tickSqrtPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
 
     return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
   }
@@ -1346,11 +1301,7 @@ export class TickUtils {
     baseIn: boolean;
   }): ReturnTypeGetTickPrice {
     const tickSqrtPriceX64 = getSqrtPriceAtTick(tick);
-    const tickPrice = sqrtPriceX64ToPrice(
-      tickSqrtPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
+    const tickPrice = sqrtPriceX64ToPrice(tickSqrtPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
 
     return baseIn
       ? { tick, price: tickPrice, tickSqrtPriceX64 }
@@ -1376,18 +1327,11 @@ export class TickUtils {
     );
 
     const tickSqrtPriceX64 = getSqrtPriceAtTick(tick);
-    const tickPrice = sqrtPriceX64ToPrice(
-      tickSqrtPriceX64,
-      poolInfo.mintA.decimals,
-      poolInfo.mintB.decimals,
-    );
+    const tickPrice = sqrtPriceX64ToPrice(tickSqrtPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
 
     return baseIn ? { tick, price: tickPrice } : { tick, price: new Decimal(1).div(tickPrice) };
   }
 }
-
-
-export const EXTENSION_TICKARRAY_BITMAP_SIZE = 14;
 
 export class TickArrayBitmap {
   public static maxTickInTickarrayBitmap(tickSpacing: number): number {
@@ -1468,10 +1412,7 @@ export class TickMath {
     mintDecimalsA: number,
     mintDecimalsB: number,
   ): number {
-
-    const tick = getTickAtSqrtPrice(
-      priceToSqrtPriceX64(price, mintDecimalsA, mintDecimalsB),
-    );
+    const tick = getTickAtSqrtPrice(priceToSqrtPriceX64(price, mintDecimalsA, mintDecimalsB));
     let result = tick / tickSpacing;
     if (result < 0) {
       result = Math.floor(result);
@@ -1492,4 +1433,36 @@ export class TickMath {
     const sqrtPriceX64 = getSqrtPriceAtTick(tick);
     return sqrtPriceX64ToPrice(sqrtPriceX64, mintDecimalsA, mintDecimalsB);
   }
+}
+
+/**
+ * Fetch tick arrays for swap simulation
+ */
+export async function fetchTickArrays(
+  programId: PublicKey,
+  connection: Connection,
+  poolId: PublicKey,
+  currentTick: number,
+  tickSpacing: number,
+  zeroForOne: boolean,
+): Promise<ReturnType<typeof TickArrayLayout.decode>[]> {
+  const tickArrays: ReturnType<typeof TickArrayLayout.decode>[] = [];
+  const tickArrayStart = getTickArrayStartIndex(currentTick, tickSpacing);
+  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE;
+
+  // Fetch tick arrays in the swap direction
+  const endOffset = zeroForOne ? -5 : 5;
+  const step = zeroForOne ? -1 : 1;
+
+  for (let i = 0; zeroForOne ? i >= endOffset : i <= endOffset; i += step) {
+    const start = tickArrayStart + i * ticksPerArray;
+    const taAddress = getPdaTickArrayAddress(programId, poolId, start).publicKey;
+    const taData = (await connection.getAccountInfo(taAddress, "confirmed")) as any;
+    if (taData) {
+      const tickArray = TickArrayLayout.decode(taData.data);
+      tickArrays.push(tickArray);
+    }
+  }
+
+  return tickArrays;
 }
