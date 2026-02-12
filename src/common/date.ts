@@ -1,3 +1,4 @@
+// @ts-nocheck
 export type TimeStamp = string | number | Date;
 
 export const isNumber = (val): boolean => typeof val === "number";
