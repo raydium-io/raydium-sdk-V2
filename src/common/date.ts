@@ -1,6 +1,7 @@
 export type TimeStamp = string | number | Date;
 
-export const isNumber = (val): boolean => typeof val === "number";
+export const isNumber = (val: any): val is number => typeof val === "number";
+
 export type DateParam = string | number | Date | undefined;
 
 export const getDate = (value?: DateParam): Date => (value ? new Date(value) : new Date());
@@ -9,17 +10,17 @@ export const getTime = (value?: DateParam): number => getDate(value).getTime();
 /** A must be milliseconds */
 export function isDateBefore(timestampA: TimeStamp, timestampB: TimeStamp, options?: { unit?: "ms" | "s" }): boolean {
   const realTimestampB = isNumber(timestampB)
-    ? (timestampB as number) * (options?.unit === "s" ? 1000 : 1)
-    : timestampB;
-  return new Date(timestampA).getTime() <= realTimestampB;
+    ? timestampB * (options?.unit === "s" ? 1000 : 1)
+    : getTime(timestampB);
+  return getTime(timestampA) <= realTimestampB;
 }
 
 /** A must be milliseconds */
 export function isDateAfter(timestampA: TimeStamp, timestampB: TimeStamp, options?: { unit?: "ms" | "s" }): boolean {
   const realTimestampB = isNumber(timestampB)
-    ? (timestampB as number) * (options?.unit === "s" ? 1000 : 1)
-    : timestampB;
-  return new Date(timestampA).getTime() > realTimestampB;
+    ? timestampB * (options?.unit === "s" ? 1000 : 1)
+    : getTime(timestampB);
+  return getTime(timestampA) > realTimestampB;
 }
 
 export function offsetDateTime(
@@ -35,10 +36,10 @@ export function offsetDateTime(
   const timestamp = getTime(baseDate);
   const offsetedTimestamp =
     timestamp +
-    (offset.days ? offset.days * 24 * 60 * 60 * 1000 : 0) +
-    (offset.hours ? offset.hours * 60 * 60 * 1000 : 0) +
-    (offset.minutes ? offset.minutes * 60 * 1000 : 0) +
-    (offset.seconds ? offset.seconds * 1000 : 0) +
-    (offset.milliseconds ? offset.milliseconds : 0);
+    (offset.days ?? 0) * 24 * 60 * 60 * 1000 +
+    (offset.hours ?? 0) * 60 * 60 * 1000 +
+    (offset.minutes ?? 0) * 60 * 1000 +
+    (offset.seconds ?? 0) * 1000 +
+    (offset.milliseconds ?? 0);
   return getDate(offsetedTimestamp);
 }
