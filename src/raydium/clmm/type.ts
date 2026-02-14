@@ -146,7 +146,8 @@ export interface ComputeClmmPoolInfo {
   version: 6;
   mintA: ApiV3Token;
   mintB: ApiV3Token;
-
+  vaultA: PublicKey;
+  vaultB: PublicKey;
   ammConfig: ClmmConfigInfo;
   observationId: PublicKey;
   exBitmapAccount: PublicKey;
