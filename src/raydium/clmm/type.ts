@@ -664,6 +664,7 @@ export interface OpenLimitOrder<T = TxVersion.LEGACY> {
   baseIn?: boolean;
   orderTick: number;
   amount: BN;
+  noneIndex?: number;
   ownerInfo?: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean;

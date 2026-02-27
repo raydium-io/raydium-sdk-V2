@@ -28,6 +28,7 @@ import { ClmmInstrument } from "./instrument";
 import {
   ClmmConfigLayout,
   LimitOrderLayout,
+  LimitOrderNonceLayout,
   LockClPositionLayoutV2,
   OperationLayout,
   PersonalPositionLayout,
@@ -48,6 +49,7 @@ import {
   getPdaDynamicFeeConfigAddress,
   getPdaExBitmapAccount,
   getPdaLimitOrderAddress,
+  getPdaLimitOrderNonceAddress,
   getPdaLockClPositionIdV2,
   getPdaMintExAccount,
   getPdaOperationAccount,
@@ -1548,6 +1550,7 @@ export class Clmm extends ModuleBase {
     baseIn = true,
     orderTick,
     amount,
+    noneIndex = 0,
     ownerInfo = {
       useSOLBalance: true,
     },
@@ -1600,7 +1603,15 @@ export class Clmm extends ModuleBase {
       });
     }
 
-    const limitOrder = getPdaLimitOrderAddress(programId, this.scope.ownerPubKey, poolId, orderTick, baseIn).publicKey;
+    const limitOrderNonce = getPdaLimitOrderNonceAddress(programId, this.scope.ownerPubKey, noneIndex).publicKey;
+    const res = await this.scope.connection.getAccountInfo(limitOrderNonce);
+    const orderNonce = res ? LimitOrderNonceLayout.decode(res.data).orderNonce : new BN(0);
+    const limitOrder = getPdaLimitOrderAddress(
+      programId,
+      feePayer || this.scope.ownerPubKey,
+      limitOrderNonce,
+      orderNonce,
+    ).publicKey;
     const tickArrayStart = getTickArrayStartIndex(orderTick, poolInfo.config.tickSpacing);
     const tickArray = getPdaTickArrayAddress(programId, poolId, tickArrayStart).publicKey;
     const inputVault = getPdaPoolVaultId(
@@ -1616,11 +1627,13 @@ export class Clmm extends ModuleBase {
           feePayer || this.scope.ownerPubKey,
           poolId,
           tickArray,
+          limitOrderNonce,
           limitOrder,
           ownerInputTokenAccount,
           inputVault,
           inputMint,
           inputMintProgram,
+          noneIndex,
           baseIn,
           orderTick,
           amount,
