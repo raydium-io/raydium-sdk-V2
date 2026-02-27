@@ -189,3 +189,4 @@ export function getCollectFeeOnDescription(value: number): string {
 }
 
 export const DYNAMIC_CONFIG_INDEX = 2;
+export const U64_IGNORE_RANGE = new BN("18446744073700000000");

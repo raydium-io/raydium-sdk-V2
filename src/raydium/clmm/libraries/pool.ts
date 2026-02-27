@@ -37,11 +37,9 @@ import { PersonalPositionLayout, TickArrayBitmapExtensionLayout, TickArrayLayout
 import { MAX_SQRT_PRICE_X64, MAX_TICK, MIN_SQRT_PRICE_X64, MIN_TICK } from "./constants";
 import {
   getAmountsFromLiquidityWithSlippage,
-  getAmountsOutFromLiquidity,
   getLiquidityFromAmountA,
   getLiquidityFromAmountB,
   getAmountsForLiquidity as lGetAmountsForLiquidity,
-  getLiquidityFromAmounts as lGetLiquidityFromAmounts,
 } from "./liquidityMath";
 import { getPdaExBitmapAccount, getPdaPersonalPositionAddress, getPdaTickArrayAddress } from "./pda";
 import { PositionUtils } from "./position";

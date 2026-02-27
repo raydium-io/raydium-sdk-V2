@@ -713,6 +713,19 @@ export interface CloseLimitOrder<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface CloseAllLimitOrder<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  limitOrders: PublicKey[];
+  autoWithdraw?: boolean;
+  /** 0~1000 means 0.01% ~ 100% */
+  slippage?: number;
+
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
 export interface SettleLimitOrder<T = TxVersion.LEGACY> {
   limitOrder: PublicKey;
   ownerInfo?: {

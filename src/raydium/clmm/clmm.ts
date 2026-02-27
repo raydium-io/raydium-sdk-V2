@@ -68,6 +68,7 @@ import {
 import {
   ClmmLockAddress,
   ClmmParsedRpcData,
+  CloseAllLimitOrder,
   CloseLimitOrder,
   ClosePositionExtInfo,
   CollectRewardParams,
@@ -119,8 +120,6 @@ export class Clmm extends ModuleBase {
       ammConfig,
       initialPrice,
       computeBudgetConfig,
-      forerunCreate,
-      getObserveState,
       txVersion,
       txTipConfig,
       feePayer,
@@ -154,7 +153,6 @@ export class Clmm extends ModuleBase {
       mintB,
       ammConfigId: ammConfig.id,
       initialPriceX64,
-      forerunCreate: !getObserveState && forerunCreate,
       extendMintAccount,
     });
 
@@ -165,7 +163,6 @@ export class Clmm extends ModuleBase {
     return txBuilder.versionBuild<{
       mockPoolInfo: ApiV3PoolInfoConcentratedItem;
       address: ClmmKeys;
-      forerunCreate?: boolean;
     }>({
       txVersion,
       extInfo: {
@@ -216,7 +213,6 @@ export class Clmm extends ModuleBase {
           burnPercent: 0,
           ...mockV3CreatePoolInfo,
         },
-        forerunCreate,
       },
     }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
@@ -234,7 +230,6 @@ export class Clmm extends ModuleBase {
       collectFeeOn = CollectFeeOn.FromInput,
       enableDynamicFee = true,
       computeBudgetConfig,
-      forerunCreate,
       txVersion,
       txTipConfig,
       feePayer,
@@ -319,7 +314,6 @@ export class Clmm extends ModuleBase {
     return txBuilder.versionBuild<{
       mockPoolInfo: ApiV3PoolInfoConcentratedItem;
       address: ClmmKeys;
-      forerunCreate?: boolean;
     }>({
       txVersion,
       extInfo: {
@@ -368,9 +362,10 @@ export class Clmm extends ModuleBase {
             defaultRangePoint: [],
           },
           burnPercent: 0,
+          collectFeeOn,
+          enableDynamicFee,
           ...mockV3CreatePoolInfo,
-        },
-        forerunCreate,
+        } as any,
       },
     }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
@@ -1882,7 +1877,7 @@ export class Clmm extends ModuleBase {
   public async closeLimitOrder<T extends TxVersion>({
     programId = CLMM_PROGRAM_ID,
     limitOrder,
-    autoWithdraw,
+    autoWithdraw = true,
     slippage = 0,
     feePayer,
     computeBudgetConfig,
@@ -1901,7 +1896,10 @@ export class Clmm extends ModuleBase {
     const txBuilder = this.createTxBuilder();
 
     if (autoWithdraw && !unfulfilledAmount.isZero()) {
-      const { poolInfo } = await this.getSimplePoolInfo(limitOrderData.poolId);
+      let poolInfo: SimpleClmmPoolInfo = (
+        await this.scope.api.fetchPoolById({ ids: limitOrderData.poolId.toBase58() })
+      )[0] as ApiV3PoolInfoConcentratedItem;
+      if (!poolInfo) poolInfo = (await this.getSimplePoolInfo(limitOrderData.poolId)).poolInfo;
       const { builder } = await this.decreaseLimitOrder({
         poolInfo,
         limitOrder,
@@ -1931,6 +1929,63 @@ export class Clmm extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData<T>>;
+  }
+
+  public async closeAllLimitOrder<T extends TxVersion>({
+    programId = CLMM_PROGRAM_ID,
+    limitOrders,
+    autoWithdraw = true,
+    slippage = 0,
+    feePayer,
+    computeBudgetConfig,
+    txVersion,
+  }: CloseAllLimitOrder<T>): Promise<MakeMultiTxData<T>> {
+    const txBuilder = this.createTxBuilder();
+
+    for (const limitOrder of limitOrders) {
+      const data = await this.scope.connection.getAccountInfo(limitOrder);
+      if (!data) continue;
+      const limitOrderData = LimitOrderLayout.decode(data!.data);
+      const unfulfilledAmount = limitOrderData.totalAmount.sub(limitOrderData.filledAmount);
+      if (!autoWithdraw && !unfulfilledAmount.isZero())
+        this.logAndCreateError(
+          `${limitOrder.toBase58()} order unfulfilled amount should be 0 (${unfulfilledAmount.toString()} remaining), please withdraw first or set autoWithdraw: true`,
+        );
+
+      if (autoWithdraw && !unfulfilledAmount.isZero()) {
+        let poolInfo: SimpleClmmPoolInfo = (
+          await this.scope.api.fetchPoolById({ ids: limitOrderData.poolId.toBase58() })
+        )[0] as ApiV3PoolInfoConcentratedItem;
+        if (!poolInfo) poolInfo = (await this.getSimplePoolInfo(limitOrderData.poolId)).poolInfo;
+        const { builder } = await this.decreaseLimitOrder({
+          poolInfo,
+          limitOrder,
+          amount: unfulfilledAmount,
+          slippage,
+          txVersion: TxVersion.V0,
+        });
+
+        txBuilder.addInstruction({
+          instructions: builder.allInstructions,
+        });
+      }
+
+      txBuilder.addInstruction({
+        instructions: [
+          ClmmInstrument.closeLimitOrderInstruction(
+            programId,
+            feePayer || this.scope.ownerPubKey,
+            this.scope.ownerPubKey,
+            limitOrder,
+          ),
+        ],
+      });
+    }
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async settleLimitOrder<T extends TxVersion>({
