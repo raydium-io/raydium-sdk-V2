@@ -1,6 +1,8 @@
+import { u8ToBytes } from '@/raydium/launchpad';
 import { PublicKey } from '@solana/web3.js';
+import BN from 'bn.js';
 import { findProgramAddress, METADATA_PROGRAM_ID, ProgramAddress } from "../../../common";
-import { i32ToBytes, i32ToBytesBE, u16ToBytesBE } from './utils';
+import { i32ToBytes, i32ToBytesBE, u16ToBytesBE, u64ToBytes } from './utils';
 
 export const AMM_CONFIG_SEED = Buffer.from('amm_config', 'utf8')
 export const POOL_SEED = Buffer.from('pool', 'utf8')
@@ -123,16 +125,14 @@ export function getPdaMintExAccount(
 export function getPdaLimitOrderAddress(
   programId: PublicKey,
   payer: PublicKey,
-  poolId: PublicKey,
-  tickIndex: number,
-  zeroForOne: boolean
+  limitOrderNonce: PublicKey,
+  orderNonce: BN,
 ): ProgramAddress {
   return findProgramAddress(
     [
       payer.toBuffer(),
-      poolId.toBuffer(),
-      i32ToBytesBE(tickIndex),
-      Buffer.from([zeroForOne ? 1 : 0]),
+      limitOrderNonce.toBuffer(),
+      u64ToBytes(orderNonce),
     ],
     programId
   )
@@ -147,6 +147,18 @@ export function getPdaDynamicFeeConfigAddress(
     programId
   )
 }
+
+export function getPdaLimitOrderNonceAddress(
+  programId: PublicKey,
+  wallet: PublicKey,
+  index: number
+): ProgramAddress {
+  return findProgramAddress(
+    [wallet.toBuffer(), u8ToBytes(index)],
+    programId
+  )
+}
+
 
 export const POOL_LOCK_ID_SEED = Buffer.from("locked_position", "utf8");
 export function getPdaLockPositionId(
