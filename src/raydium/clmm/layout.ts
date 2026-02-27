@@ -110,9 +110,9 @@ export const PoolInfoLayout = struct([
   u64("startTime"),
   u64("recentEpoch"),
 
-  DynamicFeeInfoLayout.replicate("dynamicFeeInfo"),
-  seq(u64(), 16),
-]);
+  DynamicFeeInfoLayout.replicate('dynamicFeeInfo'),
+  seq(u64(), 46),
+])
 
 export const PositionRewardInfoLayout = struct([u128("growthInsideLastX64"), u64("rewardAmountOwed")]);
 export const PersonalPositionLayout = struct([
@@ -162,10 +162,8 @@ export const TickLayout = struct([
   u64("ordersAmount"),
   u64("partFilledOrdersTotal"),
   u64("partFilledOrdersRemaining"),
-  u64("unsettledFilledOrdersZeroForOne"),
-  u64("unsettledFilledOrdersOneForZero"),
-  seq(u8(), 4),
-]);
+  seq(u32(), 5),
+])
 
 export const TickArrayLayout = struct([
   blob(8),
@@ -193,6 +191,7 @@ export const LimitOrderLayout = struct([
   u64("orderPhase"),
   u64("totalAmount"),
   u64("filledAmount"),
+  u64("openTime"),
   seq(u64(), 6),
 ]);
 
@@ -213,6 +212,14 @@ export const DynamicFeeConfigLayout = struct([
   u32("maxVolatilityAccumulator"),
   seq(u64(), 8),
 ]);
+
+export const LimitOrderNonceLayout = struct([
+  blob(8),
+  publicKey('wallet'),
+  u8("nonceIndex"),
+  u64("orderNonce"),
+  seq(u64(), 4),
+])
 
 export const LockPositionLayout = struct([
   u64(),
