@@ -1,4 +1,4 @@
-import BN from 'bn.js';
+import BN from "bn.js";
 
 export function u16ToBytes(num: number): Buffer {
   const buf = Buffer.alloc(2);
@@ -25,15 +25,15 @@ export function i32ToBytesBE(num: number): Buffer {
 }
 
 export function u64ToBytes(num: BN | number | bigint): Buffer {
-  if (typeof num === 'number' || typeof num === 'bigint') {
+  if (typeof num === "number" || typeof num === "bigint") {
     num = new BN(num.toString());
   }
-  return num.toArrayLike(Buffer, 'le', 8);
+  return num.toArrayLike(Buffer, "be", 8);
 }
 
 export function u128ToBytes(num: BN | number | bigint): Buffer {
-  if (typeof num === 'number' || typeof num === 'bigint') {
+  if (typeof num === "number" || typeof num === "bigint") {
     num = new BN(num.toString());
   }
-  return num.toArrayLike(Buffer, 'le', 16);
+  return num.toArrayLike(Buffer, "le", 16);
 }

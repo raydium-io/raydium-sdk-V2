@@ -4,6 +4,7 @@ import {
   CLMM_PROGRAM_ID,
   fetchMultipleMintInfos,
   getATAAddress,
+  getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
   InstructionType,
   WSOLMint,
@@ -98,6 +99,7 @@ import {
   ReturnTypeFetchMultiplePoolTickArrays,
   SetRewardParams,
   SetRewardsParams,
+  SettleAllLimitOrders,
   SettleLimitOrder,
   SimpleClmmPoolInfo,
 } from "./type";
@@ -231,6 +233,7 @@ export class Clmm extends ModuleBase {
       ammConfig,
       collectFeeOn = CollectFeeOn.FromInput,
       enableDynamicFee = true,
+      dynamicFeeConfig: customDynamicFeeConfig,
       computeBudgetConfig,
       txVersion,
       txTipConfig,
@@ -259,8 +262,9 @@ export class Clmm extends ModuleBase {
     const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
 
     let dynamicFeeConfig: PublicKey | undefined = undefined;
-    if (enableDynamicFee) {
-      dynamicFeeConfig = getPdaDynamicFeeConfigAddress(programId, DYNAMIC_CONFIG_INDEX).publicKey;
+    if (enableDynamicFee || customDynamicFeeConfig) {
+      dynamicFeeConfig =
+        customDynamicFeeConfig ?? getPdaDynamicFeeConfigAddress(programId, DYNAMIC_CONFIG_INDEX).publicKey;
 
       // Check if dynamic fee config exists
       const dynamicFeeData = await this.scope.connection.getAccountInfo(dynamicFeeConfig);
@@ -1606,6 +1610,7 @@ export class Clmm extends ModuleBase {
     const limitOrderNonce = getPdaLimitOrderNonceAddress(programId, this.scope.ownerPubKey, noneIndex).publicKey;
     const res = await this.scope.connection.getAccountInfo(limitOrderNonce);
     const orderNonce = res ? LimitOrderNonceLayout.decode(res.data).orderNonce : new BN(0);
+
     const limitOrder = getPdaLimitOrderAddress(
       programId,
       feePayer || this.scope.ownerPubKey,
@@ -1995,7 +2000,6 @@ export class Clmm extends ModuleBase {
       });
     }
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
@@ -2015,9 +2019,14 @@ export class Clmm extends ModuleBase {
     const data = await this.scope.connection.getAccountInfo(limitOrder);
     if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
     const limitOrderData = LimitOrderLayout.decode(data!.data);
-    const poolInfo = await this.getRpcClmmPoolInfo({ poolId: limitOrderData.poolId });
 
-    const outputMint = limitOrderData.zeroForOne ? poolInfo.mintB : poolInfo.mintA;
+    let poolInfo: SimpleClmmPoolInfo = (
+      await this.scope.api.fetchPoolById({ ids: limitOrderData.poolId.toBase58() })
+    )[0] as ApiV3PoolInfoConcentratedItem;
+    if (!poolInfo) poolInfo = (await this.getSimplePoolInfo(limitOrderData.poolId)).poolInfo;
+
+    const outputMint = new PublicKey(limitOrderData.zeroForOne ? poolInfo.mintB.address : poolInfo.mintA.address);
+    const programId = new PublicKey(poolInfo.programId);
 
     // // Check if order has any filled amount to settle
     // if (limitOrderData.filledAmount.isZero()) {
@@ -2087,17 +2096,17 @@ export class Clmm extends ModuleBase {
       });
     }
 
-    const tickArrayStart = getTickArrayStartIndex(limitOrderData.tickIndex, poolInfo.tickSpacing);
+    const tickArrayStart = getTickArrayStartIndex(limitOrderData.tickIndex, poolInfo.config.tickSpacing);
     txBuilder.addInstruction({
       instructions: [
         ClmmInstrument.settleLimitOrderInstruction(
-          poolInfo.programId,
+          programId,
           feePayer || this.scope.ownerPubKey,
           limitOrderData.poolId,
-          getPdaTickArrayAddress(poolInfo.programId, limitOrderData.poolId, tickArrayStart).publicKey,
+          getPdaTickArrayAddress(programId, limitOrderData.poolId, tickArrayStart).publicKey,
           limitOrder,
           ownerOutputTokenAccount,
-          getPdaPoolVaultId(poolInfo.programId, limitOrderData.poolId, outputMint).publicKey,
+          getPdaPoolVaultId(programId, limitOrderData.poolId, outputMint).publicKey,
           outputMint,
           outputMintProgram,
         ),
@@ -2109,6 +2118,117 @@ export class Clmm extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData<T>>;
+  }
+
+  public async settleAllLimitOrder<T extends TxVersion>({
+    limitOrders,
+    feePayer,
+    ownerInfo = {
+      useSOLBalance: true,
+    },
+    associatedOnly = true,
+    computeBudgetConfig,
+    txVersion,
+  }: SettleAllLimitOrders<T>): Promise<MakeMultiTxData<T>> {
+    const res = await getMultipleAccountsInfo(this.scope.connection, limitOrders);
+    const allPoolId: string[] = [];
+    const allLimitOrderData = res.map((r, idx) => {
+      if (!r) return;
+      const data = LimitOrderLayout.decode(r!.data);
+      allPoolId.push(data.poolId.toString());
+      return {
+        ...data,
+        pda: limitOrders[idx],
+      };
+    });
+
+    let poolInfo: SimpleClmmPoolInfo[] = (await this.scope.api.fetchPoolById({
+      ids: allPoolId.join(","),
+    })) as ApiV3PoolInfoConcentratedItem[];
+
+    if (!poolInfo.filter(Boolean).length) {
+      const res = await Promise.all(allPoolId.map((p) => this.getSimplePoolInfo(p)));
+      poolInfo = res.map((r) => r.poolInfo);
+    }
+
+    const txBuilder = this.createTxBuilder();
+
+    const ataMap: Record<string, PublicKey> = {};
+
+    for (const limitOrder of allLimitOrderData) {
+      if (!limitOrder) continue;
+      const pool = poolInfo.find((p) => p.id === limitOrder.poolId.toBase58());
+      if (!pool) continue;
+      const programId = new PublicKey(pool.programId);
+      const outputMint = new PublicKey(limitOrder.zeroForOne ? pool.mintB.address : pool.mintA.address);
+      const isOutputSol = outputMint.equals(WSOLMint);
+      const outputUseSolBalance = ownerInfo.useSOLBalance && isOutputSol;
+      const outputMintProgram = new PublicKey(
+        isOutputSol ? TOKEN_PROGRAM_ID : (await this.scope.token.getTokenInfo(outputMint)).programId,
+      );
+
+      const preCreatedAta = ataMap[outputMint.toBase58()];
+
+      let ownerOutputTokenAccount: PublicKey | undefined =
+        outputUseSolBalance || !associatedOnly
+          ? undefined
+          : getATAAddress(this.scope.ownerPubKey, outputMint, outputMintProgram).publicKey;
+
+      if (!preCreatedAta) {
+        if (!ownerOutputTokenAccount) {
+          const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
+            tokenProgram: outputMintProgram,
+            mint: outputMint,
+            notUseTokenAccount: outputUseSolBalance,
+            owner: this.scope.ownerPubKey,
+            skipCloseAccount: !outputUseSolBalance,
+            createInfo: {
+              payer: ownerInfo.feePayer || this.scope.ownerPubKey,
+              amount: 0,
+            },
+            associatedOnly: !outputUseSolBalance,
+          });
+          ownerOutputTokenAccount = account!;
+          instructionParams && txBuilder.addInstruction(instructionParams);
+        } else {
+          txBuilder.addInstruction({
+            instructions: [
+              createAssociatedTokenAccountIdempotentInstruction(
+                this.scope.ownerPubKey,
+                ownerOutputTokenAccount,
+                this.scope.ownerPubKey,
+                outputMint,
+                outputMintProgram,
+              ),
+            ],
+          });
+        }
+        ataMap[outputMint.toBase58()] = ownerOutputTokenAccount;
+      } else {
+        ownerOutputTokenAccount = preCreatedAta;
+      }
+
+      const tickArrayStart = getTickArrayStartIndex(limitOrder.tickIndex, pool.config.tickSpacing);
+      txBuilder.addInstruction({
+        instructions: [
+          ClmmInstrument.settleLimitOrderInstruction(
+            programId,
+            feePayer || this.scope.ownerPubKey,
+            limitOrder.poolId,
+            getPdaTickArrayAddress(programId, limitOrder.poolId, tickArrayStart).publicKey,
+            limitOrder.pda,
+            ownerOutputTokenAccount,
+            getPdaPoolVaultId(programId, limitOrder.poolId, outputMint).publicKey,
+            outputMint,
+            outputMintProgram,
+          ),
+        ],
+      });
+    }
+
+    if (txVersion === TxVersion.V0)
+      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async swap<T extends TxVersion>({
@@ -2877,12 +2997,23 @@ export class Clmm extends ModuleBase {
     const programId = rpcData.programId;
     // Get tick arrays needed for swap
     const tickArrayStart = getTickArrayStartIndex(rpcData.tickCurrent, rpcData.tickSpacing);
-    const tickArray0 = getPdaTickArrayAddress(programId, poolIdPub, tickArrayStart).publicKey;
-    // Get adjacent tick arrays (for potential cross-tick swaps)
     const ticksPerArray = rpcData.tickSpacing * 60;
-    const tickArray1 = getPdaTickArrayAddress(programId, poolIdPub, tickArrayStart - ticksPerArray).publicKey;
-    const tickArray2 = getPdaTickArrayAddress(programId, poolIdPub, tickArrayStart + ticksPerArray).publicKey;
     const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolIdPub).publicKey;
+
+    const tickArrayAddresses: { start: number; address: PublicKey }[] = [];
+    for (let i = -3; i <= 3; i++) {
+      const start = tickArrayStart + i * ticksPerArray;
+      const ta = getPdaTickArrayAddress(programId, poolIdPub, start).publicKey;
+      tickArrayAddresses.push({ start, address: ta });
+    }
+    const remainingAccounts: PublicKey[] = [];
+    for (const ta of tickArrayAddresses) {
+      const taData = await this.scope.connection.getAccountInfo(ta.address);
+      if (taData) {
+        remainingAccounts.push(ta.address);
+      }
+    }
+    remainingAccounts.push(tickArrayBitmapExtension);
 
     const tickArrays = await fetchTickArrays(
       programId,
@@ -2897,7 +3028,7 @@ export class Clmm extends ModuleBase {
       poolInfo,
       rpcData,
       configInfo,
-      remainingAccounts: [tickArray0, tickArray1, tickArray2, tickArrayBitmapExtension],
+      remainingAccounts,
       tickArrays,
     };
   }

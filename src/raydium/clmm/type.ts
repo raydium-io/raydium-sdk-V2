@@ -301,6 +301,7 @@ export interface CreateCustomizablePool<T = TxVersion.LEGACY>
   extends Omit<CreateConcentratedPool<T>, "getObserveState"> {
   collectFeeOn?: CollectFeeOn;
   enableDynamicFee?: boolean;
+  dynamicFeeConfig?: PublicKey;
 }
 
 export interface UserPositionAccount {
@@ -739,5 +740,19 @@ export interface SettleLimitOrder<T = TxVersion.LEGACY> {
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+}
+
+export interface SettleAllLimitOrders<T = TxVersion.LEGACY> {
+  limitOrders: PublicKey[];
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
   feePayer?: PublicKey;
 }
