@@ -45,7 +45,7 @@ import { getPdaExBitmapAccount, getPdaPersonalPositionAddress, getPdaTickArrayAd
 import { PositionUtils } from "./position";
 import { swapInternal } from "./swapSimulator";
 import { TickArrayBitmap, TickArrayBitmapExtensionUtils, TickQuery, TickUtils } from "./tickArrayBitmap";
-import { getSqrtPriceAtTick, priceToSqrtPriceX64, sqrtPriceX64ToPrice } from "./tickMath";
+import { getSqrtPriceAtTick, getTickArrayStartIndex, priceToSqrtPriceX64, sqrtPriceX64ToPrice } from "./tickMath";
 
 export class PoolUtils {
   public static getOutputAmountAndRemainAccounts(
@@ -492,160 +492,6 @@ export class PoolUtils {
       };
     }
     return tickArrayCache;
-  }
-
-  // deprecated, new api doesn't need
-  static async fetchPoolsAccountPosition({
-    pools,
-    connection,
-    ownerInfo,
-    batchRequest = false,
-    updateOwnerRewardAndFee = true,
-  }: {
-    pools: SDKParsedConcentratedInfo[];
-    connection: Connection;
-    ownerInfo: { wallet: PublicKey; tokenAccounts: TokenAccountRaw[] };
-    batchRequest?: boolean;
-    updateOwnerRewardAndFee?: boolean;
-  }): Promise<SDKParsedConcentratedInfo[]> {
-    const programIds: PublicKey[] = [];
-
-    for (let index = 0; index < pools.length; index++) {
-      const accountInfo = pools[index];
-
-      if (accountInfo === null) continue;
-
-      if (!programIds.find((i) => i.equals(accountInfo.state.programId))) programIds.push(accountInfo.state.programId);
-    }
-
-    if (ownerInfo) {
-      const allMint = ownerInfo.tokenAccounts.map((i) => i.accountInfo.mint);
-      const allPositionKey: PublicKey[] = [];
-      for (const itemMint of allMint) {
-        for (const itemProgramId of programIds) {
-          allPositionKey.push(getPdaPersonalPositionAddress(itemProgramId, itemMint).publicKey);
-        }
-      }
-      const positionAccountInfos = await getMultipleAccountsInfo(connection, allPositionKey, { batchRequest });
-      const keyToTickArrayAddress: { [key: string]: PublicKey } = {};
-      for (const itemAccountInfo of positionAccountInfos) {
-        if (itemAccountInfo === null) continue;
-        // TODO: add check
-
-        const position = PersonalPositionLayout.decode(itemAccountInfo.data);
-        const itemPoolId = position.poolId.toString();
-        const poolInfoA = pools.find((pool) => pool.state.id.toBase58() === itemPoolId);
-        if (poolInfoA === undefined) continue;
-
-        const poolInfo = poolInfoA.state;
-
-        const priceLower = TickUtils._getTickPriceLegacy({
-          poolInfo,
-          tick: position.tickLower,
-          baseIn: true,
-        });
-        const priceUpper = TickUtils._getTickPriceLegacy({
-          poolInfo,
-          tick: position.tickUpper,
-          baseIn: true,
-        });
-        const { amountA, amountB } = lGetAmountsForLiquidity(
-          poolInfo.sqrtPriceX64,
-          priceLower.tickSqrtPriceX64,
-          priceUpper.tickSqrtPriceX64,
-          position.liquidity,
-          false,
-        );
-
-        const leverage = 1 / (1 - Math.sqrt(Math.sqrt(priceLower.price.div(priceUpper.price).toNumber())));
-
-        poolInfoA.positionAccount = [
-          ...(poolInfoA.positionAccount ?? []),
-          {
-            poolId: position.poolId,
-            nftMint: position.nftMint,
-
-            priceLower: priceLower.price,
-            priceUpper: priceUpper.price,
-            amountA,
-            amountB,
-            tickLower: position.tickLower,
-            tickUpper: position.tickUpper,
-            liquidity: position.liquidity,
-            feeGrowthInsideLastX64A: position.feeGrowthInsideLastX64A,
-            feeGrowthInsideLastX64B: position.feeGrowthInsideLastX64B,
-            tokenFeesOwedA: position.tokenFeesOwedA,
-            tokenFeesOwedB: position.tokenFeesOwedB,
-            rewardInfos: position.rewardInfos.map((i) => ({
-              ...i,
-              pendingReward: new BN(0),
-            })),
-
-            leverage,
-            tokenFeeAmountA: new BN(0),
-            tokenFeeAmountB: new BN(0),
-          },
-        ];
-
-        const tickArrayLowerAddress = await TickUtils.getTickArrayAddressByTick(
-          poolInfoA.state.programId,
-          position.poolId,
-          position.tickLower,
-          poolInfoA.state.tickSpacing,
-        );
-        const tickArrayUpperAddress = await TickUtils.getTickArrayAddressByTick(
-          poolInfoA.state.programId,
-          position.poolId,
-          position.tickUpper,
-          poolInfoA.state.tickSpacing,
-        );
-        keyToTickArrayAddress[
-          `${poolInfoA.state.programId.toString()}-${position.poolId.toString()}-${position.tickLower}`
-        ] = tickArrayLowerAddress;
-        keyToTickArrayAddress[
-          `${poolInfoA.state.programId.toString()}-${position.poolId.toString()}-${position.tickUpper}`
-        ] = tickArrayUpperAddress;
-      }
-
-      if (updateOwnerRewardAndFee) {
-        const tickArrayKeys = Object.values(keyToTickArrayAddress);
-        const tickArrayDatas = await getMultipleAccountsInfo(connection, tickArrayKeys, { batchRequest });
-        const tickArrayLayout = {};
-        for (let index = 0; index < tickArrayKeys.length; index++) {
-          const tickArrayData = tickArrayDatas[index];
-          if (tickArrayData === null) continue;
-          const key = tickArrayKeys[index].toString();
-          tickArrayLayout[key] = TickArrayLayout.decode(tickArrayData.data);
-        }
-
-        for (const { state, positionAccount } of pools) {
-          if (!positionAccount) continue;
-          for (const itemPA of positionAccount) {
-            const keyLower = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickLower}`;
-            const keyUpper = `${state.programId.toString()}-${state.id.toString()}-${itemPA.tickUpper}`;
-            const tickArrayLower = tickArrayLayout[keyToTickArrayAddress[keyLower].toString()];
-            const tickArrayUpper = tickArrayLayout[keyToTickArrayAddress[keyUpper].toString()];
-            const tickLowerState: ReturnType<typeof TickLayout.decode> =
-              tickArrayLower.ticks[TickUtils.getTickOffsetInArray(itemPA.tickLower, state.tickSpacing)];
-            const tickUpperState: ReturnType<typeof TickLayout.decode> =
-              tickArrayUpper.ticks[TickUtils.getTickOffsetInArray(itemPA.tickUpper, state.tickSpacing)];
-            const { tokenFeeAmountA, tokenFeeAmountB } = await PositionUtils.GetPositionFees(
-              state,
-              itemPA,
-              tickLowerState,
-              tickUpperState,
-            );
-            const rewardInfos = await PositionUtils.GetPositionRewards(state, itemPA, tickLowerState, tickUpperState);
-            itemPA.tokenFeeAmountA = tokenFeeAmountA.gte(new BN(0)) ? tokenFeeAmountA : new BN(0);
-            itemPA.tokenFeeAmountB = tokenFeeAmountB.gte(new BN(0)) ? tokenFeeAmountB : new BN(0);
-            for (let i = 0; i < rewardInfos.length; i++) {
-              itemPA.rewardInfos[i].pendingReward = rewardInfos[i].gte(new BN(0)) ? rewardInfos[i] : new BN(0);
-            }
-          }
-        }
-      }
-    }
-    return pools;
   }
 
   static computeAmountOut({
@@ -1294,6 +1140,42 @@ export class PoolUtils {
         poolList: [poolInfo],
       })
     )[poolInfo.id];
+  }
+
+  static async fetchTickArrayInfo({
+    connection,
+    programId,
+    poolId,
+    tick,
+    tickSpacing,
+  }: {
+    connection: Connection;
+    programId: PublicKey;
+    poolId: PublicKey;
+    tick: number;
+    tickSpacing: number;
+  }): Promise<ReturnType<typeof TickArrayLayout.decode>> {
+    const tickArrayStart = getTickArrayStartIndex(tick, tickSpacing);
+    const tickArray = getPdaTickArrayAddress(programId, poolId, tickArrayStart).publicKey;
+    const tickData = await connection.getAccountInfo(tickArray);
+    if (!tickData) throw new Error(`tick array ${tickArray.toBase58()} not found`);
+    return TickArrayLayout.decode(tickData.data);
+  }
+
+  static async fetchMultipleTickArrayInfo({
+    connection,
+    tickInfoList,
+  }: {
+    connection: Connection;
+    tickInfoList: { programId: PublicKey; poolId: PublicKey; tick: number; tickSpacing: number }[];
+  }): Promise<(ReturnType<typeof TickArrayLayout.decode> | null)[]> {
+    const tickPda = tickInfoList.map((data) => {
+      const tickArrayStart = getTickArrayStartIndex(data.tick, data.tickSpacing);
+      return getPdaTickArrayAddress(data.programId, data.poolId, tickArrayStart).publicKey;
+    });
+
+    const data = await getMultipleAccountsInfo(connection, tickPda);
+    return data.map((d) => (d ? TickArrayLayout.decode(d.data) : d));
   }
 }
 

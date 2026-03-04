@@ -10,7 +10,6 @@ import {
   simulateMultipleInstruction,
 } from "@/common/txTool/txUtils";
 import { toApiV3Token } from "../../raydium/token/utils";
-import { makeSimulatePoolInfoInstruction } from "./instruction";
 import { getSerumAssociatedAuthority } from "./serum";
 import { StableLayout } from "./stable";
 import { AmmRpcData, ComputeAmountOutParam, LiquidityPoolKeys } from "./type";
@@ -129,105 +128,6 @@ export function getAssociatedPoolKeys({
     lookupTableAccount: PublicKey.default,
     configId: getAssociatedConfigId({ programId }),
   };
-}
-
-let stableLayout: StableLayout | undefined;
-
-export async function fetchMultipleInfo({
-  connection,
-  poolKeysList,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  config,
-  modelDataPubKey,
-}: {
-  connection: Connection;
-  poolKeysList: (AmmV4Keys | AmmV5Keys)[];
-  config: any;
-  modelDataPubKey?: PublicKey;
-}): Promise<
-  {
-    status: BN;
-    baseDecimals: number;
-    quoteDecimals: number;
-    lpDecimals: number;
-    baseReserve: BN;
-    quoteReserve: BN;
-    lpSupply: BN;
-    startTime: BN;
-  }[]
-> {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const loadStable = poolKeysList.find((i) => i.modelDataAccount);
-  if (loadStable) {
-    if (!stableLayout) {
-      stableLayout = new StableLayout({ connection, modelDataPubKey });
-      await stableLayout.initStableModelLayout();
-    }
-  }
-  return await Promise.all(
-    poolKeysList.map(async (itemPoolKey) => {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      if (itemPoolKey.modelDataAccount) {
-        const instructions = makeSimulatePoolInfoInstruction({ poolKeys: itemPoolKey });
-        const logs = await simulateMultipleInstruction(connection, [instructions.instruction], "GetPoolData");
-        const poolsInfo = logs.map((log) => {
-          const json = parseSimulateLogToJson(log, "GetPoolData");
-          const status = new BN(parseSimulateValue(json, "status"));
-          const baseDecimals = Number(parseSimulateValue(json, "coin_decimals"));
-          const quoteDecimals = Number(parseSimulateValue(json, "pc_decimals"));
-          const lpDecimals = Number(parseSimulateValue(json, "lp_decimals"));
-          const baseReserve = new BN(parseSimulateValue(json, "pool_coin_amount"));
-          const quoteReserve = new BN(parseSimulateValue(json, "pool_pc_amount"));
-          const lpSupply = new BN(parseSimulateValue(json, "pool_lp_supply"));
-          // TODO fix it when split stable
-          let startTime = "0";
-          try {
-            startTime = parseSimulateValue(json, "pool_open_time");
-          } catch (error) {
-            //
-          }
-          return {
-            status,
-            baseDecimals,
-            quoteDecimals,
-            lpDecimals,
-            baseReserve,
-            quoteReserve,
-            lpSupply,
-            startTime: new BN(startTime),
-          };
-        })[0];
-        return poolsInfo;
-      } else {
-        const [poolAcc, vaultAccA, vaultAccB, mintAccLp] = await connection.getMultipleAccountsInfo([
-          new PublicKey(itemPoolKey.id),
-          new PublicKey(itemPoolKey.vault.A),
-          new PublicKey(itemPoolKey.vault.B),
-          new PublicKey(itemPoolKey.mintLp.address),
-        ]);
-        if (poolAcc === null) throw Error("fetch pool error");
-        if (vaultAccA === null) throw Error("fetch vaultAccA error");
-        if (vaultAccB === null) throw Error("fetch vaultAccB error");
-        if (mintAccLp === null) throw Error("fetch mintAccLp error");
-        const poolInfo = liquidityStateV4Layout.decode(poolAcc.data);
-        const vaultInfoA = splAccountLayout.decode(vaultAccA.data);
-        const vaultInfoB = splAccountLayout.decode(vaultAccB.data);
-        const lpInfo = SPL_MINT_LAYOUT.decode(mintAccLp.data);
-        return {
-          status: poolInfo.status,
-          baseDecimals: poolInfo.baseDecimal.toNumber(),
-          quoteDecimals: poolInfo.quoteDecimal.toNumber(),
-          lpDecimals: lpInfo.decimals,
-          baseReserve: vaultInfoA.amount.sub(poolInfo.baseNeedTakePnl),
-          quoteReserve: vaultInfoB.amount.sub(poolInfo.quoteNeedTakePnl),
-          lpSupply: poolInfo.lpReserve,
-          startTime: poolInfo.poolOpenTime,
-        };
-      }
-    }),
-  );
 }
 
 const mockRewardData = {

@@ -9,6 +9,7 @@ import { TokenInfo } from "../token/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
 
 import {
+  LimitOrderLayout,
   LockClPositionLayoutV2,
   PersonalPositionLayout,
   PoolInfoLayout,
@@ -682,6 +683,7 @@ export interface OpenLimitOrder<T = TxVersion.LEGACY> {
 export interface IncreaseLimitOrder<T = TxVersion.LEGACY> {
   poolInfo: SimpleClmmPoolInfo;
   limitOrder: PublicKey;
+  limitOrderInfo?: ReturnType<typeof LimitOrderLayout.decode>;
   amount: BN;
   ownerInfo?: {
     feePayer?: PublicKey;
@@ -719,7 +721,7 @@ export interface CloseAllLimitOrder<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   limitOrders: PublicKey[];
   autoWithdraw?: boolean;
-  /** 0~1000 means 0.01% ~ 100% */
+  /** 0~10000 means 0.01% ~ 100% */
   slippage?: number;
 
   checkCreateATAOwner?: boolean;

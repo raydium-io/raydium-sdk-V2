@@ -36,7 +36,7 @@ import {
   PoolInfoLayout,
   TickArrayLayout,
 } from "./layout";
-import { decimalToX64, fetchTickArrays } from "./libraries";
+import { decimalToX64, fetchTickArrays, LimitOrderMath } from "./libraries";
 import {
   CollectFeeOn,
   DYNAMIC_CONFIG_INDEX,
@@ -60,14 +60,7 @@ import {
   getPdaTickArrayAddress,
 } from "./libraries/pda";
 import { clmmComputeInfoToApiInfo, PoolUtils } from "./libraries/pool";
-import {
-  getTickArrayStartIndex,
-  priceToSqrtPriceX64,
-  priceToTick,
-  roundTickDown,
-  sqrtPriceX64ToPrice,
-  tickToPrice,
-} from "./libraries/tickMath";
+import { getTickArrayStartIndex, priceToSqrtPriceX64, sqrtPriceX64ToPrice } from "./libraries/tickMath";
 import {
   ClmmLockAddress,
   ClmmParsedRpcData,
@@ -1753,8 +1746,9 @@ export class Clmm extends ModuleBase {
   public async decreaseLimitOrder<T extends TxVersion>({
     poolInfo,
     limitOrder,
+    limitOrderInfo: defaultLimitOrderInfo,
     amount,
-    slippage = 0,
+    slippage = 1000,
     ownerInfo = {
       useSOLBalance: true,
     },
@@ -1766,14 +1760,19 @@ export class Clmm extends ModuleBase {
   }: DecreaseLimitOrder<T>): Promise<MakeTxData<T>> {
     const poolId = new PublicKey(poolInfo.id);
     const programId = new PublicKey(poolInfo.programId);
-    const data = await this.scope.connection.getAccountInfo(limitOrder);
-    if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
-    const limitOrderData = LimitOrderLayout.decode(data!.data);
+    let limitOrderData = defaultLimitOrderInfo;
+    if (!limitOrderData) {
+      const data = await this.scope.connection.getAccountInfo(limitOrder);
+      if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
+      limitOrderData = LimitOrderLayout.decode(data!.data);
+    }
 
     const amountMin = amount.muln(10000 - slippage).divn(10000);
-    const unfulfilledAmount = limitOrderData.totalAmount.sub(limitOrderData.filledAmount);
+    const unfulfilledAmount = LimitOrderMath.getUnFilledAmount({ orderInfo: limitOrderData });
     if (unfulfilledAmount.isZero() || amount.gt(unfulfilledAmount))
-      this.logAndCreateError(`amount should be less than unfulfilled amount: ${unfulfilledAmount.toString()}`);
+      this.logAndCreateError(
+        `amount should be less than unfulfilled amount: ${unfulfilledAmount.toString()}, amount: ${amount.toString()}`,
+      );
 
     const [inputMint, outputMint] = limitOrderData.zeroForOne
       ? [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)]
@@ -1905,22 +1904,36 @@ export class Clmm extends ModuleBase {
     const data = await this.scope.connection.getAccountInfo(limitOrder);
     if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
     const limitOrderData = LimitOrderLayout.decode(data!.data);
-    const unfulfilledAmount = limitOrderData.totalAmount.sub(limitOrderData.filledAmount);
+    const unfulfilledAmount = LimitOrderMath.getUnFilledAmount({ orderInfo: limitOrderData });
     if (!autoWithdraw && !unfulfilledAmount.isZero())
       this.logAndCreateError(
-        `unfulfilled amount should be 0 (${unfulfilledAmount.toString()} remaining), please withdraw first or set autoWithdraw: true`,
+        `unfulfilled amount should be 0, (${unfulfilledAmount.toString()} remaining), please withdraw first or set autoWithdraw: true`,
       );
 
     const txBuilder = this.createTxBuilder();
 
-    if (autoWithdraw && !unfulfilledAmount.isZero()) {
-      let poolInfo: SimpleClmmPoolInfo = (
-        await this.scope.api.fetchPoolById({ ids: limitOrderData.poolId.toBase58() })
-      )[0] as ApiV3PoolInfoConcentratedItem;
-      if (!poolInfo) poolInfo = (await this.getSimplePoolInfo(limitOrderData.poolId)).poolInfo;
+    let poolInfo: SimpleClmmPoolInfo = (
+      await this.scope.api.fetchPoolById({ ids: limitOrderData.poolId.toBase58() })
+    )[0] as ApiV3PoolInfoConcentratedItem;
+    if (!poolInfo) poolInfo = (await this.getSimplePoolInfo(limitOrderData.poolId)).poolInfo;
+
+    const tickArrayInfo = await PoolUtils.fetchTickArrayInfo({
+      connection: this.scope.connection,
+      programId,
+      poolId: limitOrderData.poolId,
+      tick: limitOrderData.tickIndex,
+      tickSpacing: poolInfo.config.tickSpacing,
+    });
+    const limitOrderSettle = LimitOrderMath.settleFilledOrder({
+      orderInfo: limitOrderData,
+      tickInfo: tickArrayInfo.ticks.find((i) => i.tick === limitOrderData.tickIndex)!,
+    });
+
+    if (!unfulfilledAmount.isZero()) {
       const { builder } = await this.decreaseLimitOrder({
         poolInfo,
         limitOrder,
+        limitOrderInfo: limitOrderData,
         amount: unfulfilledAmount,
         slippage,
         txVersion: TxVersion.V0,
@@ -1929,6 +1942,9 @@ export class Clmm extends ModuleBase {
       txBuilder.addInstruction({
         instructions: builder.allInstructions,
       });
+    } else if (!limitOrderSettle.isZero()) {
+      const settleBuilData = await this.settleLimitOrder({ limitOrder });
+      txBuilder.addInstruction({ ...settleBuilData.builder.AllTxData });
     }
 
     txBuilder.addInstruction({
@@ -1953,31 +1969,73 @@ export class Clmm extends ModuleBase {
     programId = CLMM_PROGRAM_ID,
     limitOrders,
     autoWithdraw = true,
-    slippage = 0,
+    slippage = 10000,
     feePayer,
     computeBudgetConfig,
     txVersion,
   }: CloseAllLimitOrder<T>): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder();
+    const ordersRes = await getMultipleAccountsInfo(this.scope.connection, limitOrders);
+    const allLimitOrderData = ordersRes.map((o, idx) =>
+      o ? { ...LimitOrderLayout.decode(o.data), pda: limitOrders[idx] } : null,
+    );
+    const noneNullLimitOrder = allLimitOrderData.filter(Boolean) as (ReturnType<typeof LimitOrderLayout.decode> & {
+      pda: PublicKey;
+    })[];
+    const poolIdList = noneNullLimitOrder.map((o) => o.poolId.toBase58());
+    const allPoolInfo = (
+      await this.scope.api.fetchPoolById({
+        ids: poolIdList.join(","),
+      })
+    ).filter(Boolean) as ApiV3PoolInfoConcentratedItem[];
 
+    const poolInfoMap: Record<string, SimpleClmmPoolInfo> = {};
+    allPoolInfo.forEach((p) => (poolInfoMap[p.id] = p as SimpleClmmPoolInfo));
+    if (!allPoolInfo.length) {
+      const res = await this.getMultipleSimplePoolInfo(poolIdList);
+      poolIdList.forEach((id) => (poolInfoMap[id] = res[id].poolInfo));
+    }
+
+    const tickArrayInfos = await PoolUtils.fetchMultipleTickArrayInfo({
+      connection: this.scope.connection,
+      tickInfoList: noneNullLimitOrder.map((o) => ({
+        programId,
+        poolId: o!.poolId,
+        tick: o!.tickIndex,
+        tickSpacing: poolInfoMap[o!.poolId.toString()].config.tickSpacing,
+      })),
+    });
+    const tickArrayInfoMap: Record<string, ReturnType<typeof TickArrayLayout.decode>> = {};
+    tickArrayInfos.forEach((info, idx) => {
+      if (!info) return;
+      tickArrayInfoMap[noneNullLimitOrder[idx].pda.toBase58()] = info;
+    });
+
+    let idx = 0;
     for (const limitOrder of limitOrders) {
-      const data = await this.scope.connection.getAccountInfo(limitOrder);
-      if (!data) continue;
-      const limitOrderData = LimitOrderLayout.decode(data!.data);
-      const unfulfilledAmount = limitOrderData.totalAmount.sub(limitOrderData.filledAmount);
+      const limitOrderData = allLimitOrderData[idx];
+      if (!limitOrderData) {
+        idx++;
+        continue;
+      }
+      const unfulfilledAmount = LimitOrderMath.getUnFilledAmount({ orderInfo: limitOrderData });
       if (!autoWithdraw && !unfulfilledAmount.isZero())
         this.logAndCreateError(
           `${limitOrder.toBase58()} order unfulfilled amount should be 0 (${unfulfilledAmount.toString()} remaining), please withdraw first or set autoWithdraw: true`,
         );
 
-      if (autoWithdraw && !unfulfilledAmount.isZero()) {
-        let poolInfo: SimpleClmmPoolInfo = (
-          await this.scope.api.fetchPoolById({ ids: limitOrderData.poolId.toBase58() })
-        )[0] as ApiV3PoolInfoConcentratedItem;
-        if (!poolInfo) poolInfo = (await this.getSimplePoolInfo(limitOrderData.poolId)).poolInfo;
+      const poolInfo = poolInfoMap[limitOrderData.poolId.toBase58()];
+      const tickArrayInfo = tickArrayInfoMap[limitOrder.toBase58()];
+      const limitOrderSettle = LimitOrderMath.settleFilledOrder({
+        orderInfo: limitOrderData,
+        tickInfo: tickArrayInfo.ticks.find((i) => i.tick === limitOrderData.tickIndex)!,
+      });
+
+      if (!unfulfilledAmount.isZero()) {
         const { builder } = await this.decreaseLimitOrder({
           poolInfo,
           limitOrder,
+          limitOrderInfo: limitOrderData,
           amount: unfulfilledAmount,
           slippage,
           txVersion: TxVersion.V0,
@@ -1986,6 +2044,9 @@ export class Clmm extends ModuleBase {
         txBuilder.addInstruction({
           instructions: builder.allInstructions,
         });
+      } else if (!limitOrderSettle.isZero()) {
+        const settleBuilData = await this.settleLimitOrder({ limitOrder });
+        txBuilder.addInstruction({ ...settleBuilData.builder.AllTxData });
       }
 
       txBuilder.addInstruction({
@@ -1998,6 +2059,7 @@ export class Clmm extends ModuleBase {
           ),
         ],
       });
+      idx++;
     }
 
     if (txVersion === TxVersion.V0)
@@ -2025,7 +2087,11 @@ export class Clmm extends ModuleBase {
     )[0] as ApiV3PoolInfoConcentratedItem;
     if (!poolInfo) poolInfo = (await this.getSimplePoolInfo(limitOrderData.poolId)).poolInfo;
 
-    const outputMint = new PublicKey(limitOrderData.zeroForOne ? poolInfo.mintB.address : poolInfo.mintA.address);
+    const outputMintInfo = limitOrderData.zeroForOne ? poolInfo.mintB : poolInfo.mintA;
+    const [outputMint, outputMintProgram] = [
+      new PublicKey(outputMintInfo.address),
+      new PublicKey(outputMintInfo.programId),
+    ];
     const programId = new PublicKey(poolInfo.programId);
 
     // // Check if order has any filled amount to settle
@@ -2058,9 +2124,6 @@ export class Clmm extends ModuleBase {
     const txBuilder = this.createTxBuilder();
     const isOutputSol = outputMint.equals(WSOLMint);
     const outputUseSolBalance = ownerInfo.useSOLBalance && isOutputSol;
-    const outputMintProgram = new PublicKey(
-      isOutputSol ? TOKEN_PROGRAM_ID : (await this.scope.token.getTokenInfo(outputMint)).programId,
-    );
 
     let ownerOutputTokenAccount: PublicKey | undefined =
       outputUseSolBalance || !associatedOnly
@@ -3032,7 +3095,6 @@ export class Clmm extends ModuleBase {
       tickArrays,
     };
   }
-
   public async getSimplePoolInfo(poolId: string | PublicKey): Promise<{
     poolInfo: SimpleClmmPoolInfo;
     rpcData: ClmmParsedRpcData;
@@ -3060,5 +3122,64 @@ export class Clmm extends ModuleBase {
       },
       rpcData,
     };
+  }
+
+  public async getMultipleSimplePoolInfo(poolIdList: (string | PublicKey)[]): Promise<
+    Record<
+      string,
+      {
+        poolInfo: SimpleClmmPoolInfo;
+        rpcData: ClmmParsedRpcData;
+      }
+    >
+  > {
+    const poolInfoMap = await this.getRpcClmmPoolInfos({ poolIds: poolIdList });
+    const mintSet = new Set(
+      Object.values(poolInfoMap)
+        .map((p) => [p.mintA.toBase58(), p.mintB.toBase58()])
+        .flat(),
+    );
+
+    const mintInfos = await fetchMultipleMintInfos({
+      connection: this.scope.connection,
+      mints: Array.from(mintSet).map((p) => new PublicKey(p)),
+    });
+
+    const poolData: Record<
+      string,
+      {
+        poolInfo: SimpleClmmPoolInfo;
+        rpcData: ClmmParsedRpcData;
+      }
+    > = {};
+
+    poolIdList.forEach((poolId) => {
+      const rpcData = poolInfoMap[poolId.toString()];
+      if (!rpcData) return null;
+      const mintA = mintInfos[rpcData.mintA.toBase58()];
+      const mintB = mintInfos[rpcData.mintB.toBase58()];
+      poolData[poolId.toString()] = {
+        poolInfo: {
+          id: poolId,
+          programId: rpcData.programId,
+          mintA: {
+            address: rpcData.mintA,
+            programId: mintA.programId,
+            decimals: rpcData.mintDecimalsA,
+          },
+          mintB: {
+            address: rpcData.mintB,
+            programId: mintB.programId,
+            decimals: rpcData.mintDecimalsB,
+          },
+          config: {
+            tickSpacing: rpcData.tickSpacing,
+          },
+        },
+        rpcData,
+      };
+    });
+
+    return poolData;
   }
 }
