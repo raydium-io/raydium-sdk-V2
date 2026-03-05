@@ -34,7 +34,7 @@ export function getPdaCpiEvent(programId: PublicKey): ProgramAddress {
   return findProgramAddress([Buffer.from("__event_authority", "utf8")], programId);
 }
 
-export function u8ToBytes(num: number) {
+function u8ToBytes(num: number) {
   const arr = new ArrayBuffer(1);
   const view = new DataView(arr);
   view.setUint8(0, num);

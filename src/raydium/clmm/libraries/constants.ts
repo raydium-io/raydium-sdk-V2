@@ -58,15 +58,13 @@ export const FEE_RATE_DENOMINATOR = 1_000_000;
 
 export const MAX_FEE_RATE = 100_000;
 
-// collectFeeOn options (CollectFeeOn enum):
-// 0 = FromInput (fee collected from input token during swap)
-// 1 = Token0Only (fee collected from token0)
-// 2 = Token1Only (fee collected from token1)
 export enum CollectFeeOn {
   FromInput = 0,
   TokenOnlyA = 1,
   TokenOnlyB = 2,
 }
+
+// export const FEE_RATE_DENOMINATOR_VALUE = 1_000_000;
 
 export const MAX_FEE_RATE_NUMERATOR = 100_000;
 export const VOLATILITY_ACCUMULATOR_SCALE = 10_000;

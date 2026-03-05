@@ -165,7 +165,7 @@ export interface ComputeClmmPoolInfo {
   swapOutAmountTokenB: BN;
   swapInAmountTokenB: BN;
   swapOutAmountTokenA: BN;
-  tickArrayBitmap: BN[];
+  tickArrayBitmap: Buffer;
 
   startTime: number;
 

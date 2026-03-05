@@ -1,7 +1,7 @@
 import BN from "bn.js";
 import { LimitOrderLayout, TickLayout } from "../layout";
-import { mulDivFloor } from "./bigNum";
-import { getLimitOrderOutput } from "./swapSimulator";
+import { mulDivCeil } from "./bigNum";
+import { TickUtil } from "./tickArrayUtil";
 
 export class LimitOrderMath {
   public static isFullyFilled({ orderInfo }: { orderInfo: ReturnType<typeof LimitOrderLayout.decode> }): boolean {
@@ -27,14 +27,13 @@ export class LimitOrderMath {
     if (orderInfo.orderPhase.eq(tickInfo.orderPhase)) {
       filledAmount = new BN(0);
     } else if (orderInfo.orderPhase.add(new BN(1)).eq(tickInfo.orderPhase)) {
-      if (!tickInfo.partFilledOrdersTotal.gt(new BN(0))) throw Error("");
-      const newRemainingAmount = mulDivFloor(
+      const newRemainingAmount = mulDivCeil(
         orderInfo.totalAmount,
         tickInfo.partFilledOrdersRemaining,
         tickInfo.partFilledOrdersTotal,
       );
       filledAmount = remainingAmount.sub(newRemainingAmount);
-    } else if (orderInfo.orderPhase.add(new BN(2)).eq(tickInfo.orderPhase)) {
+    } else if (orderInfo.orderPhase.add(new BN(2)).lte(tickInfo.orderPhase)) {
       filledAmount = remainingAmount;
     } else {
       throw Error("");
@@ -42,6 +41,6 @@ export class LimitOrderMath {
 
     // orderInfo.filledAmount = orderInfo.filledAmount.add(filledAmount)
 
-    return getLimitOrderOutput(filledAmount, tickInfo.tick, orderInfo.zeroForOne);
+    return TickUtil.getLimitOrderOutput({ amountIn: filledAmount, tick: tickInfo.tick, zeroForOne: orderInfo.zeroForOne });
   }
 }

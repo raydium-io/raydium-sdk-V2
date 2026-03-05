@@ -97,7 +97,7 @@ export const PoolInfoLayout = struct([
 
   seq(RewardInfoLayout, REWARD_NUM, "rewardInfos"),
 
-  seq(u64(), 16, "tickArrayBitmap"),
+  blob(8 * 16, 'tickArrayBitmap'),
 
   u64("totalFeesTokenA"),
   u64("totalFeesClaimedTokenA"),
@@ -186,7 +186,7 @@ export const LimitOrderLayout = struct([
   blob(8),
   publicKey("poolId"),
   publicKey("owner"),
-  s32("tickIndex"),
+  s32("tick"),
   bool("zeroForOne"),
   u64("orderPhase"),
   u64("totalAmount"),
@@ -198,8 +198,9 @@ export const LimitOrderLayout = struct([
 export const TickArrayBitmapExtensionLayout = struct([
   blob(8),
   publicKey("poolId"),
-  seq(seq(u64(), 8), EXTENSION_TICKARRAY_BITMAP_SIZE, "positiveTickArrayBitmap"),
-  seq(seq(u64(), 8), EXTENSION_TICKARRAY_BITMAP_SIZE, "negativeTickArrayBitmap"),
+
+  blob(8 * 8 * EXTENSION_TICKARRAY_BITMAP_SIZE, 'positiveTickArrayBitmap'),
+  blob(8 * 8 * EXTENSION_TICKARRAY_BITMAP_SIZE, 'negativeTickArrayBitmap'),
 ]);
 
 export const DynamicFeeConfigLayout = struct([

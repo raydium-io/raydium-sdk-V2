@@ -1,9 +1,34 @@
 import BN from "bn.js"
 import Decimal from "decimal.js"
-import { Q128, U128_MAX } from "./constants"
+import { BN_ONE, BN_ZERO, Q128, U128_MAX } from "./constants"
 
 export function mask(bits: number): BN {
   return new BN(1).shln(bits).subn(1)
+}
+
+export function checkedAdd(a: BN, b: BN, maxBits: number): BN {
+  const result = a.add(b)
+  const maxValue = mask(maxBits)
+  if (result.gt(maxValue)) {
+    throw new Error(`Addition overflow: result exceeds ${maxBits} bits`)
+  }
+  return result
+}
+
+export function checkedSub(a: BN, b: BN): BN {
+  if (a.lt(b)) {
+    throw new Error("Subtraction underflow")
+  }
+  return a.sub(b)
+}
+
+export function checkedMul(a: BN, b: BN, maxBits: number): BN {
+  const result = a.mul(b)
+  const maxValue = mask(maxBits)
+  if (result.gt(maxValue)) {
+    throw new Error(`Multiplication overflow: result exceeds ${maxBits} bits`)
+  }
+  return result
 }
 
 export function mulFull(a: BN, b: BN): [BN, BN] {
@@ -36,6 +61,10 @@ export function mulDivCeil(a: BN, b: BN, denominator: BN): BN {
 
 export function mulDivRound(a: BN, b: BN, denominator: BN, roundUp: boolean): BN {
   return roundUp ? mulDivCeil(a, b, denominator) : mulDivFloor(a, b, denominator)
+}
+
+export function divRoundingUp(x: BN, y: BN) {
+  return x.div(y).add(x.mod(y).isZero() ? BN_ZERO : BN_ONE)
 }
 
 export function u128SaturatingAdd(a: BN, b: BN): BN {

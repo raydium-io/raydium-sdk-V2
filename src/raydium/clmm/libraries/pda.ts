@@ -1,4 +1,4 @@
-import { u8ToBytes } from '@/raydium/launchpad';
+import { u8ToBytes } from '@/raydium/clmm';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { findProgramAddress, METADATA_PROGRAM_ID, ProgramAddress } from "../../../common";
@@ -15,7 +15,6 @@ export const POOL_TICK_ARRAY_BITMAP_SEED = Buffer.from('pool_tick_array_bitmap_e
 export const POOL_OBSERVATION_SEED = Buffer.from('observation', 'utf8')
 export const SUPPORT_MINT_SEED = Buffer.from('support_mint', 'utf8')
 export const DYNAMIC_FEE_CONFIG_SEED = Buffer.from('dynamic_fee_config', 'utf8')
-export const LIMIT_ORDER_SEED = Buffer.from('limit_order', 'utf8')
 
 
 export function getPdaAmmConfigId(programId: PublicKey, index: number): ProgramAddress {

@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { priceToTick, roundTickDown, roundTickUp, tickToPrice } from "./tickMath";
+import { TickUtil } from "./tickArrayUtil";
 
 export const getOrderTick = ({
   baseIn,
@@ -14,9 +14,9 @@ export const getOrderTick = ({
   mintADecimal: number;
   mintBDecimal: number;
 }): { tick: number; price: Decimal } => {
-  const priceTick = priceToTick(price, mintADecimal, mintBDecimal);
-  const orderTick = baseIn ? roundTickUp(priceTick, tickSpacing) : roundTickDown(priceTick, tickSpacing);
-  const orderPrice = tickToPrice(orderTick, mintADecimal, mintBDecimal);
+  const priceTick = TickUtil.priceToTick(price, mintADecimal, mintBDecimal);
+  const orderTick = TickUtil.toTickIndex(priceTick, tickSpacing);
+  const orderPrice = TickUtil.tickToPrice(orderTick, mintADecimal, mintBDecimal);
 
   return {
     tick: orderTick,

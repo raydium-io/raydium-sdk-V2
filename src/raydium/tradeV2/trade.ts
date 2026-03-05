@@ -33,6 +33,7 @@ import {
   ReturnTypeComputeAmountOutBaseOut,
   ReturnTypeComputeAmountOutFormat,
   ReturnTypeFetchMultiplePoolTickArrays,
+  TickUtil,
 } from "../../raydium/clmm";
 import { PoolInfoLayout } from "../../raydium/clmm/layout";
 import { CpmmPoolInfoLayout, getPdaPoolAuthority } from "../../raydium/cpmm";
@@ -47,7 +48,6 @@ import { closeAccountInstruction, createWSolAccountInstructions } from "../accou
 import { TokenAccount } from "../account/types";
 import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from "../clmm/libraries/constants";
 import { PoolUtils } from "../clmm/libraries/pool";
-import { priceToSqrtPriceX64 } from "../clmm/libraries/tickMath";
 import { CpmmComputeData } from "../cpmm";
 import {
   buyExactInInstruction,
@@ -437,7 +437,7 @@ export default class TradeV2 extends ModuleBase {
       sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
 
-      sqrtPriceLimitX64 = priceToSqrtPriceX64(
+      sqrtPriceLimitX64 = TickUtil.priceToSqrtPriceX64(
         priceLimit,
         clmmPoolData.poolInfo.mintA.decimals,
         clmmPoolData.poolInfo.mintB.decimals,
@@ -934,7 +934,7 @@ export default class TradeV2 extends ModuleBase {
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
-      sqrtPriceLimitX64 = priceToSqrtPriceX64(
+      sqrtPriceLimitX64 = TickUtil.priceToSqrtPriceX64(
         priceLimit,
         clmmPoolData.poolInfo.mintA.decimals,
         clmmPoolData.poolInfo.mintB.decimals,
