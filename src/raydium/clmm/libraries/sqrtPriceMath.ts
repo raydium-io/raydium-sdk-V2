@@ -65,7 +65,7 @@ export class SqrtPriceMath {
     zeroForOne: boolean
   ): BN {
     if (!sqrtPriceX64.gt(BN_ZERO)) throw Error('sqrtPriceX64.gt(BN_ZERO)')
-    if (liquidity.gt(BN_ZERO)) throw Error('liquidity.gt(BN_ZERO)')
+    if (!liquidity.gt(BN_ZERO)) throw Error('liquidity.gt(BN_ZERO)')
 
     if (zeroForOne) {
       return this.getNextSqrtPriceFromAmountARoundingUp(sqrtPriceX64, liquidity, amountIn, true)
@@ -81,7 +81,7 @@ export class SqrtPriceMath {
     zeroForOne: boolean
   ): BN {
     if (!sqrtPriceX64.gt(BN_ZERO)) throw Error('sqrtPriceX64.gt(BN_ZERO)')
-    if (liquidity.gt(BN_ZERO)) throw Error('liquidity.gt(BN_ZERO)')
+    if (!liquidity.gt(BN_ZERO)) throw Error('liquidity.gt(BN_ZERO)')
 
     if (zeroForOne) {
       return this.getNextSqrtPriceFromAmountBRoundingDown(sqrtPriceX64, liquidity, amountIn, false)

@@ -55,7 +55,7 @@ export class TickArrayBitmapUtil {
           }
         }
       }
-    } else if (findInfo.type === 'zeroForOne') {
+    } else if (findInfo.type === 'oneForZero') {
       const startIndex = Math.floor(findInfo.tickArrayCurrent / tickSpacing / TICK_ARRAY_SIZE)
       const startTickIndex = Math.floor(findInfo.tickArrayCurrent / tickSpacing / TICK_ARRAY_SIZE) * tickSpacing * TICK_ARRAY_SIZE
 
@@ -103,7 +103,7 @@ export class TickArrayBitmapUtil {
           }
         }
       }
-    } else if (findInfo.type === 'oneForZero') {
+    } else if (findInfo.type === 'zeroForOne') {
       const startIndex = Math.floor(findInfo.tickArrayCurrent / tickSpacing / TICK_ARRAY_SIZE)
       const startTickIndex = Math.floor(findInfo.tickArrayCurrent / tickSpacing / TICK_ARRAY_SIZE) * tickSpacing * TICK_ARRAY_SIZE
 
@@ -155,14 +155,14 @@ export class TickArrayBitmapUtil {
   }
 
   static findTickArrayAddress(params: {
-    program: PublicKey, poolId: PublicKey,
+    programId: PublicKey, poolId: PublicKey,
     tickSpacing: number,
     poolBitmap: ReturnType<typeof PoolInfoLayout.decode>['tickArrayBitmap'],
     tickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     findInfo: { type: 'zeroForOne' | 'oneForZero', count?: number, tickArrayCurrent: number } | { type: 'all' },
   }) {
     const indexs = this.findTickArrayStartIndex(params)
-    return indexs.map(i => getPdaTickArrayAddress(params.program, params.poolId, i).publicKey)
+    return indexs.map(i => getPdaTickArrayAddress(params.programId, params.poolId, i).publicKey)
   }
 
   static bitmapIndexToStartIndex({ type, index, tickSpacing }: { type: 'l' | 'm' | 'r', index: number, tickSpacing: number }): number {
@@ -211,7 +211,7 @@ export class TickArrayUtil {
   }) {
     const currentTickArrayStartIndex = this.getTickArrayStartIndex(currentTickIndex, tickSpacing)
     if (currentTickArrayStartIndex !== data.startTickIndex) return undefined
-    const offsetInArray = (currentTickIndex - data.startTickIndex) / tickSpacing
+    const offsetInArray = Math.floor((currentTickIndex - data.startTickIndex) / tickSpacing)
 
     if (zeroForOne) {
       for (let i = offsetInArray; i >= 0; i--) {
