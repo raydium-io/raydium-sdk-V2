@@ -649,7 +649,7 @@ export interface SimpleClmmPoolInfo {
     programId: string | PublicKey;
     decimals: number;
   };
-  config: { tickSpacing: number };
+  config: { id: string; tickSpacing: number };
 }
 
 export interface ClmmLockAddress {

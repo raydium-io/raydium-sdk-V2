@@ -34,6 +34,7 @@ import {
   OperationLayout,
   PersonalPositionLayout,
   PoolInfoLayout,
+  TickArrayBitmapExtensionLayout,
   TickArrayLayout,
 } from "./layout";
 import { clmmComputeInfoToApiInfo, decimalToX64, LimitOrderMath, PoolUtils } from "./libraries";
@@ -57,7 +58,7 @@ import {
   getPdaProtocolPositionAddress,
   getPdaTickArrayAddress,
 } from "./libraries/pda";
-import { fetchTickArrays, TickArrayUtil, TickUtil } from "./libraries/tickArrayUtil";
+import { fetchTickArrays, TickArrayBitmapUtil, TickArrayUtil, TickUtil } from "./libraries/tickArrayUtil";
 import {
   ClmmLockAddress,
   ClmmParsedRpcData,
@@ -2314,8 +2315,8 @@ export class Clmm extends ModuleBase {
     txTipConfig,
     feePayer,
   }: {
-    poolInfo: ApiV3PoolInfoConcentratedItem;
-    poolKeys?: ClmmKeys;
+    poolInfo: SimpleClmmPoolInfo;
+    poolKeys?: Pick<ClmmKeys, "vault" | "lookupTableAccount">;
     inputMint: string | PublicKey;
     amountIn: BN;
     amountOutMin: BN;
@@ -2391,8 +2392,8 @@ export class Clmm extends ModuleBase {
 
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("user do not have token account", {
-        tokenA: poolInfo.mintA.symbol || poolInfo.mintA.address,
-        tokenB: poolInfo.mintB.symbol || poolInfo.mintB.address,
+        tokenA: poolInfo.mintA.address,
+        tokenB: poolInfo.mintB.address,
         ownerTokenAccountA,
         ownerTokenAccountB,
         mintAUseSOLBalance,
@@ -2400,10 +2401,14 @@ export class Clmm extends ModuleBase {
         associatedOnly,
       });
 
-    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
+    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id.toString()));
     txBuilder.addInstruction(
       ClmmInstrument.makeSwapBaseInInstructions({
-        poolInfo,
+        poolInfo: {
+          ...poolInfo,
+          id: poolInfo.id.toString(),
+          programId: poolInfo.programId.toString(),
+        },
         poolKeys,
         observationId,
         ownerInfo: {
@@ -2441,8 +2446,8 @@ export class Clmm extends ModuleBase {
     txTipConfig,
     feePayer,
   }: {
-    poolInfo: ApiV3PoolInfoConcentratedItem;
-    poolKeys?: ClmmKeys;
+    poolInfo: SimpleClmmPoolInfo;
+    poolKeys?: Pick<ClmmKeys, "vault" | "lookupTableAccount">;
     outputMint: string | PublicKey;
     amountOut: BN;
     amountInMax: BN;
@@ -2521,8 +2526,8 @@ export class Clmm extends ModuleBase {
 
     if (!ownerTokenAccountA || !ownerTokenAccountB)
       this.logAndCreateError("user do not have token account", {
-        tokenA: poolInfo.mintA.symbol || poolInfo.mintA.address,
-        tokenB: poolInfo.mintB.symbol || poolInfo.mintB.address,
+        tokenA: poolInfo.mintA.address,
+        tokenB: poolInfo.mintB.address,
         ownerTokenAccountA,
         ownerTokenAccountB,
         mintAUseSOLBalance,
@@ -2530,10 +2535,14 @@ export class Clmm extends ModuleBase {
         associatedOnly,
       });
 
-    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
+    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id.toString()));
     txBuilder.addInstruction(
       ClmmInstrument.makeSwapBaseOutInstructions({
-        poolInfo,
+        poolInfo: {
+          ...poolInfo,
+          id: poolInfo.id.toString(),
+          programId: poolInfo.programId.toString(),
+        },
         poolKeys,
         observationId,
         ownerInfo: {
@@ -3054,15 +3063,14 @@ export class Clmm extends ModuleBase {
     };
   }
 
-  public async getSwapPoolInfo(
-    poolId: string | PublicKey,
-    zeroForOne = true,
-  ): Promise<{
+  public async getSwapPoolInfo(poolId: string | PublicKey): Promise<{
     poolInfo: SimpleClmmPoolInfo;
     rpcData: ClmmParsedRpcData;
     configInfo: ReturnType<typeof ClmmConfigLayout.decode>;
-    remainingAccounts: PublicKey[];
-    tickArrays: ReturnType<typeof TickArrayLayout.decode>[];
+    tickArrays: {
+      address: PublicKey;
+      value: ReturnType<typeof TickArrayLayout.decode>;
+    }[];
   }> {
     const { poolInfo, rpcData } = await this.getSimplePoolInfo(poolId);
 
@@ -3070,41 +3078,29 @@ export class Clmm extends ModuleBase {
     const configInfo = ClmmConfigLayout.decode(res!.data);
 
     const poolIdPub = new PublicKey(poolId);
-    const programId = rpcData.programId;
+
     // Get tick arrays needed for swap
-    const tickArrayStart = TickArrayUtil.getTickArrayStartIndex(rpcData.tickCurrent, rpcData.tickSpacing);
-    const ticksPerArray = rpcData.tickSpacing * 60;
-    const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolIdPub).publicKey;
+    const tickArrays: { address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[] = [];
+    const tickArrayBitmapExtension = getPdaExBitmapAccount(CLMM_PROGRAM_ID, poolIdPub).publicKey;
+    const tickArrayBitmapExtensionRes = await this.scope.connection.getAccountInfo(tickArrayBitmapExtension);
+    const tickArraysAddress = TickArrayBitmapUtil.findTickArrayAddress({
+      programId: CLMM_PROGRAM_ID,
+      poolId: new PublicKey(poolId),
+      poolBitmap: rpcData.tickArrayBitmap,
+      tickArrayBitmap: TickArrayBitmapExtensionLayout.decode(tickArrayBitmapExtensionRes!.data),
+      tickSpacing: poolInfo.config.tickSpacing,
+      findInfo: { type: "zeroForOne", tickArrayCurrent: rpcData.tickCurrent },
+    });
 
-    const tickArrayAddresses: { start: number; address: PublicKey }[] = [];
-    for (let i = -3; i <= 3; i++) {
-      const start = tickArrayStart + i * ticksPerArray;
-      const ta = getPdaTickArrayAddress(programId, poolIdPub, start).publicKey;
-      tickArrayAddresses.push({ start, address: ta });
-    }
-    const remainingAccounts: PublicKey[] = [];
-    for (const ta of tickArrayAddresses) {
-      const taData = await this.scope.connection.getAccountInfo(ta.address);
-      if (taData) {
-        remainingAccounts.push(ta.address);
-      }
-    }
-    remainingAccounts.push(tickArrayBitmapExtension);
-
-    const tickArrays = await fetchTickArrays(
-      programId,
-      this.scope.connection,
-      poolIdPub,
-      rpcData.tickCurrent,
-      rpcData.tickSpacing,
-      zeroForOne,
-    );
+    const tickArrayRes = await getMultipleAccountsInfo(this.scope.connection, tickArraysAddress);
+    tickArrayRes.forEach((res, idx) => {
+      if (res) tickArrays.push({ address: tickArraysAddress[idx], value: TickArrayLayout.decode(res.data) });
+    });
 
     return {
       poolInfo,
       rpcData,
       configInfo,
-      remainingAccounts,
       tickArrays,
     };
   }
@@ -3130,6 +3126,7 @@ export class Clmm extends ModuleBase {
           decimals: rpcData.mintDecimalsB,
         },
         config: {
+          id: rpcData.configId.toBase58(),
           tickSpacing: rpcData.tickSpacing,
         },
       },
@@ -3186,6 +3183,7 @@ export class Clmm extends ModuleBase {
             decimals: rpcData.mintDecimalsB,
           },
           config: {
+            id: rpcData.configId.toBase58(),
             tickSpacing: rpcData.tickSpacing,
           },
         },
