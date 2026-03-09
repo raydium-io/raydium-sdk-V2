@@ -706,6 +706,7 @@ export default class TradeV2 extends ModuleBase {
     const clmmComputeAmount = fixClmmOut
       ? await PoolUtils.computeAmountIn({
         poolInfo: clmmPoolData.computePoolInfo,
+        tickarrayBitmapExtension: clmmPoolData.computePoolInfo.exBitmapInfo,
         tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
         amountOut: inputAmount,
         baseMint: new PublicKey(clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"].address),
@@ -715,6 +716,7 @@ export default class TradeV2 extends ModuleBase {
       })
       : await PoolUtils.computeAmountOutFormat({
         poolInfo: clmmPoolData.computePoolInfo,
+        tickarrayBitmapExtension: clmmPoolData.computePoolInfo.exBitmapInfo,
         tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
         amountIn: inputAmount,
         tokenOut,
@@ -1176,6 +1178,7 @@ export default class TradeV2 extends ModuleBase {
 
     const clmmComputeAmount = await PoolUtils.computeAmountOutFormat({
       poolInfo: clmmPoolData.computePoolInfo,
+      tickarrayBitmapExtension: clmmPoolData.computePoolInfo.exBitmapInfo,
       tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
       amountIn: minLaunchOutAmount,
       tokenOut,
@@ -1868,6 +1871,7 @@ export default class TradeV2 extends ModuleBase {
         executionPriceX64,
       } = PoolUtils.computeAmountOutFormat({
         poolInfo: itemPool,
+        tickarrayBitmapExtension: itemPool.exBitmapInfo,
         tickArrayCache: tickCache[itemPool.id.toString()],
         amountIn: amountIn.raw,
         tokenOut: outputToken,

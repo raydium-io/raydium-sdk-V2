@@ -203,6 +203,7 @@ import { swapInternal } from "./swapSimulator"
 export class PoolUtils {
   public static getOutputAmountAndRemainAccounts(
     poolInfo: ComputeClmmPoolInfo,
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> },
     inputTokenMint: PublicKey,
     inputAmount: BN,
@@ -217,18 +218,22 @@ export class PoolUtils {
   } {
     const zeroForOne = inputTokenMint.toBase58() === poolInfo.mintA.address;
 
-    const { allTrade, amountCalculated, feeAmount, sqrtPriceX64, accounts } = swapInternal(
-      poolInfo.accInfo,
-      Object.entries(tickArrayCache).map(i => ({ address: new PublicKey(i[0]), value: i[1] })),
+    const { allTrade, amountCalculated, feeAmount, sqrtPriceX64, accounts } = swapInternal({
+      programId: poolInfo.programId,
+      poolId: poolInfo.id,
+      poolInfo: poolInfo.accInfo,
+      tickArrays: Object.entries(tickArrayCache).map(i => ({ address: new PublicKey(i[0]), value: i[1] })),
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
-      poolInfo.ammConfig,
-      inputAmount,
-      sqrtPriceLimitX64 ?? BN_ZERO,
+      configInfo: poolInfo.ammConfig,
+      tickarrayBitmapExtension,
+      amountSpecified: inputAmount,
+      sqrtPriceLimitX64: sqrtPriceLimitX64 ?? BN_ZERO,
       zeroForOne,
-      true,
-      blockTimestamp!
-    )
+      isBaseInput: true,
+      blockTimestamp,
+      includeExtraTickArrays: true,
+    })
 
     return {
       allTrade,
@@ -241,6 +246,7 @@ export class PoolUtils {
 
   public static getInputAmountAndRemainAccounts(
     poolInfo: ComputeClmmPoolInfo,
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> },
     outputTokenMint: PublicKey,
     outputAmount: BN,
@@ -249,18 +255,22 @@ export class PoolUtils {
   ): { allTrade: boolean, expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
     const zeroForOne = outputTokenMint.toBase58() === poolInfo.mintB.address;
 
-    const { allTrade, amountCalculated, feeAmount, sqrtPriceX64, accounts } = swapInternal(
-      poolInfo.accInfo,
-      Object.entries(tickArrayCache).map(i => ({ address: new PublicKey(i[0]), value: i[1] })),
+    const { allTrade, amountCalculated, feeAmount, sqrtPriceX64, accounts } = swapInternal({
+      programId: poolInfo.programId,
+      poolId: poolInfo.id,
+      poolInfo: poolInfo.accInfo,
+      tickArrays: Object.entries(tickArrayCache).map(i => ({ address: new PublicKey(i[0]), value: i[1] })),
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
-      poolInfo.ammConfig,
-      outputAmount,
-      sqrtPriceLimitX64 ?? BN_ZERO,
+      configInfo: poolInfo.ammConfig,
+      tickarrayBitmapExtension,
+      amountSpecified: outputAmount,
+      sqrtPriceLimitX64: sqrtPriceLimitX64 ?? BN_ZERO,
       zeroForOne,
-      false,
-      blockTimestamp!
-    )
+      isBaseInput: false,
+      blockTimestamp,
+      includeExtraTickArrays: true,
+    })
 
     return {
       allTrade,
@@ -357,6 +367,7 @@ export class PoolUtils {
 
   static computeAmountOut({
     poolInfo,
+    tickarrayBitmapExtension,
     tickArrayCache,
     baseMint,
     epochInfo,
@@ -366,6 +377,7 @@ export class PoolUtils {
     priceLimit = new Decimal(0),
   }: {
     poolInfo: ComputeClmmPoolInfo;
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> };
     baseMint: PublicKey;
 
@@ -399,6 +411,7 @@ export class PoolUtils {
       feeAmount,
     } = PoolUtils.getOutputAmountAndRemainAccounts(
       poolInfo,
+      tickarrayBitmapExtension,
       tickArrayCache,
       baseMint,
       realAmountIn.amount.sub(realAmountIn.fee ?? BN_ZERO),
@@ -442,6 +455,7 @@ export class PoolUtils {
 
   static computeAmountOutFormat({
     poolInfo,
+    tickarrayBitmapExtension,
     tickArrayCache,
     amountIn,
     tokenOut: _tokenOut,
@@ -451,6 +465,7 @@ export class PoolUtils {
     catchLiquidityInsufficient = false,
   }: {
     poolInfo: ComputeClmmPoolInfo;
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> };
     amountIn: BN;
     tokenOut: ApiV3Token;
@@ -488,6 +503,7 @@ export class PoolUtils {
       executionPriceX64,
     } = PoolUtils.computeAmountOut({
       poolInfo,
+      tickarrayBitmapExtension,
       tickArrayCache,
       baseMint: new PublicKey(inputMint.address),
       amountIn,
@@ -545,6 +561,7 @@ export class PoolUtils {
 
   static computeAmountIn({
     poolInfo,
+    tickarrayBitmapExtension,
     tickArrayCache,
     baseMint,
     epochInfo,
@@ -554,6 +571,7 @@ export class PoolUtils {
     blockTimestamp,
   }: {
     poolInfo: ComputeClmmPoolInfo;
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
     tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> };
     baseMint: PublicKey;
 
@@ -586,6 +604,7 @@ export class PoolUtils {
       feeAmount,
     } = PoolUtils.getInputAmountAndRemainAccounts(
       poolInfo,
+      tickarrayBitmapExtension,
       tickArrayCache,
       baseMint,
       realAmountOut.amount.sub(realAmountOut.fee ?? BN_ZERO),

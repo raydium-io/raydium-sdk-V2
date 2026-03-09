@@ -1,11 +1,11 @@
 import { PublicKey } from '@solana/web3.js'
 import BN from 'bn.js'
-import { ClmmConfigLayout, PoolInfoLayout, TickArrayLayout } from '../layout'
+import { ClmmConfigLayout, PoolInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout } from '../layout'
 import { BN_ZERO, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from './constants'
 import { LiquidityMathUtil } from './liquidityMath'
 import { PoolUtil } from './pool'
 import { SwapMathUtil, SwapState } from './swapMath'
-import { TickArrayUtil, TickUtil } from './tickArrayUtil'
+import { TickArrayBitmapUtil, TickArrayUtil, TickUtil } from './tickArrayUtil'
 
 export interface SwapSimulationResult {
   allTrade: boolean
@@ -18,16 +18,33 @@ export interface SwapSimulationResult {
   accounts: PublicKey[]
 }
 
-export function swapInternal(
+export function swapInternal({
+  programId,
+  poolId,
+  poolInfo,
+  tickArrays,
+  configInfo,
+  tickarrayBitmapExtension,
+  amountSpecified,
+  sqrtPriceLimitX64,
+  zeroForOne,
+  isBaseInput,
+  blockTimestamp,
+  includeExtraTickArrays,
+}: {
+  programId: PublicKey,
+  poolId: PublicKey,
   poolInfo: ReturnType<typeof PoolInfoLayout.decode>,
   tickArrays: { address: PublicKey, value: ReturnType<typeof TickArrayLayout.decode> }[],
   configInfo: ReturnType<typeof ClmmConfigLayout.decode>,
+  tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
   amountSpecified: BN,
   sqrtPriceLimitX64: BN,
   zeroForOne: boolean,
   isBaseInput: boolean,
-  blockTimestamp: number
-): SwapSimulationResult {
+  blockTimestamp: number,
+  includeExtraTickArrays: boolean,
+}): SwapSimulationResult {
   if (sqrtPriceLimitX64.isZero()) {
     sqrtPriceLimitX64 = zeroForOne
       ? new BN(MIN_SQRT_PRICE_X64).addn(1)
@@ -35,6 +52,28 @@ export function swapInternal(
   }
 
   let tickArrayListIndex = 0
+
+  if (tickArrays.length === 0) {
+    return {
+      allTrade: false,
+      amountSpecifiedRemaining: amountSpecified,
+      amountCalculated: BN_ZERO,
+      feeAmount: BN_ZERO,
+      sqrtPriceX64: poolInfo.sqrtPriceX64,
+      liquidity: poolInfo.liquidity,
+      tickCurrent: poolInfo.tickCurrent,
+      accounts: [],
+    }
+  }
+
+  const addTickArrayAddress = includeExtraTickArrays ? TickArrayBitmapUtil.findTickArrayAddress({
+    programId,
+    poolId,
+    tickSpacing: poolInfo.tickSpacing,
+    poolBitmap: poolInfo.tickArrayBitmap,
+    tickArrayBitmap: tickarrayBitmapExtension,
+    findInfo: { type: !zeroForOne ? 'zeroForOne' : 'oneForZero', count: 2, tickArrayCurrent: poolInfo.tickCurrent },
+  }) : []
 
   const _startTickIndex = TickArrayUtil.getTickArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing)
   const { firstItckArrayContainsPoolTick: _firstItckArrayContainsPoolTick, firstValidTickArrayStartIndex } = { firstItckArrayContainsPoolTick: tickArrays[tickArrayListIndex].value.startTickIndex === _startTickIndex, firstValidTickArrayStartIndex: tickArrays[tickArrayListIndex].value.startTickIndex }
@@ -184,6 +223,6 @@ export function swapInternal(
     sqrtPriceX64: state.sqrtPriceX64,
     liquidity: state.liquidity,
     tickCurrent: state.tick,
-    accounts: tickArrays.slice(0, tickArrayListIndex).map(i => i.address),
+    accounts: [...addTickArrayAddress, ...tickArrays.slice(0, tickArrayListIndex + 1 + (includeExtraTickArrays ? 1 : 0)).map(i => i.address)],
   }
 }
