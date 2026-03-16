@@ -39,6 +39,7 @@ import {
 } from "./layout";
 import { clmmComputeInfoToApiInfo, decimalToX64, LimitOrderMath, PoolUtils } from "./libraries";
 import {
+  BN_ZERO,
   CollectFeeOn,
   DYNAMIC_CONFIG_INDEX,
   MAX_SQRT_PRICE_X64,
@@ -2335,9 +2336,9 @@ export class Clmm extends ModuleBase {
     feePayer?: PublicKey;
   }): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
-    const baseIn = inputMint.toString() === poolInfo.mintA.address;
-    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toBase58();
-    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toBase58();
+    const baseIn = inputMint.toString() === poolInfo.mintA.address.toString();
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address.toString() === WSOLMint.toBase58();
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address.toString() === WSOLMint.toBase58();
 
     let sqrtPriceLimitX64: BN;
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
@@ -2419,7 +2420,7 @@ export class Clmm extends ModuleBase {
         inputMint: new PublicKey(inputMint),
         amountIn,
         amountOutMin,
-        sqrtPriceLimitX64,
+        sqrtPriceLimitX64: BN_ZERO,
         remainingAccounts,
       }),
     );
@@ -2466,16 +2467,12 @@ export class Clmm extends ModuleBase {
     feePayer?: PublicKey;
   }): Promise<MakeTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
-    const baseIn = outputMint.toString() === poolInfo.mintB.address;
-    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address === WSOLMint.toBase58();
-    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address === WSOLMint.toBase58();
-
+    const baseIn = outputMint.toString() === poolInfo.mintB.address.toString();
+    const mintAUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintA.address.toString() === WSOLMint.toBase58();
+    const mintBUseSOLBalance = ownerInfo.useSOLBalance && poolInfo.mintB.address.toString() === WSOLMint.toBase58();
     let sqrtPriceLimitX64: BN;
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
-      sqrtPriceLimitX64 =
-        outputMint.toString() === poolInfo.mintB.address
-          ? MIN_SQRT_PRICE_X64.add(new BN(1))
-          : MAX_SQRT_PRICE_X64.sub(new BN(1));
+      sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
       sqrtPriceLimitX64 = TickUtil.priceToSqrtPriceX64(priceLimit, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
     }
@@ -2553,7 +2550,7 @@ export class Clmm extends ModuleBase {
         outputMint: new PublicKey(outputMint),
         amountOut,
         amountInMax,
-        sqrtPriceLimitX64,
+        sqrtPriceLimitX64: BN_ZERO,
         remainingAccounts,
       }),
     );
@@ -3063,7 +3060,10 @@ export class Clmm extends ModuleBase {
     };
   }
 
-  public async getSwapPoolInfo(poolId: string | PublicKey): Promise<{
+  public async getSwapPoolInfo(
+    poolId: string | PublicKey,
+    zeroForOne = true,
+  ): Promise<{
     poolInfo: SimpleClmmPoolInfo;
     rpcData: ClmmParsedRpcData;
     configInfo: ReturnType<typeof ClmmConfigLayout.decode>;
@@ -3079,23 +3079,15 @@ export class Clmm extends ModuleBase {
     const programId = new PublicKey(poolInfo.programId);
     const poolIdPub = new PublicKey(poolId);
 
-    // Get tick arrays needed for swap
-    const tickArrays: { address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[] = [];
-    const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolIdPub).publicKey;
-    const tickArrayBitmapExtensionRes = await this.scope.connection.getAccountInfo(tickArrayBitmapExtension);
-    const tickArraysAddress = TickArrayBitmapUtil.findTickArrayAddress({
+    const tickArrays = await fetchTickArrays(
       programId,
-      poolId: new PublicKey(poolId),
-      poolBitmap: rpcData.tickArrayBitmap,
-      tickArrayBitmap: TickArrayBitmapExtensionLayout.decode(tickArrayBitmapExtensionRes!.data),
-      tickSpacing: poolInfo.config.tickSpacing,
-      findInfo: { type: "zeroForOne", tickArrayCurrent: rpcData.tickCurrent },
-    });
-
-    const tickArrayRes = await getMultipleAccountsInfo(this.scope.connection, tickArraysAddress);
-    tickArrayRes.forEach((res, idx) => {
-      if (res) tickArrays.push({ address: tickArraysAddress[idx], value: TickArrayLayout.decode(res.data) });
-    });
+      this.scope.connection,
+      poolIdPub,
+      rpcData.tickCurrent,
+      configInfo.tickSpacing,
+      rpcData.tickArrayBitmap,
+      zeroForOne,
+    );
 
     return {
       poolInfo,

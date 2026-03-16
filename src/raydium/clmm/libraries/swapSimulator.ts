@@ -1,21 +1,21 @@
-import { PublicKey } from '@solana/web3.js'
-import BN from 'bn.js'
-import { ClmmConfigLayout, PoolInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout } from '../layout'
-import { BN_ZERO, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from './constants'
-import { LiquidityMathUtil } from './liquidityMath'
-import { PoolUtil } from './pool'
-import { SwapMathUtil, SwapState } from './swapMath'
-import { TickArrayBitmapUtil, TickArrayUtil, TickUtil } from './tickArrayUtil'
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import { ClmmConfigLayout, PoolInfoLayout, TickArrayBitmapExtensionLayout, TickArrayLayout } from "../layout";
+import { BN_ZERO, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from "./constants";
+import { LiquidityMathUtil } from "./liquidityMath";
+import { PoolUtil } from "./pool";
+import { SwapMathUtil, SwapState } from "./swapMath";
+import { TickArrayBitmapUtil, TickArrayUtil, TickUtil } from "./tickArrayUtil";
 
 export interface SwapSimulationResult {
-  allTrade: boolean
-  amountSpecifiedRemaining: BN
-  amountCalculated: BN
-  feeAmount: BN
-  sqrtPriceX64: BN
-  liquidity: BN
-  tickCurrent: number
-  accounts: PublicKey[]
+  allTrade: boolean;
+  amountSpecifiedRemaining: BN;
+  amountCalculated: BN;
+  feeAmount: BN;
+  sqrtPriceX64: BN;
+  liquidity: BN;
+  tickCurrent: number;
+  accounts: PublicKey[];
 }
 
 export function swapInternal({
@@ -32,26 +32,24 @@ export function swapInternal({
   blockTimestamp,
   includeExtraTickArrays,
 }: {
-  programId: PublicKey,
-  poolId: PublicKey,
-  poolInfo: ReturnType<typeof PoolInfoLayout.decode>,
-  tickArrays: { address: PublicKey, value: ReturnType<typeof TickArrayLayout.decode> }[],
-  configInfo: ReturnType<typeof ClmmConfigLayout.decode>,
-  tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
-  amountSpecified: BN,
-  sqrtPriceLimitX64: BN,
-  zeroForOne: boolean,
-  isBaseInput: boolean,
-  blockTimestamp: number,
-  includeExtraTickArrays: boolean,
+  programId: PublicKey;
+  poolId: PublicKey;
+  poolInfo: ReturnType<typeof PoolInfoLayout.decode>;
+  tickArrays: { address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[];
+  configInfo: ReturnType<typeof ClmmConfigLayout.decode>;
+  tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
+  amountSpecified: BN;
+  sqrtPriceLimitX64: BN;
+  zeroForOne: boolean;
+  isBaseInput: boolean;
+  blockTimestamp: number;
+  includeExtraTickArrays: boolean;
 }): SwapSimulationResult {
   if (sqrtPriceLimitX64.isZero()) {
-    sqrtPriceLimitX64 = zeroForOne
-      ? new BN(MIN_SQRT_PRICE_X64).addn(1)
-      : new BN(MAX_SQRT_PRICE_X64).subn(1)
+    sqrtPriceLimitX64 = zeroForOne ? new BN(MIN_SQRT_PRICE_X64).addn(1) : new BN(MAX_SQRT_PRICE_X64).subn(1);
   }
 
-  let tickArrayListIndex = 0
+  let tickArrayListIndex = 0;
 
   if (tickArrays.length === 0) {
     return {
@@ -63,48 +61,64 @@ export function swapInternal({
       liquidity: poolInfo.liquidity,
       tickCurrent: poolInfo.tickCurrent,
       accounts: [],
-    }
+    };
   }
 
-  const addTickArrayAddress = includeExtraTickArrays ? TickArrayBitmapUtil.findTickArrayAddress({
-    programId,
-    poolId,
-    tickSpacing: poolInfo.tickSpacing,
-    poolBitmap: poolInfo.tickArrayBitmap,
-    tickArrayBitmap: tickarrayBitmapExtension,
-    findInfo: { type: !zeroForOne ? 'zeroForOne' : 'oneForZero', count: 2, tickArrayCurrent: poolInfo.tickCurrent },
-  }) : []
+  const addTickArrayAddress = includeExtraTickArrays
+    ? TickArrayBitmapUtil.findTickArrayAddress({
+        programId,
+        poolId,
+        tickSpacing: poolInfo.tickSpacing,
+        poolBitmap: poolInfo.tickArrayBitmap,
+        tickArrayBitmap: tickarrayBitmapExtension,
+        findInfo: { type: !zeroForOne ? "zeroForOne" : "oneForZero", count: 2, tickArrayCurrent: poolInfo.tickCurrent },
+      }).filter((i) => i.toString() !== tickArrays[0].address.toString())
+    : [];
 
-  const _startTickIndex = TickArrayUtil.getTickArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing)
-  const { firstItckArrayContainsPoolTick: _firstItckArrayContainsPoolTick, firstValidTickArrayStartIndex } = { firstItckArrayContainsPoolTick: tickArrays[tickArrayListIndex].value.startTickIndex === _startTickIndex, firstValidTickArrayStartIndex: tickArrays[tickArrayListIndex].value.startTickIndex }
-  let firstItckArrayContainsPoolTick = _firstItckArrayContainsPoolTick
+  const _startTickIndex = TickArrayUtil.getTickArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing);
+  const { firstItckArrayContainsPoolTick: _firstItckArrayContainsPoolTick, firstValidTickArrayStartIndex } = {
+    firstItckArrayContainsPoolTick: tickArrays[tickArrayListIndex].value.startTickIndex === _startTickIndex,
+    firstValidTickArrayStartIndex: tickArrays[tickArrayListIndex].value.startTickIndex,
+  };
+  let firstItckArrayContainsPoolTick = _firstItckArrayContainsPoolTick;
 
-  let currentValidTIckArrayStrartIndex = firstValidTickArrayStartIndex
+  let currentValidTIckArrayStrartIndex = firstValidTickArrayStartIndex;
 
-  const tickArrayCurrent = tickArrays[tickArrayListIndex]
+  const tickArrayCurrent = tickArrays[tickArrayListIndex];
 
-  const isFeeOnInput = PoolUtil.isFeeOnInput(poolInfo.feeOn, zeroForOne)
+  const isFeeOnInput = PoolUtil.isFeeOnInput(poolInfo.feeOn, zeroForOne);
 
-  const state = SwapState.newValue({ poolInfo, amountSpecified, zeroForOne, feeRate: configInfo.tradeFeeRate, blockTimestamp, })
+  const state = SwapState.newValue({
+    poolInfo,
+    amountSpecified,
+    zeroForOne,
+    feeRate: configInfo.tradeFeeRate,
+    blockTimestamp,
+  });
 
   while (!state.amountSpecifiedRemaining.isZero() && !state.sqrtPriceX64.eq(sqrtPriceLimitX64)) {
     const nextInitializedTick = (() => {
-      const tickState = TickArrayUtil.nextInitalizedTick({ data: tickArrayCurrent.value, tickSpacing: state.tickSpacing, zeroForOne, currentTickIndex: state.tick })
+      const tickState = TickArrayUtil.nextInitalizedTick({
+        data: tickArrayCurrent.value,
+        tickSpacing: state.tickSpacing,
+        zeroForOne,
+        currentTickIndex: state.tick,
+      });
       if (tickState !== undefined) {
-        return tickState
+        return tickState;
       } else if (!firstItckArrayContainsPoolTick) {
-        firstItckArrayContainsPoolTick = true
-        return TickArrayUtil.firstinitializedTick({ data: tickArrayCurrent.value, zeroForOne })
+        firstItckArrayContainsPoolTick = true;
+        return TickArrayUtil.firstinitializedTick({ data: tickArrayCurrent.value, zeroForOne });
       } else {
-        const nextTickArrayIndex = tickArrays[++tickArrayListIndex]
+        const nextTickArrayIndex = tickArrays[++tickArrayListIndex];
         if (nextTickArrayIndex === undefined) {
-          return undefined
+          return undefined;
         }
 
-        currentValidTIckArrayStrartIndex = nextTickArrayIndex.value.startTickIndex
-        return TickArrayUtil.firstinitializedTick({ data: nextTickArrayIndex.value, zeroForOne })
+        currentValidTIckArrayStrartIndex = nextTickArrayIndex.value.startTickIndex;
+        return TickArrayUtil.firstinitializedTick({ data: nextTickArrayIndex.value, zeroForOne });
       }
-    })()
+    })();
 
     if (nextInitializedTick === undefined) {
       return {
@@ -115,8 +129,8 @@ export function swapInternal({
         sqrtPriceX64: state.sqrtPriceX64,
         liquidity: state.liquidity,
         tickCurrent: state.tick,
-        accounts: tickArrays.slice(0, tickArrayListIndex).map(i => i.address),
-      }
+        accounts: tickArrays.slice(0, tickArrayListIndex).map((i) => i.address),
+      };
     }
 
     const targetPrice = SwapState.getTargetPriceBasedOnNextTick({
@@ -124,18 +138,22 @@ export function swapInternal({
       tickNext: nextInitializedTick.tick,
       zeroForOne,
       sqrtPriceLimitX64,
-    })
+    });
 
-    let liquidityNext = state.liquidity
+    let liquidityNext = state.liquidity;
     do {
-      SwapState.updateVolatilityAccumulator({ state })
+      SwapState.updateVolatilityAccumulator({ state });
 
-      const totalFeeRate = SwapState.getTotalFeeRate({ data: state })
-      const { isSkipped: isSkippedTickSpacing, boundedPrice } = SwapState.getSpacingBoundedPrice({ data: state, targetPrice, zeroForOne })
+      const totalFeeRate = SwapState.getTotalFeeRate({ data: state });
+      const { isSkipped: isSkippedTickSpacing, boundedPrice } = SwapState.getSpacingBoundedPrice({
+        data: state,
+        targetPrice,
+        zeroForOne,
+      });
 
-      const isPriceChange = !state.sqrtPriceX64.eq(boundedPrice)
+      const isPriceChange = !state.sqrtPriceX64.eq(boundedPrice);
 
-      let swapComputedResult
+      let swapComputedResult;
       if (isPriceChange) {
         swapComputedResult = SwapMathUtil.computeSwap(
           state.sqrtPriceX64,
@@ -146,7 +164,7 @@ export function swapInternal({
           isBaseInput,
           zeroForOne,
           isFeeOnInput,
-        )
+        );
 
         SwapState.applySwapAmounts({
           state,
@@ -157,12 +175,12 @@ export function swapInternal({
           isFeeOnInput,
           protocolFeeRate: new BN(configInfo.protocolFeeRate),
           fundFeeRate: new BN(configInfo.fundFeeRate),
-        })
+        });
       } else {
-        swapComputedResult = SwapMathUtil.newSwapComputationResult({ sqrtPriceNextX64: boundedPrice })
+        swapComputedResult = SwapMathUtil.newSwapComputationResult({ sqrtPriceNextX64: boundedPrice });
       }
 
-      const limitOrderUnfilledAmountBefore = TickUtil.limitOrderUnfilledAmount({ tick: nextInitializedTick })
+      const limitOrderUnfilledAmountBefore = TickUtil.limitOrderUnfilledAmount({ tick: nextInitializedTick });
       if (state.sqrtPriceNextX64.eq(swapComputedResult.sqrtPriceNextX64)) {
         const limitOrderResult = TickUtil.matchLimitOrder({
           tick: nextInitializedTick,
@@ -171,7 +189,7 @@ export function swapInternal({
           isBaseInput,
           feeRate: totalFeeRate,
           isFeeOnInput,
-        })
+        });
 
         if (limitOrderResult.amountIn.gt(BN_ZERO)) {
           SwapState.applySwapAmounts({
@@ -183,37 +201,47 @@ export function swapInternal({
             isFeeOnInput,
             protocolFeeRate: new BN(configInfo.protocolFeeRate),
             fundFeeRate: new BN(configInfo.fundFeeRate),
-          })
+          });
         }
 
-        if (TickUtil.hasLiquidity({ data: nextInitializedTick }) && !TickUtil.hasLimitOrders({ data: nextInitializedTick })) {
-          const liquidityNet = zeroForOne ? nextInitializedTick.liquidityNet.neg() : nextInitializedTick.liquidityNet
+        if (
+          TickUtil.hasLiquidity({ data: nextInitializedTick }) &&
+          !TickUtil.hasLimitOrders({ data: nextInitializedTick })
+        ) {
+          const liquidityNet = zeroForOne ? nextInitializedTick.liquidityNet.neg() : nextInitializedTick.liquidityNet;
 
-          liquidityNext = LiquidityMathUtil.addDelta(state.liquidity, liquidityNet)
+          liquidityNext = LiquidityMathUtil.addDelta(state.liquidity, liquidityNet);
         }
 
-        state.tick = (zeroForOne && !TickUtil.hasLimitOrders({ data: nextInitializedTick })) || (!zeroForOne && TickUtil.hasLimitOrders({ data: nextInitializedTick })) ? state.tickNext - 1 : state.tickNext
+        state.tick =
+          (zeroForOne && !TickUtil.hasLimitOrders({ data: nextInitializedTick })) ||
+          (!zeroForOne && TickUtil.hasLimitOrders({ data: nextInitializedTick }))
+            ? state.tickNext - 1
+            : state.tickNext;
       } else if (!state.sqrtPriceX64.eq(swapComputedResult.sqrtPriceNextX64)) {
-        state.tick = TickUtil.getTickAtSqrtPrice(swapComputedResult.sqrtPriceNextX64)
+        state.tick = TickUtil.getTickAtSqrtPrice(swapComputedResult.sqrtPriceNextX64);
       }
 
-      state.sqrtPriceX64 = swapComputedResult.sqrtPriceNextX64
+      state.sqrtPriceX64 = swapComputedResult.sqrtPriceNextX64;
       if (state.amountSpecifiedRemaining.isZero() || state.sqrtPriceX64.eq(targetPrice)) {
-        const limitOrderUnfilledAmountAfter = TickUtil.limitOrderUnfilledAmount({ tick: nextInitializedTick })
+        const limitOrderUnfilledAmountAfter = TickUtil.limitOrderUnfilledAmount({ tick: nextInitializedTick });
 
-        if (!state.amountSpecifiedRemaining.isZero() && !limitOrderUnfilledAmountAfter.eq(limitOrderUnfilledAmountBefore)) {
-          if (!limitOrderUnfilledAmountAfter.isZero()) throw Error('!limitOrderUnfilledAmountAfter.isZero()')
+        if (
+          !state.amountSpecifiedRemaining.isZero() &&
+          !limitOrderUnfilledAmountAfter.eq(limitOrderUnfilledAmountBefore)
+        ) {
+          if (!limitOrderUnfilledAmountAfter.isZero()) throw Error("!limitOrderUnfilledAmountAfter.isZero()");
         }
-        break
+        break;
       }
-      SwapState.updateDynamicFeeIndex({ state, zeroForOne, isSkippedTickSpacing })
+      SwapState.updateDynamicFeeIndex({ state, zeroForOne, isSkippedTickSpacing });
 
       // eslint-disable-next-line no-constant-condition
-    } while (true)
-    state.liquidity = liquidityNext
+    } while (true);
+    state.liquidity = liquidityNext;
     // SwapState.splitFee({ state, protocolFeeRate: new BN(configInfo.protocolFeeRate), fundFeeRate: new BN(configInfo.fundFeeRate) })
   }
-  SwapState.updateVolatilityAccumulatorOnPrice({ state })
+  SwapState.updateVolatilityAccumulatorOnPrice({ state });
 
   return {
     allTrade: true,
@@ -223,6 +251,9 @@ export function swapInternal({
     sqrtPriceX64: state.sqrtPriceX64,
     liquidity: state.liquidity,
     tickCurrent: state.tick,
-    accounts: [...addTickArrayAddress, ...tickArrays.slice(0, tickArrayListIndex + 1 + (includeExtraTickArrays ? 1 : 0)).map(i => i.address)],
-  }
+    accounts: [
+      ...addTickArrayAddress,
+      ...tickArrays.slice(0, tickArrayListIndex + 1 + (includeExtraTickArrays ? 1 : 0)).map((i) => i.address),
+    ],
+  };
 }

@@ -1789,7 +1789,7 @@ export class ClmmInstrument {
     const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
 
-    const isInputMintA = poolInfo.mintA.address === inputMint.toString();
+    const isInputMintA = poolInfo.mintA.address.toString() === inputMint.toString();
 
     const ins = [
       this.swapV2Instruction(
@@ -1858,7 +1858,8 @@ export class ClmmInstrument {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
-    const isInputMintA = poolInfo.mintA.address === outputMint.toBase58();
+    const isInputMintA = poolInfo.mintB.address.toString() === outputMint.toBase58();
+
     const ins = [
       this.swapV2Instruction(
         programId,
@@ -1867,14 +1868,14 @@ export class ClmmInstrument {
         id,
         new PublicKey(poolInfo.config.id),
 
-        isInputMintA ? ownerInfo.tokenAccountB : ownerInfo.tokenAccountA,
         isInputMintA ? ownerInfo.tokenAccountA : ownerInfo.tokenAccountB,
+        isInputMintA ? ownerInfo.tokenAccountB : ownerInfo.tokenAccountA,
 
-        isInputMintA ? mintBVault : mintAVault,
         isInputMintA ? mintAVault : mintBVault,
+        isInputMintA ? mintBVault : mintAVault,
 
-        isInputMintA ? mintB : mintA,
         isInputMintA ? mintA : mintB,
+        isInputMintA ? mintB : mintA,
 
         remainingAccounts,
         observationId,

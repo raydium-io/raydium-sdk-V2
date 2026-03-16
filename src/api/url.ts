@@ -12,6 +12,8 @@ export const API_URLS = {
   CLMM_CONFIG: "/main/clmm-config",
   CPMM_CONFIG: "/main/cpmm-config",
 
+  CLMM_DYNAMIC_CONFIG: "/main/clmm-dynamic-config",
+
   VERSION: "/main/version",
 
   // api v3

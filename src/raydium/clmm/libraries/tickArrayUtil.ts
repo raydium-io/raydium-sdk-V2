@@ -666,6 +666,7 @@ export async function fetchTickArrays(
   currentTick: number,
   tickSpacing: number,
   tickArrayBitmap: Buffer,
+  zeroForOne = true,
 ): Promise<{ address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[]> {
   const tickArrays: { address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[] = [];
   const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolId).publicKey;
@@ -676,7 +677,7 @@ export async function fetchTickArrays(
     poolBitmap: tickArrayBitmap,
     tickArrayBitmap: TickArrayBitmapExtensionLayout.decode(tickArrayBitmapExtensionRes!.data),
     tickSpacing,
-    findInfo: { type: "zeroForOne", tickArrayCurrent: currentTick },
+    findInfo: { type: zeroForOne ? "zeroForOne" : "oneForZero", tickArrayCurrent: currentTick },
   });
 
   const tickArrayRes = await getMultipleAccountsInfo(connection, tickArraysAddress);

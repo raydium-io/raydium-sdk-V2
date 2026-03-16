@@ -69,6 +69,17 @@ export interface ApiClmmConfigInfo {
   defaultRangePoint: number[];
 }
 
+export interface ApiClmmDynamicConfigInfo {
+  id: string;
+  decayPeriod: number;
+  dynamicFeeControl: number;
+  filterPeriod: number;
+  index: number;
+  maxVolatilityAccumulator: number;
+  recommendConfigId: string[];
+  reductionFactor: number;
+}
+
 export interface ApiCpmmConfigInfo {
   id: string;
   index: number;

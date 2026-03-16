@@ -17,6 +17,7 @@ import {
   PoolFetchType,
   JupToken,
   ApiLaunchConfig,
+  ApiClmmDynamicConfigInfo,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
@@ -132,6 +133,11 @@ export class Api {
 
   async getClmmConfigs(): Promise<ApiClmmConfigInfo[]> {
     const res = await this.api.get(this.urlConfigs.CLMM_CONFIG || API_URLS.CLMM_CONFIG);
+    return res.data;
+  }
+
+  async getClmmDynamicConfigs(): Promise<ApiClmmDynamicConfigInfo[]> {
+    const res = await this.api.get(this.urlConfigs.CLMM_DYNAMIC_CONFIG || API_URLS.CLMM_DYNAMIC_CONFIG);
     return res.data;
   }
 
