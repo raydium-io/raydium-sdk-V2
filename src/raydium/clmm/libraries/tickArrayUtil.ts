@@ -1,4 +1,4 @@
-import { FEE_RATE_DENOMINATOR_VALUE } from "@/common";
+import { FEE_RATE_DENOMINATOR_VALUE, getMultipleAccountsInfo } from "@/common";
 import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
@@ -21,7 +21,7 @@ import {
   TICK_ARRAY_SIZE,
   TICK_TO_SQRT_PRICE_FACTORS,
 } from "./constants";
-import { getPdaTickArrayAddress } from "./pda";
+import { getPdaExBitmapAccount, getPdaTickArrayAddress } from "./pda";
 
 export interface LimitOrderMatchResult {
   amountIn: BN;
@@ -31,181 +31,211 @@ export interface LimitOrderMatchResult {
 
 export class TickArrayBitmapUtil {
   private static scanLinearBitmap({
-    bitmap, tickSpacing, offset, checkInfo,
+    bitmap,
+    tickSpacing,
+    offset,
+    checkInfo,
   }: {
-    bitmap: Buffer, tickSpacing: number, offset: number,
-    checkInfo?: { tick: number; valueType: 'lte' | 'gte' },
+    bitmap: Buffer;
+    tickSpacing: number;
+    offset: number;
+    checkInfo?: { tick: number; valueType: "lte" | "gte" };
   }): number[] {
-    const result: number[] = []
-    const totalBits = bitmap.length * 8
+    const result: number[] = [];
+    const totalBits = bitmap.length * 8;
 
-    let startBit = 0
-    let endBit = totalBits - 1
+    let startBit = 0;
+    let endBit = totalBits - 1;
 
     if (checkInfo) {
-      const threshold = checkInfo.tick / (tickSpacing * TICK_ARRAY_SIZE) - offset
-      if (checkInfo.valueType === 'gte') {
-        startBit = Math.max(0, Math.ceil(threshold))
+      const threshold = checkInfo.tick / (tickSpacing * TICK_ARRAY_SIZE) - offset;
+      if (checkInfo.valueType === "gte") {
+        startBit = Math.max(0, Math.ceil(threshold));
       } else {
-        endBit = Math.min(totalBits - 1, Math.floor(threshold))
+        endBit = Math.min(totalBits - 1, Math.floor(threshold));
       }
     }
 
-    if (startBit > endBit) return result
+    if (startBit > endBit) return result;
 
-    const startByte = Math.floor(startBit / 8)
-    const endByte = Math.floor(endBit / 8)
+    const startByte = Math.floor(startBit / 8);
+    const endByte = Math.floor(endBit / 8);
 
     for (let i = startByte; i <= endByte; i++) {
-      if (!bitmap[i]) continue
+      if (!bitmap[i]) continue;
 
-      const jStart = i === startByte ? startBit % 8 : 0
-      const jEnd = i === endByte ? endBit % 8 : 7
+      const jStart = i === startByte ? startBit % 8 : 0;
+      const jEnd = i === endByte ? endBit % 8 : 7;
       for (let j = jStart; j <= jEnd; j++) {
         if (bitmap[i] & (1 << j)) {
-          result.push((i * 8 + j + offset) * tickSpacing * TICK_ARRAY_SIZE)
+          result.push((i * 8 + j + offset) * tickSpacing * TICK_ARRAY_SIZE);
         }
       }
     }
-    return result
+    return result;
   }
 
-  private static findPoolBitmap({ bitmap, tickSpacing, checkInfo }: {
-    bitmap: Buffer, tickSpacing: number,
-    checkInfo?: { tick: number; valueType: 'lte' | 'gte' },
+  private static findPoolBitmap({
+    bitmap,
+    tickSpacing,
+    checkInfo,
+  }: {
+    bitmap: Buffer;
+    tickSpacing: number;
+    checkInfo?: { tick: number; valueType: "lte" | "gte" };
   }): number[] {
     if (checkInfo) {
-      const _i = Math.floor(checkInfo.tick / TICK_ARRAY_SIZE / tickSpacing)
-      if (checkInfo.valueType === 'lte' && _i < -512) return []
-      if (checkInfo.valueType === 'gte' && _i > 512) return []
+      const _i = Math.floor(checkInfo.tick / TICK_ARRAY_SIZE / tickSpacing);
+      if (checkInfo.valueType === "lte" && _i < -512) return [];
+      if (checkInfo.valueType === "gte" && _i > 512) return [];
     }
-    return this.scanLinearBitmap({ bitmap, tickSpacing, offset: -TICK_ARRAY_BITMAP_SIZE, checkInfo })
+    return this.scanLinearBitmap({ bitmap, tickSpacing, offset: -TICK_ARRAY_BITMAP_SIZE, checkInfo });
   }
 
-  private static findPositiveTickArrayBitmap({ bitmap, tickSpacing, checkInfo }: {
-    bitmap: Buffer, tickSpacing: number,
-    checkInfo?: { tick: number; valueType: 'lte' | 'gte' },
+  private static findPositiveTickArrayBitmap({
+    bitmap,
+    tickSpacing,
+    checkInfo,
+  }: {
+    bitmap: Buffer;
+    tickSpacing: number;
+    checkInfo?: { tick: number; valueType: "lte" | "gte" };
   }): number[] {
     if (checkInfo) {
-      const _i = Math.floor(checkInfo.tick / TICK_ARRAY_SIZE / tickSpacing)
-      if (checkInfo.valueType === 'lte' && _i < 512) return []
+      const _i = Math.floor(checkInfo.tick / TICK_ARRAY_SIZE / tickSpacing);
+      if (checkInfo.valueType === "lte" && _i < 512) return [];
     }
-    return this.scanLinearBitmap({ bitmap, tickSpacing, offset: TICK_ARRAY_BITMAP_SIZE, checkInfo })
+    return this.scanLinearBitmap({ bitmap, tickSpacing, offset: TICK_ARRAY_BITMAP_SIZE, checkInfo });
   }
 
   private static findNegativeTickArrayBitmap({
-    bitmap, tickSpacing, count, checkInfo,
+    bitmap,
+    tickSpacing,
+    count,
+    checkInfo,
   }: {
-    bitmap: Buffer, tickSpacing: number,
-    count?: number, checkInfo?: { tick: number; valueType: 'lte' | 'gte' },
+    bitmap: Buffer;
+    tickSpacing: number;
+    count?: number;
+    checkInfo?: { tick: number; valueType: "lte" | "gte" };
   }): number[] {
-    const result: number[] = []
+    const result: number[] = [];
 
     if (checkInfo) {
-      const _i = Math.floor(checkInfo.tick / TICK_ARRAY_SIZE / tickSpacing)
-      if (checkInfo.valueType === 'gte' && _i >= -512) return result
+      const _i = Math.floor(checkInfo.tick / TICK_ARRAY_SIZE / tickSpacing);
+      if (checkInfo.valueType === "gte" && _i >= -512) return result;
     }
 
-    const maxFlatIndex = checkInfo?.valueType === 'lte'
-      ? Math.floor(checkInfo.tick / (TICK_ARRAY_SIZE * tickSpacing)) + 7680
-      : Infinity
-    const minFlatIndex = checkInfo?.valueType === 'gte'
-      ? Math.ceil(checkInfo.tick / (TICK_ARRAY_SIZE * tickSpacing)) + 7680
-      : 0
+    const maxFlatIndex =
+      checkInfo?.valueType === "lte" ? Math.floor(checkInfo.tick / (TICK_ARRAY_SIZE * tickSpacing)) + 7680 : Infinity;
+    const minFlatIndex =
+      checkInfo?.valueType === "gte" ? Math.ceil(checkInfo.tick / (TICK_ARRAY_SIZE * tickSpacing)) + 7680 : 0;
 
-    outer:
-    for (let arrayIndex = 0; arrayIndex < EXTENSION_TICKARRAY_BITMAP_SIZE; arrayIndex++) {
-      const reversedIndex = (EXTENSION_TICKARRAY_BITMAP_SIZE - 1) - arrayIndex
+    outer: for (let arrayIndex = 0; arrayIndex < EXTENSION_TICKARRAY_BITMAP_SIZE; arrayIndex++) {
+      const reversedIndex = EXTENSION_TICKARRAY_BITMAP_SIZE - 1 - arrayIndex;
       for (let searchIndex = 0; searchIndex < 512; searchIndex++) {
-        const flatIndex = arrayIndex * 512 + searchIndex
+        const flatIndex = arrayIndex * 512 + searchIndex;
 
-        if (flatIndex > maxFlatIndex) break outer
-        if (flatIndex < minFlatIndex) continue
+        if (flatIndex > maxFlatIndex) break outer;
+        if (flatIndex < minFlatIndex) continue;
 
-        const byteOffset = reversedIndex * 64 + Math.floor(searchIndex / 8)
+        const byteOffset = reversedIndex * 64 + Math.floor(searchIndex / 8);
         if (!bitmap[byteOffset]) {
-          searchIndex = Math.floor(searchIndex / 8) * 8 + 7
-          continue
+          searchIndex = Math.floor(searchIndex / 8) * 8 + 7;
+          continue;
         }
-        if (bitmap[byteOffset] & (1 << (searchIndex % 8))) {
-          const tick = (arrayIndex * 512 + searchIndex - 7680) * TICK_ARRAY_SIZE * tickSpacing
-          result.push(tick)
+        if (bitmap[byteOffset] & (1 << searchIndex % 8)) {
+          const tick = (arrayIndex * 512 + searchIndex - 7680) * TICK_ARRAY_SIZE * tickSpacing;
+          result.push(tick);
 
-          if (count !== undefined && result.length >= count) break outer
+          if (count !== undefined && result.length >= count) break outer;
         }
       }
     }
-    return result
+    return result;
   }
 
   static findTickArrayStartIndex({
-    tickSpacing, poolBitmap, tickArrayBitmap, findInfo,
+    tickSpacing,
+    poolBitmap,
+    tickArrayBitmap,
+    findInfo,
   }: {
-    tickSpacing: number,
-    poolBitmap: ReturnType<typeof PoolInfoLayout.decode>['tickArrayBitmap'],
-    tickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
-    findInfo: { type: 'zeroForOne' | 'oneForZero'; count?: number; tickArrayCurrent: number } | { type: 'all' },
+    tickSpacing: number;
+    poolBitmap: ReturnType<typeof PoolInfoLayout.decode>["tickArrayBitmap"];
+    tickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
+    findInfo: { type: "zeroForOne" | "oneForZero"; count?: number; tickArrayCurrent: number } | { type: "all" };
   }): number[] {
-    if (findInfo.type === 'all') {
+    if (findInfo.type === "all") {
       return [
         ...this.findNegativeTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.negativeTickArrayBitmap }),
         ...this.findPoolBitmap({ tickSpacing, bitmap: poolBitmap }),
         ...this.findPositiveTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.positiveTickArrayBitmap }),
-      ]
+      ];
     }
 
-    const tickStart = TickArrayUtil.getTickArrayStartIndex(findInfo.tickArrayCurrent, tickSpacing)
-    const { count } = findInfo
+    const tickStart = TickArrayUtil.getTickArrayStartIndex(findInfo.tickArrayCurrent, tickSpacing);
+    const { count } = findInfo;
 
-    if (findInfo.type === 'oneForZero') {
-
-      const checkInfo = { tick: tickStart, valueType: 'gte' } as const
+    if (findInfo.type === "oneForZero") {
+      const checkInfo = { tick: tickStart, valueType: "gte" } as const;
       const finders = [
-        () => this.findNegativeTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.negativeTickArrayBitmap, checkInfo }),
+        () =>
+          this.findNegativeTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.negativeTickArrayBitmap, checkInfo }),
         () => this.findPoolBitmap({ tickSpacing, bitmap: poolBitmap, checkInfo }),
-        () => this.findPositiveTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.positiveTickArrayBitmap, checkInfo }),
-      ]
-      return this.collectUntil(finders, count)
+        () =>
+          this.findPositiveTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.positiveTickArrayBitmap, checkInfo }),
+      ];
+      return this.collectUntil(finders, count);
     }
 
-    if (findInfo.type === 'zeroForOne') {
-
-      const checkInfo = { tick: tickStart, valueType: 'lte' } as const
+    if (findInfo.type === "zeroForOne") {
+      const checkInfo = { tick: tickStart, valueType: "lte" } as const;
       const finders = [
-        () => this.findPositiveTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.positiveTickArrayBitmap, checkInfo }).sort((a, b) => b - a),
+        () =>
+          this.findPositiveTickArrayBitmap({
+            tickSpacing,
+            bitmap: tickArrayBitmap.positiveTickArrayBitmap,
+            checkInfo,
+          }).sort((a, b) => b - a),
         () => this.findPoolBitmap({ tickSpacing, bitmap: poolBitmap, checkInfo }).sort((a, b) => b - a),
-        () => this.findNegativeTickArrayBitmap({ tickSpacing, bitmap: tickArrayBitmap.negativeTickArrayBitmap, checkInfo }).sort((a, b) => b - a),
-      ]
-      return this.collectUntil(finders, count)
+        () =>
+          this.findNegativeTickArrayBitmap({
+            tickSpacing,
+            bitmap: tickArrayBitmap.negativeTickArrayBitmap,
+            checkInfo,
+          }).sort((a, b) => b - a),
+      ];
+      return this.collectUntil(finders, count);
     }
 
-    throw new Error('find info type check error')
+    throw new Error("find info type check error");
   }
 
-  private static collectUntil(
-    finders: Array<() => number[]>,
-    count: number | undefined,
-  ): number[] {
-    const collected: number[] = []
+  private static collectUntil(finders: Array<() => number[]>, count: number | undefined): number[] {
+    const collected: number[] = [];
     for (const finder of finders) {
-      if (count !== undefined && collected.length >= count) break
-      collected.push(...finder())
+      if (count !== undefined && collected.length >= count) break;
+      collected.push(...finder());
     }
-    return collected.slice(0, count)
+    return collected.slice(0, count);
   }
 
   static findTickArrayAddress(params: {
-    programId: PublicKey, poolId: PublicKey, tickSpacing: number,
-    poolBitmap: ReturnType<typeof PoolInfoLayout.decode>['tickArrayBitmap'],
-    tickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
-    findInfo: { type: 'zeroForOne' | 'oneForZero'; count?: number; tickArrayCurrent: number } | { type: 'all' },
+    programId: PublicKey;
+    poolId: PublicKey;
+    tickSpacing: number;
+    poolBitmap: ReturnType<typeof PoolInfoLayout.decode>["tickArrayBitmap"];
+    tickArrayBitmap: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
+    findInfo: { type: "zeroForOne" | "oneForZero"; count?: number; tickArrayCurrent: number } | { type: "all" };
   }) {
-    return this.findTickArrayStartIndex(params)
-      .map(i => getPdaTickArrayAddress(params.programId, params.poolId, i).publicKey)
+    return this.findTickArrayStartIndex(params).map(
+      (i) => getPdaTickArrayAddress(params.programId, params.poolId, i).publicKey,
+    );
   }
 
   static maxTickInTickarrayBitmap(tickSpacing: number): number {
-    return tickSpacing * TICK_ARRAY_SIZE * TICK_ARRAY_BITMAP_SIZE
+    return tickSpacing * TICK_ARRAY_SIZE * TICK_ARRAY_BITMAP_SIZE;
   }
 }
 
@@ -635,25 +665,24 @@ export async function fetchTickArrays(
   poolId: PublicKey,
   currentTick: number,
   tickSpacing: number,
-  zeroForOne: boolean,
-): Promise<ReturnType<typeof TickArrayLayout.decode>[]> {
-  const tickArrays: ReturnType<typeof TickArrayLayout.decode>[] = [];
-  const tickArrayStart = TickArrayUtil.getTickArrayStartIndex(currentTick, tickSpacing);
-  const ticksPerArray = tickSpacing * TICK_ARRAY_SIZE;
+  tickArrayBitmap: Buffer,
+): Promise<{ address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[]> {
+  const tickArrays: { address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[] = [];
+  const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolId).publicKey;
+  const tickArrayBitmapExtensionRes = await connection.getAccountInfo(tickArrayBitmapExtension);
+  const tickArraysAddress = TickArrayBitmapUtil.findTickArrayAddress({
+    programId,
+    poolId,
+    poolBitmap: tickArrayBitmap,
+    tickArrayBitmap: TickArrayBitmapExtensionLayout.decode(tickArrayBitmapExtensionRes!.data),
+    tickSpacing,
+    findInfo: { type: "zeroForOne", tickArrayCurrent: currentTick },
+  });
 
-  // Fetch tick arrays in the swap direction
-  const endOffset = zeroForOne ? -5 : 5;
-  const step = zeroForOne ? -1 : 1;
-
-  for (let i = 0; zeroForOne ? i >= endOffset : i <= endOffset; i += step) {
-    const start = tickArrayStart + i * ticksPerArray;
-    const taAddress = getPdaTickArrayAddress(programId, poolId, start).publicKey;
-    const taData = (await connection.getAccountInfo(taAddress, "confirmed")) as any;
-    if (taData) {
-      const tickArray = TickArrayLayout.decode(taData.data);
-      tickArrays.push(tickArray);
-    }
-  }
+  const tickArrayRes = await getMultipleAccountsInfo(connection, tickArraysAddress);
+  tickArrayRes.forEach((res, idx) => {
+    if (res) tickArrays.push({ address: tickArraysAddress[idx], value: TickArrayLayout.decode(res.data) });
+  });
 
   return tickArrays;
 }

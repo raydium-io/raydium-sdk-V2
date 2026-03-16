@@ -3076,15 +3076,15 @@ export class Clmm extends ModuleBase {
 
     const res = await this.scope.connection.getAccountInfo(rpcData.configId);
     const configInfo = ClmmConfigLayout.decode(res!.data);
-
+    const programId = new PublicKey(poolInfo.programId);
     const poolIdPub = new PublicKey(poolId);
 
     // Get tick arrays needed for swap
     const tickArrays: { address: PublicKey; value: ReturnType<typeof TickArrayLayout.decode> }[] = [];
-    const tickArrayBitmapExtension = getPdaExBitmapAccount(CLMM_PROGRAM_ID, poolIdPub).publicKey;
+    const tickArrayBitmapExtension = getPdaExBitmapAccount(programId, poolIdPub).publicKey;
     const tickArrayBitmapExtensionRes = await this.scope.connection.getAccountInfo(tickArrayBitmapExtension);
     const tickArraysAddress = TickArrayBitmapUtil.findTickArrayAddress({
-      programId: CLMM_PROGRAM_ID,
+      programId,
       poolId: new PublicKey(poolId),
       poolBitmap: rpcData.tickArrayBitmap,
       tickArrayBitmap: TickArrayBitmapExtensionLayout.decode(tickArrayBitmapExtensionRes!.data),
