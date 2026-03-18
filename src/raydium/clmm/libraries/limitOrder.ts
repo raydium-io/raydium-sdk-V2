@@ -39,8 +39,10 @@ export class LimitOrderMath {
       throw Error("");
     }
 
-    // orderInfo.filledAmount = orderInfo.filledAmount.add(filledAmount)
-
-    return TickUtil.getLimitOrderOutput({ amountIn: filledAmount, tick: tickInfo.tick, zeroForOne: orderInfo.zeroForOne });
+    return TickUtil.getLimitOrderOutput({
+      amountIn: filledAmount,
+      tick: tickInfo.tick,
+      zeroForOne: orderInfo.zeroForOne,
+    });
   }
 }

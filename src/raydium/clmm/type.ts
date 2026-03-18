@@ -301,7 +301,6 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
 export interface CreateCustomizablePool<T = TxVersion.LEGACY>
   extends Omit<CreateConcentratedPool<T>, "getObserveState"> {
   collectFeeOn?: CollectFeeOn;
-  enableDynamicFee?: boolean;
   dynamicFeeConfig?: PublicKey;
 }
 
@@ -696,6 +695,7 @@ export interface IncreaseLimitOrder<T = TxVersion.LEGACY> {
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+  forerunCreate?: boolean;
 }
 
 export interface DecreaseLimitOrder<T = TxVersion.LEGACY> extends IncreaseLimitOrder<T> {
@@ -743,6 +743,7 @@ export interface SettleLimitOrder<T = TxVersion.LEGACY> {
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+  forerunCreate?: boolean;
 }
 
 export interface SettleAllLimitOrders<T = TxVersion.LEGACY> {

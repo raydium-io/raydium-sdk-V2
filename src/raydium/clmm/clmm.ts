@@ -224,8 +224,7 @@ export class Clmm extends ModuleBase {
       initialPrice,
       ammConfig,
       collectFeeOn = CollectFeeOn.FromInput,
-      enableDynamicFee = true,
-      dynamicFeeConfig: customDynamicFeeConfig,
+      dynamicFeeConfig,
       computeBudgetConfig,
       txVersion,
       txTipConfig,
@@ -253,17 +252,11 @@ export class Clmm extends ModuleBase {
     // const desc = getCollectFeeOnDescription(collectFeeOn);
     const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
 
-    let dynamicFeeConfig: PublicKey | undefined = undefined;
-    if (enableDynamicFee || customDynamicFeeConfig) {
-      dynamicFeeConfig =
-        customDynamicFeeConfig ?? getPdaDynamicFeeConfigAddress(programId, DYNAMIC_CONFIG_INDEX).publicKey;
-
+    if (dynamicFeeConfig) {
       // Check if dynamic fee config exists
       const dynamicFeeData = await this.scope.connection.getAccountInfo(dynamicFeeConfig);
-      if (!dynamicFeeData) {
+      if (!dynamicFeeData)
         throw new Error("Dynamic Fee Config not found. Run 03_admin_create_dynamic_fee_config.ts first.");
-      }
-
       console.log("Dynamic Fee Config", dynamicFeeConfig.toBase58());
 
       // Add dynamic fee config as remaining account
@@ -273,18 +266,6 @@ export class Clmm extends ModuleBase {
         isWritable: false,
       });
     }
-
-    // const extendMintAccount: PublicKey[] = [];
-    // const fetchAccounts: PublicKey[] = [];
-    // if (mintA.programId === TOKEN_2022_PROGRAM_ID.toBase58())
-    //   fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintA.address)).publicKey);
-    // if (mintB.programId === TOKEN_2022_PROGRAM_ID.toBase58())
-    //   fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintB.address)).publicKey);
-    // const extMintRes = await this.scope.connection.getMultipleAccountsInfo(fetchAccounts);
-
-    // extMintRes.forEach((r, idx) => {
-    //   if (r) extendMintAccount.push(fetchAccounts[idx]);
-    // });
 
     const ins = ClmmInstrument.createCustomizablePoolInstruction(
       programId,
@@ -361,9 +342,8 @@ export class Clmm extends ModuleBase {
           },
           burnPercent: 0,
           collectFeeOn,
-          enableDynamicFee,
           ...mockV3CreatePoolInfo,
-        } as any,
+        } as ApiV3PoolInfoConcentratedItem,
       },
     }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
@@ -1607,6 +1587,7 @@ export class Clmm extends ModuleBase {
 
     const limitOrderNonce = getPdaLimitOrderNonceAddress(programId, this.scope.ownerPubKey, noneIndex).publicKey;
     const res = await this.scope.connection.getAccountInfo(limitOrderNonce);
+
     const orderNonce = res ? LimitOrderNonceLayout.decode(res.data).orderNonce : new BN(0);
 
     const limitOrder = getPdaLimitOrderAddress(
@@ -1762,6 +1743,7 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     txVersion,
+    forerunCreate,
   }: DecreaseLimitOrder<T>): Promise<MakeTxData<T>> {
     const poolId = new PublicKey(poolInfo.id);
     const programId = new PublicKey(poolInfo.programId);
@@ -1891,8 +1873,9 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
-    return txBuilder.versionBuild({
+    return txBuilder.versionBuild<{ forerunCreate?: boolean }>({
       txVersion,
+      extInfo: { forerunCreate },
     }) as Promise<MakeTxData<T>>;
   }
 
@@ -1988,18 +1971,14 @@ export class Clmm extends ModuleBase {
       pda: PublicKey;
     })[];
     const poolIdList = noneNullLimitOrder.map((o) => o.poolId.toBase58());
+
     const allPoolInfo = (
       await this.scope.api.fetchPoolById({
         ids: poolIdList.join(","),
       })
     ).filter(Boolean) as ApiV3PoolInfoConcentratedItem[];
-
     const poolInfoMap: Record<string, SimpleClmmPoolInfo> = {};
     allPoolInfo.forEach((p) => (poolInfoMap[p.id] = p as SimpleClmmPoolInfo));
-    if (!allPoolInfo.length) {
-      const res = await this.getMultipleSimplePoolInfo(poolIdList);
-      poolIdList.forEach((id) => (poolInfoMap[id] = res[id].poolInfo));
-    }
 
     const tickArrayInfos = await PoolUtils.fetchMultipleTickArrayInfo({
       connection: this.scope.connection,
@@ -2044,13 +2023,14 @@ export class Clmm extends ModuleBase {
           amount: unfulfilledAmount,
           slippage,
           txVersion: TxVersion.V0,
+          forerunCreate: true,
         });
 
         txBuilder.addInstruction({
           instructions: builder.allInstructions,
         });
       } else if (!limitOrderSettle.isZero()) {
-        const settleBuilData = await this.settleLimitOrder({ limitOrder });
+        const settleBuilData = await this.settleLimitOrder({ limitOrder, forerunCreate: true });
         txBuilder.addInstruction({ ...settleBuilData.builder.AllTxData });
       }
 
@@ -2082,6 +2062,7 @@ export class Clmm extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     txVersion,
+    forerunCreate,
   }: SettleLimitOrder<T>): Promise<MakeTxData<T>> {
     const data = await this.scope.connection.getAccountInfo(limitOrder);
     if (!data) this.logAndCreateError(`limit order ${limitOrder.toBase58()} not exist`);
@@ -2098,33 +2079,6 @@ export class Clmm extends ModuleBase {
       new PublicKey(outputMintInfo.programId),
     ];
     const programId = new PublicKey(poolInfo.programId);
-
-    // // Check if order has any filled amount to settle
-    // if (limitOrderData.filledAmount.isZero()) {
-    //   console.log("\n⚠ Order has not been filled yet.");
-    //   console.log("The pool price must cross the order tick for the order to be filled.");
-
-    //   // Check if order is fillable
-    //   if (limitOrderData.zeroForOne) {
-    //     // Sell order: filled when price goes above order tick
-    //     if (poolInfo.tickCurrent < limitOrderData.tick) {
-    //       this.logAndCreateError(
-    //         `Current price is below order price. Order will fill when price rises above ${orderPrice.toFixed(6)}`,
-    //       );
-    //     } else {
-    //       this.logAndCreateError("Price has crossed order tick. Order may have been partially filled.");
-    //     }
-    //   } else {
-    //     // Buy order: filled when price goes below order tick
-    //     if (poolInfo.tickCurrent > limitOrderData.tick) {
-    //       this.logAndCreateError(
-    //         `Current price is above order price. Order will fill when price drops below ${orderPrice.toFixed(6)}`,
-    //       );
-    //     } else {
-    //       this.logAndCreateError("Price has crossed order tick. Order may have been partially filled.");
-    //     }
-    //   }
-    // }
 
     const txBuilder = this.createTxBuilder();
     const isOutputSol = outputMint.equals(WSOLMint);
@@ -2183,8 +2137,9 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
-    return txBuilder.versionBuild({
+    return txBuilder.versionBuild<{ forerunCreate?: boolean }>({
       txVersion,
+      extInfo: { forerunCreate },
     }) as Promise<MakeTxData<T>>;
   }
 
