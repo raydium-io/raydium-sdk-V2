@@ -677,12 +677,14 @@ export interface OpenLimitOrder<T = TxVersion.LEGACY> {
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+  tickArrayBitmap?: PublicKey;
 }
 
 export interface IncreaseLimitOrder<T = TxVersion.LEGACY> {
   poolInfo: SimpleClmmPoolInfo;
   limitOrder: PublicKey;
   limitOrderInfo?: ReturnType<typeof LimitOrderLayout.decode>;
+  tickArrayBitmap?: PublicKey;
   amount: BN;
   ownerInfo?: {
     feePayer?: PublicKey;

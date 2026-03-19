@@ -1533,6 +1533,7 @@ export class Clmm extends ModuleBase {
     orderTick,
     amount,
     noneIndex = 0,
+    tickArrayBitmap,
     ownerInfo = {
       useSOLBalance: true,
     },
@@ -1621,6 +1622,7 @@ export class Clmm extends ModuleBase {
           baseIn,
           orderTick,
           amount,
+          tickArrayBitmap,
         ),
       ],
     });
@@ -1735,6 +1737,7 @@ export class Clmm extends ModuleBase {
     limitOrderInfo: defaultLimitOrderInfo,
     amount,
     slippage = 1000,
+    tickArrayBitmap,
     ownerInfo = {
       useSOLBalance: true,
     },
@@ -1867,6 +1870,7 @@ export class Clmm extends ModuleBase {
           outputMint,
           amount,
           amountMin,
+          tickArrayBitmap,
         ),
       ],
     });

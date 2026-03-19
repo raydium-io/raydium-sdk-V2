@@ -739,6 +739,7 @@ export class ClmmInstrument {
     zeroForOne: boolean,
     tickIndex: number,
     amount: BN,
+    tickArrayBitmap?: PublicKey,
   ): TransactionInstruction {
     const dataLayout = struct([u8("nonceIndex"), bool("zeroForOne"), s32("tickIndex"), u64("amount")]);
 
@@ -753,6 +754,7 @@ export class ClmmInstrument {
       { pubkey: inputVaultMint, isSigner: false, isWritable: false },
       { pubkey: inputTokenProgram, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ...(tickArrayBitmap ? [{ pubkey: tickArrayBitmap, isSigner: false, isWritable: true }] : []),
     ];
 
     const data = Buffer.alloc(dataLayout.span);
