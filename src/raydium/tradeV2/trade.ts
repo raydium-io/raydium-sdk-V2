@@ -7,6 +7,7 @@ import {
   TransferFee,
   TransferFeeConfig,
   createSyncNativeInstruction,
+  createTransferCheckedInstruction,
 } from "@solana/spl-token";
 import BN from "bn.js";
 import Decimal from "decimal.js";
@@ -310,15 +311,28 @@ export default class TradeV2 extends ModuleBase {
 
     if (swapInfo.feeConfig !== undefined) {
       const checkTxBuilder = this.createTxBuilder();
-      checkTxBuilder.addInstruction({
-        instructions: [
-          createTransferInstruction(
+
+      // Use createTransferCheckedInstruction for Token2022, createTransferInstruction for regular tokens
+      const transferInstruction = amountIn.amount.token.isToken2022
+        ? createTransferCheckedInstruction(
+            sourceAcc,
+            amountIn.amount.token.mint, // mint parameter required for checked transfer
+            swapInfo.feeConfig.feeAccount,
+            this.scope.ownerPubKey,
+            swapInfo.feeConfig.feeAmount.toNumber(),
+            amountIn.amount.token.decimals, // decimals parameter required for checked transfer
+            [],
+            TOKEN_2022_PROGRAM_ID,
+          )
+        : createTransferInstruction(
             sourceAcc,
             swapInfo.feeConfig.feeAccount,
             this.scope.ownerPubKey,
             swapInfo.feeConfig.feeAmount.toNumber(),
-          ),
-        ],
+          );
+
+      checkTxBuilder.addInstruction({
+        instructions: [transferInstruction],
         instructionTypes: [InstructionType.TransferAmount],
       });
       checkTxBuilder.addInstruction(swapIns);

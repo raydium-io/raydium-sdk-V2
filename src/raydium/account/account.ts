@@ -211,7 +211,13 @@ export default class Account extends ModuleBase {
     };
 
     if (associatedOnly) {
-      const _createATAIns = createAssociatedTokenAccountIdempotentInstruction(owner, ata, owner, mint, tokenProgram);
+      const _createATAIns = createAssociatedTokenAccountIdempotentInstruction(
+        createInfo.payer || owner,
+        ata,
+        owner,
+        mint,
+        tokenProgram,
+      );
       const _ataInTokenAcc = this.tokenAccountRawInfos.find((i) => i.pubkey.equals(ata));
       if (checkCreateATAOwner) {
         const ataInfo = await this.scope.connection.getAccountInfo(ata);

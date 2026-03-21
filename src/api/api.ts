@@ -141,9 +141,7 @@ export class Api {
   }
 
   async getClmmPoolLines(poolId: string): Promise<{ price: string; liquidity: string }[]> {
-    const res = await this.api.get(
-      `${this.urlConfigs.POOL_LIQUIDITY_LINE || API_URLS.POOL_LIQUIDITY_LINE}?id=${poolId}`,
-    );
+    const res = await this.api.get(`${this.urlConfigs.POOL_POSITION_LINE || API_URLS.POOL_POSITION_LINE}?id=${poolId}`);
     return res.data;
   }
 
