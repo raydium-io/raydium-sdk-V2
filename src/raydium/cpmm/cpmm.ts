@@ -721,7 +721,7 @@ export default class CpmmModule extends ModuleBase {
         createInfo:
           mintAUseSOLBalance || !baseIn
             ? {
-                payer: this.scope.ownerPubKey,
+                payer: feePayer || this.scope.ownerPubKey,
                 amount: baseIn ? swapResult.inputAmount : 0,
               }
             : undefined,
@@ -740,7 +740,7 @@ export default class CpmmModule extends ModuleBase {
         createInfo:
           mintBUseSOLBalance || baseIn
             ? {
-                payer: this.scope.ownerPubKey,
+                payer: feePayer || this.scope.ownerPubKey,
                 amount: baseIn ? 0 : swapResult.inputAmount,
               }
             : undefined,
