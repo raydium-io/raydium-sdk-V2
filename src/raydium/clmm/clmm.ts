@@ -1048,11 +1048,15 @@ export class Clmm extends ModuleBase {
       rewardMint: PublicKey;
     }[] = [];
     for (let i = 0; i < poolKeys.rewardInfos.length; i++) {
-      rewardAccountsFullInfo.push({
-        poolRewardVault: new PublicKey(poolKeys.rewardInfos[i].vault),
-        ownerRewardVault: rewardAccounts[i],
-        rewardMint: new PublicKey(poolKeys.rewardInfos[i].mint.address),
-      });
+      const mint = poolKeys.rewardInfos[i].mint.address;
+      const ownerRewardVault = ownerMintToAccount[mint];
+      if (ownerRewardVault) {
+        rewardAccountsFullInfo.push({
+          poolRewardVault: new PublicKey(poolKeys.rewardInfos[i].vault),
+          ownerRewardVault,
+          rewardMint: new PublicKey(mint),
+        });
+      }
     }
 
     const harvestLockIns = await ClmmInstrument.harvestLockPositionInstructionV2({

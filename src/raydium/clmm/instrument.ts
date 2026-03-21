@@ -1702,17 +1702,26 @@ export class ClmmInstrument {
       ownerPosition.tickUpper,
     );
 
+    // Match by mint: rewardDefaultInfos and rewardInfos can differ in length/order
+    const ownerMintToAccount = new Map<string, PublicKey>();
+    for (let i = 0; i < poolInfo.rewardDefaultInfos.length; i++) {
+      ownerMintToAccount.set(poolInfo.rewardDefaultInfos[i].mint.address, ownerInfo.rewardAccounts[i]);
+    }
     const rewardAccounts: {
       poolRewardVault: PublicKey;
       ownerRewardVault: PublicKey;
       rewardMint: PublicKey;
     }[] = [];
-    for (let i = 0; i < poolInfo.rewardDefaultInfos.length; i++) {
-      rewardAccounts.push({
-        poolRewardVault: new PublicKey(poolKeys.rewardInfos[i].vault),
-        ownerRewardVault: ownerInfo.rewardAccounts[i],
-        rewardMint: new PublicKey(poolInfo.rewardDefaultInfos[i].mint.address),
-      });
+    for (let i = 0; i < poolKeys.rewardInfos.length; i++) {
+      const mint = poolKeys.rewardInfos[i].mint.address;
+      const ownerRewardVault = ownerMintToAccount.get(mint);
+      if (ownerRewardVault) {
+        rewardAccounts.push({
+          poolRewardVault: new PublicKey(poolKeys.rewardInfos[i].vault),
+          ownerRewardVault,
+          rewardMint: new PublicKey(mint),
+        });
+      }
     }
 
     const ins: TransactionInstruction[] = [];
