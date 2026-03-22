@@ -268,6 +268,7 @@ export interface ReturnTypeComputeAmountOut {
 }
 
 export interface ReturnTypeComputeAmountOutBaseOut {
+  allTrade: boolean;
   amountIn: GetTransferAmountFee;
   maxAmountIn: GetTransferAmountFee;
   realAmountOut: GetTransferAmountFee;

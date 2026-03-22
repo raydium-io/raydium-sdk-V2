@@ -1150,6 +1150,7 @@ export default class LiquidityModule extends ModuleBase {
     currentPrice: Decimal;
     executionPrice: Decimal | null;
     priceImpact: Decimal;
+    fee: BN;
   } {
     const { baseReserve, quoteReserve } = poolInfo;
     if (mintIn.toString() !== poolInfo.mintA.address && mintIn.toString() !== poolInfo.mintB.address)
@@ -1200,6 +1201,7 @@ export default class LiquidityModule extends ModuleBase {
 
     let amountInRaw = new BN(0);
     let amountOutRaw = amountOut;
+    let fee = new BN(0);
     if (!amountOutRaw.isZero()) {
       // if out > reserve, out = reserve - 1
       if (amountOutRaw.gt(reserveOut)) {
@@ -1212,6 +1214,8 @@ export default class LiquidityModule extends ModuleBase {
       amountInRaw = amountInWithoutFee
         .mul(LIQUIDITY_FEES_DENOMINATOR)
         .div(LIQUIDITY_FEES_DENOMINATOR.sub(LIQUIDITY_FEES_NUMERATOR));
+
+      fee = amountInRaw.sub(amountInWithoutFee);
     }
 
     const maxAmountInRaw = new BN(new Decimal(amountInRaw.toString()).mul(1 + slippage).toFixed(0));
@@ -1263,6 +1267,7 @@ export default class LiquidityModule extends ModuleBase {
       currentPrice,
       executionPrice,
       priceImpact,
+      fee,
     };
   }
 
@@ -1416,11 +1421,11 @@ export default class LiquidityModule extends ModuleBase {
       needFetchVaults.map((i) => ({ pubkey: new PublicKey(i) })),
       config,
     );
-
     for (let i = 0; i < needFetchVaults.length; i++) {
       const vaultItemInfo = vaultAccountInfo[i].accountInfo;
       if (vaultItemInfo === null) throw Error("fetch vault info error: " + needFetchVaults[i]);
-
+      // eslint-disable-next-line
+      // @ts-ignore
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 

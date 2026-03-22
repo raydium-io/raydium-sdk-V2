@@ -19,7 +19,7 @@ import {
   createTransferInstruction,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
-  TransferFeeConfig
+  TransferFeeConfig,
 } from "@solana/spl-token";
 import { EpochInfo, PublicKey, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
@@ -30,6 +30,7 @@ import {
   ClmmInstrument,
   ClmmParsedRpcData,
   ComputeClmmPoolInfo,
+  decimalToX64,
   ReturnTypeComputeAmountOutBaseOut,
   ReturnTypeComputeAmountOutFormat,
   ReturnTypeFetchMultiplePoolTickArrays,
@@ -46,7 +47,7 @@ import {
 import { ComputeBudgetConfig, ReturnTypeFetchMultipleMintInfos } from "../../raydium/type";
 import { closeAccountInstruction, createWSolAccountInstructions } from "../account/instruction";
 import { TokenAccount } from "../account/types";
-import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from "../clmm/libraries/constants";
+import { BN_ZERO, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from "../clmm/libraries/constants";
 import { PoolUtils } from "../clmm/libraries/pool";
 import { CpmmComputeData } from "../cpmm";
 import {
@@ -69,6 +70,8 @@ import { toApiV3Token, toToken, toTokenAmount } from "../token";
 import { makeSwapInstruction } from "./instrument";
 import {
   BasicPoolInfo,
+  ComputeAmountInAmmLayout,
+  ComputeAmountInLayout,
   ComputeAmountOutAmmLayout,
   ComputeAmountOutLayout,
   ComputePoolType,
@@ -227,9 +230,9 @@ export default class TradeV2 extends ModuleBase {
         skipCloseAccount: !useSolBalance,
         createInfo: useSolBalance
           ? {
-            payer: this.scope.ownerPubKey,
-            amount: amountIn.amount.raw,
-          }
+              payer: this.scope.ownerPubKey,
+              amount: amountIn.amount.raw,
+            }
           : undefined,
         associatedOnly: useSolBalance ? false : ownerInfo.associatedOnly,
         checkCreateATAOwner: ownerInfo.checkCreateATAOwner,
@@ -390,7 +393,7 @@ export default class TradeV2 extends ModuleBase {
     checkCreateATAOwner?: boolean;
     computeBudgetConfig?: ComputeBudgetConfig;
     txVersion: T;
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): Promise<
     MakeTxData<
       T,
@@ -436,7 +439,6 @@ export default class TradeV2 extends ModuleBase {
     if (!priceLimit || priceLimit.equals(new Decimal(0))) {
       sqrtPriceLimitX64 = baseIn ? MIN_SQRT_PRICE_X64.add(new BN(1)) : MAX_SQRT_PRICE_X64.sub(new BN(1));
     } else {
-
       sqrtPriceLimitX64 = TickUtil.priceToSqrtPriceX64(
         priceLimit,
         clmmPoolData.poolInfo.mintA.decimals,
@@ -502,35 +504,35 @@ export default class TradeV2 extends ModuleBase {
     txBuilder.addInstruction(
       fixClmmOut
         ? ClmmInstrument.makeSwapBaseOutInstructions({
-          poolInfo: clmmPoolData.poolInfo,
-          poolKeys: clmmPoolData.poolKeys,
-          observationId: clmmPoolData.computePoolInfo.observationId,
-          ownerInfo: {
-            wallet: this.scope.ownerPubKey,
-            tokenAccountA: ownerTokenAccountA!,
-            tokenAccountB: ownerTokenAccountB!,
-          },
-          outputMint: baseIn ? clmmMintB : clmmMintA,
-          amountOut: clmmAmountOut,
-          amountInMax: maxClmmAmountIn,
-          sqrtPriceLimitX64,
-          remainingAccounts,
-        })
+            poolInfo: clmmPoolData.poolInfo,
+            poolKeys: clmmPoolData.poolKeys,
+            observationId: clmmPoolData.computePoolInfo.observationId,
+            ownerInfo: {
+              wallet: this.scope.ownerPubKey,
+              tokenAccountA: ownerTokenAccountA!,
+              tokenAccountB: ownerTokenAccountB!,
+            },
+            outputMint: baseIn ? clmmMintB : clmmMintA,
+            amountOut: clmmAmountOut,
+            amountInMax: maxClmmAmountIn,
+            sqrtPriceLimitX64,
+            remainingAccounts,
+          })
         : ClmmInstrument.makeSwapBaseInInstructions({
-          poolInfo: clmmPoolData.poolInfo,
-          poolKeys: clmmPoolData.poolKeys,
-          observationId: clmmPoolData.computePoolInfo.observationId,
-          ownerInfo: {
-            wallet: this.scope.ownerPubKey,
-            tokenAccountA: ownerTokenAccountA!,
-            tokenAccountB: ownerTokenAccountB!,
-          },
-          inputMint: new PublicKey(inputMint),
-          amountIn: inputAmount,
-          amountOutMin: clmmAmountOut,
-          sqrtPriceLimitX64,
-          remainingAccounts,
-        }),
+            poolInfo: clmmPoolData.poolInfo,
+            poolKeys: clmmPoolData.poolKeys,
+            observationId: clmmPoolData.computePoolInfo.observationId,
+            ownerInfo: {
+              wallet: this.scope.ownerPubKey,
+              tokenAccountA: ownerTokenAccountA!,
+              tokenAccountB: ownerTokenAccountB!,
+            },
+            inputMint: new PublicKey(inputMint),
+            amountIn: inputAmount,
+            amountOutMin: clmmAmountOut,
+            sqrtPriceLimitX64,
+            remainingAccounts,
+          }),
     );
 
     const launchMintAProgram = launchPoolInfo.mintProgramFlag === 0 ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
@@ -559,9 +561,9 @@ export default class TradeV2 extends ModuleBase {
         skipCloseAccount: !mintBUseSol,
         createInfo: mintBUseSol
           ? {
-            payer: this.scope.ownerPubKey!,
-            amount: clmmAmountOut,
-          }
+              payer: this.scope.ownerPubKey!,
+              amount: clmmAmountOut,
+            }
           : undefined,
         associatedOnly: false,
         checkCreateATAOwner,
@@ -672,7 +674,7 @@ export default class TradeV2 extends ModuleBase {
     launchPlatformInfo?: Pick<LaunchpadPlatformInfo, "feeRate" | "creatorFeeRate">;
     slot?: number;
     mintInfo?: ApiV3Token;
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): Promise<{
     clmmPoolData: {
       poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -705,25 +707,25 @@ export default class TradeV2 extends ModuleBase {
 
     const clmmComputeAmount = fixClmmOut
       ? await PoolUtils.computeAmountIn({
-        poolInfo: clmmPoolData.computePoolInfo,
-        tickarrayBitmapExtension: clmmPoolData.computePoolInfo.exBitmapInfo,
-        tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
-        amountOut: inputAmount,
-        baseMint: new PublicKey(clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"].address),
-        slippage,
-        epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
-        blockTimestamp,
-      })
+          poolInfo: clmmPoolData.computePoolInfo,
+          tickarrayBitmapExtension: clmmPoolData.computePoolInfo.exBitmapInfo,
+          tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
+          amountOut: inputAmount,
+          baseMint: new PublicKey(clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"].address),
+          slippage,
+          epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
+          blockTimestamp,
+        })
       : await PoolUtils.computeAmountOutFormat({
-        poolInfo: clmmPoolData.computePoolInfo,
-        tickarrayBitmapExtension: clmmPoolData.computePoolInfo.exBitmapInfo,
-        tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
-        amountIn: inputAmount,
-        tokenOut,
-        slippage,
-        epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
-        blockTimestamp,
-      });
+          poolInfo: clmmPoolData.computePoolInfo,
+          tickarrayBitmapExtension: clmmPoolData.computePoolInfo.exBitmapInfo,
+          tickArrayCache: clmmPoolData.tickData[clmmPoolId.toString()],
+          amountIn: inputAmount,
+          tokenOut,
+          slippage,
+          epochInfo: epochInfo ?? (await this.scope.fetchEpochInfo()),
+          blockTimestamp,
+        });
 
     let launchPoolInfo = propsLaunchPoolInfo;
     if (!launchPoolInfo)
@@ -741,20 +743,20 @@ export default class TradeV2 extends ModuleBase {
 
     const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
       ? {
-        transferFeeConfigAuthority: PublicKey.default,
-        withdrawWithheldAuthority: PublicKey.default,
-        withheldAmount: BigInt(0),
-        olderTransferFee: {
-          epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-          maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-          transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-        },
-        newerTransferFee: {
-          epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-          maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-          transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-        },
-      }
+          transferFeeConfigAuthority: PublicKey.default,
+          withdrawWithheldAuthority: PublicKey.default,
+          withheldAmount: BigInt(0),
+          olderTransferFee: {
+            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
+            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
+          },
+          newerTransferFee: {
+            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
+            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
+          },
+        }
       : undefined;
 
     const launchBuyAmount = fixClmmOut
@@ -829,7 +831,7 @@ export default class TradeV2 extends ModuleBase {
     checkCreateATAOwner?: boolean;
     computeBudgetConfig?: ComputeBudgetConfig;
     txVersion: T;
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): Promise<
     MakeTxData<
       T,
@@ -1089,7 +1091,7 @@ export default class TradeV2 extends ModuleBase {
     };
     launchPoolInfo?: LaunchpadPoolInfo & { programId: PublicKey; configInfo: LaunchpadConfigInfo };
     launchPlatformInfo?: LaunchpadPlatformInfo;
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): Promise<{
     clmmPoolData: {
       poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -1138,20 +1140,20 @@ export default class TradeV2 extends ModuleBase {
 
     const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
       ? {
-        transferFeeConfigAuthority: PublicKey.default,
-        withdrawWithheldAuthority: PublicKey.default,
-        withheldAmount: BigInt(0),
-        olderTransferFee: {
-          epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-          maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-          transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-        },
-        newerTransferFee: {
-          epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-          maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-          transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-        },
-      }
+          transferFeeConfigAuthority: PublicKey.default,
+          withdrawWithheldAuthority: PublicKey.default,
+          withheldAmount: BigInt(0),
+          olderTransferFee: {
+            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
+            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
+          },
+          newerTransferFee: {
+            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
+            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
+            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
+          },
+        }
       : undefined;
 
     const launchSwapInfo = Curve.sellExactIn({
@@ -1685,7 +1687,7 @@ export default class TradeV2 extends ModuleBase {
       feeBps: BN;
       feeAccount: PublicKey;
     };
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): ComputeAmountOutLayout[] {
     const _amountInFee =
       feeConfig === undefined
@@ -1697,9 +1699,9 @@ export default class TradeV2 extends ModuleBase {
       feeConfig === undefined
         ? undefined
         : {
-          feeAmount: _amountInFee,
-          feeAccount: feeConfig.feeAccount,
-        };
+            feeAmount: _amountInFee,
+            feeAccount: feeConfig.feeAccount,
+          };
     const outputToken = {
       ...propOutputToken,
       address: solToWSol(propOutputToken.address).toString(),
@@ -1807,9 +1809,9 @@ export default class TradeV2 extends ModuleBase {
             remainingAccounts: [maxFirstIn.data.remainingAccounts[0], outC.remainingAccounts[0]],
             minMiddleAmountFee: outC.amountOut.fee?.raw
               ? new TokenAmount(
-                (maxFirstIn.data.amountOut.amount as TokenAmount).token,
-                (maxFirstIn.data.amountOut.fee?.raw ?? ZERO).add(outC.amountOut.fee?.raw ?? ZERO),
-              )
+                  (maxFirstIn.data.amountOut.amount as TokenAmount).token,
+                  (maxFirstIn.data.amountOut.fee?.raw ?? ZERO).add(outC.amountOut.fee?.raw ?? ZERO),
+                )
               : undefined,
             middleToken: (maxFirstIn.data.amountOut.amount as TokenAmount).token,
             poolReady: maxFirstIn.data.poolReady && outC.poolReady,
@@ -1833,6 +1835,202 @@ export default class TradeV2 extends ModuleBase {
       .sort((a, b) => (a.amountOut.amount.raw.sub(b.amountOut.amount.raw).gt(ZERO) ? -1 : 1));
   }
 
+  public getAllRouteComputeAmountIn({
+    outputTokenAmount,
+    directPath,
+    routePathDict,
+    simulateCache,
+    tickCache,
+    slippage,
+    chainTime,
+    epochInfo,
+    blockTimestamp,
+    feeConfig,
+  }: {
+    directPath: ComputePoolType[];
+    routePathDict: ComputeRoutePathType;
+    simulateCache: ReturnTypeFetchMultipleInfo;
+    tickCache: ReturnTypeFetchMultiplePoolTickArrays;
+
+    mintInfos: ReturnTypeFetchMultipleMintInfos;
+
+    outputTokenAmount: TokenAmount;
+    inputToken: ApiV3Token;
+    slippage: number;
+    chainTime: number;
+    epochInfo: EpochInfo;
+
+    feeConfig?: {
+      feeBps: BN;
+      feeAccount: PublicKey;
+    };
+    blockTimestamp: number;
+  }): ComputeAmountInLayout[] {
+    const outputToken = toApiV3Token({
+      address: solToWSol(outputTokenAmount.token.mint).toBase58(),
+      decimals: outputTokenAmount.token.decimals,
+      programId: outputTokenAmount.token.isToken2022 ? TOKEN_2022_PROGRAM_ID.toBase58() : TOKEN_PROGRAM_ID.toBase58(),
+      extensions: {},
+    });
+    const inRoute: ComputeAmountInLayout[] = [];
+    for (const itemPool of directPath) {
+      try {
+        const computeResult = this.computeAmountIn({
+          itemPool,
+          tickCache,
+          simulateCache,
+          chainTime,
+          epochInfo,
+          slippage,
+          outputToken,
+          amountOut: outputTokenAmount.raw,
+          blockTimestamp,
+        });
+        const _amountInFee =
+          feeConfig === undefined
+            ? new BN(0)
+            : computeResult.amountIn.amount.raw.mul(new BN(feeConfig.feeBps.toNumber())).div(new BN(10000));
+        inRoute.push({
+          ...computeResult,
+          feeConfig:
+            feeConfig === undefined
+              ? undefined
+              : {
+                  feeAmount: _amountInFee,
+                  feeAccount: feeConfig.feeAccount,
+                },
+        });
+      } catch (e: any) {
+        this.logDebug("direct error", itemPool.version, itemPool.id.toString(), e.message);
+        /* empty */
+      }
+    }
+    this.logDebug("direct done");
+    for (const [routeMint, info] of Object.entries(routePathDict)) {
+      // const routeToken = new Token(info.mintProgram, routeMint, info.mDecimals);
+      const routeToken = {
+        chainId: 101,
+        address: routeMint,
+        programId: info.mintProgram.toBase58(),
+        logoURI: "",
+        symbol: "",
+        name: "",
+        decimals: info.mDecimals,
+        tags: [],
+        extensions: {},
+      };
+
+      // intermdiate -> out
+      const minIntermediateIn = info.out
+        .map((i) => {
+          try {
+            return {
+              pool: i,
+              data: this.computeAmountIn({
+                itemPool: i,
+                tickCache,
+                simulateCache,
+                chainTime,
+                epochInfo,
+                slippage,
+                outputToken,
+                amountOut: outputTokenAmount.raw,
+                blockTimestamp,
+              }),
+            };
+          } catch (e: any) {
+            this.logDebug("route in error", i.version, i.id.toString(), e.message);
+            return undefined;
+          }
+        })
+        .sort((_a, _b) => {
+          const a = _a === undefined ? ZERO : _a.data.amountIn.amount.raw.add(_a.data.amountIn.fee?.raw ?? ZERO);
+          const b = _b === undefined ? ZERO : _b.data.amountIn.amount.raw.add(_b.data.amountIn.fee?.raw ?? ZERO);
+          return a.lt(b) ? -1 : 1;
+        })[0];
+      if (minIntermediateIn === undefined) continue;
+      const routeAmountIn = new TokenAmount(
+        toToken(routeToken),
+        minIntermediateIn.data.amountIn.amount.raw.add(minIntermediateIn.data.amountIn.fee?.raw ?? ZERO),
+      );
+      for (const iInPool of info.in) {
+        try {
+          // input -> intermdiate
+          const inputToIntermediate = this.computeAmountIn({
+            itemPool: iInPool,
+            tickCache,
+            simulateCache,
+            chainTime,
+            epochInfo,
+            slippage,
+            outputToken: routeToken,
+            amountOut: routeAmountIn.raw,
+            blockTimestamp,
+          });
+          const _amountInFee =
+            feeConfig === undefined
+              ? new BN(0)
+              : inputToIntermediate.amountIn.amount.raw.mul(new BN(feeConfig.feeBps.toNumber())).div(new BN(10000));
+
+          inRoute.push({
+            ...inputToIntermediate,
+            allTrade: inputToIntermediate.allTrade && minIntermediateIn.data.allTrade ? true : false,
+            amountIn: inputToIntermediate.amountIn,
+            amountOut: minIntermediateIn.data.amountOut,
+            maxAmountIn: inputToIntermediate.maxAmountIn,
+            currentPrice: undefined,
+            executionPrice: new Decimal(
+              new Price({
+                baseToken: minIntermediateIn.data.amountIn.amount.token,
+                denominator: minIntermediateIn.data.amountIn.amount.raw,
+                quoteToken: inputToIntermediate.amountOut.amount.token,
+                numerator: inputToIntermediate.amountOut.amount.raw.sub(inputToIntermediate.amountOut.fee?.raw ?? ZERO),
+              }).toFixed(),
+            ),
+            priceImpact: new Decimal(minIntermediateIn.data.priceImpact.add(inputToIntermediate.priceImpact).toFixed()),
+            fee: [inputToIntermediate.fee[0], minIntermediateIn.data.fee[0]],
+            routeType: "route",
+            poolInfoList: [minIntermediateIn.pool, iInPool],
+            remainingAccounts: [minIntermediateIn.data.remainingAccounts[0], inputToIntermediate.remainingAccounts[0]],
+            minMiddleAmountFee: inputToIntermediate.amountOut.fee?.raw
+              ? new TokenAmount(
+                  (minIntermediateIn.data.amountOut.amount as TokenAmount).token,
+                  (minIntermediateIn.data.amountOut.fee?.raw ?? ZERO).add(
+                    inputToIntermediate.amountOut.fee?.raw ?? ZERO,
+                  ),
+                )
+              : undefined,
+            middleToken: (minIntermediateIn.data.amountOut.amount as TokenAmount).token,
+            poolReady: minIntermediateIn.data.poolReady && inputToIntermediate.poolReady,
+            poolType: [minIntermediateIn.data.poolType, inputToIntermediate.poolType],
+            feeConfig:
+              feeConfig === undefined
+                ? undefined
+                : {
+                    feeAmount: _amountInFee,
+                    feeAccount: feeConfig.feeAccount,
+                  },
+            expirationTime: minExpirationTime(
+              minIntermediateIn.data.expirationTime,
+              inputToIntermediate.expirationTime,
+            ),
+          });
+        } catch (e: any) {
+          this.logDebug("route out error", iInPool.version, iInPool.id.toString(), e.message);
+          /* empty */
+        }
+      }
+    }
+
+    return inRoute
+      .filter((i) => {
+        if (!i.allTrade)
+          this.logDebug(`pool ${i.poolInfoList.map((p) => p.id.toString()).join(",")} filter out since not all trade`);
+        return i.allTrade;
+      })
+      .sort((a, b) => (b.amountIn.amount.raw.sub(a.amountIn.amount.raw).gt(ZERO) ? -1 : 1));
+  }
+
   /** trade related utils */
 
   private computeAmountOut({
@@ -1854,7 +2052,7 @@ export default class TradeV2 extends ModuleBase {
     amountIn: TokenAmount;
     outputToken: ApiV3Token;
     slippage: number;
-    blockTimestamp: number,
+    blockTimestamp: number;
   }): ComputeAmountOutAmmLayout {
     if (itemPool.version === 6) {
       const {
@@ -1972,6 +2170,227 @@ export default class TradeV2 extends ModuleBase {
         executionPrice,
         priceImpact,
         fee: [new TokenAmount(amountIn.token, fee)],
+        routeType: "amm",
+        poolInfoList: [itemPool],
+        remainingAccounts: [],
+        poolReady: Number(simulateCache[itemPool.id as string].openTime) < chainTime,
+        poolType: itemPool.version === 5 ? "STABLE" : undefined,
+        expirationTime: undefined,
+        allTrade: true,
+        slippage,
+        clmmExPriceX64: [undefined],
+      };
+    }
+  }
+
+  private computeAmountIn({
+    itemPool,
+    tickCache,
+    simulateCache,
+    chainTime,
+    epochInfo,
+    slippage,
+    amountOut,
+    outputToken,
+    blockTimestamp,
+  }: {
+    itemPool: ComputePoolType;
+    tickCache: ReturnTypeFetchMultiplePoolTickArrays;
+    simulateCache: ReturnTypeFetchMultipleInfo;
+    chainTime: number;
+    epochInfo: EpochInfo;
+    amountOut: BN;
+    outputToken: ApiV3Token;
+    slippage: number;
+    blockTimestamp: number;
+  }): ComputeAmountInAmmLayout {
+    const inputToken = outputToken.address === itemPool.mintB.address ? itemPool.mintA : itemPool.mintB;
+    if (itemPool.version === 6) {
+      const {
+        allTrade,
+        realAmountOut,
+        amountIn,
+        maxAmountIn,
+        expirationTime,
+        currentPrice,
+        executionPrice,
+        priceImpact,
+        fee,
+        remainingAccounts,
+      } = PoolUtils.computeAmountIn({
+        poolInfo: itemPool,
+        tickarrayBitmapExtension: itemPool.exBitmapInfo,
+        tickArrayCache: tickCache[itemPool.id.toString()],
+        amountOut,
+        baseMint: new PublicKey(inputToken.address),
+        slippage,
+        epochInfo,
+        blockTimestamp,
+      });
+      return {
+        allTrade,
+        amountOut: {
+          amount: toTokenAmount({
+            ...outputToken,
+            amount: realAmountOut.amount,
+          }),
+          fee: realAmountOut.fee
+            ? toTokenAmount({
+                ...outputToken,
+                amount: realAmountOut.fee,
+              })
+            : undefined,
+          expirationTime: undefined,
+        },
+        amountIn: {
+          amount: toTokenAmount({
+            ...inputToken,
+            amount: amountIn.amount,
+          }),
+          fee: amountIn.fee
+            ? toTokenAmount({
+                ...inputToken,
+                amount: amountIn.fee,
+              })
+            : undefined,
+          expirationTime: amountIn.expirationTime,
+        },
+        maxAmountIn: {
+          amount: toTokenAmount({
+            ...inputToken,
+            amount: maxAmountIn.amount,
+          }),
+          fee: maxAmountIn.fee
+            ? toTokenAmount({
+                ...inputToken,
+                amount: maxAmountIn.fee,
+              })
+            : undefined,
+          expirationTime: maxAmountIn.expirationTime,
+        },
+        currentPrice: new Decimal(currentPrice.toFixed()),
+        executionPrice: new Decimal(executionPrice.toFixed()),
+        priceImpact: new Decimal(priceImpact.toFixed()),
+        fee: [
+          toTokenAmount({
+            ...inputToken,
+            amount: fee,
+          }),
+        ],
+        remainingAccounts: [remainingAccounts],
+        routeType: "amm",
+        poolInfoList: [itemPool],
+        poolReady: itemPool.startTime < chainTime,
+        poolType: "CLMM",
+        slippage,
+        clmmExPriceX64: [decimalToX64(executionPrice)],
+        expirationTime: minExpirationTime(realAmountOut.expirationTime, expirationTime),
+      };
+    } else if (itemPool.version === 7) {
+      const {
+        allTrade,
+        executionPrice,
+        amountIn,
+        amountOut: realAmountOut,
+        priceImpact,
+        fee,
+      } = this.scope.cpmm.computeSwapAmount({
+        pool: itemPool,
+        outputMint: outputToken.address,
+        amountIn: amountOut,
+        swapBaseIn: false,
+        slippage,
+      });
+
+      return {
+        allTrade,
+        amountOut: {
+          amount: toTokenAmount({
+            ...outputToken,
+            amount: realAmountOut,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        amountIn: {
+          amount: toTokenAmount({
+            ...inputToken,
+            amount: amountIn,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        maxAmountIn: {
+          amount: toTokenAmount({
+            ...inputToken,
+            amount: amountIn.mul(new BN((1 + slippage) * 10000)).div(new BN(10000)),
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        currentPrice: itemPool.poolPrice,
+        executionPrice,
+        priceImpact,
+        fee: [
+          toTokenAmount({
+            ...inputToken,
+            amount: fee,
+          }),
+        ],
+        remainingAccounts: [],
+        routeType: "amm",
+        poolInfoList: [itemPool],
+        poolReady: itemPool.openTime.toNumber() < chainTime,
+        poolType: "CPMM",
+        slippage,
+        clmmExPriceX64: [undefined],
+        expirationTime: undefined,
+      };
+    } else {
+      if (![1, 6, 7].includes(simulateCache[itemPool.id.toString()].status)) throw Error("swap error");
+      const { amountIn, maxAmountIn, currentPrice, executionPrice, priceImpact } = this.scope.liquidity.computeAmountIn(
+        {
+          poolInfo: simulateCache[itemPool.id.toString()],
+          amountOut,
+          mintIn: inputToken.address,
+          mintOut: outputToken.address,
+          slippage,
+        },
+      );
+      return {
+        amountOut: {
+          amount: toTokenAmount({
+            ...outputToken,
+            amount: amountOut,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        amountIn: {
+          amount: toTokenAmount({
+            ...inputToken,
+            amount: amountIn,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        maxAmountIn: {
+          amount: toTokenAmount({
+            ...inputToken,
+            amount: maxAmountIn,
+          }),
+          fee: undefined,
+          expirationTime: undefined,
+        },
+        currentPrice,
+        executionPrice,
+        priceImpact,
+        fee: [
+          toTokenAmount({
+            ...inputToken,
+            amount: BN_ZERO,
+          }),
+        ],
         routeType: "amm",
         poolInfoList: [itemPool],
         remainingAccounts: [],

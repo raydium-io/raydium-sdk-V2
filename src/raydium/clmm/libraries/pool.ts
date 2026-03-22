@@ -1,23 +1,32 @@
-import { PublicKey } from "@solana/web3.js"
-import BN from "bn.js"
-import { DynamicFeeInfoLayout, PoolInfoLayout } from "../layout"
-import { mulDivFloor } from "./bigNum"
-import { BN_ZERO, CollectFeeOn, MAX_TICK, MIN_TICK, Q64, REDUCTION_FACTOR_DENOMINATOR, VOLATILITY_ACCUMULATOR_SCALE } from "./constants"
-import { TickArrayBitmapUtil, TickArrayUtil, TickUtil } from "./tickArrayUtil"
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import { DynamicFeeInfoLayout, PoolInfoLayout } from "../layout";
+import { mulDivFloor } from "./bigNum";
+import {
+  BN_ZERO,
+  CollectFeeOn,
+  MAX_TICK,
+  MIN_TICK,
+  Q64,
+  REDUCTION_FACTOR_DENOMINATOR,
+  VOLATILITY_ACCUMULATOR_SCALE,
+} from "./constants";
+import { TickArrayBitmapUtil, TickArrayUtil, TickUtil } from "./tickArrayUtil";
 
 export class PoolFee {
   static tickSpacingIndexFromTick(tickIndex: number, tickSpacing: number): number {
     if (tickIndex % tickSpacing == 0 || tickIndex >= 0) {
-      return tickIndex / tickSpacing
+      return tickIndex / tickSpacing;
     } else {
-      return tickIndex / tickSpacing - 1
+      return tickIndex / tickSpacing - 1;
     }
   }
 }
 
 export class DynamicFeeInfo {
   static getDynamicFeeInfo({ poolInfo }: { poolInfo: ReturnType<typeof PoolInfoLayout.decode> }) {
-    if (poolInfo.dynamicFeeInfo.filterPeriod === 0 &&
+    if (
+      poolInfo.dynamicFeeInfo.filterPeriod === 0 &&
       poolInfo.dynamicFeeInfo.decayPeriod === 0 &&
       poolInfo.dynamicFeeInfo.reductionFactor === 0 &&
       poolInfo.dynamicFeeInfo.dynamicFeeControl === 0 &&
@@ -25,94 +34,98 @@ export class DynamicFeeInfo {
       poolInfo.dynamicFeeInfo.tickSpacingIndexReference === 0 &&
       poolInfo.dynamicFeeInfo.volatilityReference === 0 &&
       poolInfo.dynamicFeeInfo.volatilityAccumulator === 0 &&
-      poolInfo.dynamicFeeInfo.lastUpdateTimestamp.isZero()) {
-      return undefined
+      poolInfo.dynamicFeeInfo.lastUpdateTimestamp.isZero()
+    ) {
+      return undefined;
     }
-    return poolInfo.dynamicFeeInfo
+    return poolInfo.dynamicFeeInfo;
   }
 
-  static updateReference({ dynamicFeeInfo, tickSpacingIndex, currentTimestamp }: {
-    dynamicFeeInfo: ReturnType<typeof DynamicFeeInfoLayout.decode>,
-    tickSpacingIndex: number,
-    currentTimestamp: number,
+  static updateReference({
+    dynamicFeeInfo,
+    tickSpacingIndex,
+    currentTimestamp,
+  }: {
+    dynamicFeeInfo: ReturnType<typeof DynamicFeeInfoLayout.decode>;
+    tickSpacingIndex: number;
+    currentTimestamp: number;
   }) {
-    const timeSinceReferenceUpdate = currentTimestamp - dynamicFeeInfo.lastUpdateTimestamp.toNumber()
+    const timeSinceReferenceUpdate = currentTimestamp - dynamicFeeInfo.lastUpdateTimestamp.toNumber();
 
     if (timeSinceReferenceUpdate < dynamicFeeInfo.filterPeriod) {
       //
     } else if (timeSinceReferenceUpdate < dynamicFeeInfo.decayPeriod) {
-      dynamicFeeInfo.tickSpacingIndexReference = tickSpacingIndex
-      dynamicFeeInfo.volatilityReference = Math.floor((dynamicFeeInfo.volatilityAccumulator * dynamicFeeInfo.reductionFactor) / REDUCTION_FACTOR_DENOMINATOR)
-      dynamicFeeInfo.lastUpdateTimestamp = new BN(currentTimestamp)
+      dynamicFeeInfo.tickSpacingIndexReference = tickSpacingIndex;
+      dynamicFeeInfo.volatilityReference = Math.floor(
+        (dynamicFeeInfo.volatilityAccumulator * dynamicFeeInfo.reductionFactor) / REDUCTION_FACTOR_DENOMINATOR,
+      );
+      dynamicFeeInfo.lastUpdateTimestamp = new BN(currentTimestamp);
     } else {
-      dynamicFeeInfo.tickSpacingIndexReference = tickSpacingIndex
-      dynamicFeeInfo.volatilityReference = 0
-      dynamicFeeInfo.lastUpdateTimestamp = new BN(currentTimestamp)
+      dynamicFeeInfo.tickSpacingIndexReference = tickSpacingIndex;
+      dynamicFeeInfo.volatilityReference = 0;
+      dynamicFeeInfo.lastUpdateTimestamp = new BN(currentTimestamp);
     }
   }
 
-  static updateVolatilityAccumulator({ state, tickSpacingIndex }: {
-    state: ReturnType<typeof DynamicFeeInfoLayout.decode>,
-    tickSpacingIndex: number,
+  static updateVolatilityAccumulator({
+    state,
+    tickSpacingIndex,
+  }: {
+    state: ReturnType<typeof DynamicFeeInfoLayout.decode>;
+    tickSpacingIndex: number;
   }) {
-    const indexDelta = Math.abs(state.tickSpacingIndexReference - tickSpacingIndex)
-    const volatilityAccumulator = state.volatilityReference + indexDelta * VOLATILITY_ACCUMULATOR_SCALE
+    const indexDelta = Math.abs(state.tickSpacingIndexReference - tickSpacingIndex);
+    const volatilityAccumulator = state.volatilityReference + indexDelta * VOLATILITY_ACCUMULATOR_SCALE;
 
-    state.volatilityAccumulator = Math.min(volatilityAccumulator, state.maxVolatilityAccumulator)
+    state.volatilityAccumulator = Math.min(volatilityAccumulator, state.maxVolatilityAccumulator);
   }
 }
-
 
 export class PoolUtil {
   static isFeeOnInput(feeOn: number, zeroForOne: boolean): boolean {
     switch (feeOn) {
       case CollectFeeOn.FromInput:
-        return true
+        return true;
       case CollectFeeOn.TokenOnlyA:
-        return zeroForOne
+        return zeroForOne;
       case CollectFeeOn.TokenOnlyB:
-        return !zeroForOne
+        return !zeroForOne;
       default:
-        return true
+        return true;
     }
   }
 
   static isFeeOnTokenA(poolInfo: ReturnType<typeof PoolInfoLayout.decode>, zeroForOne: boolean) {
-    if (poolInfo.feeOn === CollectFeeOn.FromInput) return zeroForOne
-    if (poolInfo.feeOn === CollectFeeOn.TokenOnlyA) return true
-    return false
+    if (poolInfo.feeOn === CollectFeeOn.FromInput) return zeroForOne;
+    if (poolInfo.feeOn === CollectFeeOn.TokenOnlyA) return true;
+    return false;
   }
 
-  static isOverflowDefaultTickarrayBitmap({ tickSpacing, tickIndexs }: {
-    tickSpacing: number,
-    tickIndexs: number[],
-  }) {
-    const { maxTickBoundary, minTickBoundary } = this.tickArrayStartIndexRange({ tickSpacing })
+  static isOverflowDefaultTickarrayBitmap({ tickSpacing, tickIndexs }: { tickSpacing: number; tickIndexs: number[] }) {
+    const { maxTickBoundary, minTickBoundary } = this.tickArrayStartIndexRange({ tickSpacing });
     for (const tickIndex of tickIndexs) {
-      const tickarrayStartIndex = TickArrayUtil.getTickArrayStartIndex(tickIndex, tickSpacing)
+      const tickarrayStartIndex = TickArrayUtil.getTickArrayStartIndex(tickIndex, tickSpacing);
 
       if (tickarrayStartIndex >= maxTickBoundary || tickarrayStartIndex < minTickBoundary) {
-        return true
+        return true;
       }
     }
 
-    return false
+    return false;
   }
 
-
-  static tickArrayStartIndexRange({ tickSpacing }: {
-    tickSpacing: number,
-  }) {
-    let maxTickBoundary = TickArrayBitmapUtil.maxTickInTickarrayBitmap(tickSpacing)
-    let minTickBoundary = -maxTickBoundary
+  static tickArrayStartIndexRange({ tickSpacing }: { tickSpacing: number }) {
+    let maxTickBoundary = TickArrayBitmapUtil.maxTickInTickarrayBitmap(tickSpacing);
+    let minTickBoundary = -maxTickBoundary;
 
     if (maxTickBoundary > MAX_TICK) {
-      maxTickBoundary = TickArrayUtil.getTickArrayStartIndex(MAX_TICK, tickSpacing) + TickArrayUtil.tickCount(tickSpacing)
+      maxTickBoundary =
+        TickArrayUtil.getTickArrayStartIndex(MAX_TICK, tickSpacing) + TickArrayUtil.tickCount(tickSpacing);
     }
     if (minTickBoundary < MIN_TICK) {
-      minTickBoundary = TickArrayUtil.getTickArrayStartIndex(MIN_TICK, tickSpacing)
+      minTickBoundary = TickArrayUtil.getTickArrayStartIndex(MIN_TICK, tickSpacing);
     }
-    return { maxTickBoundary, minTickBoundary }
+    return { maxTickBoundary, minTickBoundary };
   }
 
   public static async updatePoolRewardInfos({
@@ -165,13 +178,13 @@ export class PoolUtil {
   }
 }
 
-import { ApiV3PoolInfoConcentratedItem } from "@/api"
-import { RewardInfoLayout } from "../layout"
-import { ComputeClmmPoolInfo } from "../type"
-import { x64ToDecimal } from "./bigNum"
+import { ApiV3PoolInfoConcentratedItem } from "@/api";
+import { RewardInfoLayout } from "../layout";
+import { ComputeClmmPoolInfo } from "../type";
+import { x64ToDecimal } from "./bigNum";
 
-import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token"
-import { Connection, EpochInfo } from "@solana/web3.js"
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import { Connection, EpochInfo } from "@solana/web3.js";
 
 import {
   ClmmPoolRewardInfo,
@@ -180,10 +193,10 @@ import {
   ReturnTypeComputeAmountOutFormat,
   ReturnTypeFetchExBitmaps,
   ReturnTypeFetchMultiplePoolTickArrays,
-  ReturnTypeGetLiquidityAmountOut
-} from "../type"
+  ReturnTypeGetLiquidityAmountOut,
+} from "../type";
 
-import { ApiV3Token } from "@/api/type"
+import { ApiV3Token } from "@/api/type";
 
 import {
   getMultipleAccountsInfo,
@@ -191,20 +204,20 @@ import {
   getTransferAmountFeeV2,
   minExpirationTime,
   solToWSol,
-} from "@/common"
-import { Percent, Price, Token, TokenAmount } from "@/module"
-import Decimal from "decimal.js"
-import { TickArrayBitmapExtensionLayout, TickArrayLayout } from "../layout"
-import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from "./constants"
-import { LiquidityMathUtil } from "./liquidityMath"
-import { getPdaExBitmapAccount, getPdaTickArrayAddress } from "./pda"
-import { swapInternal } from "./swapSimulator"
+} from "@/common";
+import { Percent, Price, Token, TokenAmount } from "@/module";
+import Decimal from "decimal.js";
+import { TickArrayBitmapExtensionLayout, TickArrayLayout } from "../layout";
+import { MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64 } from "./constants";
+import { LiquidityMathUtil } from "./liquidityMath";
+import { getPdaExBitmapAccount, getPdaTickArrayAddress } from "./pda";
+import { swapInternal } from "./swapSimulator";
 
 export class PoolUtils {
   public static getOutputAmountAndRemainAccounts(
     poolInfo: ComputeClmmPoolInfo,
     tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
-    tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> },
+    tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey } },
     inputTokenMint: PublicKey,
     inputAmount: BN,
     blockTimestamp: number,
@@ -222,7 +235,10 @@ export class PoolUtils {
       programId: poolInfo.programId,
       poolId: poolInfo.id,
       poolInfo: poolInfo.accInfo,
-      tickArrays: Object.entries(tickArrayCache).map(i => ({ address: new PublicKey(i[0]), value: i[1] })),
+      tickArrays: Object.entries(tickArrayCache).map((i) => ({
+        address: i[1].address,
+        value: i[1],
+      })),
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       configInfo: poolInfo.ammConfig,
@@ -233,7 +249,7 @@ export class PoolUtils {
       isBaseInput: true,
       blockTimestamp,
       includeExtraTickArrays: true,
-    })
+    });
 
     return {
       allTrade,
@@ -252,14 +268,14 @@ export class PoolUtils {
     outputAmount: BN,
     blockTimestamp: number,
     sqrtPriceLimitX64?: BN,
-  ): { allTrade: boolean, expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
+  ): { allTrade: boolean; expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
     const zeroForOne = outputTokenMint.toBase58() === poolInfo.mintB.address;
 
     const { allTrade, amountCalculated, feeAmount, sqrtPriceX64, accounts } = swapInternal({
       programId: poolInfo.programId,
       poolId: poolInfo.id,
       poolInfo: poolInfo.accInfo,
-      tickArrays: Object.entries(tickArrayCache).map(i => ({ address: new PublicKey(i[0]), value: i[1] })),
+      tickArrays: Object.entries(tickArrayCache).map((i) => ({ address: new PublicKey(i[0]), value: i[1] })),
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       configInfo: poolInfo.ammConfig,
@@ -270,7 +286,7 @@ export class PoolUtils {
       isBaseInput: false,
       blockTimestamp,
       includeExtraTickArrays: true,
-    })
+    });
 
     return {
       allTrade,
@@ -280,7 +296,6 @@ export class PoolUtils {
       feeAmount,
     };
   }
-
 
   static async fetchExBitmaps({
     connection,
@@ -323,15 +338,15 @@ export class PoolUtils {
           tickSpacing: itemPoolInfo.tickSpacing,
           poolBitmap: itemPoolInfo.tickArrayBitmap,
           tickArrayBitmap: itemPoolInfo.exBitmapInfo,
-          findInfo: { type: 'zeroForOne', count: 7, tickArrayCurrent: itemPoolInfo.tickCurrent },
+          findInfo: { type: "zeroForOne", count: 7, tickArrayCurrent: itemPoolInfo.tickCurrent },
         }),
         ...TickArrayBitmapUtil.findTickArrayStartIndex({
           tickSpacing: itemPoolInfo.tickSpacing,
           poolBitmap: itemPoolInfo.tickArrayBitmap,
           tickArrayBitmap: itemPoolInfo.exBitmapInfo,
-          findInfo: { type: 'oneForZero', count: 7, tickArrayCurrent: itemPoolInfo.tickCurrent },
-        })
-      ]
+          findInfo: { type: "oneForZero", count: 7, tickArrayCurrent: itemPoolInfo.tickCurrent },
+        }),
+      ];
 
       for (const itemIndex of startIndexArray) {
         const { publicKey: tickArrayAddress } = getPdaTickArrayAddress(
@@ -339,7 +354,7 @@ export class PoolUtils {
           itemPoolInfo.id,
           itemIndex,
         );
-        if (tickArraysToPoolId[tickArrayAddress.toString()] !== undefined) continue
+        if (tickArraysToPoolId[tickArrayAddress.toString()] !== undefined) continue;
         tickArrays.push({ pubkey: tickArrayAddress });
         tickArraysToPoolId[tickArrayAddress.toString()] = itemPoolInfo.id;
       }
@@ -377,8 +392,8 @@ export class PoolUtils {
     priceLimit = new Decimal(0),
   }: {
     poolInfo: ComputeClmmPoolInfo;
-    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
-    tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> };
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
+    tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey } };
     baseMint: PublicKey;
 
     epochInfo: EpochInfo;
@@ -421,7 +436,11 @@ export class PoolUtils {
 
     const amountOut = getTransferAmountFeeV2(_expectedAmountOut, outFeeConfig, epochInfo, false);
 
-    const _executionPrice = TickUtil.sqrtPriceX64ToPrice(_executionPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
+    const _executionPrice = TickUtil.sqrtPriceX64ToPrice(
+      _executionPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
     const executionPrice = isBaseIn ? _executionPrice : new Decimal(1).div(_executionPrice);
 
     const _minAmountOut = _expectedAmountOut
@@ -465,8 +484,8 @@ export class PoolUtils {
     catchLiquidityInsufficient = false,
   }: {
     poolInfo: ComputeClmmPoolInfo;
-    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
-    tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> };
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
+    tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey } };
     amountIn: BN;
     tokenOut: ApiV3Token;
     slippage: number;
@@ -571,7 +590,7 @@ export class PoolUtils {
     blockTimestamp,
   }: {
     poolInfo: ComputeClmmPoolInfo;
-    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>,
+    tickarrayBitmapExtension: ReturnType<typeof TickArrayBitmapExtensionLayout.decode>;
     tickArrayCache: { [key: string]: ReturnType<typeof TickArrayLayout.decode> };
     baseMint: PublicKey;
 
@@ -596,8 +615,8 @@ export class PoolUtils {
     }
 
     const realAmountOut = getTransferAmountFeeV2(amountOut, feeConfigs[baseMint.toString()], epochInfo, true);
-
     const {
+      allTrade,
       expectedAmountIn: _expectedAmountIn,
       remainingAccounts,
       executionPrice: _executionPriceX64,
@@ -611,12 +630,15 @@ export class PoolUtils {
       blockTimestamp,
       sqrtPriceLimitX64,
     );
-
     const inMint = isBaseIn ? poolInfo.mintB.address : poolInfo.mintA.address;
 
     const amountIn = getTransferAmountFeeV2(_expectedAmountIn, feeConfigs[inMint], epochInfo, false);
 
-    const _executionPrice = TickUtil.sqrtPriceX64ToPrice(_executionPriceX64, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
+    const _executionPrice = TickUtil.sqrtPriceX64ToPrice(
+      _executionPriceX64,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
     const executionPrice = isBaseIn ? _executionPrice : new Decimal(1).div(_executionPrice);
 
     const _maxAmountIn = _expectedAmountIn
@@ -635,6 +657,7 @@ export class PoolUtils {
     );
 
     return {
+      allTrade,
       amountIn,
       maxAmountIn,
       realAmountOut,
@@ -666,8 +689,16 @@ export class PoolUtils {
   } {
     const aprInfo = poolInfo[aprType];
 
-    const priceLower = TickUtil.tickToPrice(positionTickLowerIndex, poolInfo.mintA.decimals, poolInfo.mintB.decimals).toNumber()
-    const priceUpper = TickUtil.tickToPrice(positionTickUpperIndex, poolInfo.mintA.decimals, poolInfo.mintB.decimals).toNumber()
+    const priceLower = TickUtil.tickToPrice(
+      positionTickLowerIndex,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    ).toNumber();
+    const priceUpper = TickUtil.tickToPrice(
+      positionTickUpperIndex,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    ).toNumber();
 
     const _minPrice = Math.max(priceLower, aprInfo.priceMin);
     const _maxPrice = Math.min(priceUpper, aprInfo.priceMax);
@@ -735,25 +766,27 @@ export class PoolUtils {
     const sqrtPriceX64A = TickUtil.getSqrtPriceAtTick(positionTickLowerIndex);
     const sqrtPriceX64B = TickUtil.getSqrtPriceAtTick(positionTickUpperIndex);
 
-    const { amountSlippageA: poolLiquidityA, amountSlippageB: poolLiquidityB } = LiquidityMathUtil.getAmountsFromLiquidityWithSlippage(
-      sqrtPriceX64,
-      sqrtPriceX64A,
-      sqrtPriceX64B,
-      poolLiquidity,
-      false,
-      false,
-      0,
-    );
+    const { amountSlippageA: poolLiquidityA, amountSlippageB: poolLiquidityB } =
+      LiquidityMathUtil.getAmountsFromLiquidityWithSlippage(
+        sqrtPriceX64,
+        sqrtPriceX64A,
+        sqrtPriceX64B,
+        poolLiquidity,
+        false,
+        false,
+        0,
+      );
 
-    const { amountSlippageA: userLiquidityA, amountSlippageB: userLiquidityB } = LiquidityMathUtil.getAmountsFromLiquidityWithSlippage(
-      sqrtPriceX64,
-      sqrtPriceX64A,
-      sqrtPriceX64B,
-      liquidity,
-      false,
-      false,
-      0,
-    );
+    const { amountSlippageA: userLiquidityA, amountSlippageB: userLiquidityB } =
+      LiquidityMathUtil.getAmountsFromLiquidityWithSlippage(
+        sqrtPriceX64,
+        sqrtPriceX64A,
+        sqrtPriceX64B,
+        liquidity,
+        false,
+        false,
+        0,
+      );
 
     const poolTvl = new Decimal(poolLiquidityA.toString())
       .div(new Decimal(10).pow(mintDecimalsA))
