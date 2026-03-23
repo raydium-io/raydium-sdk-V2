@@ -1,3 +1,15 @@
+import { EpochInfo, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  createTransferInstruction,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  TransferFeeConfig,
+  createSyncNativeInstruction,
+  createTransferCheckedInstruction,
+} from "@solana/spl-token";
+import BN from "bn.js";
+import Decimal from "decimal.js";
 import { AmmV4Keys, ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys, PoolKeys } from "@/api";
 import {
   AMM_V4,
@@ -13,17 +25,6 @@ import {
 } from "@/common";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
-import {
-  createAssociatedTokenAccountIdempotentInstruction,
-  createSyncNativeInstruction,
-  createTransferInstruction,
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  TransferFeeConfig,
-} from "@solana/spl-token";
-import { EpochInfo, PublicKey, SystemProgram } from "@solana/web3.js";
-import BN from "bn.js";
-import Decimal from "decimal.js";
 import { publicKey, struct } from "../../marshmallow";
 import { Price, TokenAmount } from "../../module";
 import {
@@ -311,15 +312,28 @@ export default class TradeV2 extends ModuleBase {
 
     if (swapInfo.feeConfig !== undefined) {
       const checkTxBuilder = this.createTxBuilder();
-      checkTxBuilder.addInstruction({
-        instructions: [
-          createTransferInstruction(
+
+      // Use createTransferCheckedInstruction for Token2022, createTransferInstruction for regular tokens
+      const transferInstruction = amountIn.amount.token.isToken2022
+        ? createTransferCheckedInstruction(
+            sourceAcc,
+            amountIn.amount.token.mint, // mint parameter required for checked transfer
+            swapInfo.feeConfig.feeAccount,
+            this.scope.ownerPubKey,
+            swapInfo.feeConfig.feeAmount.toNumber(),
+            amountIn.amount.token.decimals, // decimals parameter required for checked transfer
+            [],
+            TOKEN_2022_PROGRAM_ID,
+          )
+        : createTransferInstruction(
             sourceAcc,
             swapInfo.feeConfig.feeAccount,
             this.scope.ownerPubKey,
             swapInfo.feeConfig.feeAmount.toNumber(),
-          ),
-        ],
+          );
+
+      checkTxBuilder.addInstruction({
+        instructions: [transferInstruction],
         instructionTypes: [InstructionType.TransferAmount],
       });
       checkTxBuilder.addInstruction(swapIns);
