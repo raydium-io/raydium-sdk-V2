@@ -136,6 +136,8 @@ export interface CreatePoolParam<T> {
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+
+  randomSeedKey?: PublicKey,
 }
 
 export interface CreateMarketAndPoolParam<T> {
