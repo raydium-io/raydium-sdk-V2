@@ -1,4 +1,11 @@
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
+import { BN_ZERO, divCeil } from "@/common/bignumber";
+import { getATAAddress } from "@/common/pda";
+import { BNDivCeil } from "@/common/transfer";
+import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
+import { InstructionType, TxVersion } from "@/common/txTool/txType";
+import { AccountLayout, NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import {
   AmmV4Keys,
   AmmV5Keys,
@@ -6,13 +13,6 @@ import {
   ApiV3PoolInfoStandardItem,
   FormatFarmInfoOutV6,
 } from "../../api/type";
-import { AccountLayout, NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
-import { BN_ZERO, divCeil } from "@/common/bignumber";
-import { getATAAddress } from "@/common/pda";
-import { BNDivCeil } from "@/common/transfer";
-import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
-import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { Percent, Token, TokenAmount } from "../../module";
 import {
   FARM_PROGRAM_TO_VERSION,
@@ -35,7 +35,6 @@ import {
   makeAMMSwapV2Instruction,
   makeAddLiquidityInstruction,
   removeLiquidityInstruction,
-  swapBaseInV2Instruction,
 } from "./instruction";
 import { createPoolFeeLayout, liquidityStateV4Layout } from "./layout";
 import { StableLayout, getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice } from "./stable";
@@ -47,17 +46,15 @@ import {
   ComputeAmountOutParam,
   CreatePoolAddress,
   CreatePoolParam,
-  CreateMarketAndPoolParam,
   RemoveParams,
   SwapParam,
 } from "./type";
 import { getAssociatedConfigId, getAssociatedPoolKeys, toAmmComputePoolInfo } from "./utils";
 
+import { DEVNET_PROGRAM_ID, OPEN_BOOK_PROGRAM, WSOLMint } from "@/common";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { AMM_V4, DEVNET_PROGRAM_ID, FEE_DESTINATION_ID, OPEN_BOOK_PROGRAM, WSOLMint } from "@/common";
 import { generatePubKey } from "../account";
-import { makeCreateMarketInstruction, MarketExtInfo } from "../marketV2";
 
 export default class LiquidityModule extends ModuleBase {
   public stableLayout: StableLayout;
@@ -632,7 +629,7 @@ export default class LiquidityModule extends ModuleBase {
 
   public async createPoolV4<T extends TxVersion>({
     programId,
-    marketInfo,
+    marketProgram,
     baseMintInfo,
     quoteMintInfo,
     baseAmount,
@@ -647,6 +644,7 @@ export default class LiquidityModule extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     feePayer,
+    randomSeedKey: propsRandomSeedKey,
   }: CreatePoolParam<T>): Promise<MakeTxData<T, { address: CreatePoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
     const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(NATIVE_MINT);
@@ -692,16 +690,20 @@ export default class LiquidityModule extends ModuleBase {
     if (ownerTokenAccountBase === undefined || ownerTokenAccountQuote === undefined)
       throw Error("you don't has some token account");
 
+    const randomSeedKey = propsRandomSeedKey ?? Keypair.generate().publicKey;
+    const marketProgramId =
+      marketProgram ?? this.scope.cluster === "devnet" ? DEVNET_PROGRAM_ID.OPEN_BOOK_PROGRAM : OPEN_BOOK_PROGRAM;
+
     const poolInfo = getAssociatedPoolKeys({
       version: 4,
       marketVersion: 3,
-      marketId: marketInfo.marketId,
+      marketId: randomSeedKey,
       baseMint: baseMintInfo.mint,
       quoteMint: quoteMintInfo.mint,
       baseDecimals: baseMintInfo.decimals,
       quoteDecimals: quoteMintInfo.decimals,
       programId,
-      marketProgramId: marketInfo.programId,
+      marketProgramId,
     });
 
     const createPoolKeys = {
@@ -717,8 +719,7 @@ export default class LiquidityModule extends ModuleBase {
       withdrawQueue: poolInfo.withdrawQueue,
       ammTargetOrders: poolInfo.targetOrders,
       poolTempLp: poolInfo.lpVault,
-      marketProgramId: poolInfo.marketProgramId,
-      marketId: poolInfo.marketId,
+      randomSeedKey,
       ammConfigId: poolInfo.configId,
       feeDestinationId,
     };
@@ -734,6 +735,8 @@ export default class LiquidityModule extends ModuleBase {
       openTime: startTime,
       coinAmount: baseAmount,
       pcAmount: quoteAmount,
+
+      randomSeedKey,
     });
 
     txBuilder.addInstruction({
@@ -751,275 +754,275 @@ export default class LiquidityModule extends ModuleBase {
     }) as Promise<MakeTxData<T, { address: CreatePoolAddress }>>;
   }
 
-  public async createMarketAndPoolV4<T extends TxVersion>({
-    programId = AMM_V4,
-    marketProgram = OPEN_BOOK_PROGRAM,
-    feeDestinationId = FEE_DESTINATION_ID,
-    tokenProgram,
+  // public async createMarketAndPoolV4<T extends TxVersion>({
+  //   programId = AMM_V4,
+  //   marketProgram = OPEN_BOOK_PROGRAM,
+  //   feeDestinationId = FEE_DESTINATION_ID,
+  //   tokenProgram,
 
-    baseMintInfo,
-    quoteMintInfo,
-    baseAmount,
-    quoteAmount,
-    startTime,
+  //   baseMintInfo,
+  //   quoteMintInfo,
+  //   baseAmount,
+  //   quoteAmount,
+  //   startTime,
 
-    ownerInfo,
-    lowestFeeMarket,
-    assignSeed,
+  //   ownerInfo,
+  //   lowestFeeMarket,
+  //   assignSeed,
 
-    associatedOnly = false,
-    checkCreateATAOwner = false,
+  //   associatedOnly = false,
+  //   checkCreateATAOwner = false,
 
-    lotSize = 1,
-    tickSize = 0.01,
+  //   lotSize = 1,
+  //   tickSize = 0.01,
 
-    txVersion,
-    computeBudgetConfig,
-    txTipConfig,
-    feePayer,
-  }: CreateMarketAndPoolParam<T>): Promise<
-    MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>
-  > {
-    const wallet = this.scope.ownerPubKey;
-    const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
-    const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(NATIVE_MINT);
-    const mintBUseSOLBalance = ownerInfo.useSOLBalance && quoteMintInfo.mint.equals(NATIVE_MINT);
+  //   txVersion,
+  //   computeBudgetConfig,
+  //   txTipConfig,
+  //   feePayer,
+  // }: CreateMarketAndPoolParam<T>): Promise<
+  //   MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>
+  // > {
+  //   const wallet = this.scope.ownerPubKey;
+  //   const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
+  //   const mintAUseSOLBalance = ownerInfo.useSOLBalance && baseMintInfo.mint.equals(NATIVE_MINT);
+  //   const mintBUseSOLBalance = ownerInfo.useSOLBalance && quoteMintInfo.mint.equals(NATIVE_MINT);
 
-    const seed = assignSeed
-      ? `${baseMintInfo.mint.toBase58().slice(0, 7)}-${quoteMintInfo.mint.toBase58().slice(0, 7)}-${assignSeed}`
-      : undefined;
+  //   const seed = assignSeed
+  //     ? `${baseMintInfo.mint.toBase58().slice(0, 7)}-${quoteMintInfo.mint.toBase58().slice(0, 7)}-${assignSeed}`
+  //     : undefined;
 
-    const market = generatePubKey({
-      fromPublicKey: wallet,
-      programId: marketProgram,
-      assignSeed: seed ? `${seed}-market` : seed,
-    });
-    const requestQueue = generatePubKey({
-      fromPublicKey: wallet,
-      programId: marketProgram,
-      assignSeed: seed ? `${seed}-request` : seed,
-    });
-    const eventQueue = generatePubKey({
-      fromPublicKey: wallet,
-      programId: marketProgram,
-      assignSeed: seed ? `${seed}-event` : seed,
-    });
-    const bids = generatePubKey({
-      fromPublicKey: wallet,
-      programId: marketProgram,
-      assignSeed: seed ? `${seed}-bids` : seed,
-    });
-    const asks = generatePubKey({
-      fromPublicKey: wallet,
-      programId: marketProgram,
-      assignSeed: seed ? `${seed}-asks` : seed,
-    });
-    const baseVault = generatePubKey({
-      fromPublicKey: wallet,
-      programId: TOKEN_PROGRAM_ID,
-      assignSeed: seed ? `${seed}-baseVault` : seed,
-    });
-    const quoteVault = generatePubKey({
-      fromPublicKey: wallet,
-      programId: TOKEN_PROGRAM_ID,
-      assignSeed: seed ? `${seed}-quoteVault` : seed,
-    });
+  //   const market = generatePubKey({
+  //     fromPublicKey: wallet,
+  //     programId: marketProgram,
+  //     assignSeed: seed ? `${seed}-market` : seed,
+  //   });
+  //   const requestQueue = generatePubKey({
+  //     fromPublicKey: wallet,
+  //     programId: marketProgram,
+  //     assignSeed: seed ? `${seed}-request` : seed,
+  //   });
+  //   const eventQueue = generatePubKey({
+  //     fromPublicKey: wallet,
+  //     programId: marketProgram,
+  //     assignSeed: seed ? `${seed}-event` : seed,
+  //   });
+  //   const bids = generatePubKey({
+  //     fromPublicKey: wallet,
+  //     programId: marketProgram,
+  //     assignSeed: seed ? `${seed}-bids` : seed,
+  //   });
+  //   const asks = generatePubKey({
+  //     fromPublicKey: wallet,
+  //     programId: marketProgram,
+  //     assignSeed: seed ? `${seed}-asks` : seed,
+  //   });
+  //   const baseVault = generatePubKey({
+  //     fromPublicKey: wallet,
+  //     programId: TOKEN_PROGRAM_ID,
+  //     assignSeed: seed ? `${seed}-baseVault` : seed,
+  //   });
+  //   const quoteVault = generatePubKey({
+  //     fromPublicKey: wallet,
+  //     programId: TOKEN_PROGRAM_ID,
+  //     assignSeed: seed ? `${seed}-quoteVault` : seed,
+  //   });
 
-    const feeRateBps = 0;
-    const quoteDustThreshold = new BN(100);
-    function getVaultOwnerAndNonce() {
-      const vaultSignerNonce = new BN(0);
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        try {
-          const vaultOwner = PublicKey.createProgramAddressSync(
-            [market.publicKey.toBuffer(), vaultSignerNonce.toArrayLike(Buffer, "le", 8)],
-            marketProgram,
-          );
-          return { vaultOwner, vaultSignerNonce };
-        } catch (e) {
-          vaultSignerNonce.iaddn(1);
-          if (vaultSignerNonce.gt(new BN(25555))) throw Error("find vault owner error");
-        }
-      }
-    }
-    const { vaultOwner, vaultSignerNonce } = getVaultOwnerAndNonce();
-    const baseLotSize = new BN(Math.round(10 ** baseMintInfo.decimals * lotSize));
-    const quoteLotSize = new BN(Math.round(lotSize * 10 ** quoteMintInfo.decimals * tickSize));
+  //   const feeRateBps = 0;
+  //   const quoteDustThreshold = new BN(100);
+  //   function getVaultOwnerAndNonce() {
+  //     const vaultSignerNonce = new BN(0);
+  //     // eslint-disable-next-line no-constant-condition
+  //     while (true) {
+  //       try {
+  //         const vaultOwner = PublicKey.createProgramAddressSync(
+  //           [market.publicKey.toBuffer(), vaultSignerNonce.toArrayLike(Buffer, "le", 8)],
+  //           marketProgram,
+  //         );
+  //         return { vaultOwner, vaultSignerNonce };
+  //       } catch (e) {
+  //         vaultSignerNonce.iaddn(1);
+  //         if (vaultSignerNonce.gt(new BN(25555))) throw Error("find vault owner error");
+  //       }
+  //     }
+  //   }
+  //   const { vaultOwner, vaultSignerNonce } = getVaultOwnerAndNonce();
+  //   const baseLotSize = new BN(Math.round(10 ** baseMintInfo.decimals * lotSize));
+  //   const quoteLotSize = new BN(Math.round(lotSize * 10 ** quoteMintInfo.decimals * tickSize));
 
-    if (baseLotSize.eq(BN_ZERO)) throw Error("lot size is too small");
-    if (quoteLotSize.eq(BN_ZERO)) throw Error("tick size or lot size is too small");
-    const allTxArr = await makeCreateMarketInstruction({
-      connection: this.scope.connection,
-      wallet: this.scope.ownerPubKey,
-      marketInfo: {
-        programId: marketProgram,
-        vaultOwner,
-        baseMint: baseMintInfo.mint,
-        quoteMint: quoteMintInfo.mint,
+  //   if (baseLotSize.eq(BN_ZERO)) throw Error("lot size is too small");
+  //   if (quoteLotSize.eq(BN_ZERO)) throw Error("tick size or lot size is too small");
+  //   const allTxArr = await makeCreateMarketInstruction({
+  //     connection: this.scope.connection,
+  //     wallet: this.scope.ownerPubKey,
+  //     marketInfo: {
+  //       programId: marketProgram,
+  //       vaultOwner,
+  //       baseMint: baseMintInfo.mint,
+  //       quoteMint: quoteMintInfo.mint,
 
-        id: market,
-        baseVault,
-        quoteVault,
-        requestQueue,
-        eventQueue,
-        bids,
-        asks,
+  //       id: market,
+  //       baseVault,
+  //       quoteVault,
+  //       requestQueue,
+  //       eventQueue,
+  //       bids,
+  //       asks,
 
-        feeRateBps,
-        quoteDustThreshold,
-        vaultSignerNonce,
-        baseLotSize,
-        quoteLotSize,
-        lowestFeeMarket,
-      },
-    });
+  //       feeRateBps,
+  //       quoteDustThreshold,
+  //       vaultSignerNonce,
+  //       baseLotSize,
+  //       quoteLotSize,
+  //       lowestFeeMarket,
+  //     },
+  //   });
 
-    const txBuilder = this.createTxBuilder(feePayer);
-    txBuilder.addInstruction({
-      instructions: allTxArr[0].transaction.instructions,
-      signers: allTxArr[0].signer,
-    });
+  //   const txBuilder = this.createTxBuilder(feePayer);
+  //   txBuilder.addInstruction({
+  //     instructions: allTxArr[0].transaction.instructions,
+  //     signers: allTxArr[0].signer,
+  //   });
 
-    for await (const txData of allTxArr.slice(1, allTxArr.length)) {
-      txBuilder.addInstruction({
-        instructions: txData.transaction.instructions,
-        signers: txData.signer,
-        instructionTypes: txData.instructionTypes,
-      });
-    }
+  //   for await (const txData of allTxArr.slice(1, allTxArr.length)) {
+  //     txBuilder.addInstruction({
+  //       instructions: txData.transaction.instructions,
+  //       signers: txData.signer,
+  //       instructionTypes: txData.instructionTypes,
+  //     });
+  //   }
 
-    const { account: ownerTokenAccountBase, instructionParams: ownerTokenAccountBaseInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: baseMintInfo.mint,
-        owner: this.scope.ownerPubKey,
-        createInfo: mintAUseSOLBalance
-          ? {
-              payer: payer!,
-              amount: baseAmount,
-            }
-          : undefined,
-        notUseTokenAccount: mintAUseSOLBalance,
-        skipCloseAccount: !mintAUseSOLBalance,
-        associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
-        checkCreateATAOwner,
-        assignSeed: mintAUseSOLBalance && seed ? `${seed}-wsol` : undefined,
-      });
+  //   const { account: ownerTokenAccountBase, instructionParams: ownerTokenAccountBaseInstruction } =
+  //     await this.scope.account.getOrCreateTokenAccount({
+  //       mint: baseMintInfo.mint,
+  //       owner: this.scope.ownerPubKey,
+  //       createInfo: mintAUseSOLBalance
+  //         ? {
+  //           payer: payer!,
+  //           amount: baseAmount,
+  //         }
+  //         : undefined,
+  //       notUseTokenAccount: mintAUseSOLBalance,
+  //       skipCloseAccount: !mintAUseSOLBalance,
+  //       associatedOnly: mintAUseSOLBalance ? false : associatedOnly,
+  //       checkCreateATAOwner,
+  //       assignSeed: mintAUseSOLBalance && seed ? `${seed}-wsol` : undefined,
+  //     });
 
-    txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
+  //   txBuilder.addInstruction(ownerTokenAccountBaseInstruction || {});
 
-    const { account: ownerTokenAccountQuote, instructionParams: ownerTokenAccountQuoteInstruction } =
-      await this.scope.account.getOrCreateTokenAccount({
-        mint: quoteMintInfo.mint,
-        owner: this.scope.ownerPubKey,
-        createInfo: mintBUseSOLBalance
-          ? {
-              payer: payer!,
-              amount: quoteAmount,
-            }
-          : undefined,
+  //   const { account: ownerTokenAccountQuote, instructionParams: ownerTokenAccountQuoteInstruction } =
+  //     await this.scope.account.getOrCreateTokenAccount({
+  //       mint: quoteMintInfo.mint,
+  //       owner: this.scope.ownerPubKey,
+  //       createInfo: mintBUseSOLBalance
+  //         ? {
+  //           payer: payer!,
+  //           amount: quoteAmount,
+  //         }
+  //         : undefined,
 
-        notUseTokenAccount: mintBUseSOLBalance,
-        skipCloseAccount: !mintBUseSOLBalance,
-        associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
-        checkCreateATAOwner,
-        assignSeed: mintBUseSOLBalance && seed ? `${seed}-wsol` : undefined,
-      });
-    txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
+  //       notUseTokenAccount: mintBUseSOLBalance,
+  //       skipCloseAccount: !mintBUseSOLBalance,
+  //       associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
+  //       checkCreateATAOwner,
+  //       assignSeed: mintBUseSOLBalance && seed ? `${seed}-wsol` : undefined,
+  //     });
+  //   txBuilder.addInstruction(ownerTokenAccountQuoteInstruction || {});
 
-    if (ownerTokenAccountBase === undefined) throw Error("you don't has base token account");
-    if (ownerTokenAccountQuote === undefined) throw Error("you don't has quote token account");
+  //   if (ownerTokenAccountBase === undefined) throw Error("you don't has base token account");
+  //   if (ownerTokenAccountQuote === undefined) throw Error("you don't has quote token account");
 
-    // create pool ins
-    const poolInfo = getAssociatedPoolKeys({
-      version: 4,
-      marketVersion: 3,
-      marketId: market.publicKey,
-      baseMint: baseMintInfo.mint,
-      quoteMint: quoteMintInfo.mint,
-      baseDecimals: baseMintInfo.decimals,
-      quoteDecimals: quoteMintInfo.decimals,
-      programId,
-      marketProgramId: marketProgram,
-    });
+  //   // create pool ins
+  //   const poolInfo = getAssociatedPoolKeys({
+  //     version: 4,
+  //     marketVersion: 3,
+  //     marketId: market.publicKey,
+  //     baseMint: baseMintInfo.mint,
+  //     quoteMint: quoteMintInfo.mint,
+  //     baseDecimals: baseMintInfo.decimals,
+  //     quoteDecimals: quoteMintInfo.decimals,
+  //     programId,
+  //     marketProgramId: marketProgram,
+  //   });
 
-    const createPoolKeys = {
-      programId,
-      ammId: poolInfo.id,
-      ammAuthority: poolInfo.authority,
-      ammOpenOrders: poolInfo.openOrders,
-      lpMint: poolInfo.lpMint,
-      coinMint: poolInfo.baseMint,
-      pcMint: poolInfo.quoteMint,
-      coinVault: poolInfo.baseVault,
-      pcVault: poolInfo.quoteVault,
-      withdrawQueue: poolInfo.withdrawQueue,
-      ammTargetOrders: poolInfo.targetOrders,
-      poolTempLp: poolInfo.lpVault,
-      marketProgramId: poolInfo.marketProgramId,
-      marketId: poolInfo.marketId,
-      ammConfigId: poolInfo.configId,
-      feeDestinationId,
-    };
+  //   const createPoolKeys = {
+  //     programId,
+  //     ammId: poolInfo.id,
+  //     ammAuthority: poolInfo.authority,
+  //     ammOpenOrders: poolInfo.openOrders,
+  //     lpMint: poolInfo.lpMint,
+  //     coinMint: poolInfo.baseMint,
+  //     pcMint: poolInfo.quoteMint,
+  //     coinVault: poolInfo.baseVault,
+  //     pcVault: poolInfo.quoteVault,
+  //     withdrawQueue: poolInfo.withdrawQueue,
+  //     ammTargetOrders: poolInfo.targetOrders,
+  //     poolTempLp: poolInfo.lpVault,
+  //     marketProgramId: poolInfo.marketProgramId,
+  //     marketId: poolInfo.marketId,
+  //     ammConfigId: poolInfo.configId,
+  //     feeDestinationId,
+  //   };
 
-    const { instruction, instructionType } = createPoolV4InstructionV2({
-      ...createPoolKeys,
-      userWallet: this.scope.ownerPubKey,
-      userCoinVault: ownerTokenAccountBase,
-      userPcVault: ownerTokenAccountQuote,
-      userLpVault: getATAAddress(this.scope.ownerPubKey, poolInfo.lpMint, tokenProgram).publicKey,
+  //   const { instruction, instructionType } = createPoolV4InstructionV2({
+  //     ...createPoolKeys,
+  //     userWallet: this.scope.ownerPubKey,
+  //     userCoinVault: ownerTokenAccountBase,
+  //     userPcVault: ownerTokenAccountQuote,
+  //     userLpVault: getATAAddress(this.scope.ownerPubKey, poolInfo.lpMint, tokenProgram).publicKey,
 
-      nonce: poolInfo.nonce,
-      openTime: startTime,
-      coinAmount: baseAmount,
-      pcAmount: quoteAmount,
-    });
+  //     nonce: poolInfo.nonce,
+  //     openTime: startTime,
+  //     coinAmount: baseAmount,
+  //     pcAmount: quoteAmount,
+  //   });
 
-    txBuilder.addInstruction({
-      instructions: [instruction],
-      instructionTypes: [instructionType],
-    });
+  //   txBuilder.addInstruction({
+  //     instructions: [instruction],
+  //     instructionTypes: [instructionType],
+  //   });
 
-    const splitIns =
-      mintAUseSOLBalance || mintBUseSOLBalance
-        ? ([
-            ownerTokenAccountBaseInstruction?.instructions?.[0] || ownerTokenAccountQuoteInstruction?.instructions?.[0],
-          ].filter((i) => !!i) as TransactionInstruction[])
-        : undefined;
+  //   const splitIns =
+  //     mintAUseSOLBalance || mintBUseSOLBalance
+  //       ? ([
+  //         ownerTokenAccountBaseInstruction?.instructions?.[0] || ownerTokenAccountQuoteInstruction?.instructions?.[0],
+  //       ].filter((i) => !!i) as TransactionInstruction[])
+  //       : undefined;
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({
-        computeBudgetConfig,
-        splitIns,
-        address: {
-          requestQueue: requestQueue.publicKey,
-          eventQueue: eventQueue.publicKey,
-          bids: bids.publicKey,
-          asks: asks.publicKey,
-          baseVault: baseVault.publicKey,
-          quoteVault: quoteVault.publicKey,
-          baseMint: new PublicKey(baseMintInfo.mint),
-          quoteMint: new PublicKey(quoteMintInfo.mint),
-          ...createPoolKeys,
-        },
-      }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
+  //   if (txVersion === TxVersion.V0)
+  //     return txBuilder.sizeCheckBuildV0({
+  //       computeBudgetConfig,
+  //       splitIns,
+  //       address: {
+  //         requestQueue: requestQueue.publicKey,
+  //         eventQueue: eventQueue.publicKey,
+  //         bids: bids.publicKey,
+  //         asks: asks.publicKey,
+  //         baseVault: baseVault.publicKey,
+  //         quoteVault: quoteVault.publicKey,
+  //         baseMint: new PublicKey(baseMintInfo.mint),
+  //         quoteMint: new PublicKey(quoteMintInfo.mint),
+  //         ...createPoolKeys,
+  //       },
+  //     }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
 
-    return txBuilder.sizeCheckBuild({
-      computeBudgetConfig,
-      splitIns,
-      address: {
-        requestQueue: requestQueue.publicKey,
-        eventQueue: eventQueue.publicKey,
-        bids: bids.publicKey,
-        asks: asks.publicKey,
-        baseVault: baseVault.publicKey,
-        quoteVault: quoteVault.publicKey,
-        baseMint: new PublicKey(baseMintInfo.mint),
-        quoteMint: new PublicKey(quoteMintInfo.mint),
-        ...createPoolKeys,
-      },
-    }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
-  }
+  //   return txBuilder.sizeCheckBuild({
+  //     computeBudgetConfig,
+  //     splitIns,
+  //     address: {
+  //       requestQueue: requestQueue.publicKey,
+  //       eventQueue: eventQueue.publicKey,
+  //       bids: bids.publicKey,
+  //       asks: asks.publicKey,
+  //       baseVault: baseVault.publicKey,
+  //       quoteVault: quoteVault.publicKey,
+  //       baseMint: new PublicKey(baseMintInfo.mint),
+  //       quoteMint: new PublicKey(quoteMintInfo.mint),
+  //       ...createPoolKeys,
+  //     },
+  //   }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
+  // }
 
   public async getCreatePoolFee({ programId }: { programId: PublicKey }): Promise<BN> {
     const configId = getAssociatedConfigId({ programId });
@@ -1419,7 +1422,8 @@ export default class LiquidityModule extends ModuleBase {
     for (let i = 0; i < needFetchVaults.length; i++) {
       const vaultItemInfo = vaultAccountInfo[i].accountInfo;
       if (vaultItemInfo === null) throw Error("fetch vault info error: " + needFetchVaults[i]);
-
+      // eslint-disable-next-line
+      // @ts-ignore
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 

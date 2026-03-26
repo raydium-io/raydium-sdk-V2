@@ -107,10 +107,7 @@ export interface LiquidityPoolKeys {
 
 export interface CreatePoolParam<T> {
   programId: PublicKey;
-  marketInfo: {
-    marketId: PublicKey;
-    programId: PublicKey;
-  };
+  marketProgram?: PublicKey;
   baseMintInfo: {
     mint: PublicKey;
     decimals: number;
@@ -136,6 +133,8 @@ export interface CreatePoolParam<T> {
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+
+  randomSeedKey?: PublicKey;
 }
 
 export interface CreateMarketAndPoolParam<T> {
@@ -189,8 +188,7 @@ export interface CreatePoolAddress {
   withdrawQueue: PublicKey;
   ammTargetOrders: PublicKey;
   poolTempLp: PublicKey;
-  marketProgramId: PublicKey;
-  marketId: PublicKey;
+  randomSeedKey: PublicKey;
   ammConfigId: PublicKey;
   feeDestinationId: PublicKey;
 }

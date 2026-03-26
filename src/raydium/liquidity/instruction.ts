@@ -1,30 +1,27 @@
-import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 
-import { AmmV4Keys, AmmV5Keys } from "@/api/type";
-import { AMM_V4, BN_ONE, BN_ZERO, MODEL_DATA_PUBKEY, parseBigNumberish } from "@/common";
+import { BN_ONE, BN_ZERO, MODEL_DATA_PUBKEY, parseBigNumberish } from "@/common";
 import { createLogger } from "@/common/logger";
-import { accountMeta, RENT_PROGRAM_ID } from "@/common/pubKey";
+import { accountMeta, RENT_PROGRAM_ID, SYSTEM_PROGRAM_ID } from "@/common/pubKey";
 import { InstructionType } from "@/common/txTool/txType";
 import { struct, u64, u8 } from "@/marshmallow";
 
-import BN from "bn.js";
 import { jsonInfo2PoolKeys } from "@/common/utility";
+import BN from "bn.js";
 import { InstructionReturn } from "../type";
 import {
   addLiquidityLayout,
   fixedSwapInLayout,
   fixedSwapOutLayout,
-  initPoolLayout,
-  removeLiquidityLayout,
+  removeLiquidityLayout
 } from "./layout";
 import {
-  InitPoolInstructionParamsV4,
   LiquidityAddInstructionParams,
   RemoveLiquidityInstruction,
   SwapFixedInInstructionParamsV4,
   SwapFixedOutInstructionParamsV4,
-  SwapInstructionParams,
+  SwapInstructionParams
 } from "./type";
 
 const logger = createLogger("Raydium_liquidity_instruction");
@@ -43,7 +40,7 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
   const data = Buffer.alloc(addLiquidityLayout.span);
   addLiquidityLayout.encode(
     {
-      instruction: 3,
+      instruction: poolInfo.pooltype.includes("StablePool") ? 4 : 3,
       baseAmountIn: parseBigNumberish(baseAmountIn),
       quoteAmountIn: parseBigNumberish(quoteAmountIn),
       otherAmountMin: parseBigNumberish(otherAmountMin),
@@ -57,7 +54,7 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
     // amm
     accountMeta({ pubkey: new PublicKey(poolInfo.id) }),
     accountMeta({ pubkey: new PublicKey(poolKeys.authority), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.openOrders), isWritable: false }),
+    // accountMeta({ pubkey: new PublicKey(poolKeys.openOrders), isWritable: false }),
     accountMeta({ pubkey: new PublicKey(poolKeys.targetOrders) }),
     accountMeta({ pubkey: new PublicKey(poolInfo.lpMint.address) }),
     accountMeta({ pubkey: new PublicKey(poolKeys.vault.A) }),
@@ -70,13 +67,13 @@ export function makeAddLiquidityInstruction(params: LiquidityAddInstructionParam
 
   keys.push(
     // serum
-    accountMeta({ pubkey: new PublicKey(poolInfo.marketId), isWritable: false }),
+    // accountMeta({ pubkey: new PublicKey(poolInfo.marketId), isWritable: false }),
     // user
     accountMeta({ pubkey: userKeys.baseTokenAccount }),
     accountMeta({ pubkey: userKeys.quoteTokenAccount }),
     accountMeta({ pubkey: userKeys.lpTokenAccount }),
     accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.marketEventQueue), isWritable: false }),
+    // accountMeta({ pubkey: new PublicKey(poolKeys.marketEventQueue), isWritable: false }),
   );
 
   return new TransactionInstruction({
@@ -119,7 +116,7 @@ export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): 
       // amm
       accountMeta({ pubkey: poolKeys.id }),
       accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
-      accountMeta({ pubkey: poolKeys.openOrders }),
+      // accountMeta({ pubkey: poolKeys.openOrders }),
       accountMeta({ pubkey: poolKeys.targetOrders }),
       accountMeta({ pubkey: poolKeys.mintLp.address }),
       accountMeta({ pubkey: poolKeys.vault.A }),
@@ -128,27 +125,27 @@ export function removeLiquidityInstruction(params: RemoveLiquidityInstruction): 
 
     if (version === 5) {
       keys.push(accountMeta({ pubkey: modelDataPubKey }));
-    } else {
-      keys.push(accountMeta({ pubkey: poolKeys.id }));
-      keys.push(accountMeta({ pubkey: poolKeys.id }));
+      // } else {
+      //   keys.push(accountMeta({ pubkey: poolKeys.id }));
+      //   keys.push(accountMeta({ pubkey: poolKeys.id }));
     }
 
     keys.push(
       // serum
-      accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
-      accountMeta({ pubkey: poolKeys.marketId }),
-      accountMeta({ pubkey: poolKeys.marketBaseVault }),
-      accountMeta({ pubkey: poolKeys.marketQuoteVault }),
-      accountMeta({ pubkey: poolKeys.marketAuthority, isWritable: false }),
+      // accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
+      // accountMeta({ pubkey: poolKeys.marketId }),
+      // accountMeta({ pubkey: poolKeys.marketBaseVault }),
+      // accountMeta({ pubkey: poolKeys.marketQuoteVault }),
+      // accountMeta({ pubkey: poolKeys.marketAuthority, isWritable: false }),
       // user
       accountMeta({ pubkey: userKeys.lpTokenAccount }),
       accountMeta({ pubkey: userKeys.baseTokenAccount }),
       accountMeta({ pubkey: userKeys.quoteTokenAccount }),
       accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
       // serum orderbook
-      accountMeta({ pubkey: poolKeys.marketEventQueue }),
-      accountMeta({ pubkey: poolKeys.marketBids }),
-      accountMeta({ pubkey: poolKeys.marketAsks }),
+      // accountMeta({ pubkey: poolKeys.marketEventQueue }),
+      // accountMeta({ pubkey: poolKeys.marketBids }),
+      // accountMeta({ pubkey: poolKeys.marketAsks }),
     );
 
     return new TransactionInstruction({
@@ -172,11 +169,8 @@ export function createPoolV4InstructionV2({
   pcMint,
   coinVault,
   pcVault,
-  withdrawQueue,
   ammTargetOrders,
-  poolTempLp,
-  marketProgramId,
-  marketId,
+  randomSeedKey,
   userWallet,
   userCoinVault,
   userPcVault,
@@ -197,11 +191,8 @@ export function createPoolV4InstructionV2({
   pcMint: PublicKey;
   coinVault: PublicKey;
   pcVault: PublicKey;
-  withdrawQueue: PublicKey;
   ammTargetOrders: PublicKey;
-  poolTempLp: PublicKey;
-  marketProgramId: PublicKey;
-  marketId: PublicKey;
+  randomSeedKey: PublicKey;
   userWallet: PublicKey;
   userCoinVault: PublicKey;
   userPcVault: PublicKey;
@@ -219,7 +210,7 @@ export function createPoolV4InstructionV2({
   const keys = [
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: ammId, isSigner: false, isWritable: true },
     { pubkey: ammAuthority, isSigner: false, isWritable: false },
@@ -232,8 +223,8 @@ export function createPoolV4InstructionV2({
     { pubkey: ammTargetOrders, isSigner: false, isWritable: true }, //13
     { pubkey: ammConfigId, isSigner: false, isWritable: false },
     { pubkey: feeDestinationId, isSigner: false, isWritable: true },
-    { pubkey: marketProgramId, isSigner: false, isWritable: false },
-    { pubkey: marketId, isSigner: false, isWritable: false },
+    { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: randomSeedKey, isSigner: false, isWritable: false },
     { pubkey: userWallet, isSigner: true, isWritable: true },
     { pubkey: userCoinVault, isSigner: false, isWritable: true },
     { pubkey: userPcVault, isSigner: false, isWritable: true },
@@ -253,38 +244,62 @@ export function createPoolV4InstructionV2({
   };
 }
 
-export function simulatePoolInfoInstruction(poolKeys: AmmV4Keys | AmmV5Keys): TransactionInstruction {
-  const simulatePoolLayout = struct([u8("instruction"), u8("simulateType")]);
-  const data = Buffer.alloc(simulatePoolLayout.span);
-  simulatePoolLayout.encode(
-    {
-      instruction: 12,
-      simulateType: 0,
-    },
-    data,
-  );
+// export function makeSwapFixedInInstruction(
+//   {
+//     poolKeys: propPoolKeys,
+//     userKeys,
+//     amountIn,
+//     minAmountOut,
+//     modelDataPubKey = MODEL_DATA_PUBKEY,
+//   }: SwapFixedInInstructionParamsV4,
+//   version: number,
+// ): TransactionInstruction {
+//   const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
+//   const data = Buffer.alloc(fixedSwapInLayout.span);
+//   fixedSwapInLayout.encode(
+//     {
+//       instruction: 9,
+//       amountIn: parseBigNumberish(amountIn),
+//       minAmountOut: parseBigNumberish(minAmountOut),
+//     },
+//     data,
+//   );
+//   const keys = [
+//     // amm
+//     accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.id }),
+//     accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.openOrders }),
+//   ];
 
-  const keys = [
-    // amm
-    accountMeta({ pubkey: new PublicKey(poolKeys.id), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.authority), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.openOrders), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.vault.A), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.vault.B), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.mintLp.address), isWritable: false }),
-    // serum
-    accountMeta({ pubkey: new PublicKey(poolKeys.marketId), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.marketEventQueue), isWritable: false }),
-  ];
+//   if (version === 4) keys.push(accountMeta({ pubkey: poolKeys.targetOrders }));
+//   keys.push(accountMeta({ pubkey: poolKeys.vault.A }), accountMeta({ pubkey: poolKeys.vault.B }));
+//   if (version === 5) keys.push(accountMeta({ pubkey: modelDataPubKey }));
+//   keys.push(
+//     // serum
+//     accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.marketId }),
+//     accountMeta({ pubkey: poolKeys.marketBids }),
+//     accountMeta({ pubkey: poolKeys.marketAsks }),
+//     accountMeta({ pubkey: poolKeys.marketEventQueue }),
+//     accountMeta({ pubkey: poolKeys.marketBaseVault }),
+//     accountMeta({ pubkey: poolKeys.marketQuoteVault }),
+//     accountMeta({ pubkey: poolKeys.marketAuthority, isWritable: false }),
+//     // user
+//     accountMeta({ pubkey: userKeys.tokenAccountIn }),
+//     accountMeta({ pubkey: userKeys.tokenAccountOut }),
+//     accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
+//   );
 
-  return new TransactionInstruction({
-    programId: new PublicKey(poolKeys.programId),
-    keys,
-    data,
-  });
-}
+//   return new TransactionInstruction({
+//     programId: poolKeys.programId,
+//     keys,
+//     data,
+//   });
+// }
 
-export function makeSwapFixedInInstruction(
+
+export function makeSwapFixedInInstructionStable(
   {
     poolKeys: propPoolKeys,
     userKeys,
@@ -292,7 +307,6 @@ export function makeSwapFixedInInstruction(
     minAmountOut,
     modelDataPubKey = MODEL_DATA_PUBKEY,
   }: SwapFixedInInstructionParamsV4,
-  version: number,
 ): TransactionInstruction {
   const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
   const data = Buffer.alloc(fixedSwapInLayout.span);
@@ -309,27 +323,13 @@ export function makeSwapFixedInInstruction(
     accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
     accountMeta({ pubkey: poolKeys.id }),
     accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.openOrders }),
-  ];
-
-  if (version === 4) keys.push(accountMeta({ pubkey: poolKeys.targetOrders }));
-  keys.push(accountMeta({ pubkey: poolKeys.vault.A }), accountMeta({ pubkey: poolKeys.vault.B }));
-  if (version === 5) keys.push(accountMeta({ pubkey: modelDataPubKey }));
-  keys.push(
-    // serum
-    accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.marketId }),
-    accountMeta({ pubkey: poolKeys.marketBids }),
-    accountMeta({ pubkey: poolKeys.marketAsks }),
-    accountMeta({ pubkey: poolKeys.marketEventQueue }),
-    accountMeta({ pubkey: poolKeys.marketBaseVault }),
-    accountMeta({ pubkey: poolKeys.marketQuoteVault }),
-    accountMeta({ pubkey: poolKeys.marketAuthority, isWritable: false }),
-    // user
+    accountMeta({ pubkey: poolKeys.vault.A }),
+    accountMeta({ pubkey: poolKeys.vault.B }),
+    accountMeta({ pubkey: modelDataPubKey }),
     accountMeta({ pubkey: userKeys.tokenAccountIn }),
     accountMeta({ pubkey: userKeys.tokenAccountOut }),
     accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
-  );
+  ];
 
   return new TransactionInstruction({
     programId: poolKeys.programId,
@@ -338,7 +338,64 @@ export function makeSwapFixedInInstruction(
   });
 }
 
-export function makeSwapFixedOutInstruction(
+// export function makeSwapFixedOutInstruction(
+//   {
+//     poolKeys: propPoolKeys,
+//     userKeys,
+//     maxAmountIn,
+//     amountOut,
+//     modelDataPubKey = MODEL_DATA_PUBKEY,
+//   }: SwapFixedOutInstructionParamsV4,
+//   version: number,
+// ): TransactionInstruction {
+//   const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
+//   const data = Buffer.alloc(fixedSwapOutLayout.span);
+//   fixedSwapOutLayout.encode(
+//     {
+//       instruction: 11,
+//       maxAmountIn: parseBigNumberish(maxAmountIn),
+//       amountOut: parseBigNumberish(amountOut),
+//     },
+//     data,
+//   );
+
+//   const keys = [
+//     accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+//     // amm
+//     accountMeta({ pubkey: poolKeys.id }),
+//     accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.openOrders }),
+//     accountMeta({ pubkey: poolKeys.targetOrders }),
+//     accountMeta({ pubkey: poolKeys.vault.A }),
+//     accountMeta({ pubkey: poolKeys.vault.B }),
+//   ];
+
+//   if (version === 5) keys.push(accountMeta({ pubkey: modelDataPubKey }));
+
+//   keys.push(
+//     // serum
+//     accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.marketId }),
+//     accountMeta({ pubkey: poolKeys.marketBids }),
+//     accountMeta({ pubkey: poolKeys.marketAsks }),
+//     accountMeta({ pubkey: poolKeys.marketEventQueue }),
+//     accountMeta({ pubkey: poolKeys.marketBaseVault }),
+//     accountMeta({ pubkey: poolKeys.marketQuoteVault }),
+//     accountMeta({ pubkey: poolKeys.marketAuthority, isWritable: false }),
+//     accountMeta({ pubkey: userKeys.tokenAccountIn }),
+//     accountMeta({ pubkey: userKeys.tokenAccountOut }),
+//     accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
+//   );
+
+//   return new TransactionInstruction({
+//     programId: poolKeys.programId,
+//     keys,
+//     data,
+//   });
+// }
+
+
+export function makeSwapFixedOutInstructionStable(
   {
     poolKeys: propPoolKeys,
     userKeys,
@@ -346,7 +403,6 @@ export function makeSwapFixedOutInstruction(
     amountOut,
     modelDataPubKey = MODEL_DATA_PUBKEY,
   }: SwapFixedOutInstructionParamsV4,
-  version: number,
 ): TransactionInstruction {
   const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
   const data = Buffer.alloc(fixedSwapOutLayout.span);
@@ -364,28 +420,14 @@ export function makeSwapFixedOutInstruction(
     // amm
     accountMeta({ pubkey: poolKeys.id }),
     accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.openOrders }),
-    accountMeta({ pubkey: poolKeys.targetOrders }),
     accountMeta({ pubkey: poolKeys.vault.A }),
     accountMeta({ pubkey: poolKeys.vault.B }),
-  ];
+    accountMeta({ pubkey: modelDataPubKey }),
 
-  if (version === 5) keys.push(accountMeta({ pubkey: modelDataPubKey }));
-
-  keys.push(
-    // serum
-    accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.marketId }),
-    accountMeta({ pubkey: poolKeys.marketBids }),
-    accountMeta({ pubkey: poolKeys.marketAsks }),
-    accountMeta({ pubkey: poolKeys.marketEventQueue }),
-    accountMeta({ pubkey: poolKeys.marketBaseVault }),
-    accountMeta({ pubkey: poolKeys.marketQuoteVault }),
-    accountMeta({ pubkey: poolKeys.marketAuthority, isWritable: false }),
     accountMeta({ pubkey: userKeys.tokenAccountIn }),
     accountMeta({ pubkey: userKeys.tokenAccountOut }),
     accountMeta({ pubkey: userKeys.owner, isWritable: false, isSigner: true }),
-  );
+  ];
 
   return new TransactionInstruction({
     programId: poolKeys.programId,
@@ -512,25 +554,26 @@ export function makeAMMSwapV2Instruction(params: SwapInstructionParams): Transac
 
 export function makeAMMSwapInstruction(params: SwapInstructionParams): TransactionInstruction {
   const { poolKeys, version, userKeys, amountIn, amountOut, fixedSide } = params;
-  if (version === 4 || version === 5) {
+  if (version === 4) {
+    const props = { poolKeys, userKeys };
+    return makeAMMSwapV2Instruction(params)
+  } else if (version === 5) {
     const props = { poolKeys, userKeys };
     if (fixedSide === "in") {
-      return makeSwapFixedInInstruction(
+      return makeSwapFixedInInstructionStable(
         {
           ...props,
           amountIn,
           minAmountOut: amountOut,
         },
-        version,
       );
     } else if (fixedSide === "out") {
-      return makeSwapFixedOutInstruction(
+      return makeSwapFixedOutInstructionStable(
         {
           ...props,
           maxAmountIn: amountIn,
           amountOut,
         },
-        version,
       );
     }
     logger.logWithError("invalid params", "params", params);
@@ -540,86 +583,51 @@ export function makeAMMSwapInstruction(params: SwapInstructionParams): Transacti
   throw new Error("invalid version");
 }
 
-export function makeInitPoolInstructionV4({
-  poolKeys: propPoolKeys,
-  userKeys,
-  startTime,
-}: InitPoolInstructionParamsV4): TransactionInstruction {
-  const data = Buffer.alloc(initPoolLayout.span);
-  initPoolLayout.encode(
-    {
-      instruction: 0,
-      // nonce: poolKeys.nonce, // to do fix
-      nonce: 5,
-      startTime: parseBigNumberish(startTime),
-    },
-    data,
-  );
-  const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
+// export function makeInitPoolInstructionV4({
+//   poolKeys: propPoolKeys,
+//   userKeys,
+//   startTime,
+// }: InitPoolInstructionParamsV4): TransactionInstruction {
+//   const data = Buffer.alloc(initPoolLayout.span);
+//   initPoolLayout.encode(
+//     {
+//       instruction: 0,
+//       // nonce: poolKeys.nonce, // to do fix
+//       nonce: 5,
+//       startTime: parseBigNumberish(startTime),
+//     },
+//     data,
+//   );
+//   const poolKeys = jsonInfo2PoolKeys(propPoolKeys);
 
-  const keys = [
-    // system
-    accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
-    accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
-    accountMeta({ pubkey: SYSVAR_RENT_PUBKEY, isWritable: false }),
-    // amm
-    accountMeta({ pubkey: poolKeys.id }),
-    accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.openOrders }),
-    accountMeta({ pubkey: poolKeys.mintLp.address }),
-    accountMeta({ pubkey: poolKeys.mintA.address, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.mintB.address, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.vault.A, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.vault.B, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.id }),
-    accountMeta({ pubkey: poolKeys.targetOrders }),
-    accountMeta({ pubkey: userKeys.lpTokenAccount }),
-    accountMeta({ pubkey: poolKeys.id, isWritable: false }),
-    // serum
-    accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
-    accountMeta({ pubkey: poolKeys.marketId, isWritable: false }),
-    // user
-    accountMeta({ pubkey: userKeys.payer, isSigner: true }),
-  ];
+//   const keys = [
+//     // system
+//     accountMeta({ pubkey: TOKEN_PROGRAM_ID, isWritable: false }),
+//     accountMeta({ pubkey: SystemProgram.programId, isWritable: false }),
+//     accountMeta({ pubkey: SYSVAR_RENT_PUBKEY, isWritable: false }),
+//     // amm
+//     accountMeta({ pubkey: poolKeys.id }),
+//     accountMeta({ pubkey: poolKeys.authority, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.openOrders }),
+//     accountMeta({ pubkey: poolKeys.mintLp.address }),
+//     accountMeta({ pubkey: poolKeys.mintA.address, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.mintB.address, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.vault.A, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.vault.B, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.id }),
+//     accountMeta({ pubkey: poolKeys.targetOrders }),
+//     accountMeta({ pubkey: userKeys.lpTokenAccount }),
+//     accountMeta({ pubkey: poolKeys.id, isWritable: false }),
+//     // serum
+//     accountMeta({ pubkey: poolKeys.marketProgramId, isWritable: false }),
+//     accountMeta({ pubkey: poolKeys.marketId, isWritable: false }),
+//     // user
+//     accountMeta({ pubkey: userKeys.payer, isSigner: true }),
+//   ];
 
-  return new TransactionInstruction({
-    programId: poolKeys.programId,
-    keys,
-    data,
-  });
-}
-
-export function makeSimulatePoolInfoInstruction({ poolKeys }: { poolKeys: AmmV4Keys | AmmV5Keys }): {
-  instruction: TransactionInstruction;
-} {
-  const LAYOUT = struct([u8("instruction"), u8("simulateType")]);
-  const data = Buffer.alloc(LAYOUT.span);
-  LAYOUT.encode(
-    {
-      instruction: 12,
-      simulateType: 0,
-    },
-    data,
-  );
-
-  const keys = [
-    // amm
-    accountMeta({ pubkey: new PublicKey(poolKeys.id), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.authority), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.openOrders), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.vault.A), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.vault.B), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.mintLp.address), isWritable: false }),
-    // serum
-    accountMeta({ pubkey: new PublicKey(poolKeys.marketId), isWritable: false }),
-    accountMeta({ pubkey: new PublicKey(poolKeys.marketEventQueue), isWritable: false }),
-  ];
-
-  return {
-    instruction: new TransactionInstruction({
-      programId: new PublicKey(poolKeys.programId),
-      keys,
-      data,
-    }),
-  };
-}
+//   return new TransactionInstruction({
+//     programId: poolKeys.programId,
+//     keys,
+//     data,
+//   });
+// }
