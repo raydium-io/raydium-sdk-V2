@@ -36,6 +36,7 @@ import {
   getPdaLaunchpadAuth,
   getPdaLaunchpadPoolId,
   getPdaLaunchpadVaultId,
+  getPdaPlatformConfigAccess,
   getPdaPlatformFeeVaultAuth,
   getPdaPlatformId,
   getPdaPlatformVault,
@@ -130,8 +131,6 @@ export default class LaunchpadModule extends ModuleBase {
     configId,
 
     configInfo: propConfigInfo,
-    platformFeeRate,
-    platformVestingScale,
     txVersion,
     computeBudgetConfig,
     txTipConfig,
@@ -146,6 +145,7 @@ export default class LaunchpadModule extends ModuleBase {
     token2022,
     transferFeeExtensionParams,
     creatorFeeOn = CpmmCreatorFeeOn.OnlyTokenB,
+    platformConfigAccess,
     ...extraConfigs
   }: CreateLaunchPad<T>): Promise<
     MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; swapInfo: SwapInfoReturnExt }>
@@ -357,6 +357,7 @@ export default class LaunchpadModule extends ModuleBase {
               extraConfigs?.cliffPeriod ?? new BN(0),
               extraConfigs?.unlockPeriod ?? new BN(0),
               creatorFeeOn,
+              platformConfigAccess ? getPdaPlatformConfigAccess(programId, platformId, configId).publicKey : undefined,
             ),
       ],
     });

@@ -51,6 +51,7 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   token2022?: boolean;
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN };
   creatorFeeOn?: CpmmCreatorFeeOn;
+  platformConfigAccess?: boolean;
 }
 
 export interface BuyToken<T = TxVersion.LEGACY> {

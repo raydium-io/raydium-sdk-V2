@@ -98,10 +98,10 @@ export function initialize(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -158,6 +158,8 @@ export function initializeV2(
   unlockPeriod: BN,
 
   cpmmCreatorFeeOn: CpmmCreatorFeeOn,
+
+  platformGlobalAccess?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -198,12 +200,14 @@ export function initializeV2(
     { pubkey: programId, isSigner: false, isWritable: false },
   ];
 
+  if (platformGlobalAccess) keys.push({ pubkey: platformGlobalAccess, isSigner: false, isWritable: false })
+
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -258,6 +262,8 @@ export function initializeWithToken2022(
 
   cpmmCreatorFeeOn: CpmmCreatorFeeOn,
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN },
+
+  platformGlobalAccess?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -297,12 +303,14 @@ export function initializeWithToken2022(
     { pubkey: programId, isSigner: false, isWritable: false },
   ];
 
+  if (platformGlobalAccess) keys.push({ pubkey: platformGlobalAccess, isSigner: false, isWritable: false })
+
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-      Buffer.from(symbol, "utf-8").length +
-      Buffer.from(uri, "utf-8").length +
-      4 * 3 +
-      1,
+    Buffer.from(symbol, "utf-8").length +
+    Buffer.from(uri, "utf-8").length +
+    4 * 3 +
+    1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -788,10 +796,10 @@ export function createPlatformConfig(
 
   const data = Buffer.alloc(
     8 * 6 +
-      Buffer.from(name, "utf-8").length +
-      Buffer.from(web, "utf-8").length +
-      Buffer.from(img, "utf-8").length +
-      4 * 3,
+    Buffer.from(name, "utf-8").length +
+    Buffer.from(web, "utf-8").length +
+    Buffer.from(img, "utf-8").length +
+    4 * 3,
   );
   dataLayout.encode(
     {
@@ -831,26 +839,26 @@ export function updatePlatformConfig(
     | { type: "updatePlatformVestingScale"; value: BN }
     | { type: "updatePlatformCpCreator"; value: PublicKey }
     | {
-        type: "updateAll";
-        value: {
-          platformClaimFeeWallet: PublicKey;
-          platformLockNftWallet: PublicKey;
-          platformVestingWallet: PublicKey;
-          cpConfigId: PublicKey;
-          migrateCpLockNftScale: {
-            platformScale: BN;
-            creatorScale: BN;
-            burnScale: BN;
-          };
-          feeRate: BN;
-          name: string;
-          web: string;
-          img: string;
-          transferFeeExtensionAuth: PublicKey;
-          creatorFeeRate: BN;
-          platformVestingScale: BN;
+      type: "updateAll";
+      value: {
+        platformClaimFeeWallet: PublicKey;
+        platformLockNftWallet: PublicKey;
+        platformVestingWallet: PublicKey;
+        cpConfigId: PublicKey;
+        migrateCpLockNftScale: {
+          platformScale: BN;
+          creatorScale: BN;
+          burnScale: BN;
         };
-      },
+        feeRate: BN;
+        name: string;
+        web: string;
+        img: string;
+        transferFeeExtensionAuth: PublicKey;
+        creatorFeeRate: BN;
+        platformVestingScale: BN;
+      };
+    },
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: false },
@@ -908,16 +916,16 @@ export function updatePlatformConfig(
     ]);
     data = Buffer.alloc(
       1 +
-        32 +
-        32 +
-        32 +
-        8 * 5 +
-        4 * 3 +
-        Buffer.from(updateInfo.value.name, "utf-8").length +
-        Buffer.from(updateInfo.value.web, "utf-8").length +
-        Buffer.from(updateInfo.value.img, "utf-8").length +
-        32 +
-        8,
+      32 +
+      32 +
+      32 +
+      8 * 5 +
+      4 * 3 +
+      Buffer.from(updateInfo.value.name, "utf-8").length +
+      Buffer.from(updateInfo.value.web, "utf-8").length +
+      Buffer.from(updateInfo.value.img, "utf-8").length +
+      32 +
+      8,
     );
     dataLayout.encode(
       {
