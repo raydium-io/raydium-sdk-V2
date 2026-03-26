@@ -8,6 +8,7 @@ export const POOL_VESTING_SEED = Buffer.from("pool_vesting", "utf8");
 export const PLATFORM_SEED = Buffer.from("platform_config", "utf8");
 export const PLATFORM_FEE_VAULT_AUTH_SEED = Buffer.from("platform_fee_vault_auth_seed", "utf8");
 export const CREATOR_FEE_VAULT_AUTH_SEED = Buffer.from("creator_fee_vault_auth_seed", "utf8");
+export const PLATFORM_GLOBAL_ACCESS_SEED = Buffer.from('platform_global_access', 'utf8')
 
 export function getPdaLaunchpadAuth(programId: PublicKey): ProgramAddress {
   return findProgramAddress([AUTH_SEED], programId);
@@ -70,4 +71,11 @@ export function getPdaCreatorVault(programId: PublicKey, creator: PublicKey, min
 
 export function getPdaCreatorFeeVaultAuth(programId: PublicKey): ProgramAddress {
   return findProgramAddress([CREATOR_FEE_VAULT_AUTH_SEED], programId);
+}
+
+export function getPdaPlatformConfigAccess(programId: PublicKey, platformId: PublicKey, configId: PublicKey): ProgramAddress {
+  return findProgramAddress(
+    [PLATFORM_GLOBAL_ACCESS_SEED, platformId.toBuffer(), configId.toBuffer()],
+    programId
+  )
 }
