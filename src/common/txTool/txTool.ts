@@ -251,11 +251,14 @@ export class TxBuilder {
   public async versionBuild<O = Record<string, any>>({
     txVersion,
     extInfo,
+    lookupTableAddress,
   }: {
     txVersion?: TxVersion;
     extInfo?: O;
+    lookupTableAddress?: string[];
   }): Promise<MakeTxData<TxVersion.LEGACY, O> | MakeTxData<TxVersion.V0, O>> {
-    if (txVersion === TxVersion.V0) return (await this.buildV0({ ...(extInfo || {}) })) as MakeTxData<TxVersion.V0, O>;
+    if (txVersion === TxVersion.V0)
+      return (await this.buildV0({ ...(extInfo || {}), lookupTableAddress })) as unknown as MakeTxData<TxVersion.V0, O>;
     return this.build<O>(extInfo) as MakeTxData<TxVersion.LEGACY, O>;
   }
 
@@ -995,6 +998,7 @@ export class TxBuilder {
       lookupTableCache?: CacheLTA;
       lookupTableAddress?: string[];
       splitIns?: TransactionInstruction[];
+      insCountLimit?: number;
     },
   ): Promise<MultiTxV0BuildData> {
     const {
@@ -1002,6 +1006,7 @@ export class TxBuilder {
       splitIns = [],
       lookupTableCache = {},
       lookupTableAddress = [],
+      insCountLimit = 12,
       ...extInfo
     } = props || {};
     const lookupTableAddressAccount = {
@@ -1042,7 +1047,7 @@ export class TxBuilder {
       const _itemInsWithCompute = computeBudgetConfig ? [...computeBudgetData.instructions, ..._itemIns] : _itemIns;
       if (
         item !== splitIns[splitInsIdx] &&
-        instructionQueue.length < 12 &&
+        instructionQueue.length < insCountLimit &&
         (checkV0TxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, lookupTableAddressAccount }) ||
           checkV0TxSize({ instructions: _itemIns, payer: this.feePayer, lookupTableAddressAccount }))
       ) {
