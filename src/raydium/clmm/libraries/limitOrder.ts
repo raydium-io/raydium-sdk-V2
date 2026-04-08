@@ -28,11 +28,7 @@ export class LimitOrderMath {
     if (orderInfo.orderPhase.eq(tickInfo.orderPhase)) {
       filledAmount = BN_ZERO;
     } else if (orderInfo.orderPhase.add(BN_ONE).eq(tickInfo.orderPhase)) {
-      const newRemainingAmount = mulDivFloor(
-        remainingAmount,
-        tickInfo.unfilledRatioX64,
-        orderInfo.unfilledRatioX64,
-      );
+      const newRemainingAmount = mulDivFloor(remainingAmount, tickInfo.unfilledRatioX64, orderInfo.unfilledRatioX64);
       filledAmount = remainingAmount.sub(newRemainingAmount);
       if (filledAmount.gt(BN_ZERO)) {
         orderInfo.unfilledRatioX64 = tickInfo.unfilledRatioX64;
@@ -43,9 +39,10 @@ export class LimitOrderMath {
       throw Error("");
     }
 
-    if (filledAmount.isZero()) return BN_ZERO
+    if (filledAmount.isZero()) return BN_ZERO;
 
-    orderInfo.filledAmount = orderInfo.filledAmount.add(filledAmount)
+    // for get real executed amount
+    // orderInfo.filledAmount = orderInfo.filledAmount.add(filledAmount)
 
     return TickUtil.getLimitOrderOutput({
       amountIn: filledAmount,
