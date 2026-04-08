@@ -160,9 +160,9 @@ export const TickLayout = struct([
 
   u64("orderPhase"),
   u64("ordersAmount"),
-  u64("partFilledOrdersTotal"),
   u64("partFilledOrdersRemaining"),
-  seq(u32(), 5),
+  u128("unfilledRatioX64"),
+  seq(u32(), 3),
 ])
 
 export const TickArrayLayout = struct([
@@ -192,7 +192,8 @@ export const LimitOrderLayout = struct([
   u64("totalAmount"),
   u64("filledAmount"),
   u64("openTime"),
-  seq(u64(), 6),
+  u128('unfilledRatioX64'),
+  seq(u64(), 4),
 ]);
 
 export const TickArrayBitmapExtensionLayout = struct([

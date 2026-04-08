@@ -464,13 +464,14 @@ export class TickUtil {
       }
     }
 
-    if (result.amountOut.lte(BN_ZERO)) throw Error("result.amountOut.lte(BN_ZERO)");
-    if (result.amountIn.lte(BN_ZERO)) throw Error("result.amountIn.lte(BN_ZERO)");
-
     let consumeFromPartRemaining = BN_ZERO;
     if (tick.partFilledOrdersRemaining.gt(BN_ZERO)) {
-      if (tick.partFilledOrdersTotal.lte(BN_ZERO)) throw Error("tick.partFilledOrdersTotal.lte(BN_ZERO)");
       consumeFromPartRemaining = BN.min(tick.partFilledOrdersRemaining, result.amountOut);
+
+      if (consumeFromPartRemaining.gt(BN_ZERO)) {
+        tick.unfilledRatioX64 = mulDivFloor(tick.unfilledRatioX64, tick.partFilledOrdersRemaining.sub(consumeFromPartRemaining), tick.partFilledOrdersRemaining)
+      }
+
       tick.partFilledOrdersRemaining = tick.partFilledOrdersRemaining.sub(consumeFromPartRemaining);
     }
     const amountOutContinueToConsume = result.amountOut.sub(consumeFromPartRemaining);
@@ -480,10 +481,8 @@ export class TickUtil {
       if (tick.ordersAmount.lt(amountOutContinueToConsume)) throw Error("InvalidLimitOrderAmount");
 
       tick.orderPhase = tick.orderPhase.add(BN_ONE);
-      tick.partFilledOrdersTotal = tick.ordersAmount;
-      tick.partFilledOrdersRemaining = tick.partFilledOrdersRemaining.add(
-        tick.ordersAmount.sub(amountOutContinueToConsume),
-      );
+      tick.unfilledRatioX64 = mulDivFloor(Q64, tick.ordersAmount.sub(amountOutContinueToConsume), tick.ordersAmount);
+      tick.partFilledOrdersRemaining = tick.ordersAmount.sub(amountOutContinueToConsume);
       tick.ordersAmount = BN_ZERO;
     }
 
