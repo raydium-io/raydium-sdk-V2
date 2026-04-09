@@ -273,6 +273,7 @@ export interface CollectCreatorFees<T = TxVersion.LEGACY> {
 
 export interface CollectMultiCreatorFees<T = TxVersion.LEGACY> {
   poolInfoList: ApiV3PoolInfoStandardItemCpmm[];
+  poolKeyList?: CpmmKeys[];
 
   programId?: PublicKey;
   feePayer?: PublicKey;
