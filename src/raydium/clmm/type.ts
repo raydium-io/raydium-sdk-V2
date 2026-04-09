@@ -162,10 +162,10 @@ export interface ComputeClmmPoolInfo {
   feeGrowthGlobalX64B: BN;
   protocolFeesTokenA: BN;
   protocolFeesTokenB: BN;
-  swapInAmountTokenA: BN;
-  swapOutAmountTokenB: BN;
-  swapInAmountTokenB: BN;
-  swapOutAmountTokenA: BN;
+  // swapInAmountTokenA: BN;
+  // swapOutAmountTokenB: BN;
+  // swapInAmountTokenB: BN;
+  // swapOutAmountTokenA: BN;
   tickArrayBitmap: Buffer;
 
   startTime: number;

@@ -86,10 +86,11 @@ export const PoolInfoLayout = struct([
   u64("protocolFeesTokenA"),
   u64("protocolFeesTokenB"),
 
-  u128("swapInAmountTokenA"),
-  u128("swapOutAmountTokenB"),
-  u128("swapInAmountTokenB"),
-  u128("swapOutAmountTokenA"),
+  seq(u128(), 4),
+  // u128("swapInAmountTokenA"),
+  // u128("swapOutAmountTokenB"),
+  // u128("swapInAmountTokenB"),
+  // u128("swapOutAmountTokenA"),
 
   u8("status"),
   u8("feeOn"),
@@ -97,12 +98,13 @@ export const PoolInfoLayout = struct([
 
   seq(RewardInfoLayout, REWARD_NUM, "rewardInfos"),
 
-  blob(8 * 16, 'tickArrayBitmap'),
+  blob(8 * 16, "tickArrayBitmap"),
 
-  u64("totalFeesTokenA"),
-  u64("totalFeesClaimedTokenA"),
-  u64("totalFeesTokenB"),
-  u64("totalFeesClaimedTokenB"),
+  seq(u64(), 4),
+  // u64("totalFeesTokenA"),
+  // u64("totalFeesClaimedTokenA"),
+  // u64("totalFeesTokenB"),
+  // u64("totalFeesClaimedTokenB"),
 
   u64("fundFeesTokenA"),
   u64("fundFeesTokenB"),
@@ -110,9 +112,9 @@ export const PoolInfoLayout = struct([
   u64("startTime"),
   u64("recentEpoch"),
 
-  DynamicFeeInfoLayout.replicate('dynamicFeeInfo'),
+  DynamicFeeInfoLayout.replicate("dynamicFeeInfo"),
   seq(u64(), 46),
-])
+]);
 
 export const PositionRewardInfoLayout = struct([u128("growthInsideLastX64"), u64("rewardAmountOwed")]);
 export const PersonalPositionLayout = struct([
@@ -163,7 +165,7 @@ export const TickLayout = struct([
   u64("partFilledOrdersRemaining"),
   u128("unfilledRatioX64"),
   seq(u32(), 3),
-])
+]);
 
 export const TickArrayLayout = struct([
   blob(8),
@@ -192,7 +194,7 @@ export const LimitOrderLayout = struct([
   u64("totalAmount"),
   u64("filledAmount"),
   u64("openTime"),
-  u128('unfilledRatioX64'),
+  u128("unfilledRatioX64"),
   seq(u64(), 4),
 ]);
 
@@ -200,8 +202,8 @@ export const TickArrayBitmapExtensionLayout = struct([
   blob(8),
   publicKey("poolId"),
 
-  blob(8 * 8 * EXTENSION_TICKARRAY_BITMAP_SIZE, 'positiveTickArrayBitmap'),
-  blob(8 * 8 * EXTENSION_TICKARRAY_BITMAP_SIZE, 'negativeTickArrayBitmap'),
+  blob(8 * 8 * EXTENSION_TICKARRAY_BITMAP_SIZE, "positiveTickArrayBitmap"),
+  blob(8 * 8 * EXTENSION_TICKARRAY_BITMAP_SIZE, "negativeTickArrayBitmap"),
 ]);
 
 export const DynamicFeeConfigLayout = struct([
@@ -217,11 +219,11 @@ export const DynamicFeeConfigLayout = struct([
 
 export const LimitOrderNonceLayout = struct([
   blob(8),
-  publicKey('wallet'),
+  publicKey("wallet"),
   u8("nonceIndex"),
   u64("orderNonce"),
   seq(u64(), 4),
-])
+]);
 
 export const LockPositionLayout = struct([
   u64(),
