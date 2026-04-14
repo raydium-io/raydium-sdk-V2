@@ -2085,7 +2085,16 @@ export default class TradeV2 extends ModuleBase {
           openOrders: rpcInfo.openOrders.toBase58(),
           targetOrders: rpcInfo.targetOrders.toBase58(),
           mintLp: pool.lpMint,
-          ...marketData[pool.marketId],
+          ...(marketData[pool.marketId] || {
+            marketProgramId: rpcInfo.marketProgramId.toBase58(),
+            marketId: rpcInfo.marketId.toBase58(),
+            marketAuthority: PublicKey.default.toBase58(),
+            marketBaseVault: PublicKey.default.toBase58(),
+            marketQuoteVault: PublicKey.default.toBase58(),
+            marketBids: PublicKey.default.toBase58(),
+            marketAsks: PublicKey.default.toBase58(),
+            marketEventQueue: PublicKey.default.toBase58(),
+          }),
         };
         poolKeys.push(ammKeys);
       } else if (pool.version === 7) {
