@@ -231,14 +231,29 @@ export class PoolUtils {
   } {
     const zeroForOne = inputTokenMint.toBase58() === poolInfo.mintA.address;
 
+    const currentTickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
+      poolInfo.accInfo.tickCurrent,
+      poolInfo.accInfo.tickSpacing,
+    );
     const { allTrade, amountCalculated, feeAmount, sqrtPriceX64, accounts } = swapInternal({
       programId: poolInfo.programId,
       poolId: poolInfo.id,
       poolInfo: poolInfo.accInfo,
-      tickArrays: Object.entries(tickArrayCache).map((i) => ({
-        address: i[1].address,
-        value: i[1],
-      })),
+      tickArrays: Object.entries(tickArrayCache)
+        .map((i) => ({
+          address: i[1].address,
+          value: i[1],
+        }))
+        .filter((a) =>
+          zeroForOne
+            ? a.value.startTickIndex <= currentTickArrayStartIndex
+            : a.value.startTickIndex >= currentTickArrayStartIndex,
+        )
+        .sort((a, b) =>
+          zeroForOne
+            ? b.value.startTickIndex - a.value.startTickIndex
+            : a.value.startTickIndex - b.value.startTickIndex,
+        ),
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       configInfo: poolInfo.ammConfig,
@@ -271,11 +286,26 @@ export class PoolUtils {
   ): { allTrade: boolean; expectedAmountIn: BN; remainingAccounts: PublicKey[]; executionPrice: BN; feeAmount: BN } {
     const zeroForOne = outputTokenMint.toBase58() === poolInfo.mintB.address;
 
+    const currentTickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
+      poolInfo.accInfo.tickCurrent,
+      poolInfo.accInfo.tickSpacing,
+    );
     const { allTrade, amountCalculated, feeAmount, sqrtPriceX64, accounts } = swapInternal({
       programId: poolInfo.programId,
       poolId: poolInfo.id,
       poolInfo: poolInfo.accInfo,
-      tickArrays: Object.entries(tickArrayCache).map((i) => ({ address: new PublicKey(i[0]), value: i[1] })),
+      tickArrays: Object.entries(tickArrayCache)
+        .map((i) => ({ address: new PublicKey(i[0]), value: i[1] }))
+        .filter((a) =>
+          zeroForOne
+            ? a.value.startTickIndex <= currentTickArrayStartIndex
+            : a.value.startTickIndex >= currentTickArrayStartIndex,
+        )
+        .sort((a, b) =>
+          zeroForOne
+            ? b.value.startTickIndex - a.value.startTickIndex
+            : a.value.startTickIndex - b.value.startTickIndex,
+        ),
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       configInfo: poolInfo.ammConfig,

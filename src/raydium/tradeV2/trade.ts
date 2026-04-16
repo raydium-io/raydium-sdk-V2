@@ -719,6 +719,13 @@ export default class TradeV2 extends ModuleBase {
     const baseIn = inputMint.toString() === clmmPoolData.poolInfo.mintA.address;
     const tokenOut = clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"];
 
+    let launchPoolInfo = propsLaunchPoolInfo;
+    if (!launchPoolInfo)
+      launchPoolInfo = await this.scope.launchpad.getRpcPoolInfo({ poolId: new PublicKey(launchPoolId) });
+
+    if (tokenOut.address !== launchPoolInfo.mintB.toBase58())
+      throw new Error(`clmm swap mint(${tokenOut.address}) != launch pool mintB(${launchPoolInfo.mintB.toBase58()})`);
+
     const clmmComputeAmount = fixClmmOut
       ? await PoolUtils.computeAmountIn({
           poolInfo: clmmPoolData.computePoolInfo,
@@ -741,12 +748,6 @@ export default class TradeV2 extends ModuleBase {
           blockTimestamp,
         });
 
-    let launchPoolInfo = propsLaunchPoolInfo;
-    if (!launchPoolInfo)
-      launchPoolInfo = await this.scope.launchpad.getRpcPoolInfo({ poolId: new PublicKey(launchPoolId) });
-
-    if (tokenOut.address !== launchPoolInfo.mintB.toBase58())
-      throw new Error(`clmm swap mint(${tokenOut.address}) != launch pool mintB(${launchPoolInfo.mintB.toBase58()})`);
     let platformInfo = propsLaunchPlatformInfo;
     if (!platformInfo) {
       const data = await this.scope.connection.getAccountInfo(launchPoolInfo.platformId);
