@@ -20,42 +20,38 @@ export class LimitOrderMath {
     orderInfo: ReturnType<typeof LimitOrderLayout.decode>;
     tickInfo: ReturnType<typeof TickLayout.decode>;
   }): BN {
-    const remainingAmount = this.getUnFilledAmount({ orderInfo });
-    if (remainingAmount.isZero()) return BN_ZERO;
-
-    let filledAmount;
-    let isExact;
+    if (orderInfo.settleBase.isZero()) return BN_ZERO
 
     if (orderInfo.orderPhase.eq(tickInfo.orderPhase)) {
-      filledAmount = BN_ZERO;
-      isExact = true;
+      return BN_ZERO
     } else if (orderInfo.orderPhase.add(BN_ONE).eq(tickInfo.orderPhase)) {
-      const numerator = remainingAmount.mul(tickInfo.unfilledRatioX64);
-      const denominator = orderInfo.unfilledRatioX64;
-      const newRemainingAmount = numerator.div(denominator);
-      filledAmount = remainingAmount.sub(newRemainingAmount);
-      if (filledAmount.gt(BN_ZERO)) {
-        orderInfo.unfilledRatioX64 = tickInfo.unfilledRatioX64;
-      }
-      isExact = numerator.mod(denominator).isZero();
+      const numerator = orderInfo.settleBase.mul(tickInfo.unfilledRatioX64)
+      const denominator = orderInfo.unfilledRatioX64
+
+      const idealRemaining = numerator.div(denominator)
+      const isExact = numerator.mod(denominator).isZero()
+
+      const totalFilled = orderInfo.settleBase.sub(idealRemaining)
+      if (totalFilled.isZero()) return BN_ZERO
+
+      const effectiveFilled = isExact ? totalFilled : totalFilled.sub(BN_ONE)
+
+      const totalOutput = TickUtil.getLimitOrderOutput({ amountIn: effectiveFilled, tick: tickInfo.tick, zeroForOne: orderInfo.zeroForOne })
+
+      const payout = totalOutput.sub(orderInfo.settleOutput)
+      // orderInfo.filledAmount = orderInfo.totalAmount.sub(idealRemaining)
+      // orderInfo.settleOutput = totalOutput
+
+      return payout
     } else if (orderInfo.orderPhase.add(new BN(2)).lte(tickInfo.orderPhase)) {
-      filledAmount = remainingAmount;
-      isExact = true;
+      const totalOutput = TickUtil.getLimitOrderOutput({ amountIn: orderInfo.settleBase, tick: tickInfo.tick, zeroForOne: orderInfo.zeroForOne })
+      const payout = totalOutput.sub(orderInfo.settleOutput)
+      // orderInfo.filledAmount = orderInfo.totalAmount
+      // orderInfo.settleBase = BN_ZERO
+      // orderInfo.settleOutput = BN_ZERO
+      return payout
     } else {
-      throw Error("");
+      throw Error('invalid order phase')
     }
-
-    if (filledAmount.isZero()) return BN_ZERO;
-
-    // for get real executed amount
-    // orderInfo.filledAmount = orderInfo.filledAmount.add(filledAmount)
-
-    const effectiveFilledAmount = isExact ? filledAmount : filledAmount.sub(BN_ONE);
-
-    return TickUtil.getLimitOrderOutput({
-      amountIn: effectiveFilledAmount,
-      tick: tickInfo.tick,
-      zeroForOne: orderInfo.zeroForOne,
-    });
   }
 }

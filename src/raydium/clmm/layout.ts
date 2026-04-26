@@ -193,6 +193,8 @@ export const LimitOrderLayout = struct([
   u64("orderPhase"),
   u64("totalAmount"),
   u64("filledAmount"),
+  u64("settleBase"),
+  u64("settleOutput"),
   u64("openTime"),
   u128("unfilledRatioX64"),
   seq(u64(), 4),

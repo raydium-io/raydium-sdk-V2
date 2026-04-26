@@ -21,8 +21,8 @@ export class PositionUtils {
       feeGrowthBelowX64A = tickLowerState.feeGrowthOutsideX64A
       feeGrowthBelowX64B = tickLowerState.feeGrowthOutsideX64B
     } else {
-      feeGrowthBelowX64A = poolState.feeGrowthGlobalX64A.sub(tickLowerState.feeGrowthOutsideX64A)
-      feeGrowthBelowX64B = poolState.feeGrowthGlobalX64B.sub(tickLowerState.feeGrowthOutsideX64B)
+      feeGrowthBelowX64A = wrappingSubU128(poolState.feeGrowthGlobalX64A, tickLowerState.feeGrowthOutsideX64A)
+      feeGrowthBelowX64B = wrappingSubU128(poolState.feeGrowthGlobalX64B, tickLowerState.feeGrowthOutsideX64B)
     }
 
     let feeGrowthAboveX64A = new BN(0)
@@ -31,8 +31,8 @@ export class PositionUtils {
       feeGrowthAboveX64A = tickUpperState.feeGrowthOutsideX64A
       feeGrowthAboveX64B = tickUpperState.feeGrowthOutsideX64B
     } else {
-      feeGrowthAboveX64A = poolState.feeGrowthGlobalX64A.sub(tickUpperState.feeGrowthOutsideX64A)
-      feeGrowthAboveX64B = poolState.feeGrowthGlobalX64B.sub(tickUpperState.feeGrowthOutsideX64B)
+      feeGrowthAboveX64A = wrappingSubU128(poolState.feeGrowthGlobalX64A, tickUpperState.feeGrowthOutsideX64A)
+      feeGrowthAboveX64B = wrappingSubU128(poolState.feeGrowthGlobalX64B, tickUpperState.feeGrowthOutsideX64B)
     }
 
     const feeGrowthInsideX64A = wrappingSubU128(
@@ -123,7 +123,7 @@ export class PositionUtils {
       if (tickLowerState.liquidityGross.eqn(0)) {
         rewardGrowthsBelow = rewardInfos[i].growthGlobalX64
       } else if (tickCurrentIndex < tickLowerState.tick) {
-        rewardGrowthsBelow = rewardInfos[i].growthGlobalX64.sub(tickLowerState.rewardGrowthsOutsideX64[i])
+        rewardGrowthsBelow = wrappingSubU128(rewardInfos[i].growthGlobalX64, tickLowerState.rewardGrowthsOutsideX64[i])
       } else {
         rewardGrowthsBelow = tickLowerState.rewardGrowthsOutsideX64[i]
       }
@@ -134,7 +134,7 @@ export class PositionUtils {
       } else if (tickCurrentIndex < tickUpperState.tick) {
         rewardGrowthsAbove = tickUpperState.rewardGrowthsOutsideX64[i]
       } else {
-        rewardGrowthsAbove = rewardInfos[i].growthGlobalX64.sub(tickUpperState.rewardGrowthsOutsideX64[i])
+        rewardGrowthsAbove = wrappingSubU128(rewardInfos[i].growthGlobalX64, tickUpperState.rewardGrowthsOutsideX64[i])
       }
 
       rewardGrowthsInside.push(
