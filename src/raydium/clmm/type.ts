@@ -713,7 +713,7 @@ export interface CloseLimitOrder<T = TxVersion.LEGACY> {
   autoWithdraw?: boolean;
   /** 0~1000 means 0.01% ~ 100% */
   slippage?: number;
-
+  tickArrayBitmap?: PublicKey;
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
   txVersion?: T;

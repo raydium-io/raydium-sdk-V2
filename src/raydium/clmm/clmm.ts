@@ -1891,6 +1891,7 @@ export class Clmm extends ModuleBase {
     programId = CLMM_PROGRAM_ID,
     limitOrder,
     autoWithdraw = true,
+    tickArrayBitmap,
     slippage = 0,
     feePayer,
     computeBudgetConfig,
@@ -1931,6 +1932,7 @@ export class Clmm extends ModuleBase {
         limitOrder,
         limitOrderInfo: limitOrderData,
         amount: unfulfilledAmount,
+        tickArrayBitmap,
         slippage,
         txVersion: TxVersion.V0,
       });
