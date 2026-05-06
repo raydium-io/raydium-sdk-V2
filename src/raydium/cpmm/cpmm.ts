@@ -12,7 +12,7 @@ import { WSOLMint } from "@/common/pubKey";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
 import { Percent } from "../../module";
-import { CurveCalculator } from "./curve/calculator";
+import { CurveCalculator, SwapResult } from "./curve/calculator";
 
 import BN from "bn.js";
 import Decimal from "decimal.js";
@@ -206,6 +206,7 @@ export default class CpmmModule extends ModuleBase {
     poolInfo: ApiV3PoolInfoStandardItemCpmm;
     poolKeys: CpmmKeys;
     rpcData: CpmmParsedRpcData;
+    computePoolInfo: CpmmComputeData;
   }> {
     const rpcData = await this.getRpcPoolInfo(poolId, true);
     const mintInfos = await fetchMultipleMintInfos({
@@ -303,6 +304,15 @@ export default class CpmmModule extends ModuleBase {
         observationId: getPdaObservationId(rpcData.programId, new PublicKey(poolId)).publicKey.toBase58(),
       },
       rpcData,
+      computePoolInfo: {
+        ...rpcData,
+        id: new PublicKey(poolId),
+        configInfo: rpcData.configInfo!,
+        version: 7 as const,
+        authority: getPdaPoolAuthority(rpcData.programId).publicKey,
+        mintA,
+        mintB,
+      },
     };
   }
 
@@ -1456,7 +1466,8 @@ export default class CpmmModule extends ModuleBase {
     minAmountOut: BN;
     fee: BN;
     executionPrice: Decimal;
-    priceImpact: any;
+    priceImpact: Decimal;
+    swapResult: SwapResult;
   } {
     const isBaseIn = outputMint.toString() === pool.mintB.address;
     const isCreatorFeeOnInput = pool.feeOn === FeeOn.BothToken || pool.feeOn === FeeOn.OnlyTokenB;
@@ -1494,6 +1505,7 @@ export default class CpmmModule extends ModuleBase {
       executionPrice,
       fee: swapResult.tradeFee,
       priceImpact: pool.poolPrice.sub(executionPrice).div(pool.poolPrice),
+      swapResult,
     };
   }
 
