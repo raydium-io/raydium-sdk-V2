@@ -211,10 +211,12 @@ export class Api {
   }
 
   async getPoolList(props: FetchPoolParams = {}): Promise<PoolsApiReturn> {
-    const { type = "all", sort = "liquidity", order = "desc", page = 0, pageSize = 100 } = props;
+    const { type = "all", sort = "liquidity", order = "desc", showFarms = false, nextPageId, pageSize = 100 } = props;
     const res = await this.api.get<PoolsApiReturn>(
       (this.urlConfigs.POOL_LIST || API_URLS.POOL_LIST) +
-        `?poolType=${type}&poolSortField=${sort}&sortType=${order}&page=${page}&pageSize=${pageSize}`,
+        `?size=${pageSize}&hasReward=${showFarms}${type && type !== "all" ? `&poolType=${type}` : ""}${
+          sort ? `&sortField=${sort}` : ""
+        }${order ? `&sortType=${order}` : ""}${nextPageId ? `&nextPageId=${nextPageId}` : ""}`,
     );
     return res.data;
   }
@@ -256,7 +258,7 @@ export class Api {
     props: {
       mint1: string | PublicKey;
       mint2?: string | PublicKey;
-    } & Omit<FetchPoolParams, "pageSize">,
+    } & FetchPoolParams,
   ): Promise<PoolsApiReturn> {
     const {
       mint1: propMint1,
@@ -264,7 +266,7 @@ export class Api {
       type = PoolFetchType.All,
       sort = "default",
       order = "desc",
-      page = 1,
+      nextPageId,
     } = props;
 
     const [mint1, mint2] = [
@@ -273,9 +275,14 @@ export class Api {
     ];
     const [baseMint, quoteMint] = mint2 && mint1 > mint2 ? [mint2, mint1] : [mint1, mint2];
 
+    if (!mint1 && !mint2) throw new Error("not search mints provided");
     const res = await this.api.get(
       (this.urlConfigs.POOL_SEARCH_MINT || API_URLS.POOL_SEARCH_MINT) +
-        `?mint1=${baseMint}&mint2=${quoteMint}&poolType=${type}&poolSortField=${sort}&sortType=${order}&pageSize=100&page=${page}`,
+        `?size=100&mint1=${baseMint}${quoteMint ? `&mint2=${quoteMint}` : ""}${
+          type && type !== "all" ? `&poolType=${type}` : ""
+        }${sort ? `&sortField=${sort}` : ""}${order ? `&sortType=${order}` : ""}${
+          nextPageId ? `&nextPageId=${nextPageId}` : ""
+        }`,
     );
     return res.data;
   }

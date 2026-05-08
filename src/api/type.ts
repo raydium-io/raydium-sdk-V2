@@ -357,11 +357,8 @@ export type ApiV3PoolInfoItem =
 
 export enum PoolFetchType {
   All = "all",
-  Standard = "standard",
-  Concentrated = "concentrated",
-  AllFarm = "allFarm",
-  StandardFarm = "standardFarm",
-  ConcentratedFarm = "concentratedFarm",
+  Standard = "Standard",
+  Concentrated = "Concentrated",
 }
 
 export interface FetchPoolParams {
@@ -379,7 +376,10 @@ export interface FetchPoolParams {
     | "apr30d";
   order?: "desc" | "asc";
   pageSize?: number;
-  page?: number;
+  nextPageId?: string;
+  showFarms?: boolean;
+  mint1?: string;
+  mint2?: string;
 }
 
 // liquidity line

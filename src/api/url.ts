@@ -26,13 +26,13 @@ export const API_URLS = {
 
   JUP_TOKEN_LIST: "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
   /**
-   * poolType: {all, concentrated, standard, allFarm, concentratedFarm, standardFarm}
-   * poolSortField: {liquidity | volume_24h / 7d / 30d | fee_24h / 7d / 30d | apr_24h / 7d / 30d}
-   * sortType: {desc/asc}
-   * page: number
-   * pageSize: number
+   * poolType: Concentrated / Standard // optional
+   * sortField: liquidity / volume24h / fee24h / apr24h (more time unit 7d/30d e.g. volume27d) // optional
+   * sortType: desc / asc // optional
+   * size: 100
+   * hasReward: true or false // optional
    */
-  POOL_LIST: "/pools/info/list",
+  POOL_LIST: "/pools/info/list-v2",
   /**
    * ?ids=idList.join(',')
    */
@@ -45,7 +45,7 @@ export const API_URLS = {
    * page: number
    * pageSize: number
    */
-  POOL_SEARCH_MINT: "/pools/info/mint",
+  POOL_SEARCH_MINT: "/pools/info/list-v2",
   /** ?lps=lpList.join(',') */
   POOL_SEARCH_LP: "/pools/info/lps",
   /** ?ids=idList.join(',') */
