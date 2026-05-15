@@ -1,8 +1,8 @@
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
-import { parseBigNumberish } from "@/common";
+import { getMultipleAccountsInfo, parseBigNumberish } from "@/common";
 
-import { FormatFarmKeyOut } from "../../api/type";
+import { ApiV3Token, FormatFarmKeyOut } from "../../api/type";
 import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
 import { BN_ZERO } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
@@ -22,6 +22,8 @@ import {
   FARM_LOCK_MINT,
   FARM_LOCK_VAULT,
   FARM_PROGRAM_TO_VERSION,
+  FARM_VERSION_TO_LEDGER_LAYOUT,
+  FARM_VERSION_TO_STATE_LAYOUT,
   isValidFarmVersion,
   poolTypeV6,
   validateFarmRewards,
@@ -45,6 +47,7 @@ import {
   CreateFarm,
   CreateFarmExtInfo,
   FarmDWParam,
+  FarmPosition,
   FarmRewardInfo,
   FarmRewardInfoConfig,
   RewardInfoKey,
@@ -59,6 +62,7 @@ import {
   getAssociatedLedgerPoolAccount,
   getFarmLedgerLayout,
 } from "./util";
+import BN from "bn.js";
 
 export default class Farm extends ModuleBase {
   // token account needed
@@ -984,5 +988,126 @@ export default class Farm extends ModuleBase {
     if (txVersion === TxVersion.LEGACY)
       return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+  }
+
+  public async fetchFarmBalances(): Promise<
+    {
+      farmInfo: FormatFarmInfoOut;
+      pendingRewards: { mint: ApiV3Token; amount: string }[];
+    }[]
+  > {
+    const data = await this.scope.api.fetchFarmPositions(this.scope.ownerPubKey.toBase58());
+    const all = new Map<string, FarmPosition>();
+    const allFarms = new Map<string, FarmPosition>();
+
+    Object.keys(data || {}).forEach((lpMint) => {
+      Object.keys(data[lpMint]).forEach((farmId) => {
+        Object.keys(data[lpMint][farmId]).forEach((userVault) => {
+          const d = {
+            ...data[lpMint][farmId][userVault],
+            farmId,
+            lpMint,
+            userVault,
+          };
+          // set pos data by mint
+          const prevData = all.get(lpMint);
+
+          all.set(lpMint, {
+            lpMint,
+            hasAmount: prevData?.hasAmount || new Decimal(d.lpAmount || 0).gt(0),
+            hasV1Data: prevData?.hasV1Data || d.version === "V1",
+            totalLpAmount: new Decimal(prevData?.totalLpAmount ?? 0).add(d.lpAmount || 0).toString(),
+            totalV1LpAmount:
+              d.version === "V1"
+                ? new Decimal(prevData?.totalV1LpAmount ?? 0).add(d.lpAmount || 0).toString()
+                : prevData?.totalV1LpAmount ?? "0",
+            data: [...(prevData?.data || []), d],
+          });
+
+          // set pos data by farm
+          const prevFarmData = allFarms.get(farmId);
+          d.programId;
+          allFarms.set(farmId, {
+            lpMint,
+            hasAmount: prevFarmData?.hasAmount || new Decimal(d.lpAmount || 0).gt(0),
+            hasV1Data: prevFarmData?.hasV1Data || d.version === "V1",
+            totalLpAmount: new Decimal(prevFarmData?.totalLpAmount ?? 0).add(d.lpAmount || 0).toString(),
+            totalV1LpAmount:
+              d.version === "V1"
+                ? new Decimal(prevFarmData?.totalV1LpAmount ?? 0).add(d.lpAmount || 0).toString()
+                : prevFarmData?.totalV1LpAmount ?? "0",
+            data: [...(prevFarmData?.data || []), d],
+          });
+        });
+      });
+      all.set(lpMint, {
+        ...all.get(lpMint)!,
+        totalLpAmount: new Decimal(all.get(lpMint)?.totalLpAmount ?? 0).toString(),
+      });
+    });
+
+    const vaults = Array.from(allFarms)
+      .map((d) => d[1].data)
+      .flat();
+
+    const farmInfos = await this.scope.api.fetchFarmInfoById({
+      ids: vaults.map((d) => d.farmId).join(","),
+    });
+
+    const vaultData = await getMultipleAccountsInfo(
+      this.scope.connection,
+      vaults.map((d) => new PublicKey(d.userVault)),
+    );
+
+    const farmData = await getMultipleAccountsInfo(
+      this.scope.connection,
+      vaults.map((d) => new PublicKey(d.farmId)),
+    );
+
+    const farmBalance = farmData.map((f, idx) => {
+      if (!f || !vaultData[idx]) return undefined;
+      const version = FARM_PROGRAM_TO_VERSION[vaults[idx].programId];
+      if (!FARM_VERSION_TO_STATE_LAYOUT[version] || !FARM_VERSION_TO_LEDGER_LAYOUT[version]) return undefined;
+
+      const decodeData = FARM_VERSION_TO_LEDGER_LAYOUT[version]!.decode(vaultData[idx]!.data);
+      const farmData = FARM_VERSION_TO_STATE_LAYOUT[version]!.decode(f.data);
+      let multiplier: BN;
+      if (farmData.version === 6) {
+        multiplier = farmData.rewardMultiplier ?? new BN(10).pow(new BN(9));
+      } else {
+        multiplier = farmData.rewardInfos.length === 1 ? new BN(10).pow(new BN(9)) : new BN(10).pow(new BN(15));
+      }
+      const farm = farmInfos[idx];
+
+      const pendingRewards: { mint: ApiV3Token; amount: string }[] = farmData
+        ? farmData.rewardInfos.map((rewardInfo, index) => {
+            const rewardDebt = decodeData.rewardDebts[index];
+            let pendingReward = decodeData.deposited
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore
+              .mul(farmData?.version === 6 ? rewardInfo.accRewardPerShare : rewardInfo.perShareReward)
+              .div(multiplier)
+              .sub(rewardDebt);
+
+            if (pendingReward.lt(new BN(0))) pendingReward = new BN(0);
+            return {
+              mint: farm.rewardInfos[index]?.mint,
+              amount: pendingReward.toString(),
+            };
+          })
+        : [];
+
+      return {
+        ...decodeData,
+        ...farmData,
+        farmInfo: farm,
+        pendingRewards,
+      };
+    });
+
+    return farmBalance.filter(Boolean) as {
+      farmInfo: FormatFarmInfoOut;
+      pendingRewards: { mint: ApiV3Token; amount: string }[];
+    }[];
   }
 }

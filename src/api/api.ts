@@ -17,12 +17,13 @@ import {
   PoolFetchType,
   JupToken,
   ApiLaunchConfig,
+  FarmPositionData,
+  CpmmLockInfo,
 } from "./type";
 import { API_URLS, API_URL_CONFIG, DEV_API_URLS } from "./url";
 import { updateReqHistory } from "./utils";
 import { PublicKey } from "@solana/web3.js";
 import { solToWSol } from "../common";
-import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 const logger = createLogger("Raydium_Api");
 const poolKeysCache: Map<string, PoolKeys> = new Map();
@@ -287,6 +288,12 @@ export class Api {
     return res.data;
   }
 
+  async fetchPoolByLpMints(props: { ids: string }): Promise<ApiV3PoolInfoItem[]> {
+    const { ids } = props;
+    const res = await this.api.get((this.urlConfigs.POOL_SEARCH_LP || API_URLS.POOL_SEARCH_LP) + `?lps=${ids}`);
+    return res.data;
+  }
+
   async fetchFarmInfoById(props: { ids: string }): Promise<FormatFarmInfoOut[]> {
     const { ids } = props;
 
@@ -327,5 +334,27 @@ export class Api {
     );
     cacheLaunchConfigs.set(this.cluster, res.data.data);
     return res.data.data;
+  }
+
+  /**
+   * {
+   *    [lpMint]: {
+   *        [farmId]: {
+   *            [userVault]: data
+   *        }
+   *    }
+   * }
+   */
+  async fetchFarmPositions(owner = ""): Promise<FarmPositionData> {
+    const res = await this.api.get<FarmPositionData>(
+      `${this.urlConfigs.OWNER_BASE_HOST || API_URLS.OWNER_BASE_HOST}` +
+        (this.urlConfigs.OWNER_STAKE_FARMS || API_URLS.OWNER_STAKE_FARMS).replace("{owner}", owner),
+    );
+    return res.data;
+  }
+
+  async fetchCpmmLockInfo(key: string | PublicKey): Promise<CpmmLockInfo> {
+    const res = await this.api.get(`${this.urlConfigs.CPMM_LOCK || API_URLS.CPMM_LOCK}?id=${key.toString()}`);
+    return res as unknown as CpmmLockInfo;
   }
 }

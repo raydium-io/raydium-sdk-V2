@@ -6,8 +6,8 @@ import {
   ApiV3PoolInfoStandardItem,
   FormatFarmInfoOutV6,
 } from "../../api/type";
-import { AccountLayout, NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
+import { AccountLayout, MintLayout, NATIVE_MINT, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { getMultipleAccountsInfo, getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
 import { BN_ZERO, divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { BNDivCeil } from "@/common/transfer";
@@ -28,7 +28,7 @@ import { ClmmInstrument } from "../clmm/instrument";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { toToken } from "../token";
 import { ComputeBudgetConfig } from "../type";
-import { LIQUIDITY_FEES_DENOMINATOR, LIQUIDITY_FEES_NUMERATOR } from "./constant";
+import { LIQUIDITY_FEES_DENOMINATOR, LIQUIDITY_FEES_NUMERATOR, poolLpAuthority } from "./constant";
 import {
   createPoolV4InstructionV2,
   makeAMMSwapInstruction,
@@ -50,6 +50,7 @@ import {
   CreateMarketAndPoolParam,
   RemoveParams,
   SwapParam,
+  LpBalanceInfo,
 } from "./type";
 import { getAssociatedConfigId, getAssociatedPoolKeys, toAmmComputePoolInfo } from "./utils";
 
@@ -1460,5 +1461,38 @@ export default class LiquidityModule extends ModuleBase {
       poolInfo,
       poolKeys: allKeys[0] as AmmV4Keys | AmmV5Keys,
     };
+  }
+
+  public async fetchPoolBalances(): Promise<LpBalanceInfo[]> {
+    await this.scope.account.fetchWalletTokenAccounts({ forceUpdate: true });
+    const readyFetchMints = this.scope.account.tokenAccounts
+      .filter((p) => !p.mint.equals(PublicKey.default) && !p.amount.isZero())
+      .map((t) => t.mint);
+
+    const r = await getMultipleAccountsInfo(this.scope.connection, readyFetchMints);
+    const mints = r.map((data, idx) => {
+      return data && data.data.length === MintLayout.span
+        ? {
+            ...MintLayout.decode(data.data as any),
+            address: readyFetchMints[idx],
+          }
+        : undefined;
+    });
+    const balanceMints = mints
+      .filter(Boolean)
+      .filter((m) =>
+        this.scope.cluster === "devnet" ? m : poolLpAuthority.has(m!.mintAuthority.toString()),
+      ) as (RawMint & { address: PublicKey })[];
+
+    const poolList = await this.scope.api.fetchPoolByLpMints({
+      ids: balanceMints.map((m) => m.address.toBase58()).join(","),
+    });
+
+    return balanceMints.map((b, idx) => ({
+      mintData: b,
+      address: b.address,
+      poolInfo: poolList[idx] as ApiV3PoolInfoStandardItem,
+      balance: this.scope.account.tokenAccounts.find((a) => a.mint.equals(b.address))?.amount ?? new BN(0),
+    }));
   }
 }

@@ -11,3 +11,10 @@ export const LIQUIDITY_VERSION_TO_SERUM_VERSION: {
   4: 3,
   5: 3,
 };
+
+// mainnet only
+export const poolLpAuthority = new Set([
+  "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
+  "3uaZBfHPfmpAHW7dsimC1SnyR61X4bJqQZKWmRSCXJxv",
+  "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL",
+]);
