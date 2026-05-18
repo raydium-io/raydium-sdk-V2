@@ -294,6 +294,10 @@ export default class CpmmModule extends ModuleBase {
         farmUpcomingCount: 0,
         farmOngoingCount: 0,
         farmFinishedCount: 0,
+        feeOn: "",
+        hasDynamicFee: false,
+        launchMigratePool: false,
+        tips: [],
       },
       poolKeys: {
         programId: rpcData.programId.toBase58(),

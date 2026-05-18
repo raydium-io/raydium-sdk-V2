@@ -206,7 +206,11 @@ export class Clmm extends ModuleBase {
             defaultRange: 0,
             defaultRangePoint: [],
           },
+          feeOn: "Both",
+          hasDynamicFee: false,
+          launchMigratePool: false,
           burnPercent: 0,
+          tips: [],
           ...mockV3CreatePoolInfo,
         },
       },
@@ -342,6 +346,15 @@ export class Clmm extends ModuleBase {
           },
           burnPercent: 0,
           collectFeeOn,
+          feeOn:
+            collectFeeOn === CollectFeeOn.FromInput
+              ? "Both"
+              : collectFeeOn === CollectFeeOn.TokenOnlyA
+              ? "TokenA"
+              : "TokenB",
+          hasDynamicFee: !!dynamicFeeConfig,
+          tips: [],
+          launchMigratePool: false,
           ...mockV3CreatePoolInfo,
         } as ApiV3PoolInfoConcentratedItem,
       },

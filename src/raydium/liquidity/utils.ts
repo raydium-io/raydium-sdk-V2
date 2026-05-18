@@ -197,6 +197,10 @@ export const toAmmComputePoolInfo = (
         decimals: Math.min(poolInfo.baseDecimal.toNumber(), poolInfo.quoteDecimal.toNumber()),
       }),
       burnPercent: 0,
+      feeOn: "Both",
+      hasDynamicFee: false,
+      tips: [],
+      launchMigratePool: false,
     };
   });
   return data;

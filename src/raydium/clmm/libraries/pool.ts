@@ -156,38 +156,38 @@ export class PoolUtil {
         tokenProgramId: new PublicKey(apiRewardProgram),
       };
 
-      if (itemReward.mint.equals(PublicKey.default) || itemReward.totalEmissioned.eq(U64_MAX)) continue
+      if (itemReward.mint.equals(PublicKey.default) || itemReward.totalEmissioned.eq(U64_MAX)) continue;
       if (chainTime <= itemReward.openTime.toNumber() || poolLiquidity.eq(BN_ZERO)) {
-        nRewardInfo.push(itemReward)
-        continue
+        nRewardInfo.push(itemReward);
+        continue;
       }
 
-      const latestUpdateTime = new BN(Math.min(itemReward.endTime.toNumber(), chainTime))
-      const timeDelta = latestUpdateTime.sub(itemReward.lastUpdateTime)
+      const latestUpdateTime = new BN(Math.min(itemReward.endTime.toNumber(), chainTime));
+      const timeDelta = latestUpdateTime.sub(itemReward.lastUpdateTime);
       if (timeDelta.isZero()) {
-        nRewardInfo.push(itemReward)
-        continue
+        nRewardInfo.push(itemReward);
+        continue;
       }
-      const rewardDelta = mulDivCeil(timeDelta, itemReward.emissionsPerSecondX64, Q64)
-      let rewardGrowthDeltaX64 = mulDivFloor(timeDelta, itemReward.emissionsPerSecondX64, poolLiquidity)
+      const rewardDelta = mulDivCeil(timeDelta, itemReward.emissionsPerSecondX64, Q64);
+      let rewardGrowthDeltaX64 = mulDivFloor(timeDelta, itemReward.emissionsPerSecondX64, poolLiquidity);
 
-      let totalEmissioned
-      const newTotal = itemReward.totalEmissioned.add(rewardDelta)
+      let totalEmissioned;
+      const newTotal = itemReward.totalEmissioned.add(rewardDelta);
       if (newTotal.lte(U64_MAX)) {
-        totalEmissioned = newTotal
+        totalEmissioned = newTotal;
       } else {
-        const remain = U64_MAX.sub(itemReward.totalEmissioned)
-        totalEmissioned = U64_MAX
-        rewardGrowthDeltaX64 = mulDivFloor(remain, Q64, poolLiquidity)
+        const remain = U64_MAX.sub(itemReward.totalEmissioned);
+        totalEmissioned = U64_MAX;
+        rewardGrowthDeltaX64 = mulDivFloor(remain, Q64, poolLiquidity);
       }
 
-      const growthGlobalX64 = itemReward.growthGlobalX64.add(rewardGrowthDeltaX64)
+      const growthGlobalX64 = itemReward.growthGlobalX64.add(rewardGrowthDeltaX64);
       nRewardInfo.push({
         ...itemReward,
         growthGlobalX64,
         totalEmissioned,
         lastUpdateTime: latestUpdateTime,
-      })
+      });
     }
     return nRewardInfo;
   }
@@ -1157,5 +1157,9 @@ export function clmmComputeInfoToApiInfo(pool: ComputeClmmPoolInfo): ApiV3PoolIn
       defaultRange: 0,
       defaultRangePoint: [],
     },
+    hasDynamicFee: false,
+    feeOn: "",
+    launchMigratePool: false,
+    tips: [],
   };
 }
