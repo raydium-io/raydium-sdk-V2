@@ -319,6 +319,7 @@ export default class LaunchpadModule extends ModuleBase {
               extraConfigs?.unlockPeriod ?? new BN(0),
               creatorFeeOn,
               transferFeeExtensionParams,
+              platformConfigAccess ? getPdaPlatformConfigAccess(programId, platformId, configId).publicKey : undefined,
             )
           : initializeV2(
               programId,

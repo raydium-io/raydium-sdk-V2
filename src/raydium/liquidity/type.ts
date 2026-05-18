@@ -7,6 +7,7 @@ import { TxVersion } from "../../common/txTool/txType";
 import { TokenAmount } from "../../module/amount";
 import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { liquidityStateV4Layout } from "./layout";
+import { RawMint } from "@solana/spl-token";
 
 export type LiquiditySide = "a" | "b";
 export type AmountSide = "base" | "quote";
@@ -294,4 +295,11 @@ export type AmmRpcData = ReturnType<typeof liquidityStateV4Layout.decode> & {
   mintBAmount: BN;
   poolPrice: Decimal;
   programId: PublicKey;
+};
+
+export type LpBalanceInfo = {
+  mintData: RawMint;
+  address: PublicKey;
+  poolInfo: ApiV3PoolInfoStandardItem;
+  balance: BN;
 };

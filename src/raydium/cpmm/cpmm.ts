@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { ApiV3PoolInfoStandardItemCpmm, CpmmKeys } from "../../api/type";
+import { ApiV3PoolInfoStandardItemCpmm, CpmmKeys, CpmmLockInfo } from "../../api/type";
 import {
   AccountLayout,
   NATIVE_MINT,
@@ -17,7 +17,9 @@ import BN from "bn.js";
 import Decimal from "decimal.js";
 import {
   CREATE_CPMM_POOL_PROGRAM,
+  DEVNET_PROGRAM_ID,
   fetchMultipleMintInfos,
+  getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
   getTransferAmountFeeV2,
   LOCK_CPMM_AUTH,
@@ -1615,6 +1617,37 @@ export default class CpmmModule extends ModuleBase {
       minAnotherAmount: slippageAdjustedMinAmount,
       liquidity,
     };
+  }
+
+  public async fetchCpmmLockBalances(): Promise<(CpmmLockInfo & { nftMint: PublicKey })[]> {
+    await this.scope.account.fetchWalletTokenAccounts({ forceUpdate: true });
+    const balanceMints = this.scope.account.tokenAccountRawInfos.filter((acc) => acc.accountInfo.amount.eq(new BN(1)));
+    const allPdaList = balanceMints.map(
+      (m) =>
+        getCpLockPda(
+          this.scope.cluster === "mainnet" ? LOCK_CPMM_PROGRAM : DEVNET_PROGRAM_ID.LOCK_CPMM_PROGRAM,
+          m.accountInfo.mint,
+        ).publicKey,
+    );
+
+    const availableMints = await getMultipleAccountsInfoWithCustomFlags(
+      this.scope.connection,
+      allPdaList.map((a) => ({ pubkey: a })),
+    );
+
+    const pdaMintSet = new Map<string, string>();
+    const mints = availableMints
+      .filter((a, idx) => {
+        pdaMintSet.set(a.pubkey.toString(), balanceMints[idx].accountInfo.mint.toString());
+        return !!a.accountInfo;
+      })
+      .map((a) => a.pubkey);
+    const lockInfo = await Promise.all(mints.map((m) => this.scope.api.fetchCpmmLockInfo(m)));
+
+    return lockInfo.map((l, idx) => ({
+      ...l,
+      nftMint: new PublicKey(pdaMintSet.get(mints[idx].toString())!),
+    }));
   }
 }
 

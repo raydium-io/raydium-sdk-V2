@@ -142,3 +142,19 @@ export type FarmPoolKeys = {
       }
   )[];
 };
+
+export interface FarmPosition {
+  lpMint: string;
+  hasAmount: boolean;
+  hasV1Data: boolean;
+  totalLpAmount: string;
+  totalV1LpAmount: string;
+  data: {
+    farmId: string;
+    lpMint: string;
+    userVault: string;
+    programId: string;
+    lpAmount: string;
+    version: "V1" | "V2";
+  }[];
+}
