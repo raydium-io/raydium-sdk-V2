@@ -7,9 +7,17 @@ import { Fraction, Percent, Price, TokenAmount } from "../../module";
 import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { TokenInfo } from "../token/type";
 import { GetTransferAmountFee, TransferAmountFee } from "../type";
-import { TickArray } from "./utils/tick";
 
-import { ClmmPositionLayout, PoolInfoLayout, LockClPositionLayoutV2, TickArrayBitmapExtensionLayout } from "./layout";
+import {
+  LimitOrderLayout,
+  LockClPositionLayoutV2,
+  PersonalPositionLayout,
+  PoolInfoLayout,
+  RewardInfoLayout,
+  TickArrayBitmapExtensionLayout,
+  TickArrayLayout,
+} from "./layout";
+import { CollectFeeOn } from "./libraries";
 
 export { ApiClmmConfigInfo };
 
@@ -33,22 +41,11 @@ export interface ClmmConfigInfo {
   description: string;
 }
 
-export interface ClmmPoolRewardInfo {
-  rewardState: number;
-  openTime: BN;
-  endTime: BN;
-  lastUpdateTime: BN;
-  emissionsPerSecondX64: BN;
-  rewardTotalEmissioned: BN;
-  rewardClaimed: BN;
-  tokenMint: PublicKey;
-  tokenVault: PublicKey;
-  creator: PublicKey;
-  rewardGrowthGlobalX64: BN;
+export type ClmmPoolRewardInfo = ReturnType<typeof RewardInfoLayout.decode> & {
   perSecond: Decimal;
   remainingRewards: undefined | BN;
   tokenProgramId: PublicKey;
-}
+};
 export interface ClmmPoolInfo {
   id: PublicKey;
   mintA: {
@@ -142,6 +139,7 @@ export interface ClmmPoolInfo {
 }
 
 export interface ComputeClmmPoolInfo {
+  accInfo: ReturnType<typeof PoolInfoLayout.decode>;
   id: PublicKey;
   version: 6;
   mintA: ApiV3Token;
@@ -164,11 +162,11 @@ export interface ComputeClmmPoolInfo {
   feeGrowthGlobalX64B: BN;
   protocolFeesTokenA: BN;
   protocolFeesTokenB: BN;
-  swapInAmountTokenA: BN;
-  swapOutAmountTokenB: BN;
-  swapInAmountTokenB: BN;
-  swapOutAmountTokenA: BN;
-  tickArrayBitmap: BN[];
+  // swapInAmountTokenA: BN;
+  // swapOutAmountTokenB: BN;
+  // swapInAmountTokenB: BN;
+  // swapOutAmountTokenA: BN;
+  tickArrayBitmap: Buffer;
 
   startTime: number;
 
@@ -271,6 +269,7 @@ export interface ReturnTypeComputeAmountOut {
 }
 
 export interface ReturnTypeComputeAmountOutBaseOut {
+  allTrade: boolean;
   amountIn: GetTransferAmountFee;
   maxAmountIn: GetTransferAmountFee;
   realAmountOut: GetTransferAmountFee;
@@ -283,7 +282,7 @@ export interface ReturnTypeComputeAmountOutBaseOut {
 }
 
 export interface ReturnTypeFetchMultiplePoolTickArrays {
-  [poolId: string]: { [key: string]: TickArray };
+  [poolId: string]: { [key: string]: ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey } };
 }
 
 export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
@@ -299,6 +298,12 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   getObserveState?: boolean;
   txVersion?: T;
   feePayer?: PublicKey;
+}
+
+export interface CreateCustomizablePool<T = TxVersion.LEGACY>
+  extends Omit<CreateConcentratedPool<T>, "getObserveState"> {
+  collectFeeOn?: CollectFeeOn;
+  dynamicFeeConfig?: PublicKey;
 }
 
 export interface UserPositionAccount {
@@ -336,7 +341,7 @@ export interface UserPositionAccount {
 export interface IncreasePositionFromLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   poolKeys?: ClmmKeys;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   ownerInfo: {
     useSOLBalance?: boolean;
   };
@@ -373,7 +378,7 @@ export interface IncreasePositionFromBase<T = TxVersion.LEGACY> {
 export interface DecreaseLiquidity<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
   poolKeys?: ClmmKeys;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint
     closePosition?: boolean;
@@ -396,7 +401,7 @@ export interface LockPosition<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   authProgramId?: PublicKey;
   poolProgramId?: PublicKey;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   payer?: PublicKey;
   computeBudgetConfig?: ComputeBudgetConfig;
   txTipConfig?: TxTipConfig;
@@ -423,17 +428,24 @@ export interface HarvestLockPosition<T = TxVersion.LEGACY> {
 }
 
 export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
-  poolInfo: ApiV3PoolInfoConcentratedItem;
-  poolKeys?: ClmmKeys;
+  poolInfo: SimpleClmmPoolInfo;
+  poolKeys?: {
+    vault: {
+      A: string | PublicKey;
+      B: string | PublicKey;
+    };
+    lookupTableAccount?: string;
+  };
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
   };
   tickLower: number;
   tickUpper: number;
 
-  base: "MintA" | "MintB";
+  base?: "MintA" | "MintB" | null;
   baseAmount: BN;
   otherAmountMax: BN;
+  liquidity: BN;
 
   nft2022?: boolean;
   associatedOnly?: boolean;
@@ -457,13 +469,14 @@ export interface OpenPositionFromBaseExtInfo {
 }
 
 export interface OpenPositionFromLiquidity<T = TxVersion.LEGACY> {
-  poolInfo: ApiV3PoolInfoConcentratedItem;
+  poolInfo: SimpleClmmPoolInfo;
   poolKeys?: ClmmKeys;
   ownerInfo: {
     useSOLBalance?: boolean; // if has WSOL mint (default: true)
   };
   amountMaxA: BN;
   amountMaxB: BN;
+  base?: "MintA" | "MintB" | null;
   tickLower: number;
   tickUpper: number;
   liquidity: BN;
@@ -492,7 +505,7 @@ export interface OpenPositionFromLiquidityExtInfo {
 
 export interface GetAmountParams {
   poolInfo: ApiV3PoolInfoConcentratedItem;
-  ownerPosition: ClmmPositionLayout;
+  ownerPosition: ReturnType<typeof PersonalPositionLayout.decode>;
   liquidity: BN;
   slippage: number;
   add: boolean;
@@ -582,7 +595,7 @@ export interface CollectRewardsParams<T = TxVersion.LEGACY> extends Omit<Collect
 
 export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   allPoolInfo: Record<string, ApiV3PoolInfoConcentratedItem>;
-  allPositions: Record<string, ClmmPositionLayout[]>;
+  allPositions: Record<string, ReturnType<typeof PersonalPositionLayout.decode>[]>;
   ownerInfo: {
     feePayer?: PublicKey;
     useSOLBalance?: boolean;
@@ -624,6 +637,22 @@ export type ClmmParsedRpcData = ReturnType<typeof PoolInfoLayout.decode> & {
   programId: PublicKey;
 };
 
+export interface SimpleClmmPoolInfo {
+  id: string | PublicKey;
+  programId: string | PublicKey;
+  mintA: {
+    address: string | PublicKey;
+    programId: string | PublicKey;
+    decimals: number;
+  };
+  mintB: {
+    address: string | PublicKey;
+    programId: string | PublicKey;
+    decimals: number;
+  };
+  config: { id: string; tickSpacing: number };
+}
+
 export interface ClmmLockAddress {
   positionId: PublicKey;
   lockPositionId: PublicKey;
@@ -631,4 +660,106 @@ export interface ClmmLockAddress {
   lockNftMint: PublicKey;
   positionNftAccount: PublicKey;
   metadataAccount: PublicKey;
+}
+
+export interface OpenLimitOrder<T = TxVersion.LEGACY> {
+  poolInfo: SimpleClmmPoolInfo;
+  baseIn?: boolean;
+  orderTick: number;
+  amount: BN;
+  noneIndex?: number;
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+  tickArrayBitmap?: PublicKey;
+}
+
+export interface IncreaseLimitOrder<T = TxVersion.LEGACY> {
+  poolInfo: SimpleClmmPoolInfo;
+  limitOrder: PublicKey;
+  limitOrderInfo?: ReturnType<typeof LimitOrderLayout.decode>;
+  tickArrayBitmap?: PublicKey;
+  amount: BN;
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+  forerunCreate?: boolean;
+}
+
+export interface DecreaseLimitOrder<T = TxVersion.LEGACY> extends IncreaseLimitOrder<T> {
+  /** 0~1000 means 0.01% ~ 100% */
+  slippage?: number;
+}
+
+export interface CloseLimitOrder<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  limitOrder: PublicKey;
+  autoWithdraw?: boolean;
+  /** 0~1000 means 0.01% ~ 100% */
+  slippage?: number;
+  tickArrayBitmap?: PublicKey;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+}
+
+export interface CloseAllLimitOrder<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+  limitOrders: PublicKey[];
+  autoWithdraw?: boolean;
+  /** 0~10000 means 0.01% ~ 100% */
+  slippage?: number;
+
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
+export interface SettleLimitOrder<T = TxVersion.LEGACY> {
+  limitOrder: PublicKey;
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  txTipConfig?: TxTipConfig;
+  feePayer?: PublicKey;
+  forerunCreate?: boolean;
+}
+
+export interface SettleAllLimitOrders<T = TxVersion.LEGACY> {
+  limitOrders: PublicKey[];
+  ownerInfo?: {
+    feePayer?: PublicKey;
+    useSOLBalance?: boolean;
+  };
+
+  associatedOnly?: boolean;
+  checkCreateATAOwner?: boolean;
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
 }

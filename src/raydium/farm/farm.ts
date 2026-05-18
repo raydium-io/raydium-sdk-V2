@@ -4,9 +4,8 @@ import { getMultipleAccountsInfo, parseBigNumberish } from "@/common";
 
 import { ApiV3Token, FormatFarmKeyOut } from "../../api/type";
 import { AddInstructionParam, jsonInfo2PoolKeys } from "@/common";
-import { BN_ZERO } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
-import { FARM_PROGRAM_ID_V6, DEVNET_PROGRAM_ID } from "@/common/programId";
+import { DEVNET_PROGRAM_ID, FARM_PROGRAM_ID_V6 } from "@/common/programId";
 import { SOLMint, solToWSol, WSOLMint } from "@/common/pubKey";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { InstructionType, TxVersion } from "@/common/txTool/txType";
@@ -16,6 +15,7 @@ import Decimal from "decimal.js";
 import { FormatFarmInfoOut, FormatFarmKeyOutV6 } from "../../api/type";
 import { ComputeBudgetConfig, TxTipConfig } from "../../raydium/type";
 import { createWSolAccountInstructions } from "../account/instruction";
+import { BN_ZERO } from "../clmm";
 import ModuleBase from "../moduleBase";
 import { TOKEN_WSOL } from "../token/constant";
 import {

@@ -1,12 +1,13 @@
-import { Connection, PublicKey } from "@solana/web3.js";
-import { MintLayout, RawMint, TOKEN_PROGRAM_ID, TransferFeeConfigLayout } from "@solana/spl-token";
 import { BigNumberish } from "@/common/bignumber";
+import { RawMint, TOKEN_PROGRAM_ID, TransferFeeConfigLayout } from "@solana/spl-token";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { Token, TokenAmount } from "../../module";
 import { SOL_INFO, TOKEN_WSOL } from "./constant";
 import { TokenInfo } from "./type";
 
-import { ApiV3Token } from "../../api";
 import { solToWSol } from "@/common";
+import { ApiV3Token } from "../../api";
+import { SPL_MINT_LAYOUT } from "./layout";
 
 export const parseTokenInfo = async ({
   connection,
@@ -16,8 +17,8 @@ export const parseTokenInfo = async ({
   mint: PublicKey | string;
 }): Promise<RawMint | undefined> => {
   const accountData = await connection.getAccountInfo(new PublicKey(mint));
-  if (!accountData || accountData.data.length !== MintLayout.span) return;
-  const tokenInfo = MintLayout.decode(accountData.data);
+  if (!accountData || accountData.data.length !== SPL_MINT_LAYOUT.span) return;
+  const tokenInfo = SPL_MINT_LAYOUT.decode(accountData.data);
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   //@ts-ignore
   return tokenInfo;
@@ -118,19 +119,19 @@ export const toFeeConfig = (
 ): ApiV3Token["extensions"]["feeConfig"] | undefined =>
   config
     ? {
-        ...config,
-        transferFeeConfigAuthority: config.transferFeeConfigAuthority.toBase58(),
-        withdrawWithheldAuthority: config.withdrawWithheldAuthority.toBase58(),
-        withheldAmount: config.withheldAmount.toString(),
-        olderTransferFee: {
-          ...config.olderTransferFee,
-          epoch: config.olderTransferFee.epoch.toString(),
-          maximumFee: config.olderTransferFee.maximumFee.toString(),
-        },
-        newerTransferFee: {
-          ...config.newerTransferFee,
-          epoch: config.newerTransferFee.epoch.toString(),
-          maximumFee: config.newerTransferFee.maximumFee.toString(),
-        },
-      }
+      ...config,
+      transferFeeConfigAuthority: config.transferFeeConfigAuthority.toBase58(),
+      withdrawWithheldAuthority: config.withdrawWithheldAuthority.toBase58(),
+      withheldAmount: config.withheldAmount.toString(),
+      olderTransferFee: {
+        ...config.olderTransferFee,
+        epoch: config.olderTransferFee.epoch.toString(),
+        maximumFee: config.olderTransferFee.maximumFee.toString(),
+      },
+      newerTransferFee: {
+        ...config.newerTransferFee,
+        epoch: config.newerTransferFee.epoch.toString(),
+        maximumFee: config.newerTransferFee.maximumFee.toString(),
+      },
+    }
     : undefined;

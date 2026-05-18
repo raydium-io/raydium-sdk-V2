@@ -33,6 +33,32 @@ export interface ComputeAmountOutAmmLayout {
   slippage: number;
   clmmExPriceX64: (BN | undefined)[];
 }
+
+export interface ComputeAmountInAmmLayout {
+  amountOut: TransferAmountFee;
+  amountIn: TransferAmountFee;
+  maxAmountIn: TransferAmountFee;
+  currentPrice: Decimal | undefined;
+  executionPrice: Decimal | null;
+  priceImpact: Decimal;
+  fee: TokenAmount[];
+  routeType: "amm";
+  poolInfoList: ComputePoolType[];
+  remainingAccounts: PublicKey[][];
+  poolReady: boolean;
+  poolType: "CLMM" | "CPMM" | "STABLE" | undefined;
+
+  feeConfig?: {
+    feeAmount: BN;
+    feeAccount: PublicKey;
+  };
+
+  expirationTime: number | undefined;
+
+  allTrade: boolean;
+  slippage: number;
+  clmmExPriceX64: (BN | undefined)[];
+}
 export interface ComputeAmountOutRouteLayout {
   amountIn: TransferAmountFee;
   amountOut: TransferAmountFee;
@@ -60,7 +86,35 @@ export interface ComputeAmountOutRouteLayout {
   clmmExPriceX64: (BN | undefined)[];
 }
 
+export interface ComputeAmountInRouteLayout {
+  amountIn: TransferAmountFee;
+  amountOut: TransferAmountFee;
+  maxAmountIn: TransferAmountFee;
+  currentPrice: Decimal | undefined;
+  executionPrice: Decimal | null;
+  priceImpact: Decimal;
+  fee: TokenAmount[];
+  routeType: "route";
+  poolInfoList: ComputePoolType[];
+  remainingAccounts: (PublicKey[] | undefined)[];
+  minMiddleAmountFee: TokenAmount | undefined;
+  middleToken: Token;
+  poolReady: boolean;
+  poolType: (string | undefined)[];
+
+  feeConfig?: {
+    feeAmount: BN;
+    feeAccount: PublicKey;
+  };
+
+  expirationTime: number | undefined;
+  allTrade: boolean;
+  slippage: number;
+  clmmExPriceX64: (BN | undefined)[];
+}
+
 export type ComputeAmountOutLayout = ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;
+export type ComputeAmountInLayout = ComputeAmountInAmmLayout | ComputeAmountInRouteLayout;
 
 export type MakeSwapInstructionParam = {
   ownerInfo: {
@@ -79,18 +133,18 @@ export type MakeSwapInstructionParam = {
 
   // ComputeAmountOutAmmLayout | ComputeAmountOutRouteLayout;
   swapInfo:
-  | (
-    | (Omit<ComputeAmountOutAmmLayout, "poolKey"> & {
-      poolKey: PoolKeys[];
-      poolInfo: ComputePoolType[];
-    })
-    | (Omit<ComputeAmountOutRouteLayout, "poolKey"> & {
-      poolKey: PoolKeys[];
-      poolInfo: ComputePoolType[];
-    })
-  ) & {
-    outputMint: PublicKey;
-  };
+    | (
+        | (Omit<ComputeAmountOutAmmLayout, "poolKey"> & {
+            poolKey: PoolKeys[];
+            poolInfo: ComputePoolType[];
+          })
+        | (Omit<ComputeAmountOutRouteLayout, "poolKey"> & {
+            poolKey: PoolKeys[];
+            poolInfo: ComputePoolType[];
+          })
+      ) & {
+        outputMint: PublicKey;
+      };
 };
 
 export interface PoolAccountInfoV4 {

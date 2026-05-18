@@ -8,7 +8,7 @@ import {
 } from "../../api/type";
 import { AccountLayout, MintLayout, NATIVE_MINT, RawMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { getMultipleAccountsInfo, getMultipleAccountsInfoWithCustomFlags } from "@/common/accountInfo";
-import { BN_ZERO, divCeil } from "@/common/bignumber";
+import { divCeil } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { BNDivCeil } from "@/common/transfer";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
@@ -35,7 +35,6 @@ import {
   makeAMMSwapV2Instruction,
   makeAddLiquidityInstruction,
   removeLiquidityInstruction,
-  swapBaseInV2Instruction,
 } from "./instruction";
 import { createPoolFeeLayout, liquidityStateV4Layout } from "./layout";
 import { StableLayout, getDxByDyBaseIn, getDyByDxBaseIn, getStablePrice } from "./stable";
@@ -45,20 +44,21 @@ import {
   AmountSide,
   ComputeAmountInParam,
   ComputeAmountOutParam,
+  CreateMarketAndPoolParam,
   CreatePoolAddress,
   CreatePoolParam,
-  CreateMarketAndPoolParam,
   RemoveParams,
   SwapParam,
   LpBalanceInfo,
 } from "./type";
 import { getAssociatedConfigId, getAssociatedPoolKeys, toAmmComputePoolInfo } from "./utils";
 
+import { AMM_V4, DEVNET_PROGRAM_ID, FEE_DESTINATION_ID, OPEN_BOOK_PROGRAM, WSOLMint } from "@/common";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { AMM_V4, DEVNET_PROGRAM_ID, FEE_DESTINATION_ID, OPEN_BOOK_PROGRAM, WSOLMint } from "@/common";
 import { generatePubKey } from "../account";
-import { makeCreateMarketInstruction, MarketExtInfo } from "../marketV2";
+import { BN_ZERO } from "../clmm";
+import { MarketExtInfo, makeCreateMarketInstruction } from "../marketV2";
 
 export default class LiquidityModule extends ModuleBase {
   public stableLayout: StableLayout;
@@ -615,6 +615,7 @@ export default class LiquidityModule extends ModuleBase {
       },
       withMetadata: "create",
       ...createPositionInfo,
+      liquidity: new BN(0),
       base,
       getEphemeralSigners,
     });
@@ -1150,6 +1151,7 @@ export default class LiquidityModule extends ModuleBase {
     currentPrice: Decimal;
     executionPrice: Decimal | null;
     priceImpact: Decimal;
+    fee: BN;
   } {
     const { baseReserve, quoteReserve } = poolInfo;
     if (mintIn.toString() !== poolInfo.mintA.address && mintIn.toString() !== poolInfo.mintB.address)
@@ -1200,6 +1202,7 @@ export default class LiquidityModule extends ModuleBase {
 
     let amountInRaw = new BN(0);
     let amountOutRaw = amountOut;
+    let fee = new BN(0);
     if (!amountOutRaw.isZero()) {
       // if out > reserve, out = reserve - 1
       if (amountOutRaw.gt(reserveOut)) {
@@ -1212,6 +1215,8 @@ export default class LiquidityModule extends ModuleBase {
       amountInRaw = amountInWithoutFee
         .mul(LIQUIDITY_FEES_DENOMINATOR)
         .div(LIQUIDITY_FEES_DENOMINATOR.sub(LIQUIDITY_FEES_NUMERATOR));
+
+      fee = amountInRaw.sub(amountInWithoutFee);
     }
 
     const maxAmountInRaw = new BN(new Decimal(amountInRaw.toString()).mul(1 + slippage).toFixed(0));
@@ -1263,6 +1268,7 @@ export default class LiquidityModule extends ModuleBase {
       currentPrice,
       executionPrice,
       priceImpact,
+      fee,
     };
   }
 
@@ -1416,11 +1422,11 @@ export default class LiquidityModule extends ModuleBase {
       needFetchVaults.map((i) => ({ pubkey: new PublicKey(i) })),
       config,
     );
-
     for (let i = 0; i < needFetchVaults.length; i++) {
       const vaultItemInfo = vaultAccountInfo[i].accountInfo;
       if (vaultItemInfo === null) throw Error("fetch vault info error: " + needFetchVaults[i]);
-
+      // eslint-disable-next-line
+      // @ts-ignore
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 

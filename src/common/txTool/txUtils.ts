@@ -81,6 +81,8 @@ export function forecastTransactionSize(instructions: TransactionInstruction[], 
   transaction.add(...instructions);
 
   try {
+    // eslint-disable-next-line
+    // @ts-ignore
     return Buffer.from(transaction.serialize({ verifySignatures: false })).toString("base64").length < MAX_BASE64_SIZE;
   } catch (error) {
     return false;

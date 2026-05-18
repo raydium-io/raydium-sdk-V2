@@ -1,12 +1,10 @@
 import { AccountInfo, GetProgramAccountsResponse, Keypair, PublicKey, RpcResponseAndContext } from "@solana/web3.js";
 import BN from "bn.js";
-import { createLogger, getATAAddress } from "../../common";
+import { getATAAddress } from "../../common";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { sha256 } from "@noble/hashes/sha256";
 import { splAccountLayout } from "./layout";
 import { TokenAccount, TokenAccountRaw } from "./types";
-
-const logger = createLogger("Raydium_Util");
 
 export interface ParseTokenAccount {
   owner: PublicKey;

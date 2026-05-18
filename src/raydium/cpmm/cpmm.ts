@@ -6,7 +6,6 @@ import {
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
 } from "@solana/spl-token";
-import { BN_ZERO } from "@/common/bignumber";
 import { getATAAddress } from "@/common/pda";
 import { WSOLMint } from "@/common/pubKey";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
@@ -61,6 +60,7 @@ import {
   CollectMultiCreatorFees,
 } from "./type";
 import { getCpLockPda } from "./pda";
+import { BN_ZERO } from "../clmm";
 
 export default class CpmmModule extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -134,6 +134,8 @@ export default class CpmmModule extends ModuleBase {
       const vaultItemInfo = vaultAccountInfo[i].accountInfo;
       if (vaultItemInfo === null) throw Error("fetch vault info error: " + needFetchVaults[i]);
 
+      // eslint-disable-next-line
+      // @ts-ignore
       vaultInfo[String(needFetchVaults[i])] = new BN(AccountLayout.decode(vaultItemInfo.data).amount.toString());
     }
 
@@ -292,6 +294,10 @@ export default class CpmmModule extends ModuleBase {
         farmUpcomingCount: 0,
         farmOngoingCount: 0,
         farmFinishedCount: 0,
+        feeOn: "",
+        hasDynamicFee: false,
+        launchMigratePool: false,
+        tips: [],
       },
       poolKeys: {
         programId: rpcData.programId.toBase58(),
@@ -1498,10 +1504,9 @@ export default class CpmmModule extends ModuleBase {
     const executionPrice = new Decimal(swapResult.outputAmount.toString()).div(swapResult.inputAmount.toString());
 
     const minAmountOut = swapResult.outputAmount.mul(new BN((1 - slippage) * 10000)).div(new BN(10000));
-
     return {
-      allTrade: swapResult.inputAmount.eq(amountIn),
-      amountIn,
+      allTrade: swapBaseIn ? swapResult.inputAmount.eq(amountIn) : swapResult.outputAmount.eq(amountIn),
+      amountIn: swapBaseIn ? amountIn : swapResult.inputAmount,
       amountOut: swapResult.outputAmount,
       minAmountOut,
       executionPrice,

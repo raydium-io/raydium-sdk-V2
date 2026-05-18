@@ -69,6 +69,17 @@ export interface ApiClmmConfigInfo {
   defaultRangePoint: number[];
 }
 
+export interface ApiClmmDynamicConfigInfo {
+  id: string;
+  decayPeriod: number;
+  dynamicFeeControl: number;
+  filterPeriod: number;
+  index: number;
+  maxVolatilityAccumulator: number;
+  recommendConfigId: string[];
+  reductionFactor: number;
+}
+
 export interface ApiCpmmConfigInfo {
   id: string;
   index: number;
@@ -328,6 +339,11 @@ export interface ApiV3PoolInfoBaseItem {
   farmFinishedCount: number;
 
   burnPercent: number;
+  feeOn: string;
+  hasDynamicFee: boolean;
+
+  launchMigratePool: boolean;
+  tips: PoolTipInterface[];
 }
 export type ApiV3PoolInfoConcentratedItem = ApiV3PoolInfoBaseItem & {
   type: "Concentrated";
@@ -648,4 +664,10 @@ export interface ApiLaunchConfig {
     totalFundRaisingB: string;
     totalSellA: string;
   };
+}
+
+export interface PoolTipInterface {
+  text?: string;
+  link?: string;
+  icon: string;
 }
