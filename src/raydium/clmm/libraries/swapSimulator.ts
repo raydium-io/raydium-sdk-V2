@@ -84,7 +84,7 @@ export function swapInternal({
 
   let currentValidTIckArrayStrartIndex = firstValidTickArrayStartIndex;
 
-  const tickArrayCurrent = tickArrays[tickArrayListIndex];
+  let tickArrayCurrent = tickArrays[tickArrayListIndex];
 
   const isFeeOnInput = PoolUtil.isFeeOnInput(poolInfo.feeOn, zeroForOne);
 
@@ -116,6 +116,7 @@ export function swapInternal({
         }
 
         currentValidTIckArrayStrartIndex = nextTickArrayIndex.value.startTickIndex;
+        tickArrayCurrent = nextTickArrayIndex;
         return TickArrayUtil.firstinitializedTick({ data: nextTickArrayIndex.value, zeroForOne });
       }
     })();
