@@ -224,6 +224,7 @@ export function swapInternal({
       }
 
       state.sqrtPriceX64 = swapComputedResult.sqrtPriceNextX64;
+      SwapState.updateDynamicFeeIndex({ state, zeroForOne, isSkippedTickSpacing });
       if (state.amountSpecifiedRemaining.isZero() || state.sqrtPriceX64.eq(targetPrice)) {
         const limitOrderUnfilledAmountAfter = TickUtil.limitOrderUnfilledAmount({ tick: nextInitializedTick });
 
@@ -235,7 +236,6 @@ export function swapInternal({
         }
         break;
       }
-      SwapState.updateDynamicFeeIndex({ state, zeroForOne, isSkippedTickSpacing });
 
       // eslint-disable-next-line no-constant-condition
     } while (true);
