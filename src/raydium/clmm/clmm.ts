@@ -370,7 +370,7 @@ export class Clmm extends ModuleBase {
     base = null,
     baseAmount,
     otherAmountMax,
-    liquidity,
+    liquidity = new BN(0),
     nft2022,
     associatedOnly = true,
     checkCreateATAOwner = false,
@@ -3083,16 +3083,16 @@ export class Clmm extends ModuleBase {
 
     return {
       poolInfo: {
-        id: poolId,
-        programId: rpcData.programId,
+        id: poolId.toString(),
+        programId: rpcData.programId.toString(),
         mintA: {
-          address: rpcData.mintA,
-          programId: mintDataRes[0]!.owner,
+          address: rpcData.mintA.toString(),
+          programId: mintDataRes[0]!.owner.toString(),
           decimals: rpcData.mintDecimalsA,
         },
         mintB: {
-          address: rpcData.mintB,
-          programId: mintDataRes[1]!.owner,
+          address: rpcData.mintB.toString(),
+          programId: mintDataRes[1]!.owner.toString(),
           decimals: rpcData.mintDecimalsB,
         },
         config: {
@@ -3140,16 +3140,16 @@ export class Clmm extends ModuleBase {
       const mintB = mintInfos[rpcData.mintB.toBase58()];
       poolData[poolId.toString()] = {
         poolInfo: {
-          id: poolId,
-          programId: rpcData.programId,
+          id: poolId.toString(),
+          programId: rpcData.programId.toString(),
           mintA: {
-            address: rpcData.mintA,
-            programId: mintA.programId,
+            address: rpcData.mintA.toString(),
+            programId: mintA.programId.toString(),
             decimals: rpcData.mintDecimalsA,
           },
           mintB: {
-            address: rpcData.mintB,
-            programId: mintB.programId,
+            address: rpcData.mintB.toString(),
+            programId: mintB.programId.toString(),
             decimals: rpcData.mintDecimalsB,
           },
           config: {

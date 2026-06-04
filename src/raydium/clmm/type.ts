@@ -445,7 +445,8 @@ export interface OpenPositionFromBase<T = TxVersion.LEGACY> {
   base?: "MintA" | "MintB" | null;
   baseAmount: BN;
   otherAmountMax: BN;
-  liquidity: BN;
+  /** if not pass liquidity or pass BN 0, contract will auto calculate lp by mint amount base */
+  liquidity?: BN;
 
   nft2022?: boolean;
   associatedOnly?: boolean;
@@ -638,16 +639,16 @@ export type ClmmParsedRpcData = ReturnType<typeof PoolInfoLayout.decode> & {
 };
 
 export interface SimpleClmmPoolInfo {
-  id: string | PublicKey;
-  programId: string | PublicKey;
+  id: string;
+  programId: string;
   mintA: {
-    address: string | PublicKey;
-    programId: string | PublicKey;
+    address: string;
+    programId: string;
     decimals: number;
   };
   mintB: {
-    address: string | PublicKey;
-    programId: string | PublicKey;
+    address: string;
+    programId: string;
     decimals: number;
   };
   config: { id: string; tickSpacing: number };
