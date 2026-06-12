@@ -59,6 +59,8 @@ export function makeCreateCpmmPoolInInstruction(
   amountMaxA: BN,
   amountMaxB: BN,
   openTime: BN,
+
+  supperMintEx?: PublicKey[],
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountMaxA"), u64("amountMaxB"), u64("openTime")]);
 
@@ -86,6 +88,7 @@ export function makeCreateCpmmPoolInInstruction(
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+    ...(supperMintEx ?? []).map(i => ({ pubkey: i, isSigner: false, isWritable: false })),
   ];
 
   const data = Buffer.alloc(dataLayout.span);
@@ -610,6 +613,8 @@ export function initializeWithPermission(
   openTime: BN,
 
   feeOn: FeeOn,
+
+  supperMintEx?: PublicKey[],
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountA"), u64("amountB"), u64("openTime"), u8("feeOn")]);
 
@@ -636,6 +641,8 @@ export function initializeWithPermission(
     { pubkey: mintProgramB, isSigner: false, isWritable: false },
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+
+    ...(supperMintEx ?? []).map(i => ({ pubkey: i, isSigner: false, isWritable: false })),
   ];
 
   const data = Buffer.alloc(dataLayout.span);

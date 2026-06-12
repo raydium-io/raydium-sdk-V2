@@ -66,6 +66,8 @@ export enum CollectFeeOn {
 
 // export const FEE_RATE_DENOMINATOR_VALUE = 1_000_000;
 
+export const MAX_TICK_SPACING = 1000;
+
 export const MAX_FEE_RATE_NUMERATOR = 100_000;
 export const VOLATILITY_ACCUMULATOR_SCALE = 10_000;
 export const REDUCTION_FACTOR_DENOMINATOR = 10_000;
