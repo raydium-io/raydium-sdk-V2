@@ -66,13 +66,13 @@ export function swapInternal({
 
   const addTickArrayAddress = includeExtraTickArrays
     ? TickArrayBitmapUtil.findTickArrayAddress({
-        programId,
-        poolId,
-        tickSpacing: poolInfo.tickSpacing,
-        poolBitmap: poolInfo.tickArrayBitmap,
-        tickArrayBitmap: tickarrayBitmapExtension,
-        findInfo: { type: !zeroForOne ? "zeroForOne" : "oneForZero", count: 2, tickArrayCurrent: poolInfo.tickCurrent },
-      }).filter((i) => i.toString() !== tickArrays[0].address.toString())
+      programId,
+      poolId,
+      tickSpacing: poolInfo.tickSpacing,
+      poolBitmap: poolInfo.tickArrayBitmap,
+      tickArrayBitmap: tickarrayBitmapExtension,
+      findInfo: { type: !zeroForOne ? "zeroForOne" : "oneForZero", count: 2, tickArrayCurrent: poolInfo.tickCurrent },
+    }).filter((i) => i.toString() !== tickArrays[0].address.toString())
     : [];
 
   const _startTickIndex = TickArrayUtil.getTickArrayStartIndex(poolInfo.tickCurrent, poolInfo.tickSpacing);
@@ -216,7 +216,7 @@ export function swapInternal({
 
         state.tick =
           (zeroForOne && !TickUtil.hasLimitOrders({ data: nextInitializedTick })) ||
-          (!zeroForOne && TickUtil.hasLimitOrders({ data: nextInitializedTick }))
+            (!zeroForOne && TickUtil.hasLimitOrders({ data: nextInitializedTick }))
             ? state.tickNext - 1
             : state.tickNext;
       } else if (!state.sqrtPriceX64.eq(swapComputedResult.sqrtPriceNextX64)) {
@@ -240,9 +240,7 @@ export function swapInternal({
       // eslint-disable-next-line no-constant-condition
     } while (true);
     state.liquidity = liquidityNext;
-    // SwapState.splitFee({ state, protocolFeeRate: new BN(configInfo.protocolFeeRate), fundFeeRate: new BN(configInfo.fundFeeRate) })
   }
-  SwapState.updateVolatilityAccumulatorOnPrice({ state });
 
   return {
     allTrade: true,

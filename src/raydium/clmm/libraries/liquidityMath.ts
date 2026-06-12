@@ -51,6 +51,8 @@ export class LiquidityMathUtil {
   }
 
   static getLiquidityFromAmountA(sqrtPriceLowerX64: BN, sqrtPriceUpperX64: BN, amountA: BN): BN {
+    if (amountA.isZero()) return BN_ZERO
+
     if (sqrtPriceLowerX64.gt(sqrtPriceUpperX64)) {
       [sqrtPriceLowerX64, sqrtPriceUpperX64] = [sqrtPriceUpperX64, sqrtPriceLowerX64];
     }
@@ -63,6 +65,8 @@ export class LiquidityMathUtil {
   }
 
   static getLiquidityFromAmountB(sqrtPriceLowerX64: BN, sqrtPriceUpperX64: BN, amountB: BN): BN {
+    if (amountB.isZero()) return BN_ZERO
+
     if (sqrtPriceLowerX64.gt(sqrtPriceUpperX64)) {
       [sqrtPriceLowerX64, sqrtPriceUpperX64] = [sqrtPriceUpperX64, sqrtPriceLowerX64];
     }
@@ -94,14 +98,6 @@ export class LiquidityMathUtil {
     }
   }
 
-  static getAmountForLiquidityA(sqrtPriceLowerX64: BN, sqrtPriceUpperX64: BN, liquidity: BN, roundUp: boolean): BN {
-    return SqrtPriceMath.getAmountADeltaUnsigned(sqrtPriceLowerX64, sqrtPriceUpperX64, liquidity, roundUp);
-  }
-
-  static getAmountForLiquidityB(sqrtPriceLowerX64: BN, sqrtPriceUpperX64: BN, liquidity: BN, roundUp: boolean): BN {
-    return SqrtPriceMath.getAmountBDeltaUnsigned(sqrtPriceLowerX64, sqrtPriceUpperX64, liquidity, roundUp);
-  }
-
   static getAmountsForLiquidity(
     sqrtPriceCurrentX64: BN,
     sqrtPriceLowerX64: BN,
@@ -117,12 +113,12 @@ export class LiquidityMathUtil {
     let amountB = BN_ZERO;
 
     if (sqrtPriceCurrentX64.lte(sqrtPriceLowerX64)) {
-      amountA = this.getAmountForLiquidityA(sqrtPriceLowerX64, sqrtPriceUpperX64, liquidity, roundUp);
+      amountA = this.getDeltaAmountAUnsigned(sqrtPriceLowerX64, sqrtPriceUpperX64, liquidity, roundUp)
     } else if (sqrtPriceCurrentX64.lt(sqrtPriceUpperX64)) {
-      amountA = this.getAmountForLiquidityA(sqrtPriceCurrentX64, sqrtPriceUpperX64, liquidity, roundUp);
-      amountB = this.getAmountForLiquidityB(sqrtPriceLowerX64, sqrtPriceCurrentX64, liquidity, roundUp);
+      amountA = this.getDeltaAmountAUnsigned(sqrtPriceCurrentX64, sqrtPriceUpperX64, liquidity, roundUp)
+      amountB = this.getDeltaAmountBUnsigned(sqrtPriceLowerX64, sqrtPriceCurrentX64, liquidity, roundUp)
     } else {
-      amountB = this.getAmountForLiquidityB(sqrtPriceLowerX64, sqrtPriceUpperX64, liquidity, roundUp);
+      amountB = this.getDeltaAmountBUnsigned(sqrtPriceLowerX64, sqrtPriceUpperX64, liquidity, roundUp)
     }
 
     return { amountA, amountB };
@@ -172,18 +168,18 @@ export class LiquidityMathUtil {
       liquidity = sqrtPriceCurrentX64.gte(sqrtPriceUpperX64)
         ? BN_ZERO
         : this.getLiquidityFromAmountA(
-            BN.max(sqrtPriceCurrentX64, sqrtPriceLowerX64),
-            sqrtPriceUpperX64,
-            amountInfo.amount,
-          );
+          BN.max(sqrtPriceCurrentX64, sqrtPriceLowerX64),
+          sqrtPriceUpperX64,
+          amountInfo.amount,
+        );
     } else if (amountInfo.type === "amountB") {
       liquidity = sqrtPriceCurrentX64.lte(sqrtPriceLowerX64)
         ? BN_ZERO
         : this.getLiquidityFromAmountB(
-            sqrtPriceLowerX64,
-            BN.min(sqrtPriceCurrentX64, sqrtPriceUpperX64),
-            amountInfo.amount,
-          );
+          sqrtPriceLowerX64,
+          BN.min(sqrtPriceCurrentX64, sqrtPriceUpperX64),
+          amountInfo.amount,
+        );
     } else {
       throw Error("amount info type check error");
     }

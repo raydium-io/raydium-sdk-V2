@@ -237,16 +237,6 @@ export class SwapState {
     }
   }
 
-  static updateVolatilityAccumulatorOnPrice({ state }: { state: SwapStateInterface, }) {
-    if (state.dynamicFeeInfo) {
-      const tickIndex = TickUtil.getTickAtSqrtPrice(state.sqrtPriceX64)
-      const finalTickSpacingIndex = PoolFee.tickSpacingIndexFromTick(tickIndex, state.tickSpacing)
-      if (state.tickSpacingIndex != finalTickSpacingIndex) {
-        state.tickSpacingIndex = finalTickSpacingIndex
-        this.updateVolatilityAccumulator({ state })
-      }
-    }
-  }
 }
 
 
@@ -363,6 +353,10 @@ export class SwapMathUtil {
       } else {
         result.feeAmount = mulDivCeil(result.amountOut, new BN(feeRate), new BN(FEE_RATE_DENOMINATOR))
         result.amountOut = result.amountOut.sub(result.feeAmount)
+
+        if (!max) {
+          result.amountIn = amountRemaining
+        }
       }
     } else {
       if (isFeeOnInput) {

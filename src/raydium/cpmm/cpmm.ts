@@ -3,6 +3,7 @@ import { ApiV3PoolInfoStandardItemCpmm, CpmmKeys, CpmmLockInfo } from "../../api
 import {
   AccountLayout,
   NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
 } from "@solana/spl-token";
@@ -40,7 +41,13 @@ import {
   makeCollectCreatorFeeInstruction,
 } from "./instruction";
 import { CpmmConfigInfoLayout, CpmmPoolInfoLayout } from "./layout";
-import { getCreatePoolKeys, getPdaObservationId, getPdaPermissionId, getPdaPoolAuthority } from "./pda";
+import {
+  getCreatePoolKeys,
+  getPdaMintExAccountCp,
+  getPdaObservationId,
+  getPdaPermissionId,
+  getPdaPoolAuthority,
+} from "./pda";
 import {
   AddCpmmLiquidityParams,
   ComputePairAmountParams,
@@ -337,6 +344,7 @@ export default class CpmmModule extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     feePayer,
+    addSupportMintExt,
     ...params
   }: CreateCpmmPoolParam<T>): Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
@@ -382,7 +390,6 @@ export default class CpmmModule extends ModuleBase {
               amount: mintBAmount,
             }
           : undefined,
-
         notUseTokenAccount: mintBUseSOLBalance,
         skipCloseAccount: !mintBUseSOLBalance,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
@@ -390,7 +397,10 @@ export default class CpmmModule extends ModuleBase {
       });
     txBuilder.addInstruction(userVaultBInstruction || {});
 
-    if (userVaultA === undefined || userVaultB === undefined) throw Error("you don't has some token account");
+    if (userVaultA === undefined || userVaultB === undefined)
+      throw Error(
+        `you don't has some token account, userVaultA: ${userVaultA?.toBase58()}, userVaultB: ${userVaultB?.toBase58()}`,
+      );
 
     const poolKeys = getCreatePoolKeys({
       poolId,
@@ -399,6 +409,20 @@ export default class CpmmModule extends ModuleBase {
       mintA: mintAPubkey,
       mintB: mintBPubkey,
     });
+
+    const extendMintAccount: PublicKey[] = [];
+    const fetchAccounts: PublicKey[] = [];
+    if (addSupportMintExt) {
+      if (mintA.programId === TOKEN_2022_PROGRAM_ID.toBase58())
+        fetchAccounts.push(getPdaMintExAccountCp(programId, new PublicKey(mintA.address)).publicKey);
+      if (mintB.programId === TOKEN_2022_PROGRAM_ID.toBase58())
+        fetchAccounts.push(getPdaMintExAccountCp(programId, new PublicKey(mintB.address)).publicKey);
+      const extMintRes = await this.scope.connection.getMultipleAccountsInfo(fetchAccounts);
+
+      extMintRes.forEach((r, idx) => {
+        if (r) extendMintAccount.push(fetchAccounts[idx]);
+      });
+    }
 
     txBuilder.addInstruction({
       instructions: [
@@ -423,6 +447,7 @@ export default class CpmmModule extends ModuleBase {
           mintAAmount,
           mintBAmount,
           startTime,
+          extendMintAccount,
         ),
       ],
       instructionTypes: [InstructionType.CpmmCreatePool],

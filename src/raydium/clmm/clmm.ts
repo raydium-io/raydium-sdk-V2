@@ -233,6 +233,7 @@ export class Clmm extends ModuleBase {
       txVersion,
       txTipConfig,
       feePayer,
+      addSupportMintExt,
     } = props;
     const txBuilder = this.createTxBuilder(feePayer);
     const [mintA, mintB, initPrice] = new BN(new PublicKey(mint1.address).toBuffer()).gt(
@@ -243,6 +244,20 @@ export class Clmm extends ModuleBase {
 
     const initialPriceX64 = TickUtil.priceToSqrtPriceX64(initPrice, mintA.decimals, mintB.decimals);
 
+    const extendMintAccount: PublicKey[] = [];
+    const fetchAccounts: PublicKey[] = [];
+    if (addSupportMintExt) {
+      if (mintA.programId === TOKEN_2022_PROGRAM_ID.toBase58())
+        fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintA.address)).publicKey);
+      if (mintB.programId === TOKEN_2022_PROGRAM_ID.toBase58())
+        fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintB.address)).publicKey);
+      const extMintRes = await this.scope.connection.getMultipleAccountsInfo(fetchAccounts);
+
+      extMintRes.forEach((r, idx) => {
+        if (r) extendMintAccount.push(fetchAccounts[idx]);
+      });
+    }
+
     const { address } = await ClmmInstrument.createPoolInstructions({
       connection: this.scope.connection,
       programId,
@@ -251,6 +266,7 @@ export class Clmm extends ModuleBase {
       mintB,
       ammConfigId: ammConfig.id,
       initialPriceX64,
+      extendMintAccount,
     });
 
     // const desc = getCollectFeeOnDescription(collectFeeOn);
@@ -286,7 +302,7 @@ export class Clmm extends ModuleBase {
       address.mintBProgram,
       initialPriceX64,
       collectFeeOn,
-      remainingAccounts.map((d) => d.pubkey),
+      [...extendMintAccount, ...remainingAccounts.map((d) => d.pubkey)],
       dynamicFeeConfig,
     );
 

@@ -30,6 +30,7 @@ export interface CreateCpmmPoolParam<T> {
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
+  addSupportMintExt?: boolean;
 }
 
 export interface CreateCpmmPoolPermissionParam<T> {

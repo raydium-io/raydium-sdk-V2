@@ -298,6 +298,7 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
   getObserveState?: boolean;
   txVersion?: T;
   feePayer?: PublicKey;
+  addSupportMintExt?: boolean;
 }
 
 export interface CreateCustomizablePool<T = TxVersion.LEGACY>
