@@ -1181,7 +1181,7 @@ export class Clmm extends ModuleBase {
 
     const { account: ownerRewardAccount, instructionParams: ownerRewardAccountIns } =
       await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: new PublicKey(rewardInfo.mint.address),
+        tokenProgram: new PublicKey(rewardInfo.mint.programId),
         mint: new PublicKey(rewardInfo.mint.address),
         notUseTokenAccount: !!rewardMintUseSOLBalance,
         skipCloseAccount: !rewardMintUseSOLBalance,
