@@ -63,8 +63,11 @@ export function divCeil(a: BN, b: BN): BN {
   // Fast case - exact division
   if (dm.mod.isZero()) return dm.div;
 
-  // Round up
-  return dm.div.isNeg() ? dm.div.isubn(1) : dm.div.iaddn(1);
+  if (a.isNeg() === b.isNeg()) {
+    return dm.div.iaddn(1);
+  } else {
+    return dm.div; // 負數截尾後本身就是 Ceil 值
+  }
 }
 
 export function shakeFractionDecimal(n: Fraction): string {
