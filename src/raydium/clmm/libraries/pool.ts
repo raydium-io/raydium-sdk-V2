@@ -16,11 +16,7 @@ import { TickArrayBitmapUtil, TickArrayUtil, TickUtil } from "./tickArrayUtil";
 
 export class PoolFee {
   static tickSpacingIndexFromTick(tickIndex: number, tickSpacing: number): number {
-    if (tickIndex % tickSpacing == 0 || tickIndex >= 0) {
-      return tickIndex / tickSpacing;
-    } else {
-      return tickIndex / tickSpacing - 1;
-    }
+    return Math.floor(tickIndex / tickSpacing);
   }
 }
 
