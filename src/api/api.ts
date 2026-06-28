@@ -267,14 +267,7 @@ export class Api {
       mint2?: string | PublicKey;
     } & FetchPoolParams,
   ): Promise<PoolsApiReturn> {
-    const {
-      mint1: propMint1,
-      mint2: propMint2,
-      type = PoolFetchType.All,
-      sort = "default",
-      order = "desc",
-      nextPageId,
-    } = props;
+    const { mint1: propMint1, mint2: propMint2, type = PoolFetchType.All, sort, order = "desc", nextPageId } = props;
 
     const [mint1, mint2] = [
       propMint1 ? solToWSol(propMint1).toBase58() : propMint1,
