@@ -1704,8 +1704,8 @@ export class ClmmInstrument {
 
     // Match by mint: rewardDefaultInfos and rewardInfos can differ in length/order
     const ownerMintToAccount = new Map<string, PublicKey>();
-    for (let i = 0; i < poolInfo.rewardDefaultInfos.length; i++) {
-      ownerMintToAccount.set(poolInfo.rewardDefaultInfos[i].mint.address, ownerInfo.rewardAccounts[i]);
+    for (let i = 0; i < poolKeys.rewardInfos.length; i++) {
+      ownerMintToAccount.set(poolKeys.rewardInfos[i].mint.address, ownerInfo.rewardAccounts[i]);
     }
     const rewardAccounts: {
       poolRewardVault: PublicKey;

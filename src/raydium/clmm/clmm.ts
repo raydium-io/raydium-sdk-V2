@@ -837,8 +837,9 @@ export class Clmm extends ModuleBase {
     ownerTokenAccountB = _ownerTokenAccountB;
     accountBInstructions && txBuilder.addInstruction(accountBInstructions);
 
+    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
     const rewardAccounts: PublicKey[] = [];
-    for (const itemReward of poolInfo.rewardDefaultInfos) {
+    for (const itemReward of poolKeys.rewardInfos) {
       const rewardUseSOLBalance = ownerInfo.useSOLBalance && itemReward.mint.address === WSOLMint.toString();
 
       let ownerRewardAccount: PublicKey | undefined;
@@ -874,10 +875,10 @@ export class Clmm extends ModuleBase {
         this.scope.account.tokenAccountRawInfos,
       );
 
-    const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
     const nft2022 = (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(
       TOKEN_2022_PROGRAM_ID,
     );
+
     const decreaseInsInfo = await ClmmInstrument.decreaseLiquidityInstructions({
       poolInfo,
       poolKeys,
@@ -3001,8 +3002,11 @@ export class Clmm extends ModuleBase {
     tickArrays: (ReturnType<typeof TickArrayLayout.decode> & { address: PublicKey })[];
   }> {
     const rpcData = await this.getRpcClmmPoolInfo({ poolId });
-
-    const mintSet = new Set([rpcData.mintA.toBase58(), rpcData.mintB.toBase58()]);
+    const mintSet = new Set([
+      rpcData.mintA.toBase58(),
+      rpcData.mintB.toBase58(),
+      ...rpcData.rewardInfos.filter((r) => !r.mint.equals(PublicKey.default)).map((r) => r.mint.toBase58()),
+    ]);
 
     const mintInfos = await fetchMultipleMintInfos({
       connection: this.scope.connection,
@@ -3018,12 +3022,11 @@ export class Clmm extends ModuleBase {
       { pubkey: rpcData.vaultB },
     ]);
 
-    const poolInfo = clmmComputeInfoToApiInfo(computeClmmPoolInfo[poolId]);
+    const poolInfo = clmmComputeInfoToApiInfo(computeClmmPoolInfo[poolId], mintInfos);
 
     if (!vaultData[0].accountInfo || !vaultData[1].accountInfo) throw new Error("pool vault data not found");
     poolInfo.mintAmountA = Number(splAccountLayout.decode(vaultData[0].accountInfo.data).amount.toString());
     poolInfo.mintAmountB = Number(splAccountLayout.decode(vaultData[1].accountInfo.data).amount.toString());
-
     const poolKeys: ClmmKeys = {
       ...computeClmmPoolInfo[poolId],
       exBitmapAccount: computeClmmPoolInfo[poolId].exBitmapAccount.toBase58(),
@@ -3039,7 +3042,11 @@ export class Clmm extends ModuleBase {
       rewardInfos: computeClmmPoolInfo[poolId].rewardInfos
         .filter((r) => !r.vault.equals(PublicKey.default))
         .map((r) => ({
-          mint: toApiV3Token({ address: r.mint.toBase58(), programId: TOKEN_PROGRAM_ID.toBase58(), decimals: 10 }),
+          mint: toApiV3Token({
+            address: r.mint.toBase58(),
+            programId: TOKEN_PROGRAM_ID.toBase58(),
+            decimals: mintInfos[r.mint.toBase58()].decimals ?? 6,
+          }),
           vault: r.vault.toBase58(),
         })),
     };
