@@ -586,30 +586,6 @@ export type OwnerCreatedFarmInfo = {
   clmm: { id: string; programId: string }[];
 };
 
-export type OwnerIdoInfo = Record<
-  string,
-  {
-    programId: string;
-    poolId: string;
-    coin: string;
-    pc: string;
-  }
->;
-
-export type IdoKeysData = {
-  programId: string;
-  id: string;
-  authority: string;
-  projectInfo: {
-    mint: ApiV3Token;
-    vault: string;
-  };
-  buyInfo: {
-    mint: ApiV3Token;
-    vault: string;
-  };
-};
-
 export interface ApiStakePool {
   programId: string;
   id: string;

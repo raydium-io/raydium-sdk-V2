@@ -15,7 +15,6 @@ import Cpmm from "./cpmm/cpmm";
 import TradeV2 from "./tradeV2/trade";
 import Utils1216 from "./utils1216";
 import MarketV2 from "./marketV2";
-import Ido from "./ido";
 import Launchpad from "./launchpad/launchpad";
 
 import TokenModule from "./token/token";
@@ -77,7 +76,6 @@ export class Raydium {
   public tradeV2: TradeV2;
   public utils1216: Utils1216;
   public marketV2: MarketV2;
-  public ido: Ido;
   public token: TokenModule;
   public launchpad: Launchpad;
   public rawBalances: Map<string, string> = new Map();
@@ -141,7 +139,6 @@ export class Raydium {
     this.cpmm = new Cpmm({ scope: this, moduleName: "Raydium_cpmm" });
     this.utils1216 = new Utils1216({ scope: this, moduleName: "Raydium_utils1216" });
     this.marketV2 = new MarketV2({ scope: this, moduleName: "Raydium_marketV2" });
-    this.ido = new Ido({ scope: this, moduleName: "Raydium_ido" });
     this.launchpad = new Launchpad({ scope: this, moduleName: "Raydium_lauchpad" });
 
     this.availability = {};

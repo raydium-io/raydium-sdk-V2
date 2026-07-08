@@ -63,10 +63,8 @@ export const API_URLS = {
   FARM_KEYS: "/farms/key/ids",
 
   OWNER_CREATED_FARM: "/create-pool/{owner}",
-  OWNER_IDO: "/main/ido/{owner}",
   OWNER_STAKE_FARMS: "/position/stake/{owner}",
   OWNER_LOCK_POSITION: "/position/clmm-lock/{owner}",
-  IDO_KEYS: "/ido/key/ids",
   SWAP_HOST: "https://transaction-v1.raydium.io",
   SWAP_COMPUTE: "/compute/",
   SWAP_TX: "/transaction/",
