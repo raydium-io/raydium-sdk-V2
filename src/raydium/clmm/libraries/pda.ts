@@ -2,7 +2,7 @@ import { u8ToBytes } from '@/raydium/clmm';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { findProgramAddress, METADATA_PROGRAM_ID, ProgramAddress } from "../../../common";
-import { i32ToBytes, i32ToBytesBE, u16ToBytesBE, u64ToBytes } from './utils';
+import { i32ToBytes, i32ToBytesBE, u16ToBytes, u16ToBytesBE, u64ToBytes } from './utils';
 
 export const AMM_CONFIG_SEED = Buffer.from('amm_config', 'utf8')
 export const POOL_SEED = Buffer.from('pool', 'utf8')
@@ -15,6 +15,7 @@ export const POOL_TICK_ARRAY_BITMAP_SEED = Buffer.from('pool_tick_array_bitmap_e
 export const POOL_OBSERVATION_SEED = Buffer.from('observation', 'utf8')
 export const SUPPORT_MINT_SEED = Buffer.from('support_mint', 'utf8')
 export const DYNAMIC_FEE_CONFIG_SEED = Buffer.from('dynamic_fee_config', 'utf8')
+export const PERMISSION_SEED = Buffer.from('permission', 'utf8')
 
 
 export function getPdaAmmConfigId(programId: PublicKey, index: number): ProgramAddress {
@@ -29,6 +30,23 @@ export function getPdaPoolId(
 ): ProgramAddress {
   return findProgramAddress(
     [POOL_SEED, ammConfigId.toBuffer(), mintA.toBuffer(), mintB.toBuffer()],
+    programId
+  )
+}
+
+export function getPdaPermission(programId: PublicKey, payer: PublicKey): ProgramAddress {
+  return findProgramAddress([PERMISSION_SEED, payer.toBuffer()], programId)
+}
+
+export function getPdaPermissionedPoolId(
+  programId: PublicKey,
+  ammConfigId: PublicKey,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  seedIndex: number
+): ProgramAddress {
+  return findProgramAddress(
+    [POOL_SEED, ammConfigId.toBuffer(), mintA.toBuffer(), mintB.toBuffer(), u16ToBytes(seedIndex)],
     programId
   )
 }

@@ -1,7 +1,7 @@
 import { ApiV3PoolInfoConcentratedItem, ApiV3Token, ClmmKeys } from "@/api/type";
 import { InstructionType, MEMO_PROGRAM_ID, METADATA_PROGRAM_ID, RENT_PROGRAM_ID, getATAAddress } from "@/common";
 import { createLogger } from "@/common/logger";
-import { bool, s32, struct, u128, u64, u8 } from "@/marshmallow";
+import { bool, s32, struct, u128, u16, u64, u8 } from "@/marshmallow";
 import { ReturnTypeMakeInstructions } from "@/raydium/type";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
@@ -14,6 +14,8 @@ import {
   getPdaMetadataKey,
   getPdaObservationAccount,
   getPdaOperationAccount,
+  getPdaPermission,
+  getPdaPermissionedPoolId,
   getPdaPersonalPositionAddress,
   getPdaPoolId,
   getPdaPoolRewardVaultId,
@@ -49,6 +51,7 @@ const logger = createLogger("Raydium_Clmm");
 const insId = {
   createPool: getAnchorByte("create_pool"),
   createCustomizablePool: getAnchorByte("create_customizable_pool"), // todo
+  createPermissionedPool: getAnchorByte("create_permissioned_pool"),
 
   openPositionV2: getAnchorByte("open_position_v2"),
   openPositionWithToken22Nft: getAnchorByte("open_position_with_token22_nft"),
@@ -173,6 +176,63 @@ export class ClmmInstrument {
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode({ sqrtPriceX64, collectFeeOn, enableDynamicFee: dynamicFeeConfig !== undefined }, data);
     const aData = Buffer.from([...insId.createCustomizablePool, ...data]);
+
+    return new TransactionInstruction({
+      keys,
+      programId,
+      data: aData,
+    });
+  }
+
+  static createPermissionedPoolInstruction(
+    programId: PublicKey,
+    payer: PublicKey,
+    poolCreator: PublicKey,
+    permission: PublicKey,
+    ammConfig: PublicKey,
+    poolId: PublicKey,
+    mintA: PublicKey,
+    mintB: PublicKey,
+    vaultA: PublicKey,
+    vaultB: PublicKey,
+    observationId: PublicKey,
+    tickArrayBitmap: PublicKey,
+    mintProgramIdA: PublicKey,
+    mintProgramIdB: PublicKey,
+    sqrtPriceX64: BN,
+    collectFeeOn: number,
+    seedIndex: number,
+    supperMintEx: PublicKey[],
+    dynamicFeeConfig?: PublicKey,
+  ): TransactionInstruction {
+    const dataLayout = struct([u128("sqrtPriceX64"), u8("collectFeeOn"), bool("enableDynamicFee"), u16("seedIndex")]);
+
+    const keys = [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: poolCreator, isSigner: false, isWritable: false },
+      { pubkey: permission, isSigner: false, isWritable: false },
+      { pubkey: ammConfig, isSigner: false, isWritable: false },
+      { pubkey: poolId, isSigner: false, isWritable: true },
+      { pubkey: mintA, isSigner: false, isWritable: false },
+      { pubkey: mintB, isSigner: false, isWritable: false },
+      { pubkey: vaultA, isSigner: false, isWritable: true },
+      { pubkey: vaultB, isSigner: false, isWritable: true },
+      { pubkey: observationId, isSigner: false, isWritable: true },
+      { pubkey: tickArrayBitmap, isSigner: false, isWritable: true },
+      { pubkey: mintProgramIdA, isSigner: false, isWritable: false },
+      { pubkey: mintProgramIdB, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
+      ...supperMintEx.map((i) => ({ pubkey: i, isSigner: false, isWritable: false })),
+      ...(dynamicFeeConfig ? [{ pubkey: dynamicFeeConfig, isSigner: false, isWritable: false }] : []),
+    ];
+
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
+      { sqrtPriceX64, collectFeeOn, enableDynamicFee: dynamicFeeConfig !== undefined, seedIndex },
+      data,
+    );
+    const aData = Buffer.from([...insId.createPermissionedPool, ...data]);
 
     return new TransactionInstruction({
       keys,
@@ -732,8 +792,11 @@ export class ClmmInstrument {
     limitOrderNonce: PublicKey,
     limitOrder: PublicKey,
     inputTokenAccount: PublicKey,
+    outputTokenAccount: PublicKey,
     inputVault: PublicKey,
+    outputVault: PublicKey,
     inputVaultMint: PublicKey,
+    outputVaultMint: PublicKey,
     inputTokenProgram: PublicKey,
     nonceIndex: number,
     zeroForOne: boolean,
@@ -750,8 +813,11 @@ export class ClmmInstrument {
       { pubkey: limitOrderNonce, isSigner: false, isWritable: true },
       { pubkey: limitOrder, isSigner: false, isWritable: true },
       { pubkey: inputTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: outputTokenAccount, isSigner: false, isWritable: true },
       { pubkey: inputVault, isSigner: false, isWritable: true },
+      { pubkey: outputVault, isSigner: false, isWritable: true },
       { pubkey: inputVaultMint, isSigner: false, isWritable: false },
+      { pubkey: outputVaultMint, isSigner: false, isWritable: false },
       { pubkey: inputTokenProgram, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ...(tickArrayBitmap ? [{ pubkey: tickArrayBitmap, isSigner: false, isWritable: true }] : []),
@@ -958,6 +1024,79 @@ export class ClmmInstrument {
         mintBProgram,
         mintAVault,
         mintBVault,
+      },
+      lookupTableAddress: [],
+    };
+  }
+
+  static createPermissionedPoolInstructions(
+    props: CreatePoolInstruction & { payer: PublicKey; seedIndex: number },
+  ): ReturnTypeMakeInstructions<{
+    poolId: PublicKey;
+    observationId: PublicKey;
+    exBitmapAccount: PublicKey;
+    mintA: PublicKey;
+    mintB: PublicKey;
+    mintAProgram: PublicKey;
+    mintBProgram: PublicKey;
+    mintAVault: PublicKey;
+    mintBVault: PublicKey;
+    permission: PublicKey;
+  }> {
+    const { programId, owner, mintA, mintB, ammConfigId, initialPriceX64, extendMintAccount, payer, seedIndex } = props;
+    const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
+    const [mintAProgram, mintBProgram] = [
+      new PublicKey(mintA.programId || TOKEN_PROGRAM_ID),
+      new PublicKey(mintB.programId || TOKEN_PROGRAM_ID),
+    ];
+
+    const { publicKey: poolId } = getPdaPermissionedPoolId(
+      programId,
+      ammConfigId,
+      mintAAddress,
+      mintBAddress,
+      seedIndex,
+    );
+    const { publicKey: permission } = getPdaPermission(programId, payer);
+    const { publicKey: observationId } = getPdaObservationAccount(programId, poolId);
+    const { publicKey: mintAVault } = getPdaPoolVaultId(programId, poolId, mintAAddress);
+    const { publicKey: mintBVault } = getPdaPoolVaultId(programId, poolId, mintBAddress);
+    const exBitmapAccount = getPdaExBitmapAccount(programId, poolId).publicKey;
+
+    const ins = [
+      this.createPoolInstruction(
+        programId,
+        poolId,
+        owner,
+        ammConfigId,
+        observationId,
+        mintAAddress,
+        mintAVault,
+        mintAProgram,
+        mintBAddress,
+        mintBVault,
+        mintBProgram,
+        exBitmapAccount,
+        initialPriceX64,
+        extendMintAccount,
+      ),
+    ];
+
+    return {
+      signers: [],
+      instructions: ins,
+      instructionTypes: [InstructionType.CreateAccount, InstructionType.ClmmCreatePool],
+      address: {
+        poolId,
+        observationId,
+        exBitmapAccount,
+        mintA: mintAAddress,
+        mintB: mintBAddress,
+        mintAProgram,
+        mintBProgram,
+        mintAVault,
+        mintBVault,
+        permission,
       },
       lookupTableAddress: [],
     };
