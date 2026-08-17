@@ -28,6 +28,9 @@ export const anchorDataBuf = {
   removePlatformCurveParam: Buffer.from([27, 30, 62, 169, 93, 224, 24, 145]),
 
   createPlatformVestingAccount: Buffer.from([146, 71, 173, 69, 98, 19, 15, 106]),
+
+  createPlatformAllowConfig: Buffer.from([69, 71, 168, 7, 214, 250, 107, 102]),
+  closePlatformAllowConfig: Buffer.from([82, 205, 36, 216, 16, 6, 240, 215]),
 };
 
 export function initialize(
@@ -98,10 +101,10 @@ export function initialize(
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-    Buffer.from(symbol, "utf-8").length +
-    Buffer.from(uri, "utf-8").length +
-    4 * 3 +
-    1,
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -159,7 +162,7 @@ export function initializeV2(
 
   cpmmCreatorFeeOn: CpmmCreatorFeeOn,
 
-  platformGlobalAccess?: PublicKey,
+  platformAllowConfig?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -200,14 +203,14 @@ export function initializeV2(
     { pubkey: programId, isSigner: false, isWritable: false },
   ];
 
-  if (platformGlobalAccess) keys.push({ pubkey: platformGlobalAccess, isSigner: false, isWritable: false })
+  if (platformAllowConfig) keys.push({ pubkey: platformAllowConfig, isSigner: false, isWritable: false });
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-    Buffer.from(symbol, "utf-8").length +
-    Buffer.from(uri, "utf-8").length +
-    4 * 3 +
-    1,
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -263,7 +266,7 @@ export function initializeWithToken2022(
   cpmmCreatorFeeOn: CpmmCreatorFeeOn,
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN },
 
-  platformGlobalAccess?: PublicKey,
+  platformAllowConfig?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -303,14 +306,14 @@ export function initializeWithToken2022(
     { pubkey: programId, isSigner: false, isWritable: false },
   ];
 
-  if (platformGlobalAccess) keys.push({ pubkey: platformGlobalAccess, isSigner: false, isWritable: false })
+  if (platformAllowConfig) keys.push({ pubkey: platformAllowConfig, isSigner: false, isWritable: false });
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
-    Buffer.from(symbol, "utf-8").length +
-    Buffer.from(uri, "utf-8").length +
-    4 * 3 +
-    1,
+      Buffer.from(symbol, "utf-8").length +
+      Buffer.from(uri, "utf-8").length +
+      4 * 3 +
+      1,
   );
   const data3 = Buffer.alloc(dataLyaout3.span);
 
@@ -796,10 +799,10 @@ export function createPlatformConfig(
 
   const data = Buffer.alloc(
     8 * 6 +
-    Buffer.from(name, "utf-8").length +
-    Buffer.from(web, "utf-8").length +
-    Buffer.from(img, "utf-8").length +
-    4 * 3,
+      Buffer.from(name, "utf-8").length +
+      Buffer.from(web, "utf-8").length +
+      Buffer.from(img, "utf-8").length +
+      4 * 3,
   );
   dataLayout.encode(
     {
@@ -838,27 +841,28 @@ export function updatePlatformConfig(
     | { type: "updateVestingWallet"; value: PublicKey }
     | { type: "updatePlatformVestingScale"; value: BN }
     | { type: "updatePlatformCpCreator"; value: PublicKey }
+    | { type: "updateRestrictGlobalConfig"; value: BN }
     | {
-      type: "updateAll";
-      value: {
-        platformClaimFeeWallet: PublicKey;
-        platformLockNftWallet: PublicKey;
-        platformVestingWallet: PublicKey;
-        cpConfigId: PublicKey;
-        migrateCpLockNftScale: {
-          platformScale: BN;
-          creatorScale: BN;
-          burnScale: BN;
+        type: "updateAll";
+        value: {
+          platformClaimFeeWallet: PublicKey;
+          platformLockNftWallet: PublicKey;
+          platformVestingWallet: PublicKey;
+          cpConfigId: PublicKey;
+          migrateCpLockNftScale: {
+            platformScale: BN;
+            creatorScale: BN;
+            burnScale: BN;
+          };
+          feeRate: BN;
+          name: string;
+          web: string;
+          img: string;
+          transferFeeExtensionAuth: PublicKey;
+          creatorFeeRate: BN;
+          platformVestingScale: BN;
         };
-        feeRate: BN;
-        name: string;
-        web: string;
-        img: string;
-        transferFeeExtensionAuth: PublicKey;
-        creatorFeeRate: BN;
-        platformVestingScale: BN;
-      };
-    },
+      },
 ): TransactionInstruction {
   const keys: Array<AccountMeta> = [
     { pubkey: platformAdmin, isSigner: true, isWritable: false },
@@ -916,16 +920,16 @@ export function updatePlatformConfig(
     ]);
     data = Buffer.alloc(
       1 +
-      32 +
-      32 +
-      32 +
-      8 * 5 +
-      4 * 3 +
-      Buffer.from(updateInfo.value.name, "utf-8").length +
-      Buffer.from(updateInfo.value.web, "utf-8").length +
-      Buffer.from(updateInfo.value.img, "utf-8").length +
-      32 +
-      8,
+        32 +
+        32 +
+        32 +
+        8 * 5 +
+        4 * 3 +
+        Buffer.from(updateInfo.value.name, "utf-8").length +
+        Buffer.from(updateInfo.value.web, "utf-8").length +
+        Buffer.from(updateInfo.value.img, "utf-8").length +
+        32 +
+        8,
     );
     dataLayout.encode(
       {
@@ -958,6 +962,10 @@ export function updatePlatformConfig(
     const dataLayout = struct([u8("index"), publicKey("value")]);
     data = Buffer.alloc(dataLayout.span);
     dataLayout.encode({ index: 11, value: updateInfo.value }, data);
+  } else if (updateInfo.type === "updateRestrictGlobalConfig") {
+    const dataLayout = struct([u8("index"), u64("value")]);
+    data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ index: 12, value: updateInfo.value }, data);
   } else {
     throw Error("updateInfo params type error");
   }
@@ -1119,5 +1127,50 @@ export function createPlatformVestingAccountIns(
     keys,
     programId,
     data: anchorDataBuf.createPlatformVestingAccount,
+  });
+}
+
+export function createPlatformAllowConfigIns(
+  programId: PublicKey,
+
+  platformAdmin: PublicKey,
+  platformId: PublicKey,
+  globalConfigId: PublicKey,
+  platformAllowConfig: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: platformAdmin, isSigner: true, isWritable: true },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: globalConfigId, isSigner: false, isWritable: false },
+    { pubkey: platformAllowConfig, isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.createPlatformAllowConfig,
+  });
+}
+
+export function closePlatformAllowConfigIns(
+  programId: PublicKey,
+
+  platformAdmin: PublicKey,
+  platformId: PublicKey,
+  globalConfigId: PublicKey,
+  platformAllowConfig: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: platformAdmin, isSigner: true, isWritable: true },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: globalConfigId, isSigner: false, isWritable: false },
+    { pubkey: platformAllowConfig, isSigner: false, isWritable: true },
+  ];
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.closePlatformAllowConfig,
   });
 }

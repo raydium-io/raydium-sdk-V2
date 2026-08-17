@@ -39,6 +39,7 @@ import {
   collectCpFeeInstruction,
   initializeWithPermission,
   makeCollectCreatorFeeInstruction,
+  collectCreatorFeePermissionlessInInstruction,
 } from "./instruction";
 import { CpmmConfigInfoLayout, CpmmPoolInfoLayout } from "./layout";
 import {
@@ -1478,6 +1479,76 @@ export default class CpmmModule extends ModuleBase {
         insCountLimit: 6,
       }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+  }
+
+  public async collectCreatorFeesPermissionless<T extends TxVersion>({
+    poolInfo,
+    poolKeys: propPoolKeys,
+    programId = CREATE_CPMM_POOL_PROGRAM,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: CollectCreatorFees<T>): Promise<MakeTxData<T>> {
+    const payer = feePayer || this.scope.ownerPubKey;
+    const txBuilder = this.createTxBuilder(payer);
+
+    const poolKeys = propPoolKeys ?? (await this.getCpmmPoolKeys(poolInfo.id));
+
+    const [mintA, mintB, mintAProgram, mintBProgram] = [
+      new PublicKey(poolInfo.mintA.address),
+      new PublicKey(poolInfo.mintB.address),
+      new PublicKey(poolInfo.mintA.programId),
+      new PublicKey(poolInfo.mintB.programId),
+    ];
+
+    const tokenAccountA = this.scope.account.getAssociatedTokenAccount(mintA, mintAProgram);
+    const tokenAccountB = this.scope.account.getAssociatedTokenAccount(mintB, mintBProgram);
+    txBuilder.addInstruction({
+      instructions: [
+        createAssociatedTokenAccountIdempotentInstruction(
+          this.scope.ownerPubKey,
+          tokenAccountA,
+          this.scope.ownerPubKey,
+          mintA,
+          new PublicKey(poolInfo.mintA.programId),
+        ),
+        createAssociatedTokenAccountIdempotentInstruction(
+          this.scope.ownerPubKey,
+          tokenAccountB,
+          this.scope.ownerPubKey,
+          mintB,
+          new PublicKey(poolInfo.mintB.programId),
+        ),
+      ],
+    });
+
+    txBuilder.addInstruction({
+      instructions: [
+        collectCreatorFeePermissionlessInInstruction(
+          programId,
+          payer,
+          this.scope.ownerPubKey,
+          new PublicKey(poolKeys.authority),
+          new PublicKey(poolKeys.id),
+          new PublicKey(poolKeys.vault.A),
+          new PublicKey(poolKeys.vault.B),
+          mintA,
+          mintB,
+          tokenAccountA,
+          tokenAccountB,
+          mintAProgram,
+          mintBProgram,
+        ),
+      ],
+      instructionTypes: [],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
   }
 
   public computeSwapAmount({

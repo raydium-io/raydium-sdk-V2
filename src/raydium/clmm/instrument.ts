@@ -345,7 +345,8 @@ export class ClmmInstrument {
     positionNftMint: PublicKey,
     positionNftAccount: PublicKey,
     personalPosition: PublicKey,
-    nft2022?: boolean,
+    nft2022: boolean,
+    poolId?: PublicKey,
   ): TransactionInstruction {
     const keys = [
       { pubkey: nftOwner, isSigner: true, isWritable: true },
@@ -356,6 +357,8 @@ export class ClmmInstrument {
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: nft2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ];
+
+    if (poolId) keys.push({ pubkey: poolId, isSigner: false, isWritable: true });
 
     const aData = Buffer.from([...insId.closePosition]);
 
@@ -1585,7 +1588,8 @@ export class ClmmInstrument {
         ownerPosition.nftMint,
         positionNftAccount,
         personalPosition,
-        nft2022,
+        !!nft2022,
+        new PublicKey(poolInfo.id),
       ),
     );
 

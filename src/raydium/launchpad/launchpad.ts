@@ -22,6 +22,7 @@ import {
   CreateLaunchPad,
   CreateMultipleVesting,
   CreatePlatform,
+  CreatePlatformAllowConfig,
   CreatePlatformVestingAccount,
   CreateVesting,
   LaunchpadConfigInfo,
@@ -34,8 +35,10 @@ import {
   getPdaCreatorFeeVaultAuth,
   getPdaCreatorVault,
   getPdaLaunchpadAuth,
+  getPdaLaunchpadConfigId,
   getPdaLaunchpadPoolId,
   getPdaLaunchpadVaultId,
+  getPdaPlatformAllowConfig,
   getPdaPlatformConfigAccess,
   getPdaPlatformFeeVaultAuth,
   getPdaPlatformId,
@@ -57,6 +60,8 @@ import {
   claimCreatorFee,
   initializeV2,
   createPlatformVestingAccountIns,
+  createPlatformAllowConfigIns,
+  closePlatformAllowConfigIns,
 } from "./instrument";
 import {
   NATIVE_MINT,
@@ -145,7 +150,7 @@ export default class LaunchpadModule extends ModuleBase {
     token2022,
     transferFeeExtensionParams,
     creatorFeeOn = CpmmCreatorFeeOn.OnlyTokenB,
-    platformConfigAccess,
+    platformAllowConfig,
     ...extraConfigs
   }: CreateLaunchPad<T>): Promise<
     MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; swapInfo: SwapInfoReturnExt }>
@@ -319,7 +324,7 @@ export default class LaunchpadModule extends ModuleBase {
               extraConfigs?.unlockPeriod ?? new BN(0),
               creatorFeeOn,
               transferFeeExtensionParams,
-              platformConfigAccess ? getPdaPlatformConfigAccess(programId, platformId, configId).publicKey : undefined,
+              platformAllowConfig ? getPdaPlatformAllowConfig(programId, platformId, configId).publicKey : undefined,
             )
           : initializeV2(
               programId,
@@ -358,7 +363,7 @@ export default class LaunchpadModule extends ModuleBase {
               extraConfigs?.cliffPeriod ?? new BN(0),
               extraConfigs?.unlockPeriod ?? new BN(0),
               creatorFeeOn,
-              platformConfigAccess ? getPdaPlatformConfigAccess(programId, platformId, configId).publicKey : undefined,
+              platformAllowConfig ? getPdaPlatformAllowConfig(programId, platformId, configId).publicKey : undefined,
             ),
       ],
     });
@@ -1883,6 +1888,78 @@ export default class LaunchpadModule extends ModuleBase {
     if (txVersion == TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+  }
+
+  public async createPlatformAllowConfig<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    platformAdmin,
+    platformId,
+    configInfo,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: CreatePlatformAllowConfig<T>): Promise<MakeTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const { publicKey: globalConfigId } = getPdaLaunchpadConfigId(
+      programId,
+      new PublicKey(configInfo.mintB),
+      configInfo.curveType,
+      configInfo.index,
+    );
+    const { publicKey: platformAllowConfig } = getPdaPlatformAllowConfig(programId, platformId, globalConfigId);
+    txBuilder.addInstruction({
+      instructions: [
+        createPlatformAllowConfigIns(programId, platformAdmin, platformId, globalConfigId, platformAllowConfig),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: {
+        platformId,
+      },
+    }) as Promise<MakeTxData<T, { platformId: PublicKey }>>;
+  }
+
+  public async closePlatformAllowConfig<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    platformAdmin,
+    platformId,
+    configInfo,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: CreatePlatformAllowConfig<T>): Promise<MakeTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const { publicKey: globalConfigId } = getPdaLaunchpadConfigId(
+      programId,
+      new PublicKey(configInfo.mintB),
+      configInfo.curveType,
+      configInfo.index,
+    );
+    const { publicKey: platformAllowConfig } = getPdaPlatformAllowConfig(programId, platformId, globalConfigId);
+    txBuilder.addInstruction({
+      instructions: [
+        closePlatformAllowConfigIns(programId, platformAdmin, platformId, globalConfigId, platformAllowConfig),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: {
+        platformId,
+      },
+    }) as Promise<MakeTxData<T, { platformId: PublicKey }>>;
   }
 
   public async getRpcPoolInfo({

@@ -51,7 +51,7 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   token2022?: boolean;
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN };
   creatorFeeOn?: CpmmCreatorFeeOn;
-  platformConfigAccess?: boolean;
+  platformAllowConfig?: boolean;
 }
 
 export interface BuyToken<T = TxVersion.LEGACY> {
@@ -151,6 +151,24 @@ export interface CreatePlatform<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface CreatePlatformAllowConfig<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  platformAdmin: PublicKey;
+  platformId: PublicKey;
+
+  configInfo: {
+    mintB: string | PublicKey;
+    curveType: number;
+    index: number;
+  };
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
 export interface UpdatePlatform<T = TxVersion.LEGACY> {
   programId?: PublicKey;
 
@@ -166,6 +184,7 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
     | { type: "updateVestingWallet"; value: PublicKey }
     | { type: "updatePlatformVestingScale"; value: BN }
     | { type: "updatePlatformCpCreator"; value: PublicKey }
+    | { type: "updateRestrictGlobalConfig"; value: BN }
     | {
         type: "updateAll";
         value: {

@@ -122,7 +122,8 @@ export const PlatformConfig = struct([
 
   publicKey("platformCpCreator"),
 
-  seq(u8(), 108),
+  u8("restrictGlobalConfig"),
+  seq(u8(), 107),
 
   vec(PlatformCurveParam, "platformCurve"),
 ]);
