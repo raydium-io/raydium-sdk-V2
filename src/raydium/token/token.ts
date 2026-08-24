@@ -1,5 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
-import { MintLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  getTransferFeeConfig,
+  MintLayout,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  unpackMint,
+} from "@solana/spl-token";
 
 import { ApiV3Token, JupTokenType } from "@/api/type";
 import ModuleBase, { ModuleBaseProps } from "../moduleBase";
@@ -7,6 +13,7 @@ import { LoadParams } from "../type";
 
 import { SOL_INFO } from "./constant";
 import { TokenInfo } from "./type";
+import { toFeeConfig } from "./utils";
 
 export default class TokenModule extends ModuleBase {
   private _tokenList: TokenInfo[] = [];
@@ -117,8 +124,9 @@ export default class TokenModule extends ModuleBase {
 
     const onlineInfo = await this.scope.connection.getAccountInfo(new PublicKey(mintStr));
     if (!onlineInfo) throw new Error(`mint address not found: ${mintStr}`);
-    const data = MintLayout.decode(onlineInfo.data);
+    const data = MintLayout.decode(onlineInfo.data as any);
     const mintSymbol = mintStr.toString().substring(0, 6);
+    const transferFeeConfig = getTransferFeeConfig(unpackMint(new PublicKey(mint), onlineInfo, onlineInfo.owner));
     const fullInfo = {
       chainId: 101,
       address: mintStr,
@@ -128,7 +136,11 @@ export default class TokenModule extends ModuleBase {
       name: mintSymbol,
       decimals: data.decimals,
       tags: [],
-      extensions: {},
+      extensions: transferFeeConfig
+        ? {
+            feeConfig: toFeeConfig(transferFeeConfig),
+          }
+        : {},
       priority: 0,
       type: "unknown",
     };

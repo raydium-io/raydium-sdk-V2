@@ -90,7 +90,7 @@ import {
 } from "./type";
 
 const ZERO = new BN(0);
-function toTransferFeeConfig(token: ApiV3Token, epoch?: number): TransferFeeConfig | undefined {
+export function toTransferFeeConfig(token: ApiV3Token, epoch?: number): TransferFeeConfig | undefined {
   const feeConfig = token.extensions?.feeConfig;
   if (!feeConfig) return undefined;
 
