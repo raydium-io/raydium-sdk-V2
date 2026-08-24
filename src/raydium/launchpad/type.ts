@@ -52,11 +52,16 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN };
   creatorFeeOn?: CpmmCreatorFeeOn;
   platformAllowConfig?: boolean;
+
+  mintBProgram?: PublicKey;
+  transferFeeConfigB?: TransferFeeConfig | undefined;
+  skipCheckMintB?: boolean;
 }
 
 export interface BuyToken<T = TxVersion.LEGACY> {
   mintA: PublicKey;
   mintAProgram?: PublicKey;
+  mintBProgram?: PublicKey;
   buyAmount: BN;
 
   programId?: PublicKey; // default mainnet
@@ -78,7 +83,9 @@ export interface BuyToken<T = TxVersion.LEGACY> {
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   transferFeeConfigA?: TransferFeeConfig | undefined;
+  transferFeeConfigB?: TransferFeeConfig | undefined;
   skipCheckMintA?: boolean;
+  skipCheckMintB?: boolean;
   fromCreate?: boolean;
 }
 
@@ -92,6 +99,7 @@ export interface BuyTokenExactOut<T = TxVersion.LEGACY>
 export interface SellToken<T = TxVersion.LEGACY> {
   mintA: PublicKey;
   mintAProgram?: PublicKey;
+  mintBProgram?: PublicKey;
   sellAmount: BN;
   slippage?: BN;
 
@@ -113,7 +121,9 @@ export interface SellToken<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
+  transferFeeConfigB?: TransferFeeConfig | undefined;
   skipCheckMintA?: boolean;
+  skipCheckMintB?: boolean;
 }
 
 export interface SellTokenExactOut<T = TxVersion.LEGACY> extends Omit<SellToken, "sellAmount" | "txVersion"> {

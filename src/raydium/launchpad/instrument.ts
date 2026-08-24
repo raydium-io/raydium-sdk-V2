@@ -144,6 +144,7 @@ export function initializeV2(
   vaultA: PublicKey,
   vaultB: PublicKey,
   metadataId: PublicKey,
+  mintProgramB: PublicKey,
 
   decimals: number,
   name: string,
@@ -195,7 +196,7 @@ export function initializeV2(
     { pubkey: metadataId, isSigner: false, isWritable: true },
 
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: mintProgramB, isSigner: false, isWritable: false },
     { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
@@ -247,6 +248,7 @@ export function initializeWithToken2022(
   mintB: PublicKey,
   vaultA: PublicKey,
   vaultB: PublicKey,
+  mintProgramB: PublicKey,
 
   decimals: number,
   name: string,
@@ -300,7 +302,7 @@ export function initializeWithToken2022(
     { pubkey: vaultB, isSigner: false, isWritable: true },
 
     { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: mintProgramB, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     { pubkey: getPdaCpiEvent(programId).publicKey, isSigner: false, isWritable: false },
     { pubkey: programId, isSigner: false, isWritable: false },

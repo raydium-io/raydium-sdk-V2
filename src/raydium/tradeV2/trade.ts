@@ -61,6 +61,7 @@ import {
   buyExactInInstruction,
   Curve,
   getPdaCreatorVault,
+  getLaunchpadPoolMintAProgram,
   getPdaLaunchpadAuth,
   getPdaPlatformVault,
   LaunchpadConfigInfo,
@@ -89,6 +90,32 @@ import {
 } from "./type";
 
 const ZERO = new BN(0);
+function toTransferFeeConfig(token: ApiV3Token, epoch?: number): TransferFeeConfig | undefined {
+  const feeConfig = token.extensions?.feeConfig;
+  if (!feeConfig) return undefined;
+
+  return {
+    transferFeeConfigAuthority: PublicKey.default,
+    withdrawWithheldAuthority: PublicKey.default,
+    withheldAmount: BigInt(0),
+    olderTransferFee: {
+      epoch: BigInt(feeConfig.olderTransferFee.epoch ?? epoch ?? 0),
+      maximumFee: BigInt(feeConfig.olderTransferFee.maximumFee),
+      transferFeeBasisPoints: feeConfig.olderTransferFee.transferFeeBasisPoints,
+    },
+    newerTransferFee: {
+      epoch: BigInt(feeConfig.newerTransferFee.epoch ?? epoch ?? 0),
+      maximumFee: BigInt(feeConfig.newerTransferFee.maximumFee),
+      transferFeeBasisPoints: feeConfig.newerTransferFee.transferFeeBasisPoints,
+    },
+  };
+}
+
+/** The quote mint of a launchpad pool may live on either token program */
+function getMintBProgram(token: ApiV3Token): PublicKey {
+  return token.programId ? new PublicKey(token.programId) : TOKEN_PROGRAM_ID;
+}
+
 export default class TradeV2 extends ModuleBase {
   constructor(params: ModuleBaseProps) {
     super(params);
@@ -433,6 +460,7 @@ export default class TradeV2 extends ModuleBase {
       launchPoolInfo,
       launchAuthProgramId,
       launchSwapInfo,
+      launchMintProgramB,
       outAmount,
       minOutAmount,
     } = await this.computeClmmToLaunchAmount({
@@ -555,7 +583,7 @@ export default class TradeV2 extends ModuleBase {
           }),
     );
 
-    const launchMintAProgram = launchPoolInfo.mintProgramFlag === 0 ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+    const launchMintAProgram = getLaunchpadPoolMintAProgram(launchPoolInfo.mintProgramFlag);
     const launchTokenAccountA = this.scope.account.getAssociatedTokenAccount(launchPoolInfo.mintA, launchMintAProgram);
     let launchTokenAccountB = tokenAccountMap[launchPoolInfo.mintB.toBase58()];
 
@@ -574,7 +602,7 @@ export default class TradeV2 extends ModuleBase {
     if (!launchTokenAccountB) {
       const mintBUseSol = launchPoolInfo.mintB.equals(WSOLMint);
       const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: launchMintProgramB,
         mint: launchPoolInfo.mintB,
         notUseTokenAccount: mintBUseSol,
         owner: this.scope.ownerPubKey,
@@ -608,7 +636,7 @@ export default class TradeV2 extends ModuleBase {
           launchPoolInfo.mintA,
           launchPoolInfo.mintB,
           launchMintAProgram,
-          TOKEN_PROGRAM_ID,
+          launchMintProgramB,
 
           getPdaPlatformVault(launchPoolInfo.programId, launchPoolInfo.platformId, launchPoolInfo.mintB).publicKey,
           getPdaCreatorVault(launchPoolInfo.programId, launchPoolInfo.creator, launchPoolInfo.mintB).publicKey,
@@ -710,6 +738,8 @@ export default class TradeV2 extends ModuleBase {
     minOutAmount: BN;
     launchSwapInfo: SwapInfoReturn;
     launchMintTransferFeeConfig?: TransferFeeConfig;
+    launchMintProgramB: PublicKey;
+    launchMintTransferFeeConfigB?: TransferFeeConfig;
   }> {
     // split slippage for clmm swap and launch buy
     const slippage =
@@ -762,23 +792,9 @@ export default class TradeV2 extends ModuleBase {
     const mintInfo = propsMintInfo ?? (await this.scope.token.getTokenInfo(launchPoolInfo.mintA));
     const authProgramId = getPdaLaunchpadAuth(launchPoolInfo.programId).publicKey;
 
-    const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
-      ? {
-          transferFeeConfigAuthority: PublicKey.default,
-          withdrawWithheldAuthority: PublicKey.default,
-          withheldAmount: BigInt(0),
-          olderTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-          },
-          newerTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-          },
-        }
-      : undefined;
+    const launchMintTransferFeeConfig = toTransferFeeConfig(mintInfo, epochInfo?.epoch);
+    const launchMintProgramB = getMintBProgram(tokenOut);
+    const launchMintTransferFeeConfigB = toTransferFeeConfig(tokenOut, epochInfo?.epoch);
 
     const launchBuyAmount = fixClmmOut
       ? inputAmount
@@ -793,6 +809,7 @@ export default class TradeV2 extends ModuleBase {
       shareFeeRate,
       creatorFeeRate: platformInfo.creatorFeeRate,
       transferFeeConfigA: launchMintTransferFeeConfig,
+      transferFeeConfigB: launchMintTransferFeeConfigB,
       slot: slot ?? (await this.scope.connection.getSlot()),
     });
 
@@ -818,6 +835,8 @@ export default class TradeV2 extends ModuleBase {
       launchPoolInfo,
       launchAuthProgramId: authProgramId,
       launchMintTransferFeeConfig,
+      launchMintProgramB,
+      launchMintTransferFeeConfigB,
       launchSwapInfo,
       outAmount: launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0)),
       minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0)),
@@ -872,6 +891,7 @@ export default class TradeV2 extends ModuleBase {
       launchPoolInfo,
       launchAuthProgramId,
       launchSwapInfo,
+      launchMintProgramB,
       minLaunchOutAmount,
       outAmount,
       minOutAmount,
@@ -888,7 +908,7 @@ export default class TradeV2 extends ModuleBase {
     const txBuilder = this.createTxBuilder(feePayer);
     const tokenAccountMap: Record<string, PublicKey> = {};
 
-    const launchMintAProgram = launchPoolInfo.mintProgramFlag === 0 ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+    const launchMintAProgram = getLaunchpadPoolMintAProgram(launchPoolInfo.mintProgramFlag);
 
     const { account: launchTokenAccountA } = await this.scope.account.getOrCreateTokenAccount({
       tokenProgram: launchMintAProgram,
@@ -905,7 +925,7 @@ export default class TradeV2 extends ModuleBase {
 
     const mintBUseSol = launchPoolInfo.mintB.equals(WSOLMint);
     const { account: launchTokenAccountB, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram: launchMintProgramB,
       mint: launchPoolInfo.mintB,
       notUseTokenAccount: mintBUseSol,
       owner: this.scope.ownerPubKey,
@@ -938,7 +958,7 @@ export default class TradeV2 extends ModuleBase {
           launchPoolInfo.mintA,
           launchPoolInfo.mintB,
           launchMintAProgram,
-          TOKEN_PROGRAM_ID,
+          launchMintProgramB,
 
           getPdaPlatformVault(launchPoolInfo.programId, launchPoolInfo.platformId, launchPoolInfo.mintB).publicKey,
           getPdaCreatorVault(launchPoolInfo.programId, launchPoolInfo.creator, launchPoolInfo.mintB).publicKey,
@@ -1128,6 +1148,8 @@ export default class TradeV2 extends ModuleBase {
     minOutAmount: BN;
     launchSwapInfo: SwapInfoReturn;
     launchMintTransferFeeConfig?: TransferFeeConfig;
+    launchMintProgramB: PublicKey;
+    launchMintTransferFeeConfigB?: TransferFeeConfig;
   }> {
     // split slippage for clmm swap and launch buy
     const slippage =
@@ -1150,6 +1172,8 @@ export default class TradeV2 extends ModuleBase {
 
     const baseIn = inputMint.toString() === clmmPoolData.poolInfo.mintA.address;
     const tokenOut = clmmPoolData.poolInfo[baseIn ? "mintB" : "mintA"];
+    // the launch pool sells into mintB, which is what this clmm swap then takes in
+    const tokenIn = clmmPoolData.poolInfo[baseIn ? "mintA" : "mintB"];
 
     let platformInfo = propsLaunchPlatformInfo;
     if (!platformInfo) {
@@ -1159,23 +1183,9 @@ export default class TradeV2 extends ModuleBase {
     const mintInfo = await this.scope.token.getTokenInfo(launchPoolInfo.mintA);
     const authProgramId = getPdaLaunchpadAuth(launchPoolInfo.programId).publicKey;
 
-    const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
-      ? {
-          transferFeeConfigAuthority: PublicKey.default,
-          withdrawWithheldAuthority: PublicKey.default,
-          withheldAmount: BigInt(0),
-          olderTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-          },
-          newerTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-          },
-        }
-      : undefined;
+    const launchMintTransferFeeConfig = toTransferFeeConfig(mintInfo, epochInfo?.epoch);
+    const launchMintProgramB = getMintBProgram(tokenIn);
+    const launchMintTransferFeeConfigB = toTransferFeeConfig(tokenIn, epochInfo?.epoch);
 
     const launchSwapInfo = Curve.sellExactIn({
       poolInfo: launchPoolInfo,
@@ -1186,6 +1196,7 @@ export default class TradeV2 extends ModuleBase {
       shareFeeRate,
       creatorFeeRate: platformInfo.creatorFeeRate,
       transferFeeConfigA: launchMintTransferFeeConfig,
+      transferFeeConfigB: launchMintTransferFeeConfigB,
       slot: await this.scope.connection.getSlot(),
     });
 
@@ -1217,6 +1228,8 @@ export default class TradeV2 extends ModuleBase {
       launchPoolInfo,
       launchAuthProgramId: authProgramId,
       launchMintTransferFeeConfig,
+      launchMintProgramB,
+      launchMintTransferFeeConfigB,
       launchSwapInfo,
       minLaunchOutAmount,
       outAmount: clmmComputeAmount.amountOut.amount.raw,
@@ -1287,6 +1300,7 @@ export default class TradeV2 extends ModuleBase {
       launchPoolInfo,
       launchAuthProgramId,
       launchSwapInfo,
+      launchMintProgramB,
       outAmount,
       minOutAmount,
     } = await this.computeCpmmToLaunchAmount({
@@ -1389,7 +1403,7 @@ export default class TradeV2 extends ModuleBase {
       ],
     });
 
-    const launchMintAProgram = launchPoolInfo.mintProgramFlag === 0 ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+    const launchMintAProgram = getLaunchpadPoolMintAProgram(launchPoolInfo.mintProgramFlag);
     const launchTokenAccountA = this.scope.account.getAssociatedTokenAccount(launchPoolInfo.mintA, launchMintAProgram);
     let launchTokenAccountB = tokenAccountMap[launchPoolInfo.mintB.toBase58()];
 
@@ -1408,7 +1422,7 @@ export default class TradeV2 extends ModuleBase {
     if (!launchTokenAccountB) {
       const mintBUseSol = launchPoolInfo.mintB.equals(WSOLMint);
       const { account, instructionParams } = await this.scope.account.getOrCreateTokenAccount({
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: launchMintProgramB,
         mint: launchPoolInfo.mintB,
         notUseTokenAccount: mintBUseSol,
         owner: this.scope.ownerPubKey,
@@ -1442,7 +1456,7 @@ export default class TradeV2 extends ModuleBase {
           launchPoolInfo.mintA,
           launchPoolInfo.mintB,
           launchMintAProgram,
-          TOKEN_PROGRAM_ID,
+          launchMintProgramB,
 
           getPdaPlatformVault(launchPoolInfo.programId, launchPoolInfo.platformId, launchPoolInfo.mintB).publicKey,
           getPdaCreatorVault(launchPoolInfo.programId, launchPoolInfo.creator, launchPoolInfo.mintB).publicKey,
@@ -1536,6 +1550,8 @@ export default class TradeV2 extends ModuleBase {
     minOutAmount: BN;
     launchSwapInfo: SwapInfoReturn;
     launchMintTransferFeeConfig?: TransferFeeConfig;
+    launchMintProgramB: PublicKey;
+    launchMintTransferFeeConfigB?: TransferFeeConfig;
   }> {
     // split slippage for clmm swap and launch buy
     const slippage =
@@ -1565,23 +1581,9 @@ export default class TradeV2 extends ModuleBase {
     const mintInfo = propsMintInfo ?? (await this.scope.token.getTokenInfo(launchPoolInfo.mintA));
     const authProgramId = getPdaLaunchpadAuth(launchPoolInfo.programId).publicKey;
 
-    const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
-      ? {
-          transferFeeConfigAuthority: PublicKey.default,
-          withdrawWithheldAuthority: PublicKey.default,
-          withheldAmount: BigInt(0),
-          olderTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-          },
-          newerTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-          },
-        }
-      : undefined;
+    const launchMintTransferFeeConfig = toTransferFeeConfig(mintInfo, epochInfo?.epoch);
+    const launchMintProgramB = getMintBProgram(tokenOut);
+    const launchMintTransferFeeConfigB = toTransferFeeConfig(tokenOut, epochInfo?.epoch);
 
     const cpmmComputeAmount = await this.scope.cpmm.computeSwapAmount({
       pool: cpmmPoolData,
@@ -1601,6 +1603,7 @@ export default class TradeV2 extends ModuleBase {
       shareFeeRate,
       creatorFeeRate: platformInfo.creatorFeeRate,
       transferFeeConfigA: launchMintTransferFeeConfig,
+      transferFeeConfigB: launchMintTransferFeeConfigB,
       slot: slot ?? (await this.scope.connection.getSlot()),
     });
 
@@ -1619,6 +1622,8 @@ export default class TradeV2 extends ModuleBase {
       launchPoolInfo,
       launchAuthProgramId: authProgramId,
       launchMintTransferFeeConfig,
+      launchMintProgramB,
+      launchMintTransferFeeConfigB,
       launchSwapInfo,
       outAmount: launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0)),
       minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0)),
@@ -1688,6 +1693,8 @@ export default class TradeV2 extends ModuleBase {
     minOutAmount: BN;
     launchSwapInfo: SwapInfoReturn;
     launchMintTransferFeeConfig?: TransferFeeConfig;
+    launchMintProgramB: PublicKey;
+    launchMintTransferFeeConfigB?: TransferFeeConfig;
     swapPoolType: "clmm" | "cpmm";
   }> {
     // split slippage for clmm swap and launch buy
@@ -1719,23 +1726,9 @@ export default class TradeV2 extends ModuleBase {
     const mintInfo = propsMintInfo ?? (await this.scope.token.getTokenInfo(launchPoolInfo.mintA));
     const authProgramId = getPdaLaunchpadAuth(launchPoolInfo.programId).publicKey;
 
-    const launchMintTransferFeeConfig = mintInfo.extensions.feeConfig
-      ? {
-          transferFeeConfigAuthority: PublicKey.default,
-          withdrawWithheldAuthority: PublicKey.default,
-          withheldAmount: BigInt(0),
-          olderTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.olderTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.olderTransferFee.transferFeeBasisPoints,
-          },
-          newerTransferFee: {
-            epoch: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.epoch ?? epochInfo?.epoch ?? 0),
-            maximumFee: BigInt(mintInfo.extensions.feeConfig.newerTransferFee.maximumFee),
-            transferFeeBasisPoints: mintInfo.extensions.feeConfig.newerTransferFee.transferFeeBasisPoints,
-          },
-        }
-      : undefined;
+    const launchMintTransferFeeConfig = toTransferFeeConfig(mintInfo, epochInfo?.epoch);
+    const launchMintProgramB = getMintBProgram(tokenOut);
+    const launchMintTransferFeeConfigB = toTransferFeeConfig(tokenOut, epochInfo?.epoch);
 
     const clmmComputeAmount = await PoolUtils.computeAmountOutFormat({
       poolInfo: clmmPoolData.computePoolInfo,
@@ -1770,6 +1763,7 @@ export default class TradeV2 extends ModuleBase {
       shareFeeRate,
       creatorFeeRate: platformInfo.creatorFeeRate,
       transferFeeConfigA: launchMintTransferFeeConfig,
+      transferFeeConfigB: launchMintTransferFeeConfigB,
       slot: slot ?? (await this.scope.connection.getSlot()),
     });
 
@@ -1795,6 +1789,8 @@ export default class TradeV2 extends ModuleBase {
       launchPoolInfo,
       launchAuthProgramId: authProgramId,
       launchMintTransferFeeConfig,
+      launchMintProgramB,
+      launchMintTransferFeeConfigB,
       launchSwapInfo,
       outAmount: launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0)),
       minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0)),
