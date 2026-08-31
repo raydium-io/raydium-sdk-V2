@@ -1,6 +1,8 @@
 export enum TxVersion {
   "V0",
   "LEGACY",
+  // 注意：務必附加在最後，數值枚舉的值依序而定，插在中間會位移 V0/LEGACY 的值
+  "V1",
 }
 
 export const InstructionType = {

@@ -52,7 +52,10 @@ export async function getRecentBlockHash(connection: Connection, propsCommitment
 export async function confirmTransaction(connection: Connection, txId: string): Promise<string> {
   connection.getSignatureStatuses([txId]);
   return new Promise((resolve, reject) => {
-    const id = setTimeout(reject, 60 * 1000);
+    const id = setTimeout(
+      () => reject(Object.assign(new Error(`Transaction confirmation timeout: ${txId}`), { txId })),
+      60 * 1000,
+    );
     connection.onSignature(
       txId,
       (signatureResult) => {

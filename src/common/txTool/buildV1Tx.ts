@@ -4,6 +4,7 @@ import {
   Keypair,
   TransactionMessage as Web3TransactionMessage,
   VersionedTransaction,
+  type Signer,
   type AddressLookupTableAccount,
 } from "@solana/web3.js"; // 1.x 型別
 
@@ -25,6 +26,7 @@ import {
 import {
   compileTransaction,
   signTransaction,
+  partiallySignTransaction,
   getBase64EncodedWireTransaction,
   getTransactionEncoder,
   getTransactionDecoder,
@@ -128,6 +130,24 @@ export function toCryptoKeyPair(keypair: Keypair): Promise<CryptoKeyPair> {
 }
 
 /**
+ * 將多個 1.x Signer / Keypair（含 64-byte secretKey）批次轉為 2.x 的 CryptoKeyPair
+ */
+export function signersToCryptoKeyPairs(signers: (Signer | Keypair)[]): Promise<CryptoKeyPair[]> {
+  return Promise.all(signers.map((s) => createKeyPairFromBytes(s.secretKey)));
+}
+
+/**
+ * 用 CryptoKeyPair 對 v1 Transaction 做「部分簽章」（不要求所有 signer 都到齊）。
+ * 常見用途：先讓臨時 signer（例如新建帳戶的 keypair）簽好，再交給錢包簽 fee payer。
+ */
+export async function partialSignV1Transaction(
+  transaction: Transaction,
+  signers: CryptoKeyPair[],
+): Promise<Transaction> {
+  return partiallySignTransaction(signers, transaction);
+}
+
+/**
  * 用 2.x API 對 buildV1Transaction 產出的 Transaction 進行簽章
  * @param transaction buildV1Transaction 的回傳值
  * @param signers 簽章者（1.x Keypair 請先用 toCryptoKeyPair 轉換）
@@ -171,32 +191,6 @@ export interface BuildV0WalletTxParams {
   addressLookupTableAccounts?: AddressLookupTableAccount[];
 }
 
-/**
- * 打包一筆 v0 的 web3.js 1.x VersionedTransaction，供 browser wallet 的
- * signAllTransactions / signTransaction 直接簽章。
- *
- * @example
- * ```ts
- * const vtx = buildV0WalletTransaction({ payer, recentBlockhash, instructions });
- * const [signed] = await wallet.signAllTransactions([vtx]); // 由錢包簽章
- * const sig = await connection.sendRawTransaction(signed.serialize());
- * ```
- */
-export function buildV0WalletTransaction({
-  payer,
-  recentBlockhash,
-  instructions,
-  addressLookupTableAccounts,
-}: BuildV0WalletTxParams): VersionedTransaction {
-  const messageV0 = new Web3TransactionMessage({
-    payerKey: payer,
-    recentBlockhash,
-    instructions,
-  }).compileToV0Message(addressLookupTableAccounts);
-
-  return new VersionedTransaction(messageV0);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // v1 + 錢包（byte-level）簽章路徑
 //
@@ -214,6 +208,52 @@ export function buildV0WalletTransaction({
  * （舊的 SignAllTransactions 綁定 1.x Transaction/VersionedTransaction 物件，無法表示 v1）。
  */
 export type SignAllTransactionsByteLevel = (transactionsBytes: Uint8Array[]) => Promise<Uint8Array[]>;
+
+// ── Wallet Standard 轉接（避免硬相依 @wallet-standard/* 套件，以最小結構型別描述）──────────
+
+/** Wallet Standard `solana:signTransaction` 單筆輸入的最小結構 */
+export interface WalletStandardSignTransactionInput {
+  account: unknown; // Wallet Standard 的 WalletAccount，原樣傳回錢包
+  transaction: Uint8Array;
+  chain?: string; // e.g. "solana:mainnet"
+  options?: Record<string, unknown>;
+}
+/** Wallet Standard `solana:signTransaction` 單筆輸出的最小結構 */
+export interface WalletStandardSignTransactionOutput {
+  signedTransaction: Uint8Array;
+}
+/** Wallet Standard `solana:signTransaction` feature 的 signTransaction 方法（variadic 批次） */
+export type WalletStandardSignTransaction = (
+  ...inputs: WalletStandardSignTransactionInput[]
+) => Promise<WalletStandardSignTransactionOutput[]>;
+
+/**
+ * 把 Wallet Standard 的 `solana:signTransaction` feature 轉接成 SignAllTransactionsByteLevel，
+ * 讓前端不用自己手寫那層 bytes ↔ input/output 的轉換。
+ *
+ * @example
+ * ```ts
+ * const feature = wallet.features["solana:signTransaction"];
+ * // 建議先確認錢包宣告支援 v1： feature.supportedTransactionVersions.includes(1)
+ * const signAll = walletStandardToByteLevelSigner({
+ *   signTransaction: feature.signTransaction,
+ *   account,                 // 目前連線的 WalletAccount
+ *   chain: "solana:mainnet",
+ * });
+ * const [signed] = await signAllV1TransactionsWithWallet([tx], signAll);
+ * ```
+ */
+export function walletStandardToByteLevelSigner(params: {
+  signTransaction: WalletStandardSignTransaction;
+  account: unknown;
+  chain?: string;
+}): SignAllTransactionsByteLevel {
+  const { signTransaction, account, chain } = params;
+  return async (transactionsBytes) => {
+    const outputs = await signTransaction(...transactionsBytes.map((transaction) => ({ account, transaction, chain })));
+    return outputs.map((o) => o.signedTransaction);
+  };
+}
 
 /**
  * 用 byte-level 的批次錢包簽章對多筆（v1 或任何版本的）2.x Transaction 簽章。

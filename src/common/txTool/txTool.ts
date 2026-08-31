@@ -18,6 +18,16 @@ import { ComputeBudgetConfig, SignAllTransactions, TxTipConfig } from "../../ray
 import { Cluster } from "../../solana";
 import { Owner } from "../owner";
 import { CacheLTA, getDevLookupTableCache, getMainLookupTableCache, getMultipleLookupTableInfo } from "./lookupTable";
+import {
+  buildV1Transaction,
+  signV1Transaction,
+  serializeV1Transaction,
+  signAllV1TransactionsWithWallet,
+  signersToCryptoKeyPairs,
+  partialSignV1Transaction,
+  type SignAllTransactionsByteLevel,
+} from "./buildV1Tx";
+import { type Transaction as TransactionV1 } from "@solana/transactions";
 import { InstructionType, TxVersion } from "./txType";
 import {
   addComputeBudget,
@@ -60,6 +70,11 @@ interface TxBuilderInit {
   loopMultiTxStatus?: boolean;
   api?: Api;
   signAllTransactions?: SignAllTransactions;
+  /**
+   * v1（2.x）交易專用的 byte-level 批次錢包簽章。現有的 signAllTransactions 綁定 1.x
+   * Transaction/VersionedTransaction 物件，無法簽 v1，故 buildV1 的錢包路徑改用這個。
+   */
+  signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
 }
 
 export interface AddInstructionParam {
@@ -91,10 +106,20 @@ export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData
   execute: (params?: ExecuteParams) => Promise<{ txId: string; signedTx: VersionedTransaction }>;
 }
 
+export interface TxV1BuildData<T = Record<string, any>> {
+  builder: TxBuilder;
+  /** 2.x（kit）的 Transaction，內含 messageBytes 與 signatures map */
+  transaction: TransactionV1;
+  instructionTypes: string[];
+  signers: Signer[];
+  execute: (params?: ExecuteParams) => Promise<{ txId: string; signedTx: TransactionV1 }>;
+  extInfo: T;
+}
+
 type TxUpdateParams = {
   txId: string;
   status: "success" | "error" | "sent";
-  signedTx: Transaction | VersionedTransaction;
+  signedTx: Transaction | VersionedTransaction | TransactionV1;
 };
 export interface MultiTxExecuteParam extends ExecuteParams {
   sequentially: boolean;
@@ -121,12 +146,24 @@ export interface MultiTxV0BuildData<T = Record<string, any>>
   execute: (executeParams?: MultiTxExecuteParam) => Promise<{ txIds: string[]; signedTxs: VersionedTransaction[] }>;
 }
 
+export interface MultiTxV1BuildData<T = Record<string, any>>
+  extends Omit<MultiTxBuildData<T>, "transactions" | "execute"> {
+  builder: TxBuilder;
+  /** 2.x（kit）的 Transaction 陣列 */
+  transactions: TransactionV1[];
+  execute: (executeParams?: MultiTxExecuteParam) => Promise<{ txIds: string[]; signedTxs: TransactionV1[] }>;
+}
+
 export type MakeMultiTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extends TxVersion.LEGACY
   ? MultiTxBuildData<O>
+  : T extends TxVersion.V1
+  ? MultiTxV1BuildData<O>
   : MultiTxV0BuildData<O>;
 
 export type MakeTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extends TxVersion.LEGACY
   ? TxBuildData<O>
+  : T extends TxVersion.V1
+  ? TxV1BuildData<O>
   : TxV0BuildData<O>;
 
 const LOOP_INTERVAL = 2000;
@@ -143,6 +180,7 @@ export class TxBuilder {
   private feePayer: PublicKey;
   private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
+  private signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
   private blockhashCommitment?: Commitment;
   private loopMultiTxStatus: boolean;
 
@@ -150,6 +188,7 @@ export class TxBuilder {
     this.connection = params.connection;
     this.feePayer = params.feePayer;
     this.signAllTransactions = params.signAllTransactions;
+    this.signAllTransactionsByteLevel = params.signAllTransactionsByteLevel;
     this.owner = params.owner;
     this.cluster = params.cluster;
     this.blockhashCommitment = params.blockhashCommitment;
@@ -256,9 +295,12 @@ export class TxBuilder {
     txVersion?: TxVersion;
     extInfo?: O;
     lookupTableAddress?: string[];
-  }): Promise<MakeTxData<TxVersion.LEGACY, O> | MakeTxData<TxVersion.V0, O>> {
+  }): Promise<MakeTxData<TxVersion.LEGACY, O> | MakeTxData<TxVersion.V0, O> | MakeTxData<TxVersion.V1, O>> {
     if (txVersion === TxVersion.V0)
       return (await this.buildV0({ ...(extInfo || {}), lookupTableAddress })) as unknown as MakeTxData<TxVersion.V0, O>;
+    if (txVersion === TxVersion.V1)
+      // v1 沒有 ALT，故不吃 lookupTableAddress
+      return (await this.buildV1({ ...(extInfo || {}) })) as unknown as MakeTxData<TxVersion.V1, O>;
     return this.build<O>(extInfo) as MakeTxData<TxVersion.LEGACY, O>;
   }
 
@@ -490,13 +532,18 @@ export class TxBuilder {
     txVersion,
     extInfo,
   }: {
-    extraPreBuildData?: MakeTxData<TxVersion.V0>[] | MakeTxData<TxVersion.LEGACY>[];
+    extraPreBuildData?: MakeTxData<TxVersion.V0>[] | MakeTxData<TxVersion.LEGACY>[] | MakeTxData<TxVersion.V1>[];
     txVersion?: T;
     extInfo?: O;
   }): Promise<MakeMultiTxData<T, O>> {
     if (txVersion === TxVersion.V0)
       return (await this.buildV0MultiTx({
         extraPreBuildData: extraPreBuildData as MakeTxData<TxVersion.V0>[],
+        buildProps: extInfo || {},
+      })) as MakeMultiTxData<T, O>;
+    if (txVersion === TxVersion.V1)
+      return (await this.buildV1MultiTx({
+        extraPreBuildData: extraPreBuildData as MakeTxData<TxVersion.V1>[],
         buildProps: extInfo || {},
       })) as MakeMultiTxData<T, O>;
     return this.buildMultiTx<O>({
@@ -587,6 +634,259 @@ export class TxBuilder {
         throw new Error("please provide owner in keypair format or signAllTransactions function");
       },
       extInfo: (extInfo || {}) as O,
+    };
+  }
+
+  /**
+   * 打包一筆 v1（2.x / kit）交易，對接 buildV1Tx。
+   *
+   * - keypair 路徑：owner.isKeyPair 時，把所有 signer 轉成 CryptoKeyPair 後用 2.x 簽章。
+   * - 錢包路徑：需在建構 TxBuilder 時提供 signAllTransactionsByteLevel（byte-level）；
+   *   臨時 signer 先部分簽，再交錢包簽 fee payer。
+   *
+   * ⚠️ v1 主網啟用日 2026-09-09 前，RPC 尚不接受 v1 交易；且 v1 無 ALT、compute budget
+   *    走 config mask（非 instruction），此處已透過 computeUnitLimit 參數處理。
+   */
+  public async buildV1<O = Record<string, any>>(
+    props?: O & {
+      recentBlockhash?: string;
+      lastValidBlockHeight?: number;
+      /** compute unit 上限；未提供時 fallback 到 computeBudgetConfig / getComputeBudgetConfig().units（預設 600000） */
+      computeUnitLimit?: number;
+      /** v1 優先費（total lamports）；未提供時由 computeBudgetConfig.microLamports × units 換算 */
+      priorityFeeLamports?: number | bigint;
+      /**
+       * v0 風格的 compute budget 設定；會自動換算成 v1 的 computeUnitLimit / priorityFeeLamports。
+       * 優先權：明確傳入的 computeUnitLimit / priorityFeeLamports > computeBudgetConfig > getComputeBudgetConfig()
+       */
+      computeBudgetConfig?: ComputeBudgetConfig;
+    },
+  ): Promise<TxV1BuildData<O>> {
+    const {
+      recentBlockhash: propRecentBlockhash,
+      lastValidBlockHeight: propLastValidBlockHeight,
+      computeUnitLimit: propComputeUnitLimit,
+      priorityFeeLamports: propPriorityFeeLamports,
+      computeBudgetConfig: propComputeBudgetConfig,
+      ...extInfo
+    } = props || {};
+
+    // blockhash + lastValidBlockHeight（兩者都需要，直接取 latestBlockhash）
+    let recentBlockhash = propRecentBlockhash;
+    let lastValidBlockHeight = propLastValidBlockHeight;
+    if (!recentBlockhash || lastValidBlockHeight === undefined) {
+      const latest = await this.connection.getLatestBlockhash(this.blockhashCommitment);
+      recentBlockhash = recentBlockhash ?? latest.blockhash;
+      lastValidBlockHeight = lastValidBlockHeight ?? latest.lastValidBlockHeight;
+    }
+
+    // compute budget：明確參數優先，否則由 computeBudgetConfig（prop）或實例 getComputeBudgetConfig() 換算
+    const budgetConfig = propComputeBudgetConfig ?? (await this.getComputeBudgetConfig());
+
+    // computeUnitLimit fallback：v1 無隱含預設值，缺少會使交易失敗
+    const computeUnitLimit = propComputeUnitLimit ?? budgetConfig?.units ?? 600000;
+
+    // priorityFeeLamports：v1 要 total lamports；v0 的 microLamports 為每 CU 價格，需 × units 換算（無條件進位）
+    let priorityFeeLamports = propPriorityFeeLamports;
+    if (priorityFeeLamports === undefined && budgetConfig?.microLamports) {
+      const MICRO = BigInt(1_000_000);
+      priorityFeeLamports =
+        (BigInt(budgetConfig.microLamports) * BigInt(computeUnitLimit) + (MICRO - BigInt(1))) / MICRO;
+    }
+
+    if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
+      this.signers.push(this.owner.signer);
+
+    const transaction = buildV1Transaction({
+      payer: this.feePayer,
+      recentBlockhash,
+      lastValidBlockHeight,
+      computeUnitLimit,
+      priorityFeeLamports,
+      instructions: [...this.allInstructions],
+    });
+
+    return {
+      builder: this,
+      transaction,
+      signers: this.signers,
+      instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
+      execute: async (params) => {
+        const { skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
+
+        // keypair 路徑：自持 key，全部 signer 轉 CryptoKeyPair 後簽章
+        if (this.owner?.isKeyPair) {
+          const keyPairs = await signersToCryptoKeyPairs(this.signers);
+          const signedTx = await signV1Transaction(transaction, keyPairs);
+          const txId = notSendToRpc
+            ? ""
+            : await this.connection.sendEncodedTransaction(serializeV1Transaction(signedTx), { skipPreflight });
+          if (sendAndConfirm && txId) await confirmTransaction(this.connection, txId);
+          return { txId, signedTx };
+        }
+
+        // 錢包路徑：臨時 signer 先部分簽，再交錢包（byte-level）簽 fee payer
+        if (this.signAllTransactionsByteLevel) {
+          const extraSigners = this.signers.filter((s) => !s.publicKey.equals(this.feePayer));
+          const partiallySigned = extraSigners.length
+            ? await partialSignV1Transaction(transaction, await signersToCryptoKeyPairs(extraSigners))
+            : transaction;
+          const [signedTx] = await signAllV1TransactionsWithWallet(
+            [partiallySigned],
+            this.signAllTransactionsByteLevel,
+          );
+          const txId = notSendToRpc
+            ? ""
+            : await this.connection.sendEncodedTransaction(serializeV1Transaction(signedTx), { skipPreflight });
+          if (sendAndConfirm && txId) await confirmTransaction(this.connection, txId);
+          return { txId, signedTx };
+        }
+
+        throw new Error("please provide owner in keypair format or signAllTransactionsByteLevel function");
+      },
+      extInfo: (extInfo || {}) as O,
+    };
+  }
+
+  /**
+   * 打包多筆 v1（2.x / kit）交易，對接 buildV1。與 buildV0MultiTx 對應但全程走 2.x：
+   * 簽章用 CryptoKeyPair / byte-level 錢包，送出用 sendEncodedTransaction(base64)。
+   */
+  public async buildV1MultiTx<T = Record<string, any>>(params: {
+    extraPreBuildData?: MakeTxData<TxVersion.V1>[];
+    buildProps?: T & {
+      recentBlockhash?: string;
+      lastValidBlockHeight?: number;
+      computeUnitLimit?: number;
+      priorityFeeLamports?: number | bigint;
+      computeBudgetConfig?: ComputeBudgetConfig;
+    };
+  }): Promise<MultiTxV1BuildData> {
+    const { extraPreBuildData = [], buildProps } = params;
+    const { transaction } = await this.buildV1(buildProps);
+
+    const filterExtraBuildData = extraPreBuildData.filter((data) => data.builder.instructions.length > 0);
+
+    const allTransactions: TransactionV1[] = [transaction, ...filterExtraBuildData.map((data) => data.transaction)];
+    const allSigners: Signer[][] = [this.signers, ...filterExtraBuildData.map((data) => data.signers)];
+    const allInstructionTypes: string[] = [
+      ...this.instructionTypes,
+      ...filterExtraBuildData.map((data) => data.instructionTypes).flat(),
+    ];
+
+    if (this.owner?.signer) {
+      allSigners.forEach((signers) => {
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) this.signers.push(this.owner!.signer!);
+      });
+    }
+
+    const sendOne = async (tx: TransactionV1, skipPreflight: boolean): Promise<string> =>
+      this.connection.sendEncodedTransaction(serializeV1Transaction(tx), { skipPreflight });
+
+    return {
+      builder: this,
+      transactions: allTransactions,
+      signers: allSigners,
+      instructionTypes: allInstructionTypes,
+      execute: async (executeParams?: MultiTxExecuteParam) => {
+        const { sequentially, onTxUpdate, skipPreflight = true } = executeParams || {};
+
+        // 先取得所有已簽章交易（keypair 或 byte-level 錢包）
+        let signedTxs: TransactionV1[];
+        if (this.owner?.isKeyPair) {
+          signedTxs = await Promise.all(
+            allTransactions.map(async (tx, idx) => signV1Transaction(tx, await signersToCryptoKeyPairs(allSigners[idx]))),
+          );
+        } else if (this.signAllTransactionsByteLevel) {
+          // 每筆先讓非 fee payer 的臨時 signer 部分簽，再交錢包批次簽 fee payer
+          const partiallySigned = await Promise.all(
+            allTransactions.map(async (tx, idx) => {
+              const extraSigners = allSigners[idx].filter((s) => !s.publicKey.equals(this.feePayer));
+              return extraSigners.length
+                ? partialSignV1Transaction(tx, await signersToCryptoKeyPairs(extraSigners))
+                : tx;
+            }),
+          );
+          signedTxs = await signAllV1TransactionsWithWallet(partiallySigned, this.signAllTransactionsByteLevel);
+        } else {
+          throw new Error("please provide owner in keypair format or signAllTransactionsByteLevel function");
+        }
+
+        // 循序送出：每筆確認後才送下一筆，並透過 onTxUpdate 回報狀態（fire-and-forget，
+        // 進度改由 onTxUpdate 的 processedTxs 提供，故立即回傳空 txIds，與 buildV0MultiTx 一致）
+        if (sequentially) {
+          let i = 0;
+          const processedTxs: TxUpdateParams[] = [];
+          const checkSendTx = async (): Promise<void> => {
+            if (!signedTxs[i]) return;
+            const tx = signedTxs[i];
+            const txId = await sendOne(tx, skipPreflight);
+            processedTxs.push({ txId, status: "sent", signedTx: tx });
+            onTxUpdate?.([...processedTxs]);
+            i++;
+
+            let confirmed = false;
+            // eslint-disable-next-line
+            let intervalId: NodeJS.Timer | null = null,
+              subSignatureId: number | null = null;
+            const cbk = (signatureResult: SignatureResult): void => {
+              intervalId !== null && clearInterval(intervalId);
+              subSignatureId !== null && this.connection.removeSignatureListener(subSignatureId);
+              const targetTxIdx = processedTxs.findIndex((t) => t.txId === txId);
+              if (targetTxIdx > -1) {
+                if (processedTxs[targetTxIdx].status === "error" || processedTxs[targetTxIdx].status === "success")
+                  return;
+                processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+              }
+              onTxUpdate?.([...processedTxs]);
+              if (!signatureResult.err) checkSendTx();
+            };
+
+            // fallback 輪詢：用 getSignatureStatus（以簽章查詢，與交易版本無關）；
+            // 不能用 getTransaction——web3.js 1.x 無法反序列化 v1 回應
+            if (this.loopMultiTxStatus)
+              intervalId = setInterval(async () => {
+                if (confirmed) {
+                  clearInterval(intervalId!);
+                  return;
+                }
+                try {
+                  const { value } = await this.connection.getSignatureStatus(txId, { searchTransactionHistory: true });
+                  if (value && (value.confirmationStatus === "confirmed" || value.confirmationStatus === "finalized")) {
+                    confirmed = true;
+                    clearInterval(intervalId!);
+                    cbk({ err: value.err });
+                    console.log("tx status from getSignatureStatus:", txId);
+                  }
+                } catch (e) {
+                  confirmed = true;
+                  clearInterval(intervalId!);
+                  console.error("getSignatureStatus timeout:", e, txId);
+                }
+              }, LOOP_INTERVAL);
+
+            subSignatureId = this.connection.onSignature(
+              txId,
+              (result) => {
+                if (confirmed) {
+                  this.connection.removeSignatureListener(subSignatureId!);
+                  return;
+                }
+                confirmed = true;
+                cbk(result);
+              },
+              "confirmed",
+            );
+            this.connection.getSignatureStatus(txId);
+          };
+          checkSendTx();
+          return { txIds: [], signedTxs };
+        }
+
+        const txIds = await Promise.all(signedTxs.map((tx) => sendOne(tx, skipPreflight)));
+        return { txIds, signedTxs };
+      },
+      extInfo: buildProps || {},
     };
   }
 

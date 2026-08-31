@@ -19,6 +19,7 @@ import Launchpad from "./launchpad/launchpad";
 
 import TokenModule from "./token/token";
 import { SignAllTransactions } from "./type";
+import { SignAllTransactionsByteLevel } from "../common/txTool/buildV1Tx";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */
@@ -35,6 +36,8 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   apiRequestTimeout?: number;
   apiCacheTime?: number;
   signAllTransactions?: SignAllTransactions;
+  /** v1（2.x / kit）交易專用的 byte-level 批次錢包簽章；錢包路徑跑 buildV1 時需要 */
+  signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
   urlConfigs?: API_URL_CONFIG;
   logRequests?: boolean;
   logCount?: number;
@@ -89,6 +92,7 @@ export class Raydium {
   public api: Api;
   private _apiCacheTime: number;
   private _signAllTransactions?: SignAllTransactions;
+  private _signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
   private logger: Logger;
   private _chainTime?: {
     fetched: number;
@@ -119,6 +123,7 @@ export class Raydium {
     this.cluster = cluster || "mainnet";
     this._owner = owner ? new Owner(owner) : undefined;
     this._signAllTransactions = config.signAllTransactions;
+    this._signAllTransactionsByteLevel = config.signAllTransactionsByteLevel;
     this.blockhashCommitment = blockhashCommitment;
     this.loopMultiTxStatus = loopMultiTxStatus;
 
@@ -208,6 +213,15 @@ export class Raydium {
   }
   public setSignAllTransactions(signAllTransactions?: SignAllTransactions): Raydium {
     this._signAllTransactions = signAllTransactions;
+    return this;
+  }
+  get signAllTransactionsByteLevel(): SignAllTransactionsByteLevel | undefined {
+    return this._signAllTransactionsByteLevel;
+  }
+  public setSignAllTransactionsByteLevel(
+    signAllTransactionsByteLevel?: SignAllTransactionsByteLevel,
+  ): Raydium {
+    this._signAllTransactionsByteLevel = signAllTransactionsByteLevel;
     return this;
   }
 
