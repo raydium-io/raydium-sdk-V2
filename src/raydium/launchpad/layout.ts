@@ -1,4 +1,4 @@
-import { publicKey, seq, struct, u16, u64, u8, vec } from "../../marshmallow";
+import { publicKey, seq, struct, u128, u16, u64, u8, vec } from "../../marshmallow";
 
 export const LaunchpadConfig = struct([
   u64(),
@@ -117,13 +117,32 @@ export const PlatformConfig = struct([
   u64("creatorFeeRate"),
   publicKey("transferFeeExtensionAuth"),
 
-  publicKey('platformVestingWallet'),
-  u64('platformVestingScale'),
+  publicKey("platformVestingWallet"),
+  u64("platformVestingScale"),
 
   publicKey("platformCpCreator"),
 
   u8("restrictGlobalConfig"),
-  seq(u8(), 107),
+  // 0: the platform does not restrict the launch params, 1: they must satisfy the
+  // PlatformCurveRule account of the used config
+  u8("restrictCurveParam"),
+  // the wallet allowed to manage the PlatformCurveRule accounts of this platform, the
+  // platform admin can always manage them too
+  publicKey("curveRuleManager"),
 
-  vec(PlatformCurveParam, "platformCurve"),
+  seq(u8(), 78),
+]);
+
+export const ParamConstraint = struct([u8("field"), u8("op"), u128("value")]);
+export const CurveRuleGroup = struct([u16("groupId"), u64("epoch"), vec(ParamConstraint, "constraints")]);
+export const PlatformCurveRule = struct([
+  u64(),
+  u8("bump"),
+  u8("version"),
+  publicKey("platformId"),
+  publicKey("configId"),
+  u64("epoch"),
+  seq(u64(), 8),
+
+  vec(CurveRuleGroup, "groups"),
 ]);
