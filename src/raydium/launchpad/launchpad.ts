@@ -185,6 +185,7 @@ export default class LaunchpadModule extends ModuleBase {
     transferFeeExtensionParams,
     creatorFeeOn = CpmmCreatorFeeOn.OnlyTokenB,
     platformAllowConfig,
+    platformCurveRuleId,
     mintBProgram: propsMintBProgram,
     transferFeeConfigB: propsTransferFeeConfigB,
     skipCheckMintB,
@@ -373,6 +374,7 @@ export default class LaunchpadModule extends ModuleBase {
               creatorFeeOn,
               transferFeeExtensionParams,
               platformAllowConfig ? getPdaPlatformAllowConfig(programId, platformId, configId).publicKey : undefined,
+              platformCurveRuleId,
             )
           : initializeV2(
               programId,
@@ -413,6 +415,7 @@ export default class LaunchpadModule extends ModuleBase {
               extraConfigs?.unlockPeriod ?? new BN(0),
               creatorFeeOn,
               platformAllowConfig ? getPdaPlatformAllowConfig(programId, platformId, configId).publicKey : undefined,
+              platformCurveRuleId,
             ),
       ],
     });

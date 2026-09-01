@@ -166,6 +166,7 @@ export function initializeV2(
   cpmmCreatorFeeOn: CpmmCreatorFeeOn,
 
   platformAllowConfig?: PublicKey,
+  platformCurveRuleId?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -207,6 +208,7 @@ export function initializeV2(
   ];
 
   if (platformAllowConfig) keys.push({ pubkey: platformAllowConfig, isSigner: false, isWritable: false });
+  if (platformCurveRuleId) keys.push({ pubkey: platformCurveRuleId, isSigner: false, isWritable: false });
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
@@ -271,6 +273,7 @@ export function initializeWithToken2022(
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN },
 
   platformAllowConfig?: PublicKey,
+  platformCurveRuleId?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -311,6 +314,7 @@ export function initializeWithToken2022(
   ];
 
   if (platformAllowConfig) keys.push({ pubkey: platformAllowConfig, isSigner: false, isWritable: false });
+  if (platformCurveRuleId) keys.push({ pubkey: platformCurveRuleId, isSigner: false, isWritable: false });
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +

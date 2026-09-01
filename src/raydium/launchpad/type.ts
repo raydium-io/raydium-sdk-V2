@@ -52,6 +52,7 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN };
   creatorFeeOn?: CpmmCreatorFeeOn;
   platformAllowConfig?: boolean;
+  platformCurveRuleId?: PublicKey;
 
   mintBProgram?: PublicKey;
   transferFeeConfigB?: TransferFeeConfig | undefined;
@@ -222,6 +223,8 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
     | { type: "updatePlatformVestingScale"; value: BN }
     | { type: "updatePlatformCpCreator"; value: PublicKey }
     | { type: "updateRestrictGlobalConfig"; value: BN }
+    | { type: "updateRestrictCurveParam"; value: BN }
+    | { type: "updateCurveRuleManager"; value: PublicKey }
     | {
         type: "updateAll";
         value: {
