@@ -23,6 +23,7 @@ import {
   CreateMultipleVesting,
   CreatePlatform,
   CreatePlatformAllowConfig,
+  CreatePlatformCurveRule,
   CreatePlatformVestingAccount,
   CreateVesting,
   LaunchpadConfigInfo,
@@ -30,6 +31,7 @@ import {
   SellToken,
   SellTokenExactOut,
   UpdatePlatform,
+  UpdatePlatformCurveRule,
 } from "./type";
 import {
   getPdaCreatorFeeVaultAuth,
@@ -40,6 +42,7 @@ import {
   getPdaLaunchpadVaultId,
   getPdaPlatformAllowConfig,
   getPdaPlatformConfigAccess,
+  getPdaPlatformCurveRule,
   getPdaPlatformFeeVaultAuth,
   getPdaPlatformId,
   getPdaPlatformVault,
@@ -62,6 +65,10 @@ import {
   createPlatformVestingAccountIns,
   createPlatformAllowConfigIns,
   closePlatformAllowConfigIns,
+  createPlatformCurveRuleIns,
+  updatePlatformCurveRuleIns,
+  removePlatformCurveRuleIns,
+  closePlatformCurveRuleIns,
 } from "./instrument";
 import {
   NATIVE_MINT,
@@ -76,7 +83,7 @@ import {
 import BN from "bn.js";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { getPdaMetadataKey } from "../clmm";
-import { LaunchpadConfig, LaunchpadPool, PlatformConfig } from "./layout";
+import { LaunchpadConfig, LaunchpadPool, PlatformConfig, PlatformCurveRule } from "./layout";
 import { Curve, SwapInfoReturn } from "./curve/curve";
 import { toLaunchpadMintProgramFlag } from "./util";
 import Decimal from "decimal.js";
@@ -2075,7 +2082,7 @@ export default class LaunchpadModule extends ModuleBase {
     computeBudgetConfig,
     txTipConfig,
     feePayer,
-  }: CreatePlatformAllowConfig<T>): Promise<MakeTxData<T>> {
+  }: CreatePlatformAllowConfig<T>): Promise<MakeTxData<T, { platformAllowConfig: PublicKey }>> {
     const txBuilder = this.createTxBuilder(feePayer);
 
     const { publicKey: globalConfigId } = getPdaLaunchpadConfigId(
@@ -2097,9 +2104,156 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
       extInfo: {
-        platformId,
+        platformAllowConfig,
       },
-    }) as Promise<MakeTxData<T, { platformId: PublicKey }>>;
+    }) as Promise<MakeTxData<T, { platformAllowConfig: PublicKey }>>;
+  }
+
+  public async createPlatformCurveRule<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    curveRuleAuthority,
+    platformId,
+    configId,
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: CreatePlatformCurveRule<T>): Promise<MakeTxData<T, { platformCurveRuleId: PublicKey }>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+
+    const { publicKey: platformCurveRuleId } = getPdaPlatformCurveRule(programId, platformId, configId);
+    txBuilder.addInstruction({
+      instructions: [
+        createPlatformCurveRuleIns(
+          programId,
+          curveRuleAuthority ?? this.scope.ownerPubKey,
+          platformId,
+          configId,
+          platformCurveRuleId,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+      extInfo: {
+        platformCurveRuleId,
+      },
+    }) as Promise<MakeTxData<T, { platformCurveRuleId: PublicKey }>>;
+  }
+
+  public async updatePlatformCurveRule<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    curveRuleAuthority,
+    platformCurveRuleId,
+    groupId,
+    constraints,
+
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: UpdatePlatformCurveRule<T>): Promise<MakeTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+    const res = await this.scope.connection.getAccountInfo(platformCurveRuleId);
+    if (!res) throw new Error(`platformCurveRule ${platformCurveRuleId} not found`);
+    const ruleData = PlatformCurveRule.decode(res.data);
+
+    txBuilder.addInstruction({
+      instructions: [
+        updatePlatformCurveRuleIns(
+          programId,
+          curveRuleAuthority ?? this.scope.ownerPubKey,
+          ruleData.platformId,
+          ruleData.configId,
+          platformCurveRuleId,
+          groupId,
+          constraints,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
+  }
+
+  public async removePlatformCurveRule<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    curveRuleAuthority,
+    platformCurveRuleId,
+    groupId,
+
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: Omit<UpdatePlatformCurveRule<T>, "constraints">): Promise<MakeTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+    const res = await this.scope.connection.getAccountInfo(platformCurveRuleId);
+    if (!res) throw new Error(`platformCurveRule ${platformCurveRuleId} not found`);
+    const ruleData = PlatformCurveRule.decode(res.data);
+
+    txBuilder.addInstruction({
+      instructions: [
+        removePlatformCurveRuleIns(
+          programId,
+          curveRuleAuthority ?? this.scope.ownerPubKey,
+          ruleData.platformId,
+          ruleData.configId,
+          platformCurveRuleId,
+          groupId,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
+  }
+
+  public async closePlatformCurveRule<T extends TxVersion>({
+    programId = LAUNCHPAD_PROGRAM,
+    curveRuleAuthority,
+    platformCurveRuleId,
+
+    txVersion,
+    computeBudgetConfig,
+    txTipConfig,
+    feePayer,
+  }: Omit<UpdatePlatformCurveRule<T>, "constraints" | "groupId">): Promise<MakeTxData<T>> {
+    const txBuilder = this.createTxBuilder(feePayer);
+    const res = await this.scope.connection.getAccountInfo(platformCurveRuleId);
+    if (!res) throw new Error(`platformCurveRule ${platformCurveRuleId} not found`);
+    const ruleData = PlatformCurveRule.decode(res.data);
+
+    txBuilder.addInstruction({
+      instructions: [
+        closePlatformCurveRuleIns(
+          programId,
+          curveRuleAuthority ?? this.scope.ownerPubKey,
+          ruleData.platformId,
+          ruleData.configId,
+          platformCurveRuleId,
+        ),
+      ],
+    });
+
+    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.versionBuild({
+      txVersion,
+    }) as Promise<MakeTxData<T>>;
   }
 
   public async getRpcPoolInfo({

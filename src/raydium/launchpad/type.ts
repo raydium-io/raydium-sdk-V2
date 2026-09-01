@@ -179,6 +179,33 @@ export interface CreatePlatformAllowConfig<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface CreatePlatformCurveRule<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  curveRuleAuthority?: PublicKey;
+  platformId: PublicKey;
+  configId: PublicKey;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
+export interface UpdatePlatformCurveRule<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  curveRuleAuthority?: PublicKey;
+  platformCurveRuleId: PublicKey;
+  groupId: number;
+  constraints: LaunchpadCurveRuleConstraint[];
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
 export interface UpdatePlatform<T = TxVersion.LEGACY> {
   programId?: PublicKey;
 
