@@ -1,11 +1,11 @@
 import { METADATA_PROGRAM_ID, RENT_PROGRAM_ID } from "@/common";
-import { publicKey, str, struct, u16, u64, u8 } from "@/marshmallow";
+import { publicKey, str, struct, u128, u16, u64, u8 } from "@/marshmallow";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AccountMeta, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import { BondingCurveParam } from "./layout";
 import { getPdaCpiEvent } from "./pda";
-import { CpmmCreatorFeeOn } from "./type";
+import { CpmmCreatorFeeOn, LaunchpadCurveRuleConstraint } from "./type";
 export const anchorDataBuf = {
   initialize: Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]),
   initializeV2: Buffer.from([67, 153, 175, 39, 218, 16, 38, 32]),
@@ -24,13 +24,15 @@ export const anchorDataBuf = {
   claimPlatformFeeFromVault: Buffer.from([117, 241, 198, 168, 248, 218, 80, 29]),
   claimCreatorFee: Buffer.from([26, 97, 138, 203, 132, 171, 141, 252]),
 
-  updatePlatformCurveParam: Buffer.from([138, 144, 138, 250, 220, 128, 4, 57]),
-  removePlatformCurveParam: Buffer.from([27, 30, 62, 169, 93, 224, 24, 145]),
-
   createPlatformVestingAccount: Buffer.from([146, 71, 173, 69, 98, 19, 15, 106]),
 
   createPlatformAllowConfig: Buffer.from([69, 71, 168, 7, 214, 250, 107, 102]),
   closePlatformAllowConfig: Buffer.from([82, 205, 36, 216, 16, 6, 240, 215]),
+
+  createPlatformCurveRule: Buffer.from([148, 71, 180, 136, 122, 144, 59, 21]),
+  updatePlatformCurveRule: Buffer.from([90, 100, 206, 196, 54, 117, 120, 139]),
+  removePlatformCurveRule: Buffer.from([236, 77, 154, 138, 32, 145, 127, 219]),
+  closePlatformCurveRule: Buffer.from([194, 114, 82, 45, 136, 88, 169, 159]),
 };
 
 export function initialize(
@@ -164,6 +166,7 @@ export function initializeV2(
   cpmmCreatorFeeOn: CpmmCreatorFeeOn,
 
   platformAllowConfig?: PublicKey,
+  platformCurveRuleId?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -205,6 +208,7 @@ export function initializeV2(
   ];
 
   if (platformAllowConfig) keys.push({ pubkey: platformAllowConfig, isSigner: false, isWritable: false });
+  if (platformCurveRuleId) keys.push({ pubkey: platformCurveRuleId, isSigner: false, isWritable: false });
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
@@ -269,6 +273,7 @@ export function initializeWithToken2022(
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN },
 
   platformAllowConfig?: PublicKey,
+  platformCurveRuleId?: PublicKey,
 ): TransactionInstruction {
   const dataLyaout1 = struct([u8("decimals"), str("name"), str("symbol"), str("uri")]);
   const dataLyaout3 = struct([
@@ -309,6 +314,7 @@ export function initializeWithToken2022(
   ];
 
   if (platformAllowConfig) keys.push({ pubkey: platformAllowConfig, isSigner: false, isWritable: false });
+  if (platformCurveRuleId) keys.push({ pubkey: platformCurveRuleId, isSigner: false, isWritable: false });
 
   const data1 = Buffer.alloc(
     Buffer.from(name, "utf-8").length +
@@ -844,6 +850,8 @@ export function updatePlatformConfig(
     | { type: "updatePlatformVestingScale"; value: BN }
     | { type: "updatePlatformCpCreator"; value: PublicKey }
     | { type: "updateRestrictGlobalConfig"; value: BN }
+    | { type: "updateRestrictCurveParam"; value: BN }
+    | { type: "updateCurveRuleManager"; value: PublicKey }
     | {
         type: "updateAll";
         value: {
@@ -968,6 +976,14 @@ export function updatePlatformConfig(
     const dataLayout = struct([u8("index"), u64("value")]);
     data = Buffer.alloc(dataLayout.span);
     dataLayout.encode({ index: 12, value: updateInfo.value }, data);
+  } else if (updateInfo.type === "updateRestrictCurveParam") {
+    const dataLayout = struct([u8("index"), u64("value")]);
+    data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ index: 13, value: updateInfo.value }, data);
+  } else if (updateInfo.type === "updateCurveRuleManager") {
+    const dataLayout = struct([u8("index"), publicKey("value")]);
+    data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode({ index: 14, value: updateInfo.value }, data);
   } else {
     throw Error("updateInfo params type error");
   }
@@ -1041,69 +1057,6 @@ export function claimCreatorFee(
 const u8Max = 255;
 const u64Max = new BN("18446744073709551615");
 
-export function updatePlatformCurveParamInstruction(
-  programId: PublicKey,
-
-  platformAdmin: PublicKey,
-  platformId: PublicKey,
-  configId: PublicKey,
-
-  index: number,
-  params: Partial<ReturnType<typeof BondingCurveParam.decode>>,
-): TransactionInstruction {
-  const keys: Array<AccountMeta> = [
-    { pubkey: platformAdmin, isSigner: true, isWritable: true },
-    { pubkey: platformId, isSigner: false, isWritable: true },
-    { pubkey: configId, isSigner: false, isWritable: false },
-    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-  ];
-
-  const data = Buffer.alloc(1 * 2 + 8 * 6 + u8().span);
-  u8().encode(index, data);
-  BondingCurveParam.encode(
-    {
-      migrateType: params.migrateType ? params.migrateType : u8Max,
-      migrateCpmmFeeOn: params.migrateCpmmFeeOn ? params.migrateCpmmFeeOn : u8Max,
-      supply: params.supply ? params.supply : new BN(0),
-      totalSellA: params.totalSellA ? params.totalSellA : new BN(0),
-      totalFundRaisingB: params.totalFundRaisingB ? params.totalFundRaisingB : new BN(0),
-      totalLockedAmount: params.totalLockedAmount ? params.totalLockedAmount : u64Max,
-      cliffPeriod: params.cliffPeriod ? params.cliffPeriod : u64Max,
-      unlockPeriod: params.unlockPeriod ? params.unlockPeriod : u64Max,
-    },
-    data,
-    1,
-  );
-
-  return new TransactionInstruction({
-    keys,
-    programId,
-    data: Buffer.from([...anchorDataBuf.updatePlatformCurveParam, ...data]),
-  });
-}
-
-export function removePlatformCurveParamInstruction(
-  programId: PublicKey,
-
-  platformAdmin: PublicKey,
-  platformId: PublicKey,
-  index: number,
-): TransactionInstruction {
-  const keys: Array<AccountMeta> = [
-    { pubkey: platformAdmin, isSigner: true, isWritable: false },
-    { pubkey: platformId, isSigner: false, isWritable: true },
-  ];
-
-  const data = Buffer.alloc(u8().span);
-  u8().encode(index, data);
-
-  return new TransactionInstruction({
-    keys,
-    programId,
-    data: Buffer.from([...anchorDataBuf.removePlatformCurveParam, ...data, 1, 2]),
-  });
-}
-
 export function createPlatformVestingAccountIns(
   programId: PublicKey,
 
@@ -1174,5 +1127,124 @@ export function closePlatformAllowConfigIns(
     keys,
     programId,
     data: anchorDataBuf.closePlatformAllowConfig,
+  });
+}
+
+function encodeCurveRuleConstraints(constraints: LaunchpadCurveRuleConstraint[]): Buffer {
+  const itemLayout = struct([u8("field"), u8("op"), u128("value")]);
+  const data = Buffer.alloc(4 + constraints.length * itemLayout.span);
+  data.writeUInt32LE(constraints.length, 0);
+  constraints.forEach((item, index) => {
+    itemLayout.encode(item, data, 4 + index * itemLayout.span);
+  });
+  return data;
+}
+
+export function createPlatformCurveRuleIns(
+  programId: PublicKey,
+
+  curveRuleAuthority: PublicKey,
+  platformId: PublicKey,
+  configId: PublicKey,
+  platformCurveRuleId: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: curveRuleAuthority, isSigner: true, isWritable: true },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: platformCurveRuleId, isSigner: false, isWritable: true },
+
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.createPlatformCurveRule,
+  });
+}
+
+export function updatePlatformCurveRuleIns(
+  programId: PublicKey,
+
+  curveRuleAuthority: PublicKey,
+  platformId: PublicKey,
+  configId: PublicKey,
+  platformCurveRuleId: PublicKey,
+
+  groupId: number,
+  constraints: LaunchpadCurveRuleConstraint[],
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: curveRuleAuthority, isSigner: true, isWritable: true },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: platformCurveRuleId, isSigner: false, isWritable: true },
+
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  const groupIdData = Buffer.alloc(u16().span);
+  u16().encode(groupId, groupIdData);
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: Buffer.from([
+      ...anchorDataBuf.updatePlatformCurveRule,
+      ...groupIdData,
+      ...encodeCurveRuleConstraints(constraints),
+    ]),
+  });
+}
+
+export function removePlatformCurveRuleIns(
+  programId: PublicKey,
+
+  curveRuleAuthority: PublicKey,
+  platformId: PublicKey,
+  configId: PublicKey,
+  platformCurveRuleId: PublicKey,
+
+  groupId: number,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: curveRuleAuthority, isSigner: true, isWritable: true },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: platformCurveRuleId, isSigner: false, isWritable: true },
+
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  const data = Buffer.alloc(u16().span);
+  u16().encode(groupId, data);
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: Buffer.from([...anchorDataBuf.removePlatformCurveRule, ...data]),
+  });
+}
+
+export function closePlatformCurveRuleIns(
+  programId: PublicKey,
+
+  curveRuleAuthority: PublicKey,
+  platformId: PublicKey,
+  configId: PublicKey,
+  platformCurveRuleId: PublicKey,
+): TransactionInstruction {
+  const keys: Array<AccountMeta> = [
+    { pubkey: curveRuleAuthority, isSigner: true, isWritable: true },
+    { pubkey: platformId, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: platformCurveRuleId, isSigner: false, isWritable: true },
+  ];
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data: anchorDataBuf.closePlatformCurveRule,
   });
 }

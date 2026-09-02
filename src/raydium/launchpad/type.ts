@@ -2,7 +2,7 @@ import { PublicKey, Signer } from "@solana/web3.js";
 import { ComputeBudgetConfig, TxTipConfig } from "../type";
 import { TxVersion } from "@/common";
 import BN from "bn.js";
-import { LaunchpadPool, LaunchpadConfig, PlatformConfig } from "./layout";
+import { LaunchpadPool, LaunchpadConfig, PlatformConfig, PlatformCurveRule } from "./layout";
 import { TransferFeeConfig } from "@solana/spl-token";
 
 export interface CreateLaunchPad<T = TxVersion.LEGACY> {
@@ -179,6 +179,33 @@ export interface CreatePlatformAllowConfig<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
 }
 
+export interface CreatePlatformCurveRule<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  curveRuleAuthority?: PublicKey;
+  platformId: PublicKey;
+  configId: PublicKey;
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
+export interface UpdatePlatformCurveRule<T = TxVersion.LEGACY> {
+  programId?: PublicKey;
+
+  curveRuleAuthority?: PublicKey;
+  platformCurveRuleId: PublicKey;
+  groupId: number;
+  constraints: LaunchpadCurveRuleConstraint[];
+
+  computeBudgetConfig?: ComputeBudgetConfig;
+  txTipConfig?: TxTipConfig;
+  txVersion?: T;
+  feePayer?: PublicKey;
+}
+
 export interface UpdatePlatform<T = TxVersion.LEGACY> {
   programId?: PublicKey;
 
@@ -195,6 +222,8 @@ export interface UpdatePlatform<T = TxVersion.LEGACY> {
     | { type: "updatePlatformVestingScale"; value: BN }
     | { type: "updatePlatformCpCreator"; value: PublicKey }
     | { type: "updateRestrictGlobalConfig"; value: BN }
+    | { type: "updateRestrictCurveParam"; value: BN }
+    | { type: "updateCurveRuleManager"; value: PublicKey }
     | {
         type: "updateAll";
         value: {
@@ -379,6 +408,74 @@ export interface ClaimMultiCreatorFee<T = TxVersion.LEGACY> {
 export type LaunchpadPoolInfo = ReturnType<typeof LaunchpadPool.decode>;
 export type LaunchpadConfigInfo = ReturnType<typeof LaunchpadConfig.decode>;
 export type LaunchpadPlatformInfo = ReturnType<typeof PlatformConfig.decode>;
+export type LaunchpadCurveRuleInfo = ReturnType<typeof PlatformCurveRule.decode>;
+
+export enum LaunchpadCurveRuleField {
+  CurveType = 0,
+  MigrateType = 1,
+  MigrateCpmmFeeOn = 2,
+  Supply = 3,
+  TotalSellA = 4,
+  TotalFundRaisingB = 5,
+  TotalLockedAmount = 6,
+  CliffPeriod = 7,
+  UnlockPeriod = 8,
+  /** 0: the base mint belongs to spl token, 1: to token2022, see LaunchpadCurveRuleBaseTokenProgram */
+  BaseTokenProgram = 9,
+  /** 1 when the base mint carries the transfer fee extension, 0 when it does not */
+  TransferFeeEnabled = 10,
+  /** the transfer fee rate of the base mint, denominator 10000, 0 without the extension */
+  TransferFeeBasisPoints = 11,
+  /** the maximum transfer fee of the base mint, 0 without the extension */
+  TransferFeeMaximumFee = 12,
+  /** derived: totalSellA / supply, denominated in 10^-6 */
+  SellRateA = 13,
+  /** derived: totalLockedAmount / supply, denominated in 10^-6 */
+  LockRate = 14,
+  /** derived: supply - totalSellA - totalLockedAmount, the base amount reaching the migrated pool */
+  MigrateAmountA = 15,
+  /** derived: migrate amount / supply, denominated in 10^-6 */
+  MigrateRateA = 16,
+  /** derived: totalFundRaisingB / supply, denominated in 10^-6, a band on the graduation valuation */
+  FundRaisingRateB = 17,
+  /** the block time the pool is created at, in seconds, it lets a group carry a validity window */
+  UnixTimestamp = 18,
+}
+
+/**
+ * The fields that read totalSellA. They are only accepted on a constant product config: the
+ * fixed and the linear curve derive the sell amount themselves, so the program refuses
+ * these fields when the rule of such a config is written.
+ */
+export const LAUNCHPAD_CURVE_RULE_CONSTANT_PRODUCT_ONLY_FIELDS = [
+  LaunchpadCurveRuleField.TotalSellA,
+  LaunchpadCurveRuleField.SellRateA,
+  LaunchpadCurveRuleField.MigrateAmountA,
+  LaunchpadCurveRuleField.MigrateRateA,
+];
+
+export enum LaunchpadCurveRuleOp {
+  Eq = 0,
+  /** min */
+  Gte = 1,
+  /** max */
+  Lte = 2,
+  Neq = 3,
+}
+
+export enum LaunchpadCurveRuleBaseTokenProgram {
+  SplToken = 0,
+  Token2022 = 1,
+}
+
+export interface LaunchpadCurveRuleConstraint {
+  field: LaunchpadCurveRuleField;
+  op: LaunchpadCurveRuleOp;
+  value: BN;
+}
+
+export const LAUNCHPAD_MAX_CURVE_RULE_GROUPS = 10;
+export const LAUNCHPAD_MAX_CONSTRAINTS_PER_GROUP = 25;
 export enum CpmmCreatorFeeOn {
   OnlyTokenB,
   BothToken,
