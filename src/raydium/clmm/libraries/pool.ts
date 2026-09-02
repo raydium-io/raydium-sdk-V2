@@ -979,13 +979,13 @@ export class PoolUtils {
     ];
     const [amountSlippageA, amountSlippageB] = [
       getTransferAmountFeeV2(
-        amounts.amountA.muln(coefficientRe),
+        new BN(new Decimal(amounts.amountA.toString()).mul(coefficientRe).toFixed(0)),
         poolInfo.mintA.extensions?.feeConfig,
         epochInfo,
         true,
       ),
       getTransferAmountFeeV2(
-        amounts.amountB.muln(coefficientRe),
+        new BN(new Decimal(amounts.amountB.toString()).mul(coefficientRe).toFixed(0)),
         poolInfo.mintB.extensions?.feeConfig,
         epochInfo,
         true,
