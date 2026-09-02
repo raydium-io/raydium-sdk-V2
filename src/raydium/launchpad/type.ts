@@ -52,7 +52,6 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   transferFeeExtensionParams?: { transferFeeBasePoints: number; maxinumFee: BN };
   creatorFeeOn?: CpmmCreatorFeeOn;
   platformAllowConfig?: boolean;
-  platformCurveRuleId?: PublicKey;
 
   mintBProgram?: PublicKey;
   transferFeeConfigB?: TransferFeeConfig | undefined;

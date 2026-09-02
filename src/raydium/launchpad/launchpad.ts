@@ -185,7 +185,6 @@ export default class LaunchpadModule extends ModuleBase {
     transferFeeExtensionParams,
     creatorFeeOn = CpmmCreatorFeeOn.OnlyTokenB,
     platformAllowConfig,
-    platformCurveRuleId,
     mintBProgram: propsMintBProgram,
     transferFeeConfigB: propsTransferFeeConfigB,
     skipCheckMintB,
@@ -331,6 +330,10 @@ export default class LaunchpadModule extends ModuleBase {
     } catch (e: any) {
       this.logAndCreateError(`check create mint params failed, ${e.message}`);
     }
+
+    const platformCurveRuleId = platform.restrictCurveParam
+      ? getPdaPlatformCurveRule(programId, platformId, configId).publicKey
+      : undefined;
 
     txBuilder.addInstruction({
       instructions: [
