@@ -1033,12 +1033,10 @@ export default class LaunchpadModule extends ModuleBase {
         mint: mintB,
         owner: this.scope.ownerPubKey,
 
-        createInfo: mintBUseSOLBalance
-          ? {
-              payer: this.scope.ownerPubKey!,
-              amount: 0,
-            }
-          : undefined,
+        createInfo: {
+          payer: this.scope.ownerPubKey!,
+          amount: 0,
+        },
         skipCloseAccount: !mintBUseSOLBalance,
         notUseTokenAccount: mintBUseSOLBalance,
         associatedOnly: mintBUseSOLBalance ? false : associatedOnly,
@@ -1047,8 +1045,8 @@ export default class LaunchpadModule extends ModuleBase {
     if (_ownerTokenAccountB) userTokenAccountB = _ownerTokenAccountB;
     txBuilder.addInstruction(_tokenAccountBInstruction || {});
 
-    if (userTokenAccountB === undefined)
-      this.logAndCreateError("cannot found mintB token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
+    if (!userTokenAccountB)
+      this.logAndCreateError("cannot found mintB token accounts", "tokenAccounts", { userTokenAccountB });
 
     let poolInfo = propPoolInfo;
     if (!poolInfo) {
