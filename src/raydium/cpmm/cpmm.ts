@@ -1531,6 +1531,7 @@ export default class CpmmModule extends ModuleBase {
           this.scope.ownerPubKey,
           new PublicKey(poolKeys.authority),
           new PublicKey(poolKeys.id),
+          new PublicKey(poolKeys.config.id),
           new PublicKey(poolKeys.vault.A),
           new PublicKey(poolKeys.vault.B),
           mintA,

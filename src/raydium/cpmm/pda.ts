@@ -9,6 +9,7 @@ const POOL_VAULT_SEED = Buffer.from("pool_vault", "utf8");
 const OBSERVATION_SEED = Buffer.from("observation", "utf8");
 const PERMISSION_SEED = Buffer.from("permission", "utf8");
 const SUPPORT_MINT_SEED = Buffer.from('support_mint', 'utf8');
+const CREATOR_FEE_SHARE_SEED = Buffer.from("creator_fee_share", "utf8");
 
 export function getPdaPoolAuthority(programId: PublicKey): {
   publicKey: PublicKey;
@@ -147,4 +148,18 @@ export function getPdaMintExAccountCp(
   nonce: number;
 } {
   return findProgramAddress([SUPPORT_MINT_SEED, mintAddress.toBuffer()], programId)
+}
+
+export function getCreatorFeeSharePda(
+  programId: PublicKey,
+  creator: PublicKey,
+  ammConfigId: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress(
+    [CREATOR_FEE_SHARE_SEED, creator.toBuffer(), ammConfigId.toBuffer()],
+    programId,
+  );
 }
