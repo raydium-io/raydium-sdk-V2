@@ -12,7 +12,7 @@ import {
   InstructionType,
 } from "@/common";
 import { createLogger } from "@/common/logger";
-import { getCpmmPdaPoolId, getCpLockPda } from "./pda";
+import { getCpmmPdaPoolId, getCpLockPda, getCreatorFeeSharePda } from "./pda";
 
 import { struct, u8, u64, bool } from "@/marshmallow";
 import { ReturnTypeMakeInstructions } from "@/raydium/type";
@@ -564,11 +564,14 @@ export function makeCollectCreatorFeeInstruction(
   mintProgramA: PublicKey,
   mintProgramB: PublicKey,
 ): TransactionInstruction {
+  const creatorFeeShare = getCreatorFeeSharePda(programId, creator, configId).publicKey;
+
   const keys: Array<AccountMeta> = [
     { pubkey: creator, isSigner: true, isWritable: false },
     { pubkey: authority, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
     { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: creatorFeeShare, isSigner: false, isWritable: false },
     { pubkey: vaultA, isSigner: false, isWritable: true },
     { pubkey: vaultB, isSigner: false, isWritable: true },
     { pubkey: mintA, isSigner: false, isWritable: false },
@@ -594,6 +597,7 @@ export function collectCreatorFeePermissionlessInInstruction(
   creator: PublicKey,
   authority: PublicKey,
   poolId: PublicKey,
+  configId: PublicKey,
   vaultA: PublicKey,
   vaultB: PublicKey,
   mintA: PublicKey,
@@ -603,11 +607,15 @@ export function collectCreatorFeePermissionlessInInstruction(
   mintProgramA: PublicKey,
   mintProgramB: PublicKey,
 ): TransactionInstruction {
+  const creatorFeeShare = getCreatorFeeSharePda(programId, creator, configId).publicKey;
+
   const keys: Array<AccountMeta> = [
     { pubkey: payer, isSigner: true, isWritable: true },
     { pubkey: creator, isSigner: false, isWritable: false },
     { pubkey: authority, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: creatorFeeShare, isSigner: false, isWritable: false },
     { pubkey: vaultA, isSigner: false, isWritable: true },
     { pubkey: vaultB, isSigner: false, isWritable: true },
     { pubkey: mintA, isSigner: false, isWritable: false },
