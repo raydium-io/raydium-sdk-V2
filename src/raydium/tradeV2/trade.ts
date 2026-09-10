@@ -159,7 +159,7 @@ export default class TradeV2 extends ModuleBase {
           instructions: [
             closeAccountInstruction({
               tokenAccount: tokenAccounts[i].publicKey!,
-              payer: this.scope.ownerPubKey,
+              destination: this.scope.ownerPubKey,
               owner: this.scope.ownerPubKey,
               programId: tokenProgram,
             }),
@@ -171,7 +171,7 @@ export default class TradeV2 extends ModuleBase {
           instructions: [
             closeAccountInstruction({
               tokenAccount: tokenAccounts[i].publicKey!,
-              payer: this.scope.ownerPubKey,
+              destination: this.scope.ownerPubKey,
               owner: this.scope.ownerPubKey,
               programId: tokenProgram,
             }),
@@ -307,7 +307,7 @@ export default class TradeV2 extends ModuleBase {
         endInstructions: [
           closeAccountInstruction({
             owner: this.scope.ownerPubKey,
-            payer: this.scope.ownerPubKey,
+            destination: this.scope.ownerPubKey,
             tokenAccount: destinationAcc,
             programId: TOKEN_PROGRAM_ID,
           }),

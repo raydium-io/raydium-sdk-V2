@@ -964,8 +964,6 @@ export class PoolUtils {
     const sqrtPriceX64A = TickUtil.getSqrtPriceAtTick(tickLower);
     const sqrtPriceX64B = TickUtil.getSqrtPriceAtTick(tickUpper);
 
-    const coefficientRe = add ? 1 + slippage : 1 - slippage;
-
     const amounts = LiquidityMathUtil.getAmountsForLiquidity(
       TickUtil.priceToSqrtPriceX64(new Decimal(poolInfo.price), poolInfo.mintA.decimals, poolInfo.mintB.decimals),
       sqrtPriceX64A,
@@ -977,15 +975,17 @@ export class PoolUtils {
       getTransferAmountFeeV2(amounts.amountA, poolInfo.mintA.extensions?.feeConfig, epochInfo, true),
       getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions?.feeConfig, epochInfo, true),
     ];
+
+    const slippageBps = slippage * 10000;
     const [amountSlippageA, amountSlippageB] = [
       getTransferAmountFeeV2(
-        amounts.amountA.muln(coefficientRe),
+        amounts.amountA.muln(10000 - slippageBps).divn(10000),
         poolInfo.mintA.extensions?.feeConfig,
         epochInfo,
         true,
       ),
       getTransferAmountFeeV2(
-        amounts.amountB.muln(coefficientRe),
+        amounts.amountB.muln(10000 - slippageBps).divn(10000),
         poolInfo.mintB.extensions?.feeConfig,
         epochInfo,
         true,
