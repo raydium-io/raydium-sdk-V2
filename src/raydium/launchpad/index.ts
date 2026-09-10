@@ -3,6 +3,7 @@ export * from "./pda";
 export * from "./type";
 export * from "./layout";
 export * from "./util";
+export * from "./curveRule";
 export * from "./curve/constantProductCurve";
 export * from "./curve/curve";
 export * from "./curve/curveBase";
