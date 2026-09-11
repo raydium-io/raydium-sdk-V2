@@ -55,10 +55,8 @@ export const CpmmPoolInfoLayout = struct([
   seq(u8(), 6),
   u64("creatorFeesMintA"),
   u64("creatorFeesMintB"),
-  u64("sharedCreatorFeesMintA"),
-  u64("sharedCreatorFeesMintB"),
 
-  seq(u64(), 26),
+  seq(u64(), 28),
 ]);
 
 export const CpmmPermission = struct([blob(8), publicKey("configId"), seq(u64(), 30)]);
