@@ -54,6 +54,7 @@ export interface InstructionReturn {
 export interface ComputeBudgetConfig {
   units?: number;
   microLamports?: number;
+  loadedAccountsDataSize?: number;
 }
 
 export interface TxTipConfig {

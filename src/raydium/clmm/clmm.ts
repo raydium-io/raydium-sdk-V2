@@ -1877,6 +1877,8 @@ export class Clmm extends ModuleBase {
 
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
+
+    return txBuilder.buildV1({}) as any;
     return txBuilder.versionBuild({
       txVersion,
       extInfo: {

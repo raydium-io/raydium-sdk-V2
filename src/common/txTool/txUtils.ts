@@ -37,6 +37,21 @@ export function addComputeBudget(config: ComputeBudgetConfig): {
     ins.push(ComputeBudgetProgram.setComputeUnitLimit({ units: config.units }));
     insTypes.push(InstructionType.SetComputeUnitLimit);
   }
+  if (config.loadedAccountsDataSize) {
+    // ComputeBudgetProgram.setLoadedAccountsDataSizeLimit 在部分 web3.js 版本尚未提供，手動組指令
+    // discriminator = 4，後接 u32 LE bytes
+    const data = Buffer.alloc(5);
+    data.writeUInt8(4, 0);
+    data.writeUInt32LE(config.loadedAccountsDataSize, 1);
+    ins.push(
+      new TransactionInstruction({
+        programId: ComputeBudgetProgram.programId,
+        keys: [],
+        data,
+      }),
+    );
+    insTypes.push(InstructionType.SetLoadedAccountsDataSizeLimit);
+  }
 
   return {
     instructions: ins,

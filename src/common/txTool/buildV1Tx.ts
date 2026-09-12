@@ -6,6 +6,8 @@ import {
   VersionedTransaction,
   type Signer,
   type AddressLookupTableAccount,
+  type AccountInfo,
+  type Connection,
 } from "@solana/web3.js"; // 1.x 型別
 
 import { address, type Address } from "@solana/addresses";
@@ -18,6 +20,7 @@ import {
   setTransactionMessageLifetimeUsingBlockhash,
   setTransactionMessageComputeUnitLimit,
   setTransactionMessagePriorityFeeLamports,
+  setTransactionMessageLoadedAccountsDataSizeLimit,
   appendTransactionMessageInstruction,
   type TransactionMessage,
   type TransactionMessageWithFeePayer,
@@ -48,6 +51,8 @@ export interface BuildV1TxParams {
   computeUnitLimit: number;
   /** v1 的優先費（total lamports；注意 v1 已從 micro-lamports/CU 改為 total lamports 計價） */
   priorityFeeLamports?: number | bigint;
+  /** loaded accounts data size 上限（bytes）；v1 寫進 config mask，非 ComputeBudget 指令 */
+  loadedAccountsDataSize?: number;
 }
 
 /**
@@ -81,6 +86,7 @@ export function buildV1Transaction({
   lastValidBlockHeight,
   computeUnitLimit,
   priorityFeeLamports,
+  loadedAccountsDataSize,
 }: BuildV1TxParams): Transaction {
   // v1 無隱含預設值：compute unit limit 為 0 會讓交易在 runtime 失敗，這裡先擋下
   if (!Number.isInteger(computeUnitLimit) || computeUnitLimit <= 0) {
@@ -104,9 +110,12 @@ export function buildV1Transaction({
   );
 
   // 2.5 v1 的 compute budget 寫進 config mask（非 ComputeBudget instruction）；優先費為 total lamports
-  const baseMessage = setTransactionMessagePriorityFeeLamports(
-    priorityFeeLamports === undefined ? undefined : BigInt(priorityFeeLamports),
-    setTransactionMessageComputeUnitLimit(computeUnitLimit, lifetimeMessage),
+  const baseMessage = setTransactionMessageLoadedAccountsDataSizeLimit(
+    loadedAccountsDataSize,
+    setTransactionMessagePriorityFeeLamports(
+      priorityFeeLamports === undefined ? undefined : BigInt(priorityFeeLamports),
+      setTransactionMessageComputeUnitLimit(computeUnitLimit, lifetimeMessage),
+    ),
   );
 
   // 3. 逐一塞入轉譯後的 Raydium Instructions（用單數版 append，避免 8.x 複數版簽章的 const 型別參數在 TS 4.x 無法解析）
@@ -173,6 +182,85 @@ export async function signV1Transaction(
  */
 export function serializeV1Transaction(transaction: Transaction): Base64EncodedWireTransaction {
   return getBase64EncodedWireTransaction(transaction);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// loaded accounts data size 量測
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** loaded accounts data size 的協定上限（64 MiB）；requestLoadedAccountsDataSize 的封頂 */
+export const MAX_LOADED_ACCOUNTS_DATA_SIZE = 64 * 1024 * 1024;
+/** upgradeable BPF loader，用來判斷 executable 帳戶是否有獨立的 programdata */
+const UPGRADEABLE_LOADER_ID = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+
+/**
+ * 依交易實際會載入的帳戶，量測建議的 loadedAccountsDataSize（bytes）。
+ *
+ * v1 交易在未宣告此上限時，runtime 會套用偏低的預設，複雜交易（如 CLMM，光 programdata 就 ~2MB）
+ * 會噴 MaxLoadedAccountsDataSizeExceeded。此方法把所有指令碰到的帳戶 + program 的實際 data size 加總，
+ * 對 upgradeable program 再加上其 programdata 帳戶大小，最後乘上 buffer 並封頂 64 MiB。
+ *
+ * 注意：會打 1~2 次 getMultipleAccountsInfo（有 programdata 時多一批），故日常走 8MB 常數即可，
+ * 需要精準（例如某筆碰到多個大 program）時再用這個。
+ *
+ * @param connection RPC 連線
+ * @param instructions 交易的所有指令（含 endInstructions）
+ * @param options.bufferRatio 量測值的放大係數，預設 1.15（+15% 餘裕）
+ * @param options.extraBytes 額外固定加量（bytes），預設 32 * 1024
+ * @returns 建議的 loadedAccountsDataSize（整數，封頂 64 MiB）
+ */
+export async function calcLoadedAccountsDataSize(
+  connection: Connection,
+  instructions: TransactionInstruction[],
+  options?: { bufferRatio?: number; extraBytes?: number },
+): Promise<number> {
+  const bufferRatio = options?.bufferRatio ?? 1.15;
+  const extraBytes = options?.extraBytes ?? 32 * 1024;
+
+  // 蒐集所有唯一的帳戶 + program id
+  const keys = new Set<string>();
+  for (const ix of instructions) {
+    keys.add(ix.programId.toBase58());
+    for (const acc of ix.keys) keys.add(acc.pubkey.toBase58());
+  }
+  const keyList = [...keys].map((k) => new PublicKey(k));
+
+  // getMultipleAccountsInfo 一次上限 100 顆，分批抓
+  const infos = await getMultipleAccountsInfoInBatch(connection, keyList);
+
+  let total = 0;
+  const programDataKeys: PublicKey[] = [];
+  for (let i = 0; i < keyList.length; i++) {
+    const info = infos[i];
+    if (!info) continue; // 不存在（例如尚未建立的 ATA / PDA）→ 0
+    total += info.data.length;
+    // upgradeable program 另有一顆 programdata 帳戶（含真正的 bytecode），也會被載入
+    if (info.executable && info.owner.equals(UPGRADEABLE_LOADER_ID)) {
+      programDataKeys.push(PublicKey.findProgramAddressSync([keyList[i].toBuffer()], UPGRADEABLE_LOADER_ID)[0]);
+    }
+  }
+
+  if (programDataKeys.length) {
+    const pdInfos = await getMultipleAccountsInfoInBatch(connection, programDataKeys);
+    for (const pd of pdInfos) if (pd) total += pd.data.length;
+  }
+
+  const withBuffer = Math.ceil(total * bufferRatio) + extraBytes;
+  return Math.min(withBuffer, MAX_LOADED_ACCOUNTS_DATA_SIZE);
+}
+
+/** getMultipleAccountsInfo 一次最多 100 顆，這裡自動分批並保持輸入順序 */
+async function getMultipleAccountsInfoInBatch(
+  connection: Connection,
+  keys: PublicKey[],
+): Promise<(AccountInfo<Buffer> | null)[]> {
+  const BATCH = 100;
+  const result: (AccountInfo<Buffer> | null)[] = [];
+  for (let i = 0; i < keys.length; i += BATCH) {
+    const batch = keys.slice(i, i + BATCH);
+    result.push(...(await connection.getMultipleAccountsInfo(batch)));
+  }
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

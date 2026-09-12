@@ -19,6 +19,7 @@ export const InstructionType = {
 
   SetComputeUnitPrice: "SetComputeUnitPrice",
   SetComputeUnitLimit: "SetComputeUnitLimit",
+  SetLoadedAccountsDataSizeLimit: "SetLoadedAccountsDataSizeLimit",
 
   // CLMM
   ClmmCreatePool: "ClmmCreatePool",

@@ -20,6 +20,7 @@ import { Owner } from "../owner";
 import { CacheLTA, getDevLookupTableCache, getMainLookupTableCache, getMultipleLookupTableInfo } from "./lookupTable";
 import {
   buildV1Transaction,
+  calcLoadedAccountsDataSize,
   signV1Transaction,
   serializeV1Transaction,
   signAllV1TransactionsWithWallet,
@@ -168,6 +169,14 @@ export type MakeTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extend
 
 const LOOP_INTERVAL = 2000;
 
+/**
+ * v1 交易在未指定 loadedAccountsDataSize 時的預設上限（bytes）。
+ * 新版 runtime 對「未宣告」的交易套用偏低的預設，複雜交易（如 CLMM，光 programdata 就 ~2MB）會噴
+ * MaxLoadedAccountsDataSizeExceeded。此值只是「上限宣告」不影響手續費，設 8MB 覆蓋常見交易並留餘裕。
+ * 需要更高可在 computeBudgetConfig.loadedAccountsDataSize 覆寫（上限 64MiB）。
+ */
+const DEFAULT_LOADED_ACCOUNTS_DATA_SIZE = 8 * 1024 * 1024;
+
 export class TxBuilder {
   private connection: Connection;
   private owner?: Owner;
@@ -183,6 +192,8 @@ export class TxBuilder {
   private signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
   private blockhashCommitment?: Commitment;
   private loopMultiTxStatus: boolean;
+  /** 最近一次 addCustomComputeBudget 傳入的設定；供 buildV1 取回（v1 的 compute budget 走 config mask 而非指令） */
+  private computeBudgetConfig?: ComputeBudgetConfig;
 
   constructor(params: TxBuilderInit) {
     this.connection = params.connection;
@@ -231,6 +242,8 @@ export class TxBuilder {
 
   public addCustomComputeBudget(config?: ComputeBudgetConfig): boolean {
     if (config) {
+      // 留存供 buildV1 取用：v1 交易的 compute budget（含 loadedAccountsDataSize）走 config mask，不吃指令
+      this.computeBudgetConfig = config;
       const { instructions, instructionTypes } = addComputeBudget(config);
       this.instructions.unshift(...instructions);
       this.instructionTypes.unshift(...instructionTypes);
@@ -660,6 +673,11 @@ export class TxBuilder {
        * 優先權：明確傳入的 computeUnitLimit / priorityFeeLamports > computeBudgetConfig > getComputeBudgetConfig()
        */
       computeBudgetConfig?: ComputeBudgetConfig;
+      /**
+       * 是否依交易實際帳戶「量測」loadedAccountsDataSize（會多打 1~2 次 getMultipleAccountsInfo）。
+       * 未開啟時走固定預設 8MB。明確指定的 loadedAccountsDataSize 仍優先於量測結果。
+       */
+      autoLoadedAccountsDataSize?: boolean;
     },
   ): Promise<TxV1BuildData<O>> {
     const {
@@ -668,6 +686,7 @@ export class TxBuilder {
       computeUnitLimit: propComputeUnitLimit,
       priorityFeeLamports: propPriorityFeeLamports,
       computeBudgetConfig: propComputeBudgetConfig,
+      autoLoadedAccountsDataSize,
       ...extInfo
     } = props || {};
 
@@ -680,8 +699,8 @@ export class TxBuilder {
       lastValidBlockHeight = lastValidBlockHeight ?? latest.lastValidBlockHeight;
     }
 
-    // compute budget：明確參數優先，否則由 computeBudgetConfig（prop）或實例 getComputeBudgetConfig() 換算
-    const budgetConfig = propComputeBudgetConfig ?? (await this.getComputeBudgetConfig());
+    // compute budget：明確參數優先，否則由 computeBudgetConfig（prop）> addCustomComputeBudget 存下的設定 > getComputeBudgetConfig() 換算
+    const budgetConfig = propComputeBudgetConfig ?? this.computeBudgetConfig ?? (await this.getComputeBudgetConfig());
 
     // computeUnitLimit fallback：v1 無隱含預設值，缺少會使交易失敗
     const computeUnitLimit = propComputeUnitLimit ?? budgetConfig?.units ?? 600000;
@@ -697,12 +716,20 @@ export class TxBuilder {
     if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
       this.signers.push(this.owner.signer);
 
+    // loadedAccountsDataSize 優先權：明確指定 > 量測（autoLoadedAccountsDataSize）> 固定預設 8MB
+    let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
+    if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize) {
+      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.allInstructions);
+    }
+    loadedAccountsDataSize = loadedAccountsDataSize ?? DEFAULT_LOADED_ACCOUNTS_DATA_SIZE;
+
     const transaction = buildV1Transaction({
       payer: this.feePayer,
       recentBlockhash,
       lastValidBlockHeight,
       computeUnitLimit,
       priorityFeeLamports,
+      loadedAccountsDataSize,
       instructions: [...this.allInstructions],
     });
 
