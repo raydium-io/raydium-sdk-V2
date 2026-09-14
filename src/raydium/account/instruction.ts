@@ -26,19 +26,20 @@ export function initTokenAccountInstruction(params: {
 
 export function closeAccountInstruction(params: {
   tokenAccount: PublicKey;
-  payer: PublicKey;
+  destination: PublicKey;
   multiSigners?: Signer[];
   owner: PublicKey;
   programId?: PublicKey;
 }): TransactionInstruction {
-  const { tokenAccount, payer, multiSigners = [], owner, programId = TOKEN_PROGRAM_ID } = params;
-  return createCloseAccountInstruction(tokenAccount, payer, owner, multiSigners, programId);
+  const { tokenAccount, destination, multiSigners = [], owner, programId = TOKEN_PROGRAM_ID } = params;
+  return createCloseAccountInstruction(tokenAccount, destination, owner, multiSigners, programId);
 }
 
 interface CreateWSolTokenAccount {
   connection: Connection;
   payer: PublicKey;
   owner: PublicKey;
+  closeDestination?: PublicKey;
   amount: BigNumberish;
   commitment?: Commitment;
   skipCloseAccount?: boolean;
@@ -51,7 +52,7 @@ export async function createWSolAccountInstructions(params: CreateWSolTokenAccou
     addresses: { newAccount: PublicKey };
   }
 > {
-  const { connection, amount, commitment, payer, owner, skipCloseAccount } = params;
+  const { connection, amount, commitment, closeDestination, payer, owner, skipCloseAccount } = params;
 
   const balanceNeeded = await connection.getMinimumBalanceForRentExemption(splAccountLayout.span, commitment);
   const lamports = parseBigNumberish(amount).add(new BN(balanceNeeded));
@@ -84,7 +85,7 @@ export async function createWSolAccountInstructions(params: CreateWSolTokenAccou
       : [
           closeAccountInstruction({
             tokenAccount: newAccount.publicKey,
-            payer,
+            destination: closeDestination ?? owner,
             owner,
           }),
         ],

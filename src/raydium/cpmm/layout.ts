@@ -14,7 +14,8 @@ export const CpmmConfigInfoLayout = struct([
   publicKey("fundOwner"),
 
   u64("creatorFeeRate"),
-  seq(u64(), 15),
+  u64("creatorFeeShareRate"),
+  seq(u64(), 14),
 ]);
 
 export const CpmmPoolInfoLayout = struct([
@@ -59,3 +60,12 @@ export const CpmmPoolInfoLayout = struct([
 ]);
 
 export const CpmmPermission = struct([blob(8), publicKey("configId"), seq(u64(), 30)]);
+
+export const CpmmCreatorFeeShareLayout = struct([
+  blob(8),
+  u8("bump"),
+  publicKey("creator"),
+  publicKey("ammConfig"),
+  u64("shareRate"),
+  seq(u64(), 8),
+]);

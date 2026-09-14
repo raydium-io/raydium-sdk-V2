@@ -268,7 +268,7 @@ export default class Account extends ModuleBase {
         newTxInstructions.endInstructions!.push(
           closeAccountInstruction({
             owner,
-            payer: createInfo.payer || owner,
+            destination: owner,
             tokenAccount: ata,
             programId: tokenProgram,
           }),
@@ -306,7 +306,7 @@ export default class Account extends ModuleBase {
         newTxInstructions.endInstructions!.push(
           closeAccountInstruction({
             owner,
-            payer: createInfo.payer || owner,
+            destination: owner,
             tokenAccount: newTokenAccount.publicKey,
             programId: tokenProgram,
           }),
@@ -350,7 +350,7 @@ export default class Account extends ModuleBase {
     }
     if (autoUnwrapWSOLToSOL && WSOLMint.toBase58() === mint.toBase58()) {
       newTxInstructions.endInstructions = [
-        closeAccountInstruction({ owner, payer: owner, tokenAccount: tokenAccountAddress, programId }),
+        closeAccountInstruction({ owner, destination: owner, tokenAccount: tokenAccountAddress, programId }),
       ];
       newTxInstructions.endInstructionTypes = [InstructionType.CloseAccount];
     }

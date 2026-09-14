@@ -488,7 +488,7 @@ export class TxBuilder {
                   try {
                     const r = await this.connection.getTransaction(txId, {
                       commitment: "confirmed",
-                      maxSupportedTransactionVersion: TxVersion.V0,
+                      maxSupportedTransactionVersion: 1,
                     });
                     if (r) {
                       confirmed = true;
@@ -1022,7 +1022,7 @@ export class TxBuilder {
                   try {
                     const r = await this.connection.getTransaction(txId, {
                       commitment: "confirmed",
-                      maxSupportedTransactionVersion: TxVersion.V0,
+                      maxSupportedTransactionVersion: 1,
                     });
                     if (r) {
                       confirmed = true;
@@ -1270,7 +1270,7 @@ export class TxBuilder {
                   try {
                     const r = await this.connection.getTransaction(txId, {
                       commitment: "confirmed",
-                      maxSupportedTransactionVersion: TxVersion.V0,
+                      maxSupportedTransactionVersion: 1,
                     });
                     if (r) {
                       confirmed = true;
@@ -1565,7 +1565,7 @@ export class TxBuilder {
                   try {
                     const r = await this.connection.getTransaction(txId, {
                       commitment: "confirmed",
-                      maxSupportedTransactionVersion: TxVersion.V0,
+                      maxSupportedTransactionVersion: 1,
                     });
                     if (r) {
                       confirmed = true;
