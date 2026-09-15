@@ -89,7 +89,7 @@ export function makeCreateCpmmPoolInInstruction(
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
-    ...(supperMintEx ?? []).map(i => ({ pubkey: i, isSigner: false, isWritable: false })),
+    ...(supperMintEx ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: false })),
   ];
 
   const data = Buffer.alloc(dataLayout.span);
@@ -571,7 +571,6 @@ export function makeCollectCreatorFeeInstruction(
     { pubkey: authority, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
     { pubkey: configId, isSigner: false, isWritable: false },
-    { pubkey: creatorFeeShare, isSigner: false, isWritable: false },
     { pubkey: vaultA, isSigner: false, isWritable: true },
     { pubkey: vaultB, isSigner: false, isWritable: true },
     { pubkey: mintA, isSigner: false, isWritable: false },
@@ -582,6 +581,7 @@ export function makeCollectCreatorFeeInstruction(
     { pubkey: mintProgramB, isSigner: false, isWritable: false },
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: creatorFeeShare, isSigner: false, isWritable: false },
   ];
 
   return new TransactionInstruction({
@@ -614,8 +614,6 @@ export function collectCreatorFeePermissionlessInInstruction(
     { pubkey: creator, isSigner: false, isWritable: false },
     { pubkey: authority, isSigner: false, isWritable: false },
     { pubkey: poolId, isSigner: false, isWritable: true },
-    { pubkey: configId, isSigner: false, isWritable: false },
-    { pubkey: creatorFeeShare, isSigner: false, isWritable: false },
     { pubkey: vaultA, isSigner: false, isWritable: true },
     { pubkey: vaultB, isSigner: false, isWritable: true },
     { pubkey: mintA, isSigner: false, isWritable: false },
@@ -626,6 +624,8 @@ export function collectCreatorFeePermissionlessInInstruction(
     { pubkey: mintProgramB, isSigner: false, isWritable: false },
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: configId, isSigner: false, isWritable: false },
+    { pubkey: creatorFeeShare, isSigner: false, isWritable: false },
   ];
 
   return new TransactionInstruction({
@@ -690,7 +690,7 @@ export function initializeWithPermission(
     { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
 
-    ...(supperMintEx ?? []).map(i => ({ pubkey: i, isSigner: false, isWritable: false })),
+    ...(supperMintEx ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: false })),
   ];
 
   const data = Buffer.alloc(dataLayout.span);
