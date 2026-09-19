@@ -1806,7 +1806,7 @@ export class Clmm extends ModuleBase {
         skipCloseAccount: !outputUseSolBalance,
         createInfo: {
           payer: ownerInfo.feePayer || this.scope.ownerPubKey,
-          amount,
+          amount: 0,
         },
         associatedOnly: !outputUseSolBalance,
       });
