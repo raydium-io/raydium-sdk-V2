@@ -303,7 +303,9 @@ export interface CreateConcentratedPool<T = TxVersion.LEGACY> {
 
 export interface CreateCustomizablePool<T = TxVersion.LEGACY>
   extends Omit<CreateConcentratedPool<T>, "getObserveState"> {
-  collectFeeOn?: CollectFeeOn;
+  /** @deprecated field has been deprecated. */
+  collectFeeOn?: never;
+  collectFeeOnMint?: PublicKey;
   dynamicFeeConfig?: PublicKey;
 }
 

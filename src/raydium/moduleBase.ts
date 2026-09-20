@@ -52,7 +52,7 @@ export default class ModuleBase {
     this.logger.info(joinMsg(args));
   }
 
-  public logAndCreateError(...args: (string | number | Record<string, any>)[]): void {
+  public logAndCreateError(...args: (string | number | Record<string, any>)[]): never {
     const message = joinMsg(args);
     throw new Error(message);
   }
