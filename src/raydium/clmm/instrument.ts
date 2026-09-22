@@ -36,7 +36,7 @@ import {
 
 import { sha256 } from "js-sha256";
 import { PoolUtil } from "./libraries";
-import { BN_ZERO } from "./libraries/constants";
+import { BN_ZERO, CollectFeeOn } from "./libraries/constants";
 import { TickArrayUtil } from "./libraries/tickArrayUtil";
 
 function getAnchorByte(ixName: string): Buffer {
@@ -149,7 +149,7 @@ export class ClmmInstrument {
     mintProgramIdA: PublicKey,
     mintProgramIdB: PublicKey,
     sqrtPriceX64: BN,
-    collectFeeOn: number, // new
+    collectFeeOn: CollectFeeOn, // new
     supperMintEx: PublicKey[],
     dynamicFeeConfig?: PublicKey, // new
   ): TransactionInstruction {
