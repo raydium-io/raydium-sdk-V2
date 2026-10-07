@@ -55,13 +55,13 @@ export class ConstantProductCurve {
     } else if (roundDirection === RoundDirection.Ceiling) {
       const tokenRemainder0 = checkedRem(lpTokenAmount.mul(swapTokenAmount0), lpTokenSupply);
 
-      if (tokenRemainder0.gt(ZERO) && tokenAmount0.gt(ZERO)) {
+      if (tokenRemainder0.gt(ZERO)) {
         tokenAmount0 = tokenAmount0.add(new BN(1));
       }
 
       const token1Remainder = checkedRem(lpTokenAmount.mul(swapTokenAmount1), lpTokenSupply);
 
-      if (token1Remainder.gt(ZERO) && tokenAmount1.gt(ZERO)) {
+      if (token1Remainder.gt(ZERO)) {
         tokenAmount1 = tokenAmount1.add(new BN(1));
       }
 
