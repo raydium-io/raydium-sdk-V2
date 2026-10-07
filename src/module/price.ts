@@ -48,7 +48,7 @@ export class Price extends Fraction {
   }
 
   public mul(other: Price): Price {
-    if (this.quoteToken !== other.baseToken) logger.logWithError("mul token not equals");
+    if (!this.quoteToken.equals(other.baseToken)) logger.logWithError("mul token not equals");
 
     const fraction = super.mul(other);
     return new Price({
