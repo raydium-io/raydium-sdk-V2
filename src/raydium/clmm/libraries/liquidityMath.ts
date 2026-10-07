@@ -142,8 +142,13 @@ export class LiquidityMathUtil {
     );
     const coefficient = amountMax ? 1 + amountSlippage : 1 - amountSlippage;
 
-    const amount0Slippage = new BN(new Decimal(amountA.toString()).mul(coefficient).toFixed(0));
-    const amount1Slippage = new BN(new Decimal(amountB.toString()).mul(coefficient).toFixed(0));
+    // Floor both bounds: Decimal's default toFixed rounding is half-up, which
+    // can round a minimum up past the caller's slippage tolerance (amount 4 at
+    // 0.5% -> 3.98 -> 4) and a maximum up past the exact bound (199.995 -> 200).
+    // Flooring keeps both inside the tolerance, matching the integer BN
+    // division used for slippage amounts in PoolUtils.getAmountsFromLiquidity.
+    const amount0Slippage = new BN(new Decimal(amountA.toString()).mul(coefficient).toFixed(0, Decimal.ROUND_FLOOR));
+    const amount1Slippage = new BN(new Decimal(amountB.toString()).mul(coefficient).toFixed(0, Decimal.ROUND_FLOOR));
     return {
       amountSlippageA: amount0Slippage,
       amountSlippageB: amount1Slippage,
