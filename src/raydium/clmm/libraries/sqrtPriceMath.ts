@@ -54,6 +54,11 @@ export class SqrtPriceMath {
       return sqrtPriceX64.add(quotient)
     } else {
       const quotient = divRoundingUp(amount.shln(RESOLUTION), liquidity)
+
+      if (quotient.gte(sqrtPriceX64)) {
+        throw new Error("Insufficient liquidity for token1 removal")
+      }
+
       return sqrtPriceX64.sub(quotient)
     }
   }
