@@ -599,7 +599,12 @@ export class TickUtil {
     const decimalPart = resultStr.slice(-DECIMAL_PRECISION);
     const priceStr = integerPart + "." + decimalPart;
 
-    const price = new Decimal(priceStr).mul(new Decimal(10).pow(decimalDiff));
+    // Multiply at high precision and re-parse: the plain mul runs at
+    // decimal.js's default 20 significant digits, but priceStr carries up
+    // to 22 (integer part + 20 decimal places), so it silently dropped the
+    // last digits even for a no-op x1 adjustment when decimalDiff is 0.
+    const HighDecimal = Decimal.clone({ precision: 50 });
+    const price = new Decimal(new HighDecimal(priceStr).mul(new HighDecimal(10).pow(decimalDiff)).toString());
 
     return price;
   }
@@ -610,18 +615,38 @@ export class TickUtil {
   }
 
   static priceToTick(price: Decimal, decimalsA: number, decimalsB: number): number {
-    const adjustedPrice = price.div(Math.pow(10, decimalsA - decimalsB));
-
-    const tick = adjustedPrice.log().div(new Decimal(1.0001).log()).floor();
-    return Math.max(MIN_TICK, Math.min(MAX_TICK, tick.toNumber()));
+    // Go through the exact BN sqrt-price path: computing the tick from a
+    // logarithm of the price (which tickToPrice produces by truncating the
+    // sqrt price to 20 decimal places) lands one tick below the true tick
+    // for essentially every price > 1, so priceToTick(tickToPrice(t)) was
+    // t - 1 for all positive ticks. getTickAtSqrtPrice over the sqrt price
+    // derived from the same price round-trips exactly.
+    const sqrtPriceX64 = this.priceToSqrtPriceX64(price, decimalsA, decimalsB);
+    // Preserve the old clamping behaviour for out-of-range prices
+    // (getTickAtSqrtPrice itself throws outside the sqrt-price range).
+    if (sqrtPriceX64.lte(MIN_SQRT_PRICE_X64)) return MIN_TICK;
+    if (sqrtPriceX64.gte(MAX_SQRT_PRICE_X64)) return MAX_TICK;
+    return this.getTickAtSqrtPrice(sqrtPriceX64);
   }
 
   static priceToSqrtPriceX64(price: Decimal, decimalsA: number, decimalsB: number): BN {
-    const adjustedPrice = price.div(Math.pow(10, decimalsA - decimalsB));
+    // Do the whole conversion at high precision: at Q64 scale, decimal.js's
+    // default 20 significant digits (which the decimals adjustment alone
+    // already saturates for prices with more than 20 significant digits)
+    // can leave the result a unit or two off the exact value, which flips
+    // tick-boundary decisions in priceToTick.
+    const HighDecimal = Decimal.clone({ precision: 50 });
+    const adjustedPrice = new HighDecimal(price.toString()).div(new HighDecimal(10).pow(decimalsA - decimalsB));
     const sqrtPrice = adjustedPrice.sqrt();
-    const sqrtPriceX64 = sqrtPrice.mul(new Decimal(2).pow(64));
+    const sqrtPriceX64 = sqrtPrice.mul(new HighDecimal(2).pow(64));
 
-    return new BN(sqrtPriceX64.toFixed(0));
+    // Round up, not to nearest: tickToPrice truncates the price to 20
+    // decimal places, so a price that came from a tick sits a fraction of
+    // a Q64 unit below that tick's exact sqrt price — rounding to nearest
+    // still lands a unit below it for smaller prices and flips
+    // priceToTick back to the previous tick. The <=1-unit upward bias is
+    // ~5e-20 relative, far below one tick step (~5e-5).
+    return new BN(sqrtPriceX64.toFixed(0, HighDecimal.ROUND_CEIL));
   }
 
   static toTickIndex(tick: number, tickSpacing: number) {
