@@ -33,6 +33,12 @@ export class ConstantProductCurve {
   }
 
   static swapBaseOutputWithoutFees(outputAmount: BN, inputVaultAmount: BN, onputVaultAmount: BN): BN {
+    // The on-chain program rejects this via checked_sub on the vault
+    // balance; without a guard, output > vault makes the denominator
+    // negative and BN division silently returns a negative input amount
+    // (and output == vault surfaces as a misleading "rhs is zero").
+    if (outputAmount.gte(onputVaultAmount)) throw Error("output amount is greater than or equal to vault amount");
+
     const numerator = inputVaultAmount.mul(outputAmount);
     const denominator = onputVaultAmount.sub(outputAmount);
     const [inputAmount] = checkedCeilDiv(numerator, denominator);
