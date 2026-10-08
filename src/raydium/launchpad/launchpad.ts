@@ -848,12 +848,12 @@ export default class LaunchpadModule extends ModuleBase {
     const multiplier = slippage
       ? new Decimal(SLIPPAGE_UNIT.add(slippage).toNumber() / SLIPPAGE_UNIT.toNumber()).clampedTo(
           0,
-          Number.MIN_SAFE_INTEGER,
+          Number.MAX_SAFE_INTEGER,
         )
       : new Decimal(1);
 
     const maxAmountB =
-      maxBuyAmount ?? slippage ? new BN(decimalAmountB.mul(multiplier).toFixed(0)) : calculatedAmount.amountB;
+      maxBuyAmount ?? (slippage ? new BN(decimalAmountB.mul(multiplier).toFixed(0)) : calculatedAmount.amountB);
 
     const userTokenAccountA = this.scope.account.getAssociatedTokenAccount(mintA, mintAProgram);
     let userTokenAccountB: PublicKey | null = null;
@@ -1296,7 +1296,8 @@ export default class LaunchpadModule extends ModuleBase {
       : new Decimal(1);
 
     const maxSellAmountA =
-      maxSellAmount ?? slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA.amount;
+      maxSellAmount ??
+      (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA.amount);
 
     const shareATA = shareFeeReceiver ? getATAAddress(shareFeeReceiver, mintB, mintBProgram).publicKey : undefined;
     if (shareATA) {
