@@ -47,8 +47,13 @@ export function parseNumberInfo(n: Numberish | undefined): {
     return { denominator: n.denominator.toString(), numerator: n.numerator.toString() };
   }
 
-  const s = String(n);
-  const [, sign = "", int = "", dec = ""] = s.replace(",", "").match(/(-?)(\d*)\.?(\d*)/) ?? [];
+  // Expand scientific notation (e.g. "1.5e-7", which String(number) and
+  // Decimal.toString() both produce for small/large magnitudes) into plain
+  // decimal form first — the regex below would otherwise stop at the "e"
+  // and silently drop the exponent, returning a wildly wrong fraction.
+  let s = String(n).replace(",", "");
+  if (/[eE]/.test(s)) s = new Decimal(s).toFixed();
+  const [, sign = "", int = "", dec = ""] = s.match(/(-?)(\d*)\.?(\d*)/) ?? [];
   const denominator = "1" + "0".repeat(dec.length);
   const numerator = sign + (int === "0" ? "" : int) + dec || "0";
   return { denominator, numerator, sign, int, dec };
