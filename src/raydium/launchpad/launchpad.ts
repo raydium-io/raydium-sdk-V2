@@ -738,7 +738,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<SwapInfoReturnExt>({
       txVersion,
@@ -942,7 +942,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{ outAmount: BN; maxSpentAmount: BN }>({
@@ -1140,7 +1140,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{ outAmount: BN }>({
@@ -1296,8 +1296,7 @@ export default class LaunchpadModule extends ModuleBase {
       : new Decimal(1);
 
     const maxSellAmountA =
-      maxSellAmount ??
-      (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA.amount);
+      maxSellAmount ?? (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA.amount);
 
     const shareATA = shareFeeReceiver ? getATAAddress(shareFeeReceiver, mintB, mintBProgram).publicKey : undefined;
     if (shareATA) {
@@ -1344,7 +1343,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{ maxSellAmount: BN }>({
@@ -1405,7 +1404,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1434,7 +1433,7 @@ export default class LaunchpadModule extends ModuleBase {
       instructions: [updatePlatformConfig(programId, platformAdmin, platformId, updateInfo)],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1473,7 +1472,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1555,7 +1554,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1666,7 +1665,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1765,7 +1764,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1876,7 +1875,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1991,7 +1990,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2067,7 +2066,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2103,7 +2102,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2139,7 +2138,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2181,7 +2180,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2218,7 +2217,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2253,7 +2252,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({

@@ -282,7 +282,7 @@ export default class LiquidityModule extends ModuleBase {
       ],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
@@ -378,7 +378,7 @@ export default class LiquidityModule extends ModuleBase {
           : InstructionType.AmmV4RemoveLiquidity,
       ],
     });
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
     return txBuilder.build() as MakeTxData<T>;
@@ -743,7 +743,7 @@ export default class LiquidityModule extends ModuleBase {
       instructionTypes: [instructionType],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1377,7 +1377,7 @@ export default class LiquidityModule extends ModuleBase {
       instructionTypes: [version === 4 ? InstructionType.AmmV4SwapBaseIn : InstructionType.AmmV5SwapBaseIn],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,

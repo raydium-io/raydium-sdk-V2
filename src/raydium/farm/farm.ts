@@ -460,7 +460,7 @@ export default class Farm extends ModuleBase {
     });
 
     const txBuilder = this.createTxBuilder(feePayer);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
@@ -589,7 +589,7 @@ export default class Farm extends ModuleBase {
 
     const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
     const txBuilder = this.createTxBuilder(feePayer);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
@@ -834,7 +834,7 @@ export default class Farm extends ModuleBase {
       owner: this.scope.ownerPubKey,
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder
       .addInstruction({

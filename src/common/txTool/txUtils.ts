@@ -19,6 +19,8 @@ import { InstructionType } from "./txType";
 import { ComputeBudgetConfig } from "../../raydium/type";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
+import { getBase64EncodedWireTransaction, type Transaction as V1Transaction } from "@solana/transactions";
+
 const logger = createLogger("Raydium_txUtil");
 
 export const MAX_BASE64_SIZE = 1644;
@@ -331,7 +333,19 @@ export const toBuffer = (arr: Buffer | Uint8Array | Array<number>): Buffer => {
   }
 };
 
-export const txToBase64 = (transaction: Transaction | VersionedTransaction): string => {
+/**
+ * A 2.x (kit) Transaction is a plain `{ messageBytes, signatures }` object rather than a class instance,
+ * so it cannot be detected with `instanceof`. Neither the 1.x Transaction nor VersionedTransaction carries
+ * `messageBytes`, which makes it a reliable discriminator.
+ */
+export const isV1Transaction = (
+  transaction: Transaction | VersionedTransaction | V1Transaction,
+): transaction is V1Transaction => "messageBytes" in transaction;
+
+export const txToBase64 = (transaction: Transaction | VersionedTransaction | V1Transaction): string => {
+  if (isV1Transaction(transaction)) {
+    return getBase64EncodedWireTransaction(transaction);
+  }
   let serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
   if (transaction instanceof VersionedTransaction) serialized = toBuffer(serialized);
   try {
@@ -341,7 +355,7 @@ export const txToBase64 = (transaction: Transaction | VersionedTransaction): str
   }
 };
 
-export function printSimulate(transactions: Transaction[] | VersionedTransaction[]): string[] {
+export function printSimulate(transactions: Transaction[] | VersionedTransaction[] | V1Transaction[]): string[] {
   const allBase64: string[] = [];
   transactions.forEach((transaction) => {
     if (transaction instanceof Transaction) {

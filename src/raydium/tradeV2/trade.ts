@@ -143,7 +143,7 @@ export default class TradeV2 extends ModuleBase {
     const { amount, tokenProgram, txVersion = TxVersion.LEGACY, feePayer } = props;
     const tokenAccounts = await this.getWSolAccounts();
     const txBuilder = this.createTxBuilder(feePayer);
-    txBuilder.addCustomComputeBudget(props.computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(props.computeBudgetConfig);
     // const ins = await createWSolAccountInstructions({
     //   connection: this.scope.connection,
     //   owner: this.scope.ownerPubKey,
@@ -649,7 +649,7 @@ export default class TradeV2 extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild({
       txVersion,
@@ -1067,7 +1067,7 @@ export default class TradeV2 extends ModuleBase {
       }),
     );
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
 
     return txBuilder.versionBuild({
       txVersion,
@@ -1469,7 +1469,7 @@ export default class TradeV2 extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     return txBuilder.versionBuild({
       txVersion,
       extInfo: {

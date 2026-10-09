@@ -8,7 +8,7 @@ import {
   type AddressLookupTableAccount,
   type AccountInfo,
   type Connection,
-} from "@solana/web3.js"; // 1.x 型別
+} from "@solana/web3.js"; // 1.x types
 
 import { address, type Address } from "@solana/addresses";
 import { AccountRole, type Instruction } from "@solana/instructions";
@@ -42,21 +42,22 @@ export interface BuildV1TxParams {
   payer: PublicKey;
   recentBlockhash: string;
   instructions: TransactionInstruction[];
-  /** 區塊高度上限，超過後該 blockhash 失效。可傳 number 或 bigint */
+  /** Max block height; the blockhash expires beyond it. Accepts number or bigint */
   lastValidBlockHeight: number | bigint;
   /**
-   * Compute unit 上限。v1 沒有隱含預設值——沒設會被 runtime 當成 0 → 交易直接失敗，
-   * 故此為必填。v1 的 compute budget 不再走 ComputeBudget instruction，而是寫進 config mask。
+   * Compute unit limit. v1 has no implicit default — leaving it unset makes the runtime treat it as 0,
+   * which fails the transaction outright, so it is required here. In v1 the compute budget no longer
+   * goes through a ComputeBudget instruction but is written into the config mask.
    */
   computeUnitLimit: number;
-  /** v1 的優先費（total lamports；注意 v1 已從 micro-lamports/CU 改為 total lamports 計價） */
+  /** v1 priority fee (total lamports; note v1 switched from micro-lamports/CU to total lamports) */
   priorityFeeLamports?: number | bigint;
-  /** loaded accounts data size 上限（bytes）；v1 寫進 config mask，非 ComputeBudget 指令 */
+  /** Loaded accounts data size limit (bytes); in v1 it goes into the config mask, not a ComputeBudget instruction */
   loadedAccountsDataSize?: number;
 }
 
 /**
- * 將 1.x 的 TransactionInstruction 轉為 2.x 的 Instruction 格式
+ * Convert a 1.x TransactionInstruction into the 2.x Instruction format
  */
 function convertV1InstructionToV2(ix: TransactionInstruction): Instruction {
   return {
@@ -76,8 +77,8 @@ function convertV1InstructionToV2(ix: TransactionInstruction): Instruction {
 }
 
 /**
- * 使用 2.x 子模組打包 V1 Transaction Message，並回傳 2.x 的 Transaction 物件
- * （內含 messageBytes 與待簽章的 signatures map，交由呼叫端以 2.x API 簽章 / 送出）
+ * Build a V1 transaction message with the 2.x submodules and return a 2.x Transaction object
+ * (it carries messageBytes and the pending signatures map; the caller signs / sends it with the 2.x API)
  */
 export function buildV1Transaction({
   payer,
@@ -88,28 +89,28 @@ export function buildV1Transaction({
   priorityFeeLamports,
   loadedAccountsDataSize,
 }: BuildV1TxParams): Transaction {
-  // v1 無隱含預設值：compute unit limit 為 0 會讓交易在 runtime 失敗，這裡先擋下
+  // v1 has no implicit default: a compute unit limit of 0 makes the transaction fail at runtime, so reject it up front
   if (!Number.isInteger(computeUnitLimit) || computeUnitLimit <= 0) {
     throw new Error(
-      `buildV1Transaction: computeUnitLimit 必須為正整數（v1 無隱含預設值，0 會使交易失敗），收到 ${computeUnitLimit}`,
+      `buildV1Transaction: computeUnitLimit must be a positive integer (v1 has no implicit default, 0 fails the transaction), received ${computeUnitLimit}`,
     );
   }
 
   const payerAddress: Address = address(payer.toBase58());
 
-  // 1~2. 以 const 串接 builder（每個 builder 都回傳更精確的型別，不能重新賦值給同一個變數）
+  // 1~2. Chain the builders with const (each builder returns a more precise type, so the same variable cannot be reassigned)
   const lifetimeMessage = setTransactionMessageLifetimeUsingBlockhash(
     {
-      blockhash: blockhash(recentBlockhash), // 設定 Blockhash
+      blockhash: blockhash(recentBlockhash), // set the blockhash
       lastValidBlockHeight: BigInt(lastValidBlockHeight),
     },
     setTransactionMessageFeePayer(
-      payerAddress, // 設定 Payer
-      createTransactionMessage({ version: 1 }), // 初始化 V1 Message
+      payerAddress, // set the payer
+      createTransactionMessage({ version: 1 }), // initialize the V1 message
     ),
   );
 
-  // 2.5 v1 的 compute budget 寫進 config mask（非 ComputeBudget instruction）；優先費為 total lamports
+  // 2.5 In v1 the compute budget is written into the config mask (not a ComputeBudget instruction); the priority fee is total lamports
   const baseMessage = setTransactionMessageLoadedAccountsDataSizeLimit(
     loadedAccountsDataSize,
     setTransactionMessagePriorityFeeLamports(
@@ -118,36 +119,39 @@ export function buildV1Transaction({
     ),
   );
 
-  // 3. 逐一塞入轉譯後的 Raydium Instructions（用單數版 append，避免 8.x 複數版簽章的 const 型別參數在 TS 4.x 無法解析）
-  //    accumulator 以三個介面聯集標註，讓 baseMessage 與每次 append 的結果都能相容賦值
+  // 3. Append the converted Raydium instructions one by one (use the singular append: the plural 8.x signature's
+  //    const type parameters cannot be resolved by TS 4.x).
+  //    The accumulator is annotated as the intersection of three interfaces so both baseMessage and every
+  //    append result stay assignable to it.
   let message: TransactionMessage & TransactionMessageWithFeePayer & TransactionMessageWithBlockhashLifetime =
     baseMessage;
   for (const ix of instructions) {
     message = appendTransactionMessageInstruction(convertV1InstructionToV2(ix), message);
   }
 
-  // 4. 編譯為 2.x Transaction 物件（保留 v1，全程走 2.x 生態，不再經過 1.x VersionedTransaction）
+  // 4. Compile into a 2.x Transaction object (stays on v1 and entirely inside the 2.x ecosystem, never going through a 1.x VersionedTransaction)
   return compileTransaction(message);
 }
 
 /**
- * 將 1.x 的 Keypair 轉為 2.x 簽章所需的 CryptoKeyPair
- * （Keypair.secretKey 為 64-byte，剛好對應 createKeyPairFromBytes 的輸入）
+ * Convert a 1.x Keypair into the CryptoKeyPair required for 2.x signing
+ * (Keypair.secretKey is 64 bytes, exactly what createKeyPairFromBytes expects)
  */
 export function toCryptoKeyPair(keypair: Keypair): Promise<CryptoKeyPair> {
   return createKeyPairFromBytes(keypair.secretKey);
 }
 
 /**
- * 將多個 1.x Signer / Keypair（含 64-byte secretKey）批次轉為 2.x 的 CryptoKeyPair
+ * Convert several 1.x Signers / Keypairs (with a 64-byte secretKey) into 2.x CryptoKeyPairs in one batch
  */
 export function signersToCryptoKeyPairs(signers: (Signer | Keypair)[]): Promise<CryptoKeyPair[]> {
   return Promise.all(signers.map((s) => createKeyPairFromBytes(s.secretKey)));
 }
 
 /**
- * 用 CryptoKeyPair 對 v1 Transaction 做「部分簽章」（不要求所有 signer 都到齊）。
- * 常見用途：先讓臨時 signer（例如新建帳戶的 keypair）簽好，再交給錢包簽 fee payer。
+ * Partially sign a v1 transaction with CryptoKeyPairs (does not require every signer to be present).
+ * Typical use: let an ephemeral signer (e.g. the keypair of a newly created account) sign first,
+ * then hand the transaction to the wallet to sign as fee payer.
  */
 export async function partialSignV1Transaction(
   transaction: Transaction,
@@ -157,10 +161,10 @@ export async function partialSignV1Transaction(
 }
 
 /**
- * 用 2.x API 對 buildV1Transaction 產出的 Transaction 進行簽章
- * @param transaction buildV1Transaction 的回傳值
- * @param signers 簽章者（1.x Keypair 請先用 toCryptoKeyPair 轉換）
- * @returns 已完整簽章的 Transaction
+ * Sign the Transaction produced by buildV1Transaction using the 2.x API
+ * @param transaction the return value of buildV1Transaction
+ * @param signers the signers (convert 1.x Keypairs with toCryptoKeyPair first)
+ * @returns the fully signed Transaction
  */
 export async function signV1Transaction(
   transaction: Transaction,
@@ -170,9 +174,9 @@ export async function signV1Transaction(
 }
 
 /**
- * 將（已簽章的）Transaction 序列化成 base64 wire format，可直接丟給 RPC 的 sendTransaction
+ * Serialize a (signed) Transaction into the base64 wire format, ready to pass to the RPC sendTransaction
  *
- * @example 使用 @solana/kit 送出（需另外安裝 @solana/kit 或 @solana/rpc）
+ * @example send it with @solana/kit (requires installing @solana/kit or @solana/rpc separately)
  * ```ts
  * import { createSolanaRpc } from "@solana/kit";
  * const rpc = createSolanaRpc("https://api.mainnet-beta.solana.com");
@@ -185,29 +189,31 @@ export function serializeV1Transaction(transaction: Transaction): Base64EncodedW
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// loaded accounts data size 量測
+// Loaded accounts data size measurement
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** loaded accounts data size 的協定上限（64 MiB）；requestLoadedAccountsDataSize 的封頂 */
+/** Protocol limit for loaded accounts data size (64 MiB); the cap for requestLoadedAccountsDataSize */
 export const MAX_LOADED_ACCOUNTS_DATA_SIZE = 64 * 1024 * 1024;
-/** upgradeable BPF loader，用來判斷 executable 帳戶是否有獨立的 programdata */
+/** Upgradeable BPF loader, used to tell whether an executable account has a separate programdata account */
 const UPGRADEABLE_LOADER_ID = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
 
 /**
- * 依交易實際會載入的帳戶，量測建議的 loadedAccountsDataSize（bytes）。
+ * Measure the recommended loadedAccountsDataSize (bytes) from the accounts the transaction actually loads.
  *
- * v1 交易在未宣告此上限時，runtime 會套用偏低的預設，複雜交易（如 CLMM，光 programdata 就 ~2MB）
- * 會噴 MaxLoadedAccountsDataSizeExceeded。此方法把所有指令碰到的帳戶 + program 的實際 data size 加總，
- * 對 upgradeable program 再加上其 programdata 帳戶大小，最後乘上 buffer 並封頂 64 MiB。
+ * When a v1 transaction does not declare this limit, the runtime applies a fairly low default, and complex
+ * transactions (e.g. CLMM, whose programdata alone is ~2MB) hit MaxLoadedAccountsDataSizeExceeded. This helper
+ * sums the real data size of every account and program touched by the instructions, adds the size of the
+ * programdata account for upgradeable programs, then applies a buffer ratio and caps the result at 64 MiB.
  *
- * 注意：會打 1~2 次 getMultipleAccountsInfo（有 programdata 時多一批），故日常走 8MB 常數即可，
- * 需要精準（例如某筆碰到多個大 program）時再用這個。
+ * Note: it issues 1~2 getMultipleAccountsInfo calls (one extra batch when there is programdata), so an 8MB
+ * constant is fine for everyday use; reach for this only when precision matters (e.g. a transaction that
+ * touches several large programs).
  *
- * @param connection RPC 連線
- * @param instructions 交易的所有指令（含 endInstructions）
- * @param options.bufferRatio 量測值的放大係數，預設 1.15（+15% 餘裕）
- * @param options.extraBytes 額外固定加量（bytes），預設 32 * 1024
- * @returns 建議的 loadedAccountsDataSize（整數，封頂 64 MiB）
+ * @param connection RPC connection
+ * @param instructions all instructions of the transaction (including endInstructions)
+ * @param options.bufferRatio multiplier applied to the measured value, default 1.15 (+15% headroom)
+ * @param options.extraBytes extra fixed padding (bytes), default 32 * 1024
+ * @returns the recommended loadedAccountsDataSize (integer, capped at 64 MiB)
  */
 export async function calcLoadedAccountsDataSize(
   connection: Connection,
@@ -217,7 +223,7 @@ export async function calcLoadedAccountsDataSize(
   const bufferRatio = options?.bufferRatio ?? 1.15;
   const extraBytes = options?.extraBytes ?? 32 * 1024;
 
-  // 蒐集所有唯一的帳戶 + program id
+  // Collect every unique account + program id
   const keys = new Set<string>();
   for (const ix of instructions) {
     keys.add(ix.programId.toBase58());
@@ -225,16 +231,16 @@ export async function calcLoadedAccountsDataSize(
   }
   const keyList = [...keys].map((k) => new PublicKey(k));
 
-  // getMultipleAccountsInfo 一次上限 100 顆，分批抓
+  // getMultipleAccountsInfo takes at most 100 keys per call, so fetch in batches
   const infos = await getMultipleAccountsInfoInBatch(connection, keyList);
 
   let total = 0;
   const programDataKeys: PublicKey[] = [];
   for (let i = 0; i < keyList.length; i++) {
     const info = infos[i];
-    if (!info) continue; // 不存在（例如尚未建立的 ATA / PDA）→ 0
+    if (!info) continue; // does not exist (e.g. an ATA / PDA not created yet) → 0
     total += info.data.length;
-    // upgradeable program 另有一顆 programdata 帳戶（含真正的 bytecode），也會被載入
+    // An upgradeable program has a separate programdata account (holding the actual bytecode) that is loaded too
     if (info.executable && info.owner.equals(UPGRADEABLE_LOADER_ID)) {
       programDataKeys.push(PublicKey.findProgramAddressSync([keyList[i].toBuffer()], UPGRADEABLE_LOADER_ID)[0]);
     }
@@ -249,7 +255,7 @@ export async function calcLoadedAccountsDataSize(
   return Math.min(withBuffer, MAX_LOADED_ACCOUNTS_DATA_SIZE);
 }
 
-/** getMultipleAccountsInfo 一次最多 100 顆，這裡自動分批並保持輸入順序 */
+/** getMultipleAccountsInfo takes at most 100 keys per call; this splits the input into batches while preserving its order */
 async function getMultipleAccountsInfoInBatch(
   connection: Connection,
   keys: PublicKey[],
@@ -264,68 +270,70 @@ async function getMultipleAccountsInfoInBatch(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 錢包（browser plugin）路徑
+// Wallet (browser plugin) path
 //
-// ⚠️ Browser wallet（Phantom / Backpack…）不會暴露私鑰，只提供 signTransaction /
-//    signAllTransactions，且吃的是 web3.js 1.x 的 VersionedTransaction。加上 1.x 與
-//    主流錢包目前都不支援 v1 格式，因此錢包路徑一律使用 v0，完全走 1.x 原生 API。
+// ⚠️ Browser wallets (Phantom / Backpack…) never expose the private key; they only offer signTransaction /
+//    signAllTransactions, and those take a web3.js 1.x VersionedTransaction. Since neither 1.x nor the major
+//    wallets support the v1 format yet, the wallet path always uses v0 and stays entirely on the native 1.x API.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface BuildV0WalletTxParams {
   payer: PublicKey;
   recentBlockhash: string;
   instructions: TransactionInstruction[];
-  /** v0 專屬：可選的 Address Lookup Table，用來壓縮帳戶數量 */
+  /** v0 only: optional Address Lookup Tables, used to compress the account count */
   addressLookupTableAccounts?: AddressLookupTableAccount[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// v1 + 錢包（byte-level）簽章路徑
+// v1 + wallet (byte-level) signing path
 //
-// v1 交易的錢包簽章走 Wallet Standard 的 `solana:signTransaction`（吃序列化 bytes），
-// 而非舊 wallet-adapter 的 signAllTransactions(VersionedTransaction[])。此處刻意不綁定
-// 任何錢包套件——呼叫端把「bytes 進、簽好 bytes 出」的函式傳進來即可。
+// Wallet signing for v1 transactions goes through Wallet Standard's `solana:signTransaction` (which takes
+// serialized bytes) instead of the old wallet-adapter signAllTransactions(VersionedTransaction[]). Nothing here
+// is tied to a specific wallet package — the caller just passes in a "bytes in, signed bytes out" function.
 //
-// ⚠️ v1 主網啟用日為 2026-09-09；錢包需內部升級至 web3.js 3.x / kit 8.x 並在其
-//    `solana:signTransaction` 的 supportedTransactionVersions 宣告支援 1，才能簽 v1。
+// ⚠️ v1 goes live on mainnet on 2026-09-09; a wallet can only sign v1 once it has upgraded internally to
+//    web3.js 3.x / kit 8.x and declares support for version 1 in the supportedTransactionVersions of its
+//    `solana:signTransaction` feature.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * byte-level 的**批次**錢包簽章函式：吃多筆未簽章交易 bytes、回傳對應的已簽章 bytes。
- * 對齊錢包 plugin 的 signAllTransactions 批次語意，但走序列化 bytes 以相容 v1
- * （舊的 SignAllTransactions 綁定 1.x Transaction/VersionedTransaction 物件，無法表示 v1）。
+ * Byte-level **batch** wallet signing function: takes several unsigned transaction byte arrays and returns the
+ * matching signed ones. It mirrors the batch semantics of a wallet plugin's signAllTransactions but works on
+ * serialized bytes for v1 compatibility (the old SignAllTransactions is tied to 1.x Transaction /
+ * VersionedTransaction objects, which cannot represent v1).
  */
 export type SignAllTransactionsByteLevel = (transactionsBytes: Uint8Array[]) => Promise<Uint8Array[]>;
 
-// ── Wallet Standard 轉接（避免硬相依 @wallet-standard/* 套件，以最小結構型別描述）──────────
+// ── Wallet Standard adapters (described as minimal structural types to avoid a hard dependency on @wallet-standard/*) ──
 
-/** Wallet Standard `solana:signTransaction` 單筆輸入的最小結構 */
+/** Minimal shape of a single Wallet Standard `solana:signTransaction` input */
 export interface WalletStandardSignTransactionInput {
-  account: unknown; // Wallet Standard 的 WalletAccount，原樣傳回錢包
+  account: unknown; // the Wallet Standard WalletAccount, passed back to the wallet as-is
   transaction: Uint8Array;
   chain?: string; // e.g. "solana:mainnet"
   options?: Record<string, unknown>;
 }
-/** Wallet Standard `solana:signTransaction` 單筆輸出的最小結構 */
+/** Minimal shape of a single Wallet Standard `solana:signTransaction` output */
 export interface WalletStandardSignTransactionOutput {
   signedTransaction: Uint8Array;
 }
-/** Wallet Standard `solana:signTransaction` feature 的 signTransaction 方法（variadic 批次） */
+/** The signTransaction method of the Wallet Standard `solana:signTransaction` feature (variadic batch) */
 export type WalletStandardSignTransaction = (
   ...inputs: WalletStandardSignTransactionInput[]
 ) => Promise<WalletStandardSignTransactionOutput[]>;
 
 /**
- * 把 Wallet Standard 的 `solana:signTransaction` feature 轉接成 SignAllTransactionsByteLevel，
- * 讓前端不用自己手寫那層 bytes ↔ input/output 的轉換。
+ * Adapt a Wallet Standard `solana:signTransaction` feature into a SignAllTransactionsByteLevel so the frontend
+ * does not have to hand-write the bytes ↔ input/output conversion layer.
  *
  * @example
  * ```ts
  * const feature = wallet.features["solana:signTransaction"];
- * // 建議先確認錢包宣告支援 v1： feature.supportedTransactionVersions.includes(1)
+ * // Recommended: first check that the wallet declares v1 support: feature.supportedTransactionVersions.includes(1)
  * const signAll = walletStandardToByteLevelSigner({
  *   signTransaction: feature.signTransaction,
- *   account,                 // 目前連線的 WalletAccount
+ *   account,                 // the currently connected WalletAccount
  *   chain: "solana:mainnet",
  * });
  * const [signed] = await signAllV1TransactionsWithWallet([tx], signAll);
@@ -344,13 +352,13 @@ export function walletStandardToByteLevelSigner(params: {
 }
 
 /**
- * 用 byte-level 的批次錢包簽章對多筆（v1 或任何版本的）2.x Transaction 簽章。
- * 序列化 → 交給錢包的 signAllTransactions 批次簽 → 反序列化回 Transaction[]。
+ * Sign several 2.x Transactions (v1 or any version) with a byte-level batch wallet signer.
+ * Serialize → let the wallet's signAllTransactions sign the batch → deserialize back into Transaction[].
  *
- * @example 把 Wallet Standard 錢包的 solana:signTransaction 包成批次 signer
+ * @example wrap a Wallet Standard wallet's solana:signTransaction into a batch signer
  * ```ts
  * const feature = wallet.features["solana:signTransaction"];
- * // 建議先確認錢包宣告支援 v1： feature.supportedTransactionVersions.includes(1)
+ * // Recommended: first check that the wallet declares v1 support: feature.supportedTransactionVersions.includes(1)
  * const signAllTransactions: SignAllTransactionsByteLevel = async (txsBytes) => {
  *   const outputs = await feature.signTransaction(
  *     ...txsBytes.map((transaction) => ({ account, transaction, chain: "solana:mainnet" })),
@@ -358,7 +366,7 @@ export function walletStandardToByteLevelSigner(params: {
  *   return outputs.map((o) => o.signedTransaction);
  * };
  * const [signed] = await signAllV1TransactionsWithWallet([tx], signAllTransactions);
- * const wire = serializeV1Transaction(signed); // 再送 RPC
+ * const wire = serializeV1Transaction(signed); // then send it to the RPC
  * ```
  */
 export async function signAllV1TransactionsWithWallet(
@@ -367,14 +375,15 @@ export async function signAllV1TransactionsWithWallet(
 ): Promise<Transaction[]> {
   const encoder = getTransactionEncoder();
   const decoder = getTransactionDecoder();
-  // encode 回傳 ReadonlyUint8Array，執行期本體即為 Uint8Array，直接 cast 交給錢包簽章函式
+  // encode returns a ReadonlyUint8Array whose runtime value is a Uint8Array, so cast it straight to the wallet signer
   const unsignedBytes = transactions.map((tx) => encoder.encode(tx) as Uint8Array);
   const signedBytes = await signAllTransactions(unsignedBytes);
   return signedBytes.map((bytes) => decoder.decode(bytes));
 }
 
 /**
- * 單筆版便利函式：底層仍呼叫批次的 signAllTransactions（錢包 plugin 傳進來的就是批次函式）。
+ * Single-transaction convenience wrapper: it still calls the batch signAllTransactions underneath
+ * (what the wallet plugin hands in is a batch function).
  */
 export async function signV1TransactionWithWallet(
   transaction: Transaction,

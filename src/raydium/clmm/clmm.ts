@@ -150,7 +150,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{
@@ -317,7 +317,7 @@ export class Clmm extends ModuleBase {
     );
 
     txBuilder.addInstruction({ instructions: [ins] });
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{
@@ -498,7 +498,7 @@ export class Clmm extends ModuleBase {
     );
 
     txBuilder.addInstruction({ instructions: [ins] });
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{
@@ -671,7 +671,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<OpenPositionFromBaseExtInfo>({
       txVersion,
@@ -775,7 +775,7 @@ export class Clmm extends ModuleBase {
       nft2022,
     });
     txBuilder.addInstruction(makeOpenPositionInstructions);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<OpenPositionFromLiquidityExtInfo>({
       txVersion,
@@ -867,7 +867,7 @@ export class Clmm extends ModuleBase {
       nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
     txBuilder.addInstruction(ins);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
@@ -959,7 +959,7 @@ export class Clmm extends ModuleBase {
       nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
     txBuilder.addInstruction(ins);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
@@ -1106,7 +1106,7 @@ export class Clmm extends ModuleBase {
       });
       extInfo = { ...extInfo, ...closeInsInfo.address };
     }
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<ManipulateLiquidityExtInfo>({
       txVersion,
@@ -1140,7 +1140,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(lockIns);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1309,7 +1309,7 @@ export class Clmm extends ModuleBase {
       instructionTypes: [InstructionType.ClmmHarvestLockPosition],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1344,7 +1344,7 @@ export class Clmm extends ModuleBase {
       ownerPosition,
       nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.addInstruction(ins).versionBuild<ClosePositionExtInfo>({
       txVersion,
@@ -1412,7 +1412,7 @@ export class Clmm extends ModuleBase {
       },
     });
     txBuilder.addInstruction(insInfo);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     return txBuilder.versionBuild<InitRewardExtInfo>({
       txVersion,
       extInfo: { address: insInfo.address },
@@ -1490,7 +1490,7 @@ export class Clmm extends ModuleBase {
       };
       txBuilder.addInstruction(insInfo);
     }
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1559,7 +1559,7 @@ export class Clmm extends ModuleBase {
     });
 
     txBuilder.addInstruction(insInfo);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
@@ -1634,7 +1634,7 @@ export class Clmm extends ModuleBase {
         ...insInfo.address,
       };
     }
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
@@ -1687,7 +1687,7 @@ export class Clmm extends ModuleBase {
       rewardMint,
     });
     txBuilder.addInstruction(insInfo);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ address: Record<string, PublicKey> }>({
       txVersion,
@@ -1747,7 +1747,7 @@ export class Clmm extends ModuleBase {
       txBuilder.addInstruction(insInfo);
       address = { ...address, ...insInfo.address };
     }
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.build<{ address: Record<string, PublicKey> }>({ address });
   }
@@ -1898,10 +1898,9 @@ export class Clmm extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
-    return txBuilder.buildV1({}) as any;
     return txBuilder.versionBuild({
       txVersion,
       extInfo: {
@@ -1997,7 +1996,7 @@ export class Clmm extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -2148,7 +2147,7 @@ export class Clmm extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ forerunCreate?: boolean }>({
       txVersion,
@@ -2225,7 +2224,7 @@ export class Clmm extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -2414,7 +2413,7 @@ export class Clmm extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<{ forerunCreate?: boolean }>({
       txVersion,
@@ -2659,7 +2658,7 @@ export class Clmm extends ModuleBase {
       }),
     );
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
@@ -2789,7 +2788,7 @@ export class Clmm extends ModuleBase {
       }),
     );
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }

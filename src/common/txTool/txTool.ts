@@ -72,8 +72,8 @@ interface TxBuilderInit {
   api?: Api;
   signAllTransactions?: SignAllTransactions;
   /**
-   * v1（2.x）交易專用的 byte-level 批次錢包簽章。現有的 signAllTransactions 綁定 1.x
-   * Transaction/VersionedTransaction 物件，無法簽 v1，故 buildV1 的錢包路徑改用這個。
+   * Byte-level batch wallet signer dedicated to v1 (2.x) transactions. The existing signAllTransactions is bound
+   * to 1.x Transaction/VersionedTransaction objects and cannot sign v1, so the buildV1 wallet path uses this one.
    */
   signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
 }
@@ -109,7 +109,7 @@ export interface TxV0BuildData<T = Record<string, any>> extends Omit<TxBuildData
 
 export interface TxV1BuildData<T = Record<string, any>> {
   builder: TxBuilder;
-  /** 2.x（kit）的 Transaction，內含 messageBytes 與 signatures map */
+  /** A 2.x (kit) Transaction, carrying messageBytes and the signatures map */
   transaction: TransactionV1;
   instructionTypes: string[];
   signers: Signer[];
@@ -150,7 +150,7 @@ export interface MultiTxV0BuildData<T = Record<string, any>>
 export interface MultiTxV1BuildData<T = Record<string, any>>
   extends Omit<MultiTxBuildData<T>, "transactions" | "execute"> {
   builder: TxBuilder;
-  /** 2.x（kit）的 Transaction 陣列 */
+  /** An array of 2.x (kit) Transactions */
   transactions: TransactionV1[];
   execute: (executeParams?: MultiTxExecuteParam) => Promise<{ txIds: string[]; signedTxs: TransactionV1[] }>;
 }
@@ -170,10 +170,11 @@ export type MakeTxData<T = TxVersion.LEGACY, O = Record<string, any>> = T extend
 const LOOP_INTERVAL = 2000;
 
 /**
- * v1 交易在未指定 loadedAccountsDataSize 時的預設上限（bytes）。
- * 新版 runtime 對「未宣告」的交易套用偏低的預設，複雜交易（如 CLMM，光 programdata 就 ~2MB）會噴
- * MaxLoadedAccountsDataSizeExceeded。此值只是「上限宣告」不影響手續費，設 8MB 覆蓋常見交易並留餘裕。
- * 需要更高可在 computeBudgetConfig.loadedAccountsDataSize 覆寫（上限 64MiB）。
+ * Default loadedAccountsDataSize limit (bytes) for a v1 transaction that does not specify one.
+ * The new runtime applies a fairly low default to transactions that do not declare it, and complex transactions
+ * (e.g. CLMM, whose programdata alone is ~2MB) hit MaxLoadedAccountsDataSizeExceeded. This value is only a limit
+ * declaration and does not affect fees, so 8MB covers common transactions with headroom to spare.
+ * Override it via computeBudgetConfig.loadedAccountsDataSize when more is needed (max 64MiB).
  */
 const DEFAULT_LOADED_ACCOUNTS_DATA_SIZE = 8 * 1024 * 1024;
 
@@ -192,7 +193,7 @@ export class TxBuilder {
   private signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
   private blockhashCommitment?: Commitment;
   private loopMultiTxStatus: boolean;
-  /** 最近一次 addCustomComputeBudget 傳入的設定；供 buildV1 取回（v1 的 compute budget 走 config mask 而非指令） */
+  /** The config last passed to addCustomComputeBudget; read back by buildV1 (in v1 the compute budget goes through the config mask, not an instruction) */
   private computeBudgetConfig?: ComputeBudgetConfig;
 
   constructor(params: TxBuilderInit) {
@@ -214,18 +215,19 @@ export class TxBuilder {
     endInstructionTypes: string[];
     lookupTableAddress: string[];
   } {
+    const computeIns = this.getComputeBudgetIns();
     return {
-      instructions: this.instructions,
+      instructions: [...computeIns.instructions, ...this.instructions],
       endInstructions: this.endInstructions,
       signers: this.signers,
-      instructionTypes: this.instructionTypes,
+      instructionTypes: [...computeIns.instructionTypes, ...this.instructionTypes],
       endInstructionTypes: this.endInstructionTypes,
       lookupTableAddress: this.lookupTableAddress,
     };
   }
 
   get allInstructions(): TransactionInstruction[] {
-    return [...this.instructions, ...this.endInstructions];
+    return [...this.getComputeBudgetIns().instructions, ...this.instructions, ...this.endInstructions];
   }
 
   public async getComputeBudgetConfig(): Promise<ComputeBudgetConfig | undefined> {
@@ -240,16 +242,26 @@ export class TxBuilder {
     };
   }
 
-  public addCustomComputeBudget(config?: ComputeBudgetConfig): boolean {
+  public setCustomComputeBudget(config?: ComputeBudgetConfig): boolean {
     if (config) {
-      // 留存供 buildV1 取用：v1 交易的 compute budget（含 loadedAccountsDataSize）走 config mask，不吃指令
+      // Kept around for buildV1: a v1 transaction's compute budget (including loadedAccountsDataSize) goes through the config mask, not instructions
       this.computeBudgetConfig = config;
-      const { instructions, instructionTypes } = addComputeBudget(config);
-      this.instructions.unshift(...instructions);
-      this.instructionTypes.unshift(...instructionTypes);
       return true;
     }
     return false;
+  }
+
+  public getComputeBudgetIns() {
+    if (!this.computeBudgetConfig)
+      return {
+        instructions: [],
+        instructionTypes: [],
+      };
+    const { instructions, instructionTypes } = addComputeBudget(this.computeBudgetConfig);
+    return {
+      instructions,
+      instructionTypes,
+    };
   }
 
   public addTipInstruction(tipConfig?: TxTipConfig): boolean {
@@ -265,22 +277,6 @@ export class TxBuilder {
       return true;
     }
     return false;
-  }
-
-  public async calComputeBudget({
-    config: propConfig,
-    defaultIns,
-  }: {
-    config?: ComputeBudgetConfig;
-    defaultIns?: TransactionInstruction[];
-  }): Promise<void> {
-    try {
-      const config = propConfig || (await this.getComputeBudgetConfig());
-      if (this.addCustomComputeBudget(config)) return;
-      defaultIns && this.instructions.unshift(...defaultIns);
-    } catch {
-      defaultIns && this.instructions.unshift(...defaultIns);
-    }
   }
 
   public addInstruction({
@@ -312,14 +308,15 @@ export class TxBuilder {
     if (txVersion === TxVersion.V0)
       return (await this.buildV0({ ...(extInfo || {}), lookupTableAddress })) as unknown as MakeTxData<TxVersion.V0, O>;
     if (txVersion === TxVersion.V1)
-      // v1 沒有 ALT，故不吃 lookupTableAddress
+      // v1 has no ALT, so it does not take lookupTableAddress
       return (await this.buildV1({ ...(extInfo || {}) })) as unknown as MakeTxData<TxVersion.V1, O>;
     return this.build<O>(extInfo) as MakeTxData<TxVersion.LEGACY, O>;
   }
 
   public build<O = Record<string, any>>(extInfo?: O): MakeTxData<TxVersion.LEGACY, O> {
     const transaction = new Transaction();
-    if (this.allInstructions.length) transaction.add(...this.allInstructions);
+    const computeBudgetIns = this.getComputeBudgetIns();
+    if (this.allInstructions.length) transaction.add(...computeBudgetIns.instructions, ...this.allInstructions);
     transaction.feePayer = this.feePayer;
     if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
       this.signers.push(this.owner.signer);
@@ -328,7 +325,7 @@ export class TxBuilder {
       builder: this,
       transaction,
       signers: this.signers,
-      instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
+      instructionTypes: [...computeBudgetIns.instructionTypes, ...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { recentBlockHash: propBlockHash, skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
@@ -651,31 +648,33 @@ export class TxBuilder {
   }
 
   /**
-   * 打包一筆 v1（2.x / kit）交易，對接 buildV1Tx。
+   * Build a single v1 (2.x / kit) transaction on top of buildV1Tx.
    *
-   * - keypair 路徑：owner.isKeyPair 時，把所有 signer 轉成 CryptoKeyPair 後用 2.x 簽章。
-   * - 錢包路徑：需在建構 TxBuilder 時提供 signAllTransactionsByteLevel（byte-level）；
-   *   臨時 signer 先部分簽，再交錢包簽 fee payer。
+   * - Keypair path: when owner.isKeyPair, convert every signer into a CryptoKeyPair and sign with the 2.x API.
+   * - Wallet path: requires signAllTransactionsByteLevel (byte-level) to be provided when constructing the TxBuilder;
+   *   the ephemeral signers partially sign first, then the wallet signs as fee payer.
    *
-   * ⚠️ v1 主網啟用日 2026-09-09 前，RPC 尚不接受 v1 交易；且 v1 無 ALT、compute budget
-   *    走 config mask（非 instruction），此處已透過 computeUnitLimit 參數處理。
+   * ⚠️ Before the v1 mainnet activation date of 2026-09-09, RPCs do not accept v1 transactions yet; also v1 has no
+   *    ALT and its compute budget goes through the config mask (not an instruction), which is handled here via the
+   *    computeUnitLimit parameter.
    */
   public async buildV1<O = Record<string, any>>(
     props?: O & {
       recentBlockhash?: string;
       lastValidBlockHeight?: number;
-      /** compute unit 上限；未提供時 fallback 到 computeBudgetConfig / getComputeBudgetConfig().units（預設 600000） */
+      /** Compute unit limit; falls back to computeBudgetConfig / getComputeBudgetConfig().units (default 600000) when omitted */
       computeUnitLimit?: number;
-      /** v1 優先費（total lamports）；未提供時由 computeBudgetConfig.microLamports × units 換算 */
+      /** v1 priority fee (total lamports); derived from computeBudgetConfig.microLamports × units when omitted */
       priorityFeeLamports?: number | bigint;
       /**
-       * v0 風格的 compute budget 設定；會自動換算成 v1 的 computeUnitLimit / priorityFeeLamports。
-       * 優先權：明確傳入的 computeUnitLimit / priorityFeeLamports > computeBudgetConfig > getComputeBudgetConfig()
+       * v0-style compute budget config; it is converted automatically into v1's computeUnitLimit / priorityFeeLamports.
+       * Precedence: explicitly passed computeUnitLimit / priorityFeeLamports > computeBudgetConfig > getComputeBudgetConfig()
        */
       computeBudgetConfig?: ComputeBudgetConfig;
       /**
-       * 是否依交易實際帳戶「量測」loadedAccountsDataSize（會多打 1~2 次 getMultipleAccountsInfo）。
-       * 未開啟時走固定預設 8MB。明確指定的 loadedAccountsDataSize 仍優先於量測結果。
+       * Whether to measure loadedAccountsDataSize from the transaction's actual accounts (costs an extra 1~2
+       * getMultipleAccountsInfo calls). When disabled, the fixed 8MB default is used. An explicitly specified
+       * loadedAccountsDataSize still takes precedence over the measured value.
        */
       autoLoadedAccountsDataSize?: boolean;
     },
@@ -690,7 +689,7 @@ export class TxBuilder {
       ...extInfo
     } = props || {};
 
-    // blockhash + lastValidBlockHeight（兩者都需要，直接取 latestBlockhash）
+    // blockhash + lastValidBlockHeight (both are required, so just fetch latestBlockhash)
     let recentBlockhash = propRecentBlockhash;
     let lastValidBlockHeight = propLastValidBlockHeight;
     if (!recentBlockhash || lastValidBlockHeight === undefined) {
@@ -699,13 +698,13 @@ export class TxBuilder {
       lastValidBlockHeight = lastValidBlockHeight ?? latest.lastValidBlockHeight;
     }
 
-    // compute budget：明確參數優先，否則由 computeBudgetConfig（prop）> addCustomComputeBudget 存下的設定 > getComputeBudgetConfig() 換算
+    // compute budget: explicit params win, otherwise derive from computeBudgetConfig (prop) > the config stored by addCustomComputeBudget > getComputeBudgetConfig()
     const budgetConfig = propComputeBudgetConfig ?? this.computeBudgetConfig ?? (await this.getComputeBudgetConfig());
 
-    // computeUnitLimit fallback：v1 無隱含預設值，缺少會使交易失敗
+    // computeUnitLimit fallback: v1 has no implicit default, and a missing one makes the transaction fail
     const computeUnitLimit = propComputeUnitLimit ?? budgetConfig?.units ?? 600000;
 
-    // priorityFeeLamports：v1 要 total lamports；v0 的 microLamports 為每 CU 價格，需 × units 換算（無條件進位）
+    // priorityFeeLamports: v1 wants total lamports; v0's microLamports is a per-CU price, so multiply by units (rounding up)
     let priorityFeeLamports = propPriorityFeeLamports;
     if (priorityFeeLamports === undefined && budgetConfig?.microLamports) {
       const MICRO = BigInt(1_000_000);
@@ -716,7 +715,7 @@ export class TxBuilder {
     if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
       this.signers.push(this.owner.signer);
 
-    // loadedAccountsDataSize 優先權：明確指定 > 量測（autoLoadedAccountsDataSize）> 固定預設 8MB
+    // loadedAccountsDataSize precedence: explicitly specified > measured (autoLoadedAccountsDataSize) > the fixed 8MB default
     let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
     if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize) {
       loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.allInstructions);
@@ -741,7 +740,8 @@ export class TxBuilder {
       execute: async (params) => {
         const { skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
 
-        // keypair 路徑：自持 key，全部 signer 轉 CryptoKeyPair 後簽章
+        printSimulate([transaction]);
+        // Keypair path: we hold the keys, so convert every signer into a CryptoKeyPair and sign
         if (this.owner?.isKeyPair) {
           const keyPairs = await signersToCryptoKeyPairs(this.signers);
           const signedTx = await signV1Transaction(transaction, keyPairs);
@@ -752,7 +752,7 @@ export class TxBuilder {
           return { txId, signedTx };
         }
 
-        // 錢包路徑：臨時 signer 先部分簽，再交錢包（byte-level）簽 fee payer
+        // Wallet path: the ephemeral signers partially sign first, then the wallet (byte-level) signs as fee payer
         if (this.signAllTransactionsByteLevel) {
           const extraSigners = this.signers.filter((s) => !s.publicKey.equals(this.feePayer));
           const partiallySigned = extraSigners.length
@@ -776,8 +776,8 @@ export class TxBuilder {
   }
 
   /**
-   * 打包多筆 v1（2.x / kit）交易，對接 buildV1。與 buildV0MultiTx 對應但全程走 2.x：
-   * 簽章用 CryptoKeyPair / byte-level 錢包，送出用 sendEncodedTransaction(base64)。
+   * Build multiple v1 (2.x / kit) transactions on top of buildV1. The counterpart of buildV0MultiTx, but entirely
+   * on 2.x: signing uses CryptoKeyPairs / a byte-level wallet, sending uses sendEncodedTransaction(base64).
    */
   public async buildV1MultiTx<T = Record<string, any>>(params: {
     extraPreBuildData?: MakeTxData<TxVersion.V1>[];
@@ -818,14 +818,16 @@ export class TxBuilder {
       execute: async (executeParams?: MultiTxExecuteParam) => {
         const { sequentially, onTxUpdate, skipPreflight = true } = executeParams || {};
 
-        // 先取得所有已簽章交易（keypair 或 byte-level 錢包）
+        // First collect every signed transaction (via keypair or byte-level wallet)
         let signedTxs: TransactionV1[];
         if (this.owner?.isKeyPair) {
           signedTxs = await Promise.all(
-            allTransactions.map(async (tx, idx) => signV1Transaction(tx, await signersToCryptoKeyPairs(allSigners[idx]))),
+            allTransactions.map(async (tx, idx) =>
+              signV1Transaction(tx, await signersToCryptoKeyPairs(allSigners[idx])),
+            ),
           );
         } else if (this.signAllTransactionsByteLevel) {
-          // 每筆先讓非 fee payer 的臨時 signer 部分簽，再交錢包批次簽 fee payer
+          // For each transaction, let the non-fee-payer ephemeral signers partially sign first, then let the wallet batch-sign as fee payer
           const partiallySigned = await Promise.all(
             allTransactions.map(async (tx, idx) => {
               const extraSigners = allSigners[idx].filter((s) => !s.publicKey.equals(this.feePayer));
@@ -839,8 +841,9 @@ export class TxBuilder {
           throw new Error("please provide owner in keypair format or signAllTransactionsByteLevel function");
         }
 
-        // 循序送出：每筆確認後才送下一筆，並透過 onTxUpdate 回報狀態（fire-and-forget，
-        // 進度改由 onTxUpdate 的 processedTxs 提供，故立即回傳空 txIds，與 buildV0MultiTx 一致）
+        // Sequential sending: send the next transaction only once the previous one is confirmed, reporting status
+        // through onTxUpdate (fire-and-forget: progress is delivered via onTxUpdate's processedTxs, so empty txIds
+        // are returned immediately, consistent with buildV0MultiTx)
         if (sequentially) {
           let i = 0;
           const processedTxs: TxUpdateParams[] = [];
@@ -869,8 +872,8 @@ export class TxBuilder {
               if (!signatureResult.err) checkSendTx();
             };
 
-            // fallback 輪詢：用 getSignatureStatus（以簽章查詢，與交易版本無關）；
-            // 不能用 getTransaction——web3.js 1.x 無法反序列化 v1 回應
+            // Fallback polling: use getSignatureStatus (it queries by signature, independent of the transaction
+            // version); getTransaction cannot be used — web3.js 1.x cannot deserialize a v1 response
             if (this.loopMultiTxStatus)
               intervalId = setInterval(async () => {
                 if (confirmed) {
