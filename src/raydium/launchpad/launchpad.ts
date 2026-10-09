@@ -172,6 +172,7 @@ export default class LaunchpadModule extends ModuleBase {
     configInfo: propConfigInfo,
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     txTipConfig,
     feePayer,
     buyAmount,
@@ -491,20 +492,10 @@ export default class LaunchpadModule extends ModuleBase {
 
     txBuilder.addTipInstruction(txTipConfig);
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({
-        computeBudgetConfig,
-        swapInfo,
-        splitIns,
-        address: {
-          ...poolInfo,
-          poolId,
-        },
-      }) as Promise<
-        MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; swapInfo: SwapInfoReturnExt }>
-      >;
-    return txBuilder.sizeCheckBuild({
+    return txBuilder.versionSizeCheckBuild({
+      txVersion,
       computeBudgetConfig,
+      insCountLimit,
       swapInfo,
       splitIns,
       address: {
@@ -738,7 +729,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild<SwapInfoReturnExt>({
       txVersion,
@@ -942,7 +933,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{ outAmount: BN; maxSpentAmount: BN }>({
@@ -1140,7 +1131,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{ outAmount: BN }>({
@@ -1296,8 +1287,7 @@ export default class LaunchpadModule extends ModuleBase {
       : new Decimal(1);
 
     const maxSellAmountA =
-      maxSellAmount ??
-      (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA.amount);
+      maxSellAmount ?? (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA.amount);
 
     const shareATA = shareFeeReceiver ? getATAAddress(shareFeeReceiver, mintB, mintBProgram).publicKey : undefined;
     if (shareATA) {
@@ -1344,7 +1334,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild<{ maxSellAmount: BN }>({
@@ -1405,7 +1395,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1434,7 +1424,7 @@ export default class LaunchpadModule extends ModuleBase {
       instructions: [updatePlatformConfig(programId, platformAdmin, platformId, updateInfo)],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1473,7 +1463,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1555,7 +1545,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1571,6 +1561,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     txTipConfig,
     feePayer,
   }: ClaimAllPlatformFee<T>): Promise<MakeMultiTxData<T>> {
@@ -1635,12 +1626,9 @@ export default class LaunchpadModule extends ModuleBase {
 
     txBuilder.addTipInstruction(txTipConfig);
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-
-    return txBuilder.sizeCheckBuild({
-      computeBudgetConfig,
-    }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async createVesting<T extends TxVersion>({
@@ -1666,7 +1654,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1680,6 +1668,7 @@ export default class LaunchpadModule extends ModuleBase {
     beneficiaryList,
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     feePayer,
   }: CreateMultipleVesting<T>): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
@@ -1710,9 +1699,9 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async claimVesting<T extends TxVersion>({
@@ -1765,7 +1754,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1780,6 +1769,7 @@ export default class LaunchpadModule extends ModuleBase {
     vestingRecords = {},
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     feePayer,
   }: ClaimMultiVesting<T>): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
@@ -1830,9 +1820,9 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async claimVaultPlatformFee<T extends TxVersion>({
@@ -1876,7 +1866,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -1890,6 +1880,7 @@ export default class LaunchpadModule extends ModuleBase {
     unwrapSol = true,
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     feePayer,
     associatedOnly = true,
     checkCreateATAOwner = false,
@@ -1949,9 +1940,9 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async claimCreatorFee<T extends TxVersion>({
@@ -1991,7 +1982,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2004,6 +1995,7 @@ export default class LaunchpadModule extends ModuleBase {
     mintBList,
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     feePayer,
   }: ClaimMultiCreatorFee<T>): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
@@ -2037,9 +2029,9 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
-    if (txVersion == TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async createPlatformAllowConfig<T extends TxVersion>({
@@ -2067,7 +2059,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2103,7 +2095,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2139,7 +2131,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2181,7 +2173,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2218,7 +2210,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({
@@ -2253,7 +2245,7 @@ export default class LaunchpadModule extends ModuleBase {
       ],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
     return txBuilder.versionBuild({

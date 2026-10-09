@@ -460,7 +460,7 @@ export default class Farm extends ModuleBase {
     });
 
     const txBuilder = this.createTxBuilder(feePayer);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
@@ -589,7 +589,7 @@ export default class Farm extends ModuleBase {
 
     const farmKeys = (await this.scope.api.fetchFarmKeysById({ ids: farmInfo.id }))[0];
     const txBuilder = this.createTxBuilder(feePayer);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     const ownerMintToAccount: { [mint: string]: PublicKey } = {};
     for (const item of this.scope.account.tokenAccounts) {
@@ -834,7 +834,7 @@ export default class Farm extends ModuleBase {
       owner: this.scope.ownerPubKey,
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder
       .addInstruction({
@@ -853,6 +853,11 @@ export default class Farm extends ModuleBase {
     userAuxiliaryLedgers?: string[];
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
+    /**
+     * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+     * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+     */
+    insCountLimit?: number;
   }): Promise<MakeMultiTxData<T>> {
     const {
       farmInfoList,
@@ -863,6 +868,7 @@ export default class Farm extends ModuleBase {
       userAuxiliaryLedgers,
       txVersion,
       computeBudgetConfig,
+      insCountLimit,
     } = params;
 
     const txBuilder = this.createTxBuilder(feePayer);
@@ -985,9 +991,13 @@ export default class Farm extends ModuleBase {
       });
     }
 
-    if (txVersion === TxVersion.LEGACY)
-      return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    // unlike every other sizeCheckBuild call site this one fell back to v0, not legacy, when txVersion was
+    // omitted - kept as is, even though the generic defaults to LEGACY
+    return txBuilder.versionSizeCheckBuild({
+      txVersion: txVersion ?? TxVersion.V0,
+      computeBudgetConfig,
+      insCountLimit,
+    }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async fetchFarmBalances(): Promise<

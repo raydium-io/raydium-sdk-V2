@@ -454,7 +454,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [InstructionType.CpmmCreatePool],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -605,7 +605,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [InstructionType.CpmmAddLiquidity],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -720,7 +720,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [InstructionType.CpmmWithdrawLiquidity],
       lookupTableAddress: poolKeys.lookupTableAccount ? [poolKeys.lookupTableAccount] : [],
     });
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -862,7 +862,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [fixedOut ? InstructionType.CpmmSwapBaseOut : InstructionType.ClmmSwapBaseIn],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -898,7 +898,7 @@ export default class CpmmModule extends ModuleBase {
     });
 
     txBuilder.addInstruction(insData);
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1015,7 +1015,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [InstructionType.CpmmCollectLockFee],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1032,6 +1032,7 @@ export default class CpmmModule extends ModuleBase {
       authProgram = LOCK_CPMM_AUTH,
       cpmmProgram,
       computeBudgetConfig,
+      insCountLimit,
       txVersion,
       closeWsol = true,
     } = params;
@@ -1173,11 +1174,13 @@ export default class CpmmModule extends ModuleBase {
       });
     }
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig, lookupTableAddress: lookupTableAccounts }) as Promise<
-        MakeMultiTxData<T>
-      >;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    // lookupTableAddress only reaches v0; legacy and v1 have no ALT, so versionSizeCheckBuild drops it there
+    return txBuilder.versionSizeCheckBuild({
+      txVersion,
+      computeBudgetConfig,
+      lookupTableAddress: lookupTableAccounts,
+      insCountLimit,
+    }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async createPoolWithPermission<T extends TxVersion>({
@@ -1291,7 +1294,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [InstructionType.CpmmCreatePool],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1364,7 +1367,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
@@ -1377,6 +1380,7 @@ export default class CpmmModule extends ModuleBase {
     programId = CREATE_CPMM_POOL_PROGRAM,
     txVersion,
     computeBudgetConfig,
+    insCountLimit: propInsCountLimit,
     feePayer,
   }: CollectMultiCreatorFees<T>): Promise<MakeMultiTxData<T>> {
     const payer = feePayer || this.scope.ownerPubKey;
@@ -1472,13 +1476,14 @@ export default class CpmmModule extends ModuleBase {
       });
     }
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({
-        computeBudgetConfig,
-        lookupTableAddress: poolKeyList.map((p) => p.lookupTableAccount).filter(Boolean) as string[],
-        insCountLimit: 6,
-      }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    // lookupTableAddress only reaches v0; legacy and v1 have no ALT, so versionSizeCheckBuild drops it there
+    return txBuilder.versionSizeCheckBuild({
+      txVersion,
+      computeBudgetConfig,
+      lookupTableAddress: poolKeyList.map((p) => p.lookupTableAccount).filter(Boolean) as string[],
+      // only v0 / v1 cap at 6 by default; legacy keeps the builder default, as it did before
+      insCountLimit: propInsCountLimit ?? (txVersion === TxVersion.LEGACY ? undefined : 6),
+    }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async collectCreatorFeesPermissionless<T extends TxVersion>({
@@ -1545,7 +1550,7 @@ export default class CpmmModule extends ModuleBase {
       instructionTypes: [],
     });
 
-    txBuilder.addCustomComputeBudget(computeBudgetConfig);
+    txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
     return txBuilder.versionBuild({
       txVersion,
