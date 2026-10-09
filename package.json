@@ -1,6 +1,6 @@
 {
-  "name": "r-ttt-2",
-  "version": "0.0.16",
+  "name": "@raydium-io/raydium-sdk-v2",
+  "version": "0.2.74-alpha",
   "description": "An SDK for building applications on top of Raydium.",
   "license": "GPL-3.0",
   "main": "./lib/index.js",
@@ -39,11 +39,8 @@
     "watch": "rm -rf lib && tsup src --watch --format cjs,esm --dts --sourcemap --no-splitting --minify -d lib"
   },
   "dependencies": {
-    "@solana/addresses": "^8.2.0",
     "@solana/buffer-layout": "^4.0.1",
     "@solana/spl-token": "^0.4.8",
-    "@solana/transaction-messages": "^8.2.0",
-    "@solana/transactions": "^8.2.0",
     "@solana/web3.js": "^1.95.3",
     "axios": "^1.1.3",
     "big.js": "^6.2.1",
