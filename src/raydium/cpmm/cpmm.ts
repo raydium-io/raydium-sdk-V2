@@ -1173,6 +1173,9 @@ export default class CpmmModule extends ModuleBase {
       });
     }
 
+    // v1 has no address lookup table, so lookupTableAddress is not passed through
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig, lookupTableAddress: lookupTableAccounts }) as Promise<
         MakeMultiTxData<T>
@@ -1472,6 +1475,9 @@ export default class CpmmModule extends ModuleBase {
       });
     }
 
+    // v1 has no address lookup table, so lookupTableAddress is not passed through
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig, insCountLimit: 6 }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({
         computeBudgetConfig,

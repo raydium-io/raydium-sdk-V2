@@ -303,7 +303,7 @@ export interface BuildV0WalletTxParams {
  * serialized bytes for v1 compatibility (the old SignAllTransactions is tied to 1.x Transaction /
  * VersionedTransaction objects, which cannot represent v1).
  */
-export type SignAllTransactionsByteLevel = (transactionsBytes: Uint8Array[]) => Promise<Uint8Array[]>;
+export type SignAllV1Transactions = (transactionsBytes: Uint8Array[]) => Promise<Uint8Array[]>;
 
 // ── Wallet Standard adapters (described as minimal structural types to avoid a hard dependency on @wallet-standard/*) ──
 
@@ -324,7 +324,7 @@ export type WalletStandardSignTransaction = (
 ) => Promise<WalletStandardSignTransactionOutput[]>;
 
 /**
- * Adapt a Wallet Standard `solana:signTransaction` feature into a SignAllTransactionsByteLevel so the frontend
+ * Adapt a Wallet Standard `solana:signTransaction` feature into a SignAllV1Transactions so the frontend
  * does not have to hand-write the bytes ↔ input/output conversion layer.
  *
  * @example
@@ -343,7 +343,7 @@ export function walletStandardToByteLevelSigner(params: {
   signTransaction: WalletStandardSignTransaction;
   account: unknown;
   chain?: string;
-}): SignAllTransactionsByteLevel {
+}): SignAllV1Transactions {
   const { signTransaction, account, chain } = params;
   return async (transactionsBytes) => {
     const outputs = await signTransaction(...transactionsBytes.map((transaction) => ({ account, transaction, chain })));
@@ -359,7 +359,7 @@ export function walletStandardToByteLevelSigner(params: {
  * ```ts
  * const feature = wallet.features["solana:signTransaction"];
  * // Recommended: first check that the wallet declares v1 support: feature.supportedTransactionVersions.includes(1)
- * const signAllTransactions: SignAllTransactionsByteLevel = async (txsBytes) => {
+ * const signAllTransactions: SignAllV1Transactions = async (txsBytes) => {
  *   const outputs = await feature.signTransaction(
  *     ...txsBytes.map((transaction) => ({ account, transaction, chain: "solana:mainnet" })),
  *   );
@@ -371,7 +371,7 @@ export function walletStandardToByteLevelSigner(params: {
  */
 export async function signAllV1TransactionsWithWallet(
   transactions: Transaction[],
-  signAllTransactions: SignAllTransactionsByteLevel,
+  signAllTransactions: SignAllV1Transactions,
 ): Promise<Transaction[]> {
   const encoder = getTransactionEncoder();
   const decoder = getTransactionDecoder();
@@ -387,7 +387,7 @@ export async function signAllV1TransactionsWithWallet(
  */
 export async function signV1TransactionWithWallet(
   transaction: Transaction,
-  signAllTransactions: SignAllTransactionsByteLevel,
+  signAllTransactions: SignAllV1Transactions,
 ): Promise<Transaction> {
   const [signed] = await signAllV1TransactionsWithWallet([transaction], signAllTransactions);
   return signed;

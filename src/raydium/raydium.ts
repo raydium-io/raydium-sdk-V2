@@ -19,7 +19,7 @@ import Launchpad from "./launchpad/launchpad";
 
 import TokenModule from "./token/token";
 import { SignAllTransactions } from "./type";
-import { SignAllTransactionsByteLevel } from "../common/txTool/buildV1Tx";
+import { SignAllV1Transactions } from "../common/txTool/buildV1Tx";
 
 export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApiBatchRequestParams, "api"> {
   /* ================= solana ================= */
@@ -37,7 +37,7 @@ export interface RaydiumLoadParams extends TokenAccountDataProp, Omit<RaydiumApi
   apiCacheTime?: number;
   signAllTransactions?: SignAllTransactions;
   /** v1（2.x / kit）交易專用的 byte-level 批次錢包簽章；錢包路徑跑 buildV1 時需要 */
-  signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
+  signAllV1Transactions?: SignAllV1Transactions;
   urlConfigs?: API_URL_CONFIG;
   logRequests?: boolean;
   logCount?: number;
@@ -92,7 +92,7 @@ export class Raydium {
   public api: Api;
   private _apiCacheTime: number;
   private _signAllTransactions?: SignAllTransactions;
-  private _signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
+  private _signAllV1Transactions?: SignAllV1Transactions;
   private logger: Logger;
   private _chainTime?: {
     fetched: number;
@@ -123,7 +123,7 @@ export class Raydium {
     this.cluster = cluster || "mainnet";
     this._owner = owner ? new Owner(owner) : undefined;
     this._signAllTransactions = config.signAllTransactions;
-    this._signAllTransactionsByteLevel = config.signAllTransactionsByteLevel;
+    this._signAllV1Transactions = config.signAllV1Transactions;
     this.blockhashCommitment = blockhashCommitment;
     this.loopMultiTxStatus = loopMultiTxStatus;
 
@@ -215,13 +215,13 @@ export class Raydium {
     this._signAllTransactions = signAllTransactions;
     return this;
   }
-  get signAllTransactionsByteLevel(): SignAllTransactionsByteLevel | undefined {
-    return this._signAllTransactionsByteLevel;
+  get signAllV1Transactions(): SignAllV1Transactions | undefined {
+    return this._signAllV1Transactions;
   }
-  public setSignAllTransactionsByteLevel(
-    signAllTransactionsByteLevel?: SignAllTransactionsByteLevel,
+  public setSignAllV1Transactions(
+    signAllV1Transactions?: SignAllV1Transactions,
   ): Raydium {
-    this._signAllTransactionsByteLevel = signAllTransactionsByteLevel;
+    this._signAllV1Transactions = signAllV1Transactions;
     return this;
   }
 

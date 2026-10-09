@@ -19,7 +19,12 @@ import { InstructionType } from "./txType";
 import { ComputeBudgetConfig } from "../../raydium/type";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-import { getBase64EncodedWireTransaction, type Transaction as V1Transaction } from "@solana/transactions";
+import {
+  getBase64EncodedWireTransaction,
+  isTransactionWithinSizeLimit,
+  type Transaction as V1Transaction,
+} from "@solana/transactions";
+import { buildV1Transaction } from "./buildV1Tx";
 
 const logger = createLogger("Raydium_txUtil");
 
@@ -301,6 +306,52 @@ export function checkV0TxSize({
     const buildLength = Buffer.from(new VersionedTransaction(messageV0).serialize()).toString("base64").length;
     return buildLength < MAX_BASE64_SIZE;
   } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Whether the given instructions still fit into a single v1 transaction.
+ *
+ * Unlike legacy / v0 (both capped at 1232 bytes), a v1 transaction may be up to 4096 bytes, and its compute budget
+ * lives in the message config mask instead of ComputeBudget instructions - the mask takes a fixed amount of space,
+ * so it has to be passed in here for the measurement to match what buildV1Transaction will produce.
+ *
+ * The transaction is measured unsigned: compileTransaction already reserves one slot per required signer, so the
+ * size reported here is the final wire size.
+ */
+export function checkV1TxSize({
+  instructions,
+  payer,
+  computeUnitLimit = 600000,
+  priorityFeeLamports,
+  loadedAccountsDataSize,
+  recentBlockhash = Keypair.generate().publicKey.toString(),
+  lastValidBlockHeight = 0,
+}: {
+  instructions: TransactionInstruction[];
+  payer: PublicKey;
+  /** Must match the value handed to buildV1Transaction; it is part of the config mask */
+  computeUnitLimit?: number;
+  priorityFeeLamports?: number | bigint;
+  loadedAccountsDataSize?: number;
+  recentBlockhash?: string;
+  lastValidBlockHeight?: number | bigint;
+}): boolean {
+  try {
+    return isTransactionWithinSizeLimit(
+      buildV1Transaction({
+        payer,
+        recentBlockhash,
+        lastValidBlockHeight,
+        computeUnitLimit,
+        priorityFeeLamports,
+        loadedAccountsDataSize,
+        instructions,
+      }),
+    );
+  } catch (error) {
+    // compiling throws when e.g. the account list overflows, which means it does not fit either
     return false;
   }
 }

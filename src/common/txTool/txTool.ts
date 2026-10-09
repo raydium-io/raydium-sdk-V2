@@ -26,14 +26,15 @@ import {
   signAllV1TransactionsWithWallet,
   signersToCryptoKeyPairs,
   partialSignV1Transaction,
-  type SignAllTransactionsByteLevel,
+  type SignAllV1Transactions,
 } from "./buildV1Tx";
-import { type Transaction as TransactionV1 } from "@solana/transactions";
+import { isTransactionWithinSizeLimit, type Transaction as TransactionV1 } from "@solana/transactions";
 import { InstructionType, TxVersion } from "./txType";
 import {
   addComputeBudget,
   checkLegacyTxSize,
   checkV0TxSize,
+  checkV1TxSize,
   confirmTransaction,
   getRecentBlockHash,
   printSimulate,
@@ -75,7 +76,7 @@ interface TxBuilderInit {
    * Byte-level batch wallet signer dedicated to v1 (2.x) transactions. The existing signAllTransactions is bound
    * to 1.x Transaction/VersionedTransaction objects and cannot sign v1, so the buildV1 wallet path uses this one.
    */
-  signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
+  signAllV1Transactions?: SignAllV1Transactions;
 }
 
 export interface AddInstructionParam {
@@ -178,6 +179,16 @@ const LOOP_INTERVAL = 2000;
  */
 const DEFAULT_LOADED_ACCOUNTS_DATA_SIZE = 8 * 1024 * 1024;
 
+/**
+ * Compute units budgeted per instruction when sizeCheckBuildV1 derives its default insCountLimit.
+ *
+ * v1 keeps the 1.4M compute unit ceiling per transaction, so compute - not the 4096 byte size limit - is what
+ * actually caps how much can be packed into one transaction. The divisor is back-calculated from the legacy pair
+ * (insCountLimit 12, units 600000) rather than measured, so the derived default reproduces the v0 behaviour at the
+ * default budget and scales up with it instead of staying hardcoded.
+ */
+const V1_DEFAULT_CU_PER_INSTRUCTION = 50_000;
+
 export class TxBuilder {
   private connection: Connection;
   private owner?: Owner;
@@ -190,7 +201,7 @@ export class TxBuilder {
   private feePayer: PublicKey;
   private cluster: Cluster;
   private signAllTransactions?: SignAllTransactions;
-  private signAllTransactionsByteLevel?: SignAllTransactionsByteLevel;
+  private signAllV1Transactions?: SignAllV1Transactions;
   private blockhashCommitment?: Commitment;
   private loopMultiTxStatus: boolean;
   /** The config last passed to addCustomComputeBudget; read back by buildV1 (in v1 the compute budget goes through the config mask, not an instruction) */
@@ -200,7 +211,7 @@ export class TxBuilder {
     this.connection = params.connection;
     this.feePayer = params.feePayer;
     this.signAllTransactions = params.signAllTransactions;
-    this.signAllTransactionsByteLevel = params.signAllTransactionsByteLevel;
+    this.signAllV1Transactions = params.signAllV1Transactions;
     this.owner = params.owner;
     this.cluster = params.cluster;
     this.blockhashCommitment = params.blockhashCommitment;
@@ -651,7 +662,7 @@ export class TxBuilder {
    * Build a single v1 (2.x / kit) transaction on top of buildV1Tx.
    *
    * - Keypair path: when owner.isKeyPair, convert every signer into a CryptoKeyPair and sign with the 2.x API.
-   * - Wallet path: requires signAllTransactionsByteLevel (byte-level) to be provided when constructing the TxBuilder;
+   * - Wallet path: requires signAllV1Transactions (byte-level) to be provided when constructing the TxBuilder;
    *   the ephemeral signers partially sign first, then the wallet signs as fee payer.
    *
    * ⚠️ Before the v1 mainnet activation date of 2026-09-09, RPCs do not accept v1 transactions yet; also v1 has no
@@ -753,14 +764,14 @@ export class TxBuilder {
         }
 
         // Wallet path: the ephemeral signers partially sign first, then the wallet (byte-level) signs as fee payer
-        if (this.signAllTransactionsByteLevel) {
+        if (this.signAllV1Transactions) {
           const extraSigners = this.signers.filter((s) => !s.publicKey.equals(this.feePayer));
           const partiallySigned = extraSigners.length
             ? await partialSignV1Transaction(transaction, await signersToCryptoKeyPairs(extraSigners))
             : transaction;
           const [signedTx] = await signAllV1TransactionsWithWallet(
             [partiallySigned],
-            this.signAllTransactionsByteLevel,
+            this.signAllV1Transactions,
           );
           const txId = notSendToRpc
             ? ""
@@ -769,7 +780,7 @@ export class TxBuilder {
           return { txId, signedTx };
         }
 
-        throw new Error("please provide owner in keypair format or signAllTransactionsByteLevel function");
+        throw new Error("please provide owner in keypair format or signAllV1Transactions function");
       },
       extInfo: (extInfo || {}) as O,
     };
@@ -826,7 +837,7 @@ export class TxBuilder {
               signV1Transaction(tx, await signersToCryptoKeyPairs(allSigners[idx])),
             ),
           );
-        } else if (this.signAllTransactionsByteLevel) {
+        } else if (this.signAllV1Transactions) {
           // For each transaction, let the non-fee-payer ephemeral signers partially sign first, then let the wallet batch-sign as fee payer
           const partiallySigned = await Promise.all(
             allTransactions.map(async (tx, idx) => {
@@ -836,9 +847,9 @@ export class TxBuilder {
                 : tx;
             }),
           );
-          signedTxs = await signAllV1TransactionsWithWallet(partiallySigned, this.signAllTransactionsByteLevel);
+          signedTxs = await signAllV1TransactionsWithWallet(partiallySigned, this.signAllV1Transactions);
         } else {
-          throw new Error("please provide owner in keypair format or signAllTransactionsByteLevel function");
+          throw new Error("please provide owner in keypair format or signAllV1Transactions function");
         }
 
         // Sequential sending: send the next transaction only once the previous one is confirmed, reporting status
@@ -1612,6 +1623,297 @@ export class TxBuilder {
           }
         }
         throw new Error("please provide owner in keypair format or signAllTransactions function");
+      },
+      extInfo: extInfo || {},
+    };
+  }
+
+  /**
+   * The v1 (2.x / kit) counterpart of sizeCheckBuild / sizeCheckBuildV0: greedily packs every instruction held by
+   * this builder into as few sendable v1 transactions as possible.
+   *
+   * Differences from sizeCheckBuildV0:
+   * - a v1 transaction may be up to 4096 bytes (legacy / v0 cap at 1232), so many more instructions fit per tx.
+   *   Note a v1 transaction is additionally capped at 64 unique account addresses, which for account heavy
+   *   instructions (a CLMM decreaseLiquidity alone touches ~16) bites long before the 4096 bytes do -
+   *   checkV1TxSize reports that case as "does not fit" as well
+   * - `insCountLimit` is no longer hardcoded to 12: it defaults to computeUnitLimit / V1_DEFAULT_CU_PER_INSTRUCTION,
+   *   which is 12 at the default 600000 units (identical to v0) and 28 at the 1.4M ceiling. Account heavy
+   *   instructions get split by the account cap well before the count limit matters, so the limit really only
+   *   guards the cheap-instruction case, where compute is the thing worth guarding
+   * - v1 has no ALT, so there is no lookup table handling at all
+   * - the compute budget lives in the message config mask rather than in ComputeBudget instructions, so the
+   *   "does it still fit once the compute budget instructions are added" fallback is gone: every split tx carries
+   *   the same computeUnitLimit / priorityFeeLamports / loadedAccountsDataSize, and any ComputeBudget instruction
+   *   sitting in the builder (from setCustomComputeBudget) is deliberately left out
+   * - a 2.x Transaction is immutable, so nothing is signed here; signing happens inside execute, and the
+   *   `recentBlockHash` execute param is ignored (the blockhash is already baked into messageBytes)
+   */
+  public async sizeCheckBuildV1(
+    props?: Record<string, any> & {
+      computeBudgetConfig?: ComputeBudgetConfig;
+      /** Compute unit limit applied to every split tx; falls back to computeBudgetConfig / getComputeBudgetConfig().units (default 600000) */
+      computeUnitLimit?: number;
+      /** v1 priority fee (total lamports) applied to every split tx; derived from computeBudgetConfig.microLamports x units when omitted */
+      priorityFeeLamports?: number | bigint;
+      /** Instructions that must start a new tx (same semantics as sizeCheckBuild / sizeCheckBuildV0) */
+      splitIns?: TransactionInstruction[];
+      /** Max instruction count per tx; defaults to computeUnitLimit / 50000 (12 at the default 600000 units) */
+      insCountLimit?: number;
+      recentBlockhash?: string;
+      lastValidBlockHeight?: number;
+      /**
+       * Measure loadedAccountsDataSize from the actual accounts (1~2 extra getMultipleAccountsInfo calls). It is
+       * measured once over all instructions and the result is shared by every split tx, since it is only a limit
+       * declaration and does not affect fees.
+       */
+      autoLoadedAccountsDataSize?: boolean;
+    },
+  ): Promise<MultiTxV1BuildData> {
+    const {
+      computeBudgetConfig: propComputeBudgetConfig,
+      computeUnitLimit: propComputeUnitLimit,
+      priorityFeeLamports: propPriorityFeeLamports,
+      recentBlockhash: propRecentBlockhash,
+      lastValidBlockHeight: propLastValidBlockHeight,
+      autoLoadedAccountsDataSize,
+      splitIns = [],
+      insCountLimit: propInsCountLimit,
+      ...extInfo
+    } = props || {};
+
+    let recentBlockhash = propRecentBlockhash;
+    let lastValidBlockHeight = propLastValidBlockHeight;
+    if (!recentBlockhash || lastValidBlockHeight === undefined) {
+      const latest = await this.connection.getLatestBlockhash(this.blockhashCommitment);
+      recentBlockhash = recentBlockhash ?? latest.blockhash;
+      lastValidBlockHeight = lastValidBlockHeight ?? latest.lastValidBlockHeight;
+    }
+
+    // same precedence as buildV1: explicit params > computeBudgetConfig (prop) > setCustomComputeBudget > getComputeBudgetConfig()
+    const budgetConfig = propComputeBudgetConfig ?? this.computeBudgetConfig ?? (await this.getComputeBudgetConfig());
+    const computeUnitLimit = propComputeUnitLimit ?? budgetConfig?.units ?? 600000;
+    let priorityFeeLamports = propPriorityFeeLamports;
+    if (priorityFeeLamports === undefined && budgetConfig?.microLamports) {
+      const MICRO = BigInt(1_000_000);
+      priorityFeeLamports =
+        (BigInt(budgetConfig.microLamports) * BigInt(computeUnitLimit) + (MICRO - BigInt(1))) / MICRO;
+    }
+
+    // budget the instruction count off the compute budget rather than hardcoding it: compute, not size, is what
+    // caps a v1 transaction once the 64 account limit has had its say
+    const insCountLimit =
+      propInsCountLimit ?? Math.max(1, Math.floor(computeUnitLimit / V1_DEFAULT_CU_PER_INSTRUCTION));
+
+    const sourceInstructions = [...this.instructions, ...this.endInstructions];
+
+    let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
+    if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize)
+      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, sourceInstructions);
+    loadedAccountsDataSize = loadedAccountsDataSize ?? DEFAULT_LOADED_ACCOUNTS_DATA_SIZE;
+
+    const signerKey: { [key: string]: Signer } = this.signers.reduce(
+      (acc, cur) => ({ ...acc, [cur.publicKey.toBase58()]: cur }),
+      {},
+    );
+
+    const buildOne = (instructions: TransactionInstruction[]): TransactionV1 =>
+      buildV1Transaction({
+        payer: this.feePayer,
+        recentBlockhash: recentBlockhash!,
+        lastValidBlockHeight: lastValidBlockHeight!,
+        computeUnitLimit,
+        priorityFeeLamports,
+        loadedAccountsDataSize,
+        instructions,
+      });
+
+    const pickSigners = (instructions: TransactionInstruction[]): Signer[] =>
+      Array.from(
+        new Set<string>(
+          instructions.map((i) => i.keys.filter((ii) => ii.isSigner).map((ii) => ii.pubkey.toString())).flat(),
+        ),
+      )
+        .map((i) => signerKey[i])
+        .filter((i) => i !== undefined);
+
+    const allTransactions: TransactionV1[] = [];
+    const allSigners: Signer[][] = [];
+
+    const pushTx = (instructions: TransactionInstruction[]): void => {
+      let transaction: TransactionV1;
+      try {
+        transaction = buildOne(instructions);
+      } catch (e) {
+        // a lone instruction is never size checked before it starts a queue, so this is where one that can never
+        // be compiled on its own (e.g. over the 64 unique account limit) surfaces
+        if (instructions.length === 1) throw Error("item ins too big");
+        throw e;
+      }
+      if (!isTransactionWithinSizeLimit(transaction)) throw Error("item ins too big");
+      allTransactions.push(transaction);
+      allSigners.push(pickSigners(instructions));
+    };
+
+    let instructionQueue: TransactionInstruction[] = [];
+    let splitInsIdx = 0;
+    sourceInstructions.forEach((item) => {
+      if (
+        item !== splitIns[splitInsIdx] &&
+        instructionQueue.length < insCountLimit &&
+        checkV1TxSize({
+          instructions: [...instructionQueue, item],
+          payer: this.feePayer,
+          computeUnitLimit,
+          priorityFeeLamports,
+          loadedAccountsDataSize,
+          recentBlockhash,
+          lastValidBlockHeight,
+        })
+      ) {
+        // current ins add to queue still not exceed tx size limit
+        instructionQueue.push(item);
+      } else {
+        if (instructionQueue.length === 0) throw Error("item ins too big");
+        splitInsIdx += item === splitIns[splitInsIdx] ? 1 : 0;
+        pushTx(instructionQueue);
+        instructionQueue = [item];
+      }
+    });
+
+    if (instructionQueue.length > 0) pushTx(instructionQueue);
+
+    if (this.owner?.signer) {
+      allSigners.forEach((signers) => {
+        if (!signers.some((s) => s.publicKey.equals(this.owner!.publicKey))) signers.push(this.owner!.signer!);
+      });
+    }
+
+    const sendOne = async (tx: TransactionV1, skipPreflight: boolean): Promise<string> =>
+      this.connection.sendEncodedTransaction(serializeV1Transaction(tx), { skipPreflight });
+
+    return {
+      builder: this,
+      transactions: allTransactions,
+      signers: allSigners,
+      instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
+      execute: async (executeParams?: MultiTxExecuteParam) => {
+        const { sequentially, onTxUpdate, skipTxCount = 0, skipPreflight = true } = executeParams || {};
+
+        printSimulate(allTransactions);
+
+        // only the transactions that have not been sent yet need signing
+        const needSignTxs = allTransactions.slice(skipTxCount);
+        const needSignSigners = allSigners.slice(skipTxCount);
+
+        let newSignedTxs: TransactionV1[];
+        if (this.owner?.isKeyPair) {
+          newSignedTxs = await Promise.all(
+            needSignTxs.map(async (tx, idx) =>
+              signV1Transaction(tx, await signersToCryptoKeyPairs(needSignSigners[idx])),
+            ),
+          );
+        } else if (this.signAllV1Transactions) {
+          // per tx: the non-fee-payer ephemeral signers partially sign first, then the wallet batch-signs as fee payer
+          const partiallySigned = await Promise.all(
+            needSignTxs.map(async (tx, idx) => {
+              const extraSigners = needSignSigners[idx].filter((s) => !s.publicKey.equals(this.feePayer));
+              return extraSigners.length
+                ? partialSignV1Transaction(tx, await signersToCryptoKeyPairs(extraSigners))
+                : tx;
+            }),
+          );
+          newSignedTxs = await signAllV1TransactionsWithWallet(partiallySigned, this.signAllV1Transactions);
+        } else {
+          throw new Error("please provide owner in keypair format or signAllV1Transactions function");
+        }
+        const signedTxs = [...allTransactions.slice(0, skipTxCount), ...newSignedTxs];
+
+        if (sequentially) {
+          let i = 0;
+          const processedTxs: TxUpdateParams[] = [];
+          const checkSendTx = async (): Promise<void> => {
+            if (!signedTxs[i]) return;
+            if (i < skipTxCount) {
+              // success before, do not send again
+              processedTxs.push({ txId: "", status: "success", signedTx: signedTxs[i] });
+              onTxUpdate?.([...processedTxs]);
+              i++;
+              checkSendTx();
+              return;
+            }
+            const tx = signedTxs[i];
+            const txId = await sendOne(tx, skipPreflight);
+            processedTxs.push({ txId, status: "sent", signedTx: tx });
+            onTxUpdate?.([...processedTxs]);
+            i++;
+
+            let confirmed = false;
+            // eslint-disable-next-line
+            let intervalId: NodeJS.Timer | null = null,
+              subSignatureId: number | null = null;
+            const cbk = (signatureResult: SignatureResult): void => {
+              intervalId !== null && clearInterval(intervalId);
+              subSignatureId !== null && this.connection.removeSignatureListener(subSignatureId);
+              const targetTxIdx = processedTxs.findIndex((t) => t.txId === txId);
+              if (targetTxIdx > -1) {
+                if (processedTxs[targetTxIdx].status === "error" || processedTxs[targetTxIdx].status === "success")
+                  return;
+                processedTxs[targetTxIdx].status = signatureResult.err ? "error" : "success";
+              }
+              onTxUpdate?.([...processedTxs]);
+              if (!signatureResult.err) checkSendTx();
+            };
+
+            // getSignatureStatus instead of getTransaction: web3.js 1.x cannot deserialize a v1 response
+            if (this.loopMultiTxStatus)
+              intervalId = setInterval(async () => {
+                if (confirmed) {
+                  clearInterval(intervalId!);
+                  return;
+                }
+                try {
+                  const { value } = await this.connection.getSignatureStatus(txId, { searchTransactionHistory: true });
+                  if (value && (value.confirmationStatus === "confirmed" || value.confirmationStatus === "finalized")) {
+                    confirmed = true;
+                    clearInterval(intervalId!);
+                    cbk({ err: value.err });
+                    console.log("tx status from getSignatureStatus:", txId);
+                  }
+                } catch (e) {
+                  confirmed = true;
+                  clearInterval(intervalId!);
+                  console.error("getSignatureStatus timeout:", e, txId);
+                }
+              }, LOOP_INTERVAL);
+
+            subSignatureId = this.connection.onSignature(
+              txId,
+              (result) => {
+                if (confirmed) {
+                  this.connection.removeSignatureListener(subSignatureId!);
+                  return;
+                }
+                confirmed = true;
+                cbk(result);
+              },
+              "confirmed",
+            );
+            this.connection.getSignatureStatus(txId);
+          };
+          checkSendTx();
+          return { txIds: [], signedTxs };
+        }
+
+        const txIds: string[] = [];
+        for (let i = 0; i < signedTxs.length; i += 1) {
+          if (i < skipTxCount) {
+            txIds.push("tx skipped");
+            continue;
+          }
+          txIds.push(await sendOne(signedTxs[i], skipPreflight));
+        }
+        return { txIds, signedTxs };
       },
       extInfo: extInfo || {},
     };

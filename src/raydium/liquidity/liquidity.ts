@@ -627,6 +627,8 @@ export default class LiquidityModule extends ModuleBase {
       lookupTableAddress: clmmPoolKeys.lookupTableAccount ? [clmmPoolKeys.lookupTableAccount] : [],
     });
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
@@ -989,6 +991,22 @@ export default class LiquidityModule extends ModuleBase {
           ].filter((i) => !!i) as TransactionInstruction[])
         : undefined;
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({
+        computeBudgetConfig,
+        splitIns,
+        address: {
+          requestQueue: requestQueue.publicKey,
+          eventQueue: eventQueue.publicKey,
+          bids: bids.publicKey,
+          asks: asks.publicKey,
+          baseVault: baseVault.publicKey,
+          quoteVault: quoteVault.publicKey,
+          baseMint: new PublicKey(baseMintInfo.mint),
+          quoteMint: new PublicKey(quoteMintInfo.mint),
+          ...createPoolKeys,
+        },
+      }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({
         computeBudgetConfig,

@@ -41,7 +41,7 @@ export default class ModuleBase {
       loopMultiTxStatus: this.scope.loopMultiTxStatus,
       api: this.scope.api,
       signAllTransactions: this.scope.signAllTransactions,
-      signAllTransactionsByteLevel: this.scope.signAllTransactionsByteLevel,
+      signAllV1Transactions: this.scope.signAllV1Transactions,
     });
   }
 

@@ -987,6 +987,8 @@ export default class Farm extends ModuleBase {
 
     if (txVersion === TxVersion.LEGACY)
       return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }
 

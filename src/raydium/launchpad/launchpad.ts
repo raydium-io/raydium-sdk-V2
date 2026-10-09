@@ -491,6 +491,18 @@ export default class LaunchpadModule extends ModuleBase {
 
     txBuilder.addTipInstruction(txTipConfig);
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({
+        computeBudgetConfig,
+        swapInfo,
+        splitIns,
+        address: {
+          ...poolInfo,
+          poolId,
+        },
+      }) as Promise<
+        MakeMultiTxData<T, { address: LaunchpadPoolInfo & { poolId: PublicKey }; swapInfo: SwapInfoReturnExt }>
+      >;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({
         computeBudgetConfig,
@@ -1634,6 +1646,8 @@ export default class LaunchpadModule extends ModuleBase {
 
     txBuilder.addTipInstruction(txTipConfig);
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
 
@@ -1709,6 +1723,8 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
@@ -1829,6 +1845,8 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
@@ -1948,6 +1966,8 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
@@ -2036,7 +2056,9 @@ export default class LaunchpadModule extends ModuleBase {
       });
     });
 
-    if (txVersion == TxVersion.V0)
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
   }

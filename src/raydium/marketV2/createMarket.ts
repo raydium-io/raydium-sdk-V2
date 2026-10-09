@@ -171,6 +171,21 @@ export default class MarketV2 extends ModuleBase {
       });
     }
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({
+        computeBudgetConfig,
+        address: {
+          marketId: market.publicKey,
+          requestQueue: requestQueue.publicKey,
+          eventQueue: eventQueue.publicKey,
+          bids: bids.publicKey,
+          asks: asks.publicKey,
+          baseVault: baseVault.publicKey,
+          quoteVault: quoteVault.publicKey,
+          baseMint: new PublicKey(baseInfo.mint),
+          quoteMint: new PublicKey(quoteInfo.mint),
+        },
+      }) as Promise<MakeMultiTxData<T, MarketExtInfo>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({
         computeBudgetConfig,

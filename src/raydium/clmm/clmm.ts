@@ -2325,6 +2325,8 @@ export class Clmm extends ModuleBase {
       idx++;
     }
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
@@ -2527,6 +2529,8 @@ export class Clmm extends ModuleBase {
       });
     }
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
@@ -3046,6 +3050,8 @@ export class Clmm extends ModuleBase {
       }
     }
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
     return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;

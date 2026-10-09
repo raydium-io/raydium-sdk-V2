@@ -372,7 +372,11 @@ export default class TradeV2 extends ModuleBase {
       checkTxBuilder.addInstruction(swapIns);
 
       const { transactions } =
-        txVersion === TxVersion.V0 ? await checkTxBuilder.sizeCheckBuildV0() : await checkTxBuilder.sizeCheckBuild();
+        txVersion === TxVersion.V0
+          ? await checkTxBuilder.sizeCheckBuildV0()
+          : txVersion === TxVersion.V1
+          ? await checkTxBuilder.sizeCheckBuildV1()
+          : await checkTxBuilder.sizeCheckBuild();
       if (transactions.length < 2) {
         txBuilder.addInstruction({
           instructions: [
@@ -389,6 +393,10 @@ export default class TradeV2 extends ModuleBase {
     }
     txBuilder.addInstruction(swapIns);
 
+    if (txVersion === TxVersion.V1)
+      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig, address: swapIns.address }) as Promise<
+        MakeMultiTxData<T>
+      >;
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig, address: swapIns.address }) as Promise<
         MakeMultiTxData<T>
