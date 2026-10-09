@@ -230,6 +230,11 @@ export interface HarvestMultiLockCpmmLpParams<T = TxVersion.LEGACY> {
   withMetadata?: boolean;
   getEphemeralSigners?: (k: number) => any;
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txVersion?: T;
   closeWsol?: boolean;
 }
@@ -280,6 +285,11 @@ export interface CollectMultiCreatorFees<T = TxVersion.LEGACY> {
   feePayer?: PublicKey;
   associatedOnly?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Unlike the other entrypoints this one caps v0 / v1 at 6 rather than
+   * letting the builder default apply; legacy keeps the builder default of 12. Set this to override either.
+   */
+  insCountLimit?: number;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
 }

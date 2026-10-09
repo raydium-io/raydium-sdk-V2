@@ -393,6 +393,7 @@ export default class LiquidityModule extends ModuleBase {
     userFarmLpAmount,
     base,
     computeBudgetConfig,
+    insCountLimit,
     payer,
     userAuxiliaryLedgers,
     tokenProgram = TOKEN_PROGRAM_ID,
@@ -416,6 +417,11 @@ export default class LiquidityModule extends ModuleBase {
     base: "MintA" | "MintB";
     payer?: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
+    /**
+     * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+     * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+     */
+    insCountLimit?: number;
     tokenProgram?: PublicKey;
     checkCreateATAOwner?: boolean;
     txVersion?: T;
@@ -627,11 +633,9 @@ export default class LiquidityModule extends ModuleBase {
       lookupTableAddress: clmmPoolKeys.lookupTableAccount ? [clmmPoolKeys.lookupTableAccount] : [],
     });
 
-    if (txVersion === TxVersion.V1)
-      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async createPoolV4<T extends TxVersion>({
@@ -779,6 +783,7 @@ export default class LiquidityModule extends ModuleBase {
 
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     txTipConfig,
     feePayer,
   }: CreateMarketAndPoolParam<T>): Promise<
@@ -991,41 +996,10 @@ export default class LiquidityModule extends ModuleBase {
           ].filter((i) => !!i) as TransactionInstruction[])
         : undefined;
 
-    if (txVersion === TxVersion.V1)
-      return txBuilder.sizeCheckBuildV1({
-        computeBudgetConfig,
-        splitIns,
-        address: {
-          requestQueue: requestQueue.publicKey,
-          eventQueue: eventQueue.publicKey,
-          bids: bids.publicKey,
-          asks: asks.publicKey,
-          baseVault: baseVault.publicKey,
-          quoteVault: quoteVault.publicKey,
-          baseMint: new PublicKey(baseMintInfo.mint),
-          quoteMint: new PublicKey(quoteMintInfo.mint),
-          ...createPoolKeys,
-        },
-      }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({
-        computeBudgetConfig,
-        splitIns,
-        address: {
-          requestQueue: requestQueue.publicKey,
-          eventQueue: eventQueue.publicKey,
-          bids: bids.publicKey,
-          asks: asks.publicKey,
-          baseVault: baseVault.publicKey,
-          quoteVault: quoteVault.publicKey,
-          baseMint: new PublicKey(baseMintInfo.mint),
-          quoteMint: new PublicKey(quoteMintInfo.mint),
-          ...createPoolKeys,
-        },
-      }) as Promise<MakeMultiTxData<T, { address: CreatePoolAddress & MarketExtInfo["address"] }>>;
-
-    return txBuilder.sizeCheckBuild({
+    return txBuilder.versionSizeCheckBuild({
+      txVersion,
       computeBudgetConfig,
+      insCountLimit,
       splitIns,
       address: {
         requestQueue: requestQueue.publicKey,

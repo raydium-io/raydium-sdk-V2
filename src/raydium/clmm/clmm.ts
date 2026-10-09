@@ -2238,6 +2238,7 @@ export class Clmm extends ModuleBase {
     slippage = 10000,
     feePayer,
     computeBudgetConfig,
+    insCountLimit,
     txVersion,
   }: CloseAllLimitOrder<T>): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder();
@@ -2325,11 +2326,9 @@ export class Clmm extends ModuleBase {
       idx++;
     }
 
-    if (txVersion === TxVersion.V1)
-      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async settleLimitOrder<T extends TxVersion>({
@@ -2431,6 +2430,7 @@ export class Clmm extends ModuleBase {
     },
     associatedOnly = true,
     computeBudgetConfig,
+    insCountLimit,
     txVersion,
   }: SettleAllLimitOrders<T>): Promise<MakeMultiTxData<T>> {
     const res = await getMultipleAccountsInfo(this.scope.connection, limitOrders);
@@ -2529,11 +2529,9 @@ export class Clmm extends ModuleBase {
       });
     }
 
-    if (txVersion === TxVersion.V1)
-      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async swap<T extends TxVersion>({
@@ -2807,6 +2805,7 @@ export class Clmm extends ModuleBase {
     programId,
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     feePayer,
     lockProgram = CLMM_LOCK_PROGRAM_ID,
     lockAuth = CLMM_LOCK_AUTH_ID,
@@ -3050,11 +3049,9 @@ export class Clmm extends ModuleBase {
       }
     }
 
-    if (txVersion === TxVersion.V1)
-      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({ txVersion, computeBudgetConfig, insCountLimit }) as Promise<
+      MakeMultiTxData<T>
+    >;
   }
 
   public async getWhiteListMint({ programId }: { programId: PublicKey }): Promise<PublicKey[]> {

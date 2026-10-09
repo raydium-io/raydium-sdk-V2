@@ -232,6 +232,7 @@ export default class TradeV2 extends ModuleBase {
     swapPoolKeys,
     ownerInfo,
     computeBudgetConfig,
+    insCountLimit,
     routeProgram,
     txVersion,
     feePayer,
@@ -245,6 +246,11 @@ export default class TradeV2 extends ModuleBase {
     };
     routeProgram: PublicKey;
     computeBudgetConfig?: ComputeBudgetConfig;
+    /**
+     * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+     * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+     */
+    insCountLimit?: number;
     feePayer?: PublicKey;
   }): Promise<MakeMultiTxData<T>> {
     const txBuilder = this.createTxBuilder(feePayer);
@@ -371,12 +377,7 @@ export default class TradeV2 extends ModuleBase {
       });
       checkTxBuilder.addInstruction(swapIns);
 
-      const { transactions } =
-        txVersion === TxVersion.V0
-          ? await checkTxBuilder.sizeCheckBuildV0()
-          : txVersion === TxVersion.V1
-          ? await checkTxBuilder.sizeCheckBuildV1()
-          : await checkTxBuilder.sizeCheckBuild();
+      const { transactions } = await checkTxBuilder.versionSizeCheckBuild({ txVersion, insCountLimit });
       if (transactions.length < 2) {
         txBuilder.addInstruction({
           instructions: [
@@ -393,15 +394,12 @@ export default class TradeV2 extends ModuleBase {
     }
     txBuilder.addInstruction(swapIns);
 
-    if (txVersion === TxVersion.V1)
-      return txBuilder.sizeCheckBuildV1({ computeBudgetConfig, address: swapIns.address }) as Promise<
-        MakeMultiTxData<T>
-      >;
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({ computeBudgetConfig, address: swapIns.address }) as Promise<
-        MakeMultiTxData<T>
-      >;
-    return txBuilder.sizeCheckBuild({ computeBudgetConfig, address: swapIns.address }) as Promise<MakeMultiTxData<T>>;
+    return txBuilder.versionSizeCheckBuild({
+      txVersion,
+      computeBudgetConfig,
+      insCountLimit,
+      address: swapIns.address,
+    }) as Promise<MakeMultiTxData<T>>;
   }
 
   public async swapClmmToLaunchMint<T extends TxVersion>({

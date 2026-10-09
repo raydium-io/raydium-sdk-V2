@@ -769,10 +769,7 @@ export class TxBuilder {
           const partiallySigned = extraSigners.length
             ? await partialSignV1Transaction(transaction, await signersToCryptoKeyPairs(extraSigners))
             : transaction;
-          const [signedTx] = await signAllV1TransactionsWithWallet(
-            [partiallySigned],
-            this.signAllV1Transactions,
-          );
+          const [signedTx] = await signAllV1TransactionsWithWallet([partiallySigned], this.signAllV1Transactions);
           const txId = notSendToRpc
             ? ""
             : await this.connection.sendEncodedTransaction(serializeV1Transaction(signedTx), { skipPreflight });
@@ -1085,10 +1082,80 @@ export class TxBuilder {
     };
   }
 
+  public async versionSizeCheckBuild<T extends TxVersion, O = Record<string, any>>(
+    props?: Record<string, any> & {
+      txVersion?: T;
+      computeBudgetConfig?: ComputeBudgetConfig;
+      splitIns?: TransactionInstruction[];
+      insCountLimit?: number;
+      /** v0 only */
+      lookupTableCache?: CacheLTA;
+      lookupTableAddress?: string[];
+      /** v1 only */
+      computeUnitLimit?: number;
+      priorityFeeLamports?: number | bigint;
+      recentBlockhash?: string;
+      lastValidBlockHeight?: number;
+      autoLoadedAccountsDataSize?: boolean;
+    },
+  ): Promise<MakeMultiTxData<T, O>> {
+    const {
+      txVersion,
+      computeBudgetConfig,
+      splitIns,
+      insCountLimit,
+      lookupTableCache,
+      lookupTableAddress,
+      computeUnitLimit,
+      priorityFeeLamports,
+      recentBlockhash,
+      lastValidBlockHeight,
+      autoLoadedAccountsDataSize,
+      ...extInfo
+    } = props || {};
+
+    // every branch passes the shared props explicitly so the callee destructures them out and its own default
+    // kicks in for the undefined ones (notably insCountLimit, which v1 derives from the compute budget)
+    if (txVersion === TxVersion.V1)
+      return (await this.sizeCheckBuildV1({
+        ...extInfo,
+        computeBudgetConfig,
+        splitIns,
+        insCountLimit,
+        computeUnitLimit,
+        priorityFeeLamports,
+        recentBlockhash,
+        lastValidBlockHeight,
+        autoLoadedAccountsDataSize,
+      })) as MakeMultiTxData<T, O>;
+
+    if (txVersion === TxVersion.V0)
+      return (await this.sizeCheckBuildV0({
+        ...extInfo,
+        computeBudgetConfig,
+        splitIns,
+        insCountLimit,
+        lookupTableCache,
+        lookupTableAddress,
+      })) as MakeMultiTxData<T, O>;
+
+    return (await this.sizeCheckBuild({
+      ...extInfo,
+      computeBudgetConfig,
+      splitIns,
+      insCountLimit,
+    })) as MakeMultiTxData<T, O>;
+  }
+
   public async sizeCheckBuild(
-    props?: Record<string, any> & { computeBudgetConfig?: ComputeBudgetConfig; splitIns?: TransactionInstruction[] },
+    props?: Record<string, any> & {
+      computeBudgetConfig?: ComputeBudgetConfig;
+      splitIns?: TransactionInstruction[];
+      /** Max instruction count per tx (same semantics as sizeCheckBuildV0 / sizeCheckBuildV1) */
+      insCountLimit?: number;
+    },
   ): Promise<MultiTxBuildData> {
-    const { splitIns = [], computeBudgetConfig, ...extInfo } = props || {};
+    const { splitIns = [], computeBudgetConfig, insCountLimit = 12, ...extInfo } = props || {};
     const computeBudgetData: { instructions: TransactionInstruction[]; instructionTypes: string[] } =
       computeBudgetConfig
         ? addComputeBudget(computeBudgetConfig)
@@ -1117,7 +1184,7 @@ export class TxBuilder {
 
       if (
         item !== splitIns[splitInsIdx] &&
-        instructionQueue.length < 12 &&
+        instructionQueue.length < insCountLimit &&
         (checkLegacyTxSize({ instructions: _itemInsWithCompute, payer: this.feePayer, signers: _signer }) ||
           checkLegacyTxSize({ instructions: _itemIns, payer: this.feePayer, signers: _signer }))
       ) {
@@ -1629,9 +1696,6 @@ export class TxBuilder {
   }
 
   /**
-   * The v1 (2.x / kit) counterpart of sizeCheckBuild / sizeCheckBuildV0: greedily packs every instruction held by
-   * this builder into as few sendable v1 transactions as possible.
-   *
    * Differences from sizeCheckBuildV0:
    * - a v1 transaction may be up to 4096 bytes (legacy / v0 cap at 1232), so many more instructions fit per tx.
    *   Note a v1 transaction is additionally capped at 64 unique account addresses, which for account heavy
@@ -1641,11 +1705,6 @@ export class TxBuilder {
    *   which is 12 at the default 600000 units (identical to v0) and 28 at the 1.4M ceiling. Account heavy
    *   instructions get split by the account cap well before the count limit matters, so the limit really only
    *   guards the cheap-instruction case, where compute is the thing worth guarding
-   * - v1 has no ALT, so there is no lookup table handling at all
-   * - the compute budget lives in the message config mask rather than in ComputeBudget instructions, so the
-   *   "does it still fit once the compute budget instructions are added" fallback is gone: every split tx carries
-   *   the same computeUnitLimit / priorityFeeLamports / loadedAccountsDataSize, and any ComputeBudget instruction
-   *   sitting in the builder (from setCustomComputeBudget) is deliberately left out
    * - a 2.x Transaction is immutable, so nothing is signed here; signing happens inside execute, and the
    *   `recentBlockHash` execute param is ignored (the blockhash is already baked into messageBytes)
    */
@@ -1693,6 +1752,7 @@ export class TxBuilder {
     // same precedence as buildV1: explicit params > computeBudgetConfig (prop) > setCustomComputeBudget > getComputeBudgetConfig()
     const budgetConfig = propComputeBudgetConfig ?? this.computeBudgetConfig ?? (await this.getComputeBudgetConfig());
     const computeUnitLimit = propComputeUnitLimit ?? budgetConfig?.units ?? 600000;
+    console.log(1231231111, propComputeUnitLimit, budgetConfig?.units);
     let priorityFeeLamports = propPriorityFeeLamports;
     if (priorityFeeLamports === undefined && budgetConfig?.microLamports) {
       const MICRO = BigInt(1_000_000);
@@ -1704,6 +1764,7 @@ export class TxBuilder {
     // caps a v1 transaction once the 64 account limit has had its say
     const insCountLimit =
       propInsCountLimit ?? Math.max(1, Math.floor(computeUnitLimit / V1_DEFAULT_CU_PER_INSTRUCTION));
+    console.log("sizeCheckBuildV1: computeUnitLimit", computeUnitLimit, "insCountLimit", insCountLimit);
 
     const sourceInstructions = [...this.instructions, ...this.endInstructions];
 
