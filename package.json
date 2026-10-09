@@ -1,6 +1,6 @@
 {
   "name": "r-ttt-2",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "An SDK for building applications on top of Raydium.",
   "license": "GPL-3.0",
   "main": "./lib/index.js",

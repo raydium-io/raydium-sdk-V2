@@ -1752,7 +1752,6 @@ export class TxBuilder {
     // same precedence as buildV1: explicit params > computeBudgetConfig (prop) > setCustomComputeBudget > getComputeBudgetConfig()
     const budgetConfig = propComputeBudgetConfig ?? this.computeBudgetConfig ?? (await this.getComputeBudgetConfig());
     const computeUnitLimit = propComputeUnitLimit ?? budgetConfig?.units ?? 600000;
-    console.log(1231231111, propComputeUnitLimit, budgetConfig?.units);
     let priorityFeeLamports = propPriorityFeeLamports;
     if (priorityFeeLamports === undefined && budgetConfig?.microLamports) {
       const MICRO = BigInt(1_000_000);
