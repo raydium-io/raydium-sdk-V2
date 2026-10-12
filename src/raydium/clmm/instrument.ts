@@ -4,7 +4,15 @@ import { createLogger } from "@/common/logger";
 import { bool, s32, struct, u128, u16, u64, u8 } from "@/marshmallow";
 import { ReturnTypeMakeInstructions } from "@/raydium/type";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Connection, Keypair, PublicKey, Signer, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import {
+  AccountMeta,
+  Connection,
+  Keypair,
+  PublicKey,
+  Signer,
+  SystemProgram,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import BN from "bn.js";
 import { ObservationLayout, PersonalPositionLayout } from "./layout";
 import {
@@ -104,6 +112,8 @@ export class ClmmInstrument {
     tickArrayBitmap: PublicKey,
     sqrtPriceX64: BN,
     supperMintEx: PublicKey[] | undefined,
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([u128("sqrtPriceX64"), u64("startTime")]);
 
@@ -122,6 +132,7 @@ export class ClmmInstrument {
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
       ...(supperMintEx ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: false })),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -152,6 +163,8 @@ export class ClmmInstrument {
     collectFeeOn: CollectFeeOn, // new
     supperMintEx: PublicKey[],
     dynamicFeeConfig?: PublicKey, // new
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([u128("sqrtPriceX64"), u8("collectFeeOn"), bool("enableDynamicFee")]);
 
@@ -171,6 +184,7 @@ export class ClmmInstrument {
       { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
       ...supperMintEx.map((i) => ({ pubkey: i, isSigner: false, isWritable: false })),
       ...(dynamicFeeConfig ? [{ pubkey: dynamicFeeConfig, isSigner: false, isWritable: false }] : []),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -204,6 +218,8 @@ export class ClmmInstrument {
     seedIndex: number,
     supperMintEx: PublicKey[],
     dynamicFeeConfig?: PublicKey,
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([u128("sqrtPriceX64"), u8("collectFeeOn"), bool("enableDynamicFee"), u16("seedIndex")]);
 
@@ -225,6 +241,7 @@ export class ClmmInstrument {
       { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
       ...supperMintEx.map((i) => ({ pubkey: i, isSigner: false, isWritable: false })),
       ...(dynamicFeeConfig ? [{ pubkey: dynamicFeeConfig, isSigner: false, isWritable: false }] : []),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -398,6 +415,8 @@ export class ClmmInstrument {
     baseFlag: boolean | null,
 
     exTickArrayBitmap?: PublicKey,
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([
       s32("tickLower"),
@@ -437,6 +456,7 @@ export class ClmmInstrument {
       { pubkey: mintB, isSigner: false, isWritable: false },
 
       ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -487,6 +507,8 @@ export class ClmmInstrument {
     baseFlag: boolean | null,
 
     exTickArrayBitmap?: PublicKey,
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([
       u128("liquidity"),
@@ -514,6 +536,7 @@ export class ClmmInstrument {
       { pubkey: mintB, isSigner: false, isWritable: false },
 
       ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -563,6 +586,8 @@ export class ClmmInstrument {
     amountMinB: BN,
 
     exTickArrayBitmap?: PublicKey,
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([u128("liquidity"), u64("amountMinA"), u64("amountMinB")]);
 
@@ -592,6 +617,7 @@ export class ClmmInstrument {
           { pubkey: i.rewardMint, isSigner: false, isWritable: false },
         ])
         .flat(),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -624,6 +650,8 @@ export class ClmmInstrument {
     isBaseInput: boolean,
 
     tickArrayBitmapExtension?: PublicKey,
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([
       u64("amount"),
@@ -649,6 +677,7 @@ export class ClmmInstrument {
 
       ...(tickArrayBitmapExtension ? [{ pubkey: tickArrayBitmapExtension, isSigner: false, isWritable: true }] : []),
       ...tickArray.map((i) => ({ pubkey: i, isSigner: false, isWritable: true })),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -724,6 +753,8 @@ export class ClmmInstrument {
     baseFlag: boolean | null,
 
     exTickArrayBitmap?: PublicKey,
+    /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+    hookAccounts: AccountMeta[] = [],
   ): TransactionInstruction {
     const dataLayout = struct([
       s32("tickLower"),
@@ -760,6 +791,7 @@ export class ClmmInstrument {
       { pubkey: mintA, isSigner: false, isWritable: false },
       { pubkey: mintB, isSigner: false, isWritable: false },
       ...(exTickArrayBitmap ? [{ pubkey: exTickArrayBitmap, isSigner: false, isWritable: true }] : []),
+      ...hookAccounts,
     ];
 
     const data = Buffer.alloc(dataLayout.span);
@@ -1118,6 +1150,7 @@ export class ClmmInstrument {
     withMetadata,
     getEphemeralSigners,
     nft2022,
+    hookAccounts,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1137,6 +1170,8 @@ export class ClmmInstrument {
     withMetadata: "create" | "no-create";
     getEphemeralSigners?: (k: number) => any;
     nft2022?: boolean;
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): Promise<ReturnTypeMakeInstructions> {
     const signers: Signer[] = [];
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
@@ -1197,6 +1232,7 @@ export class ClmmInstrument {
           })
             ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
+          hookAccounts ?? [],
         )
       : this.openPositionV2Instruction(
           programId,
@@ -1232,6 +1268,7 @@ export class ClmmInstrument {
           })
             ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
+          hookAccounts ?? [],
         );
 
     return {
@@ -1264,6 +1301,7 @@ export class ClmmInstrument {
     withMetadata,
     getEphemeralSigners,
     nft2022,
+    hookAccounts,
   }: {
     poolInfo: SimpleClmmPoolInfo;
     poolKeys: {
@@ -1291,6 +1329,8 @@ export class ClmmInstrument {
     withMetadata: "create" | "no-create";
     getEphemeralSigners?: (k: number) => any;
     nft2022?: boolean;
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): Promise<ReturnTypeMakeInstructions<OpenPositionFromBaseExtInfo>> {
     const signers: Signer[] = [];
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
@@ -1355,6 +1395,7 @@ export class ClmmInstrument {
           })
             ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
+          hookAccounts ?? [],
         )
       : this.openPositionV2Instruction(
           programId,
@@ -1394,6 +1435,7 @@ export class ClmmInstrument {
           })
             ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
+          hookAccounts ?? [],
         );
 
     return {
@@ -1426,6 +1468,7 @@ export class ClmmInstrument {
     withMetadata,
     getEphemeralSigners,
     nft2022,
+    hookAccounts,
   }: {
     poolInfo: SimpleClmmPoolInfo;
     poolKeys: ClmmKeys;
@@ -1444,6 +1487,8 @@ export class ClmmInstrument {
     withMetadata: "create" | "no-create";
     getEphemeralSigners?: (k: number) => any;
     nft2022?: boolean;
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): Promise<ReturnTypeMakeInstructions<OpenPositionFromLiquidityExtInfo["address"]>> {
     let nftMintAccount: PublicKey;
     const signers: Keypair[] = [];
@@ -1504,6 +1549,7 @@ export class ClmmInstrument {
           })
             ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
+          hookAccounts ?? [],
         )
       : this.openPositionV2Instruction(
           programId,
@@ -1539,6 +1585,7 @@ export class ClmmInstrument {
           })
             ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
+          hookAccounts ?? [],
         );
 
     return {
@@ -1614,6 +1661,7 @@ export class ClmmInstrument {
     amountMaxA,
     amountMaxB,
     nft2022,
+    hookAccounts,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1629,6 +1677,8 @@ export class ClmmInstrument {
     amountMaxA: BN;
     amountMaxB: BN;
     nft2022?: boolean;
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickArrayUtil.getTickArrayStartIndex(
@@ -1682,6 +1732,7 @@ export class ClmmInstrument {
       })
         ? getPdaExBitmapAccount(programId, id).publicKey
         : undefined,
+      hookAccounts ?? [],
     );
 
     return {
@@ -1708,6 +1759,7 @@ export class ClmmInstrument {
     baseAmount,
     otherAmountMax,
     nft2022,
+    hookAccounts,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1724,6 +1776,8 @@ export class ClmmInstrument {
 
     otherAmountMax: BN;
     nft2022?: boolean;
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickArrayUtil.getTickArrayStartIndex(
@@ -1787,6 +1841,7 @@ export class ClmmInstrument {
           })
             ? getPdaExBitmapAccount(programId, id).publicKey
             : undefined,
+          hookAccounts ?? [],
         ),
       ],
       signers: [],
@@ -1805,6 +1860,7 @@ export class ClmmInstrument {
     amountMinB,
     programId,
     nft2022,
+    hookAccounts,
   }: {
     poolInfo: ApiV3PoolInfoConcentratedItem;
     poolKeys: ClmmKeys;
@@ -1821,6 +1877,8 @@ export class ClmmInstrument {
     amountMinB: BN;
     programId?: PublicKey;
     nft2022?: boolean;
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): ReturnTypeMakeInstructions<ManipulateLiquidityExtInfo["address"]> {
     const [poolProgramId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const tickArrayLowerStartIndex = TickArrayUtil.getTickArrayStartIndex(
@@ -1894,6 +1952,7 @@ export class ClmmInstrument {
       })
         ? getPdaExBitmapAccount(poolProgramId, id).publicKey
         : undefined,
+      hookAccounts ?? [],
     );
     ins.push(decreaseIns);
 
@@ -1922,6 +1981,7 @@ export class ClmmInstrument {
     amountOutMin,
     sqrtPriceLimitX64,
     remainingAccounts,
+    hookAccounts,
   }: {
     poolInfo: SimpleClmmPoolInfo;
     poolKeys: Pick<ClmmKeys, "vault" | "lookupTableAccount">;
@@ -1938,6 +1998,8 @@ export class ClmmInstrument {
     sqrtPriceLimitX64: BN;
 
     remainingAccounts: PublicKey[];
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): ReturnTypeMakeInstructions {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
@@ -1969,6 +2031,7 @@ export class ClmmInstrument {
         sqrtPriceLimitX64,
         true,
         getPdaExBitmapAccount(programId, id).publicKey,
+        hookAccounts ?? [],
       ),
     ];
     return {
@@ -1990,6 +2053,7 @@ export class ClmmInstrument {
     amountInMax,
     sqrtPriceLimitX64,
     remainingAccounts,
+    hookAccounts,
   }: {
     poolInfo: SimpleClmmPoolInfo;
     poolKeys: Pick<ClmmKeys, "vault" | "lookupTableAccount">;
@@ -2008,6 +2072,8 @@ export class ClmmInstrument {
     sqrtPriceLimitX64: BN;
 
     remainingAccounts: PublicKey[];
+    /** transfer-hook accounts for hooked Token-2022 mints, from fetchTransferHookAccounts */
+    hookAccounts?: AccountMeta[];
   }): ReturnTypeMakeInstructions {
     const [programId, id] = [new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)];
     const [mintAVault, mintBVault] = [new PublicKey(poolKeys.vault.A), new PublicKey(poolKeys.vault.B)];
@@ -2038,6 +2104,7 @@ export class ClmmInstrument {
         sqrtPriceLimitX64,
         false,
         getPdaExBitmapAccount(programId, id).publicKey,
+        hookAccounts ?? [],
       ),
     ];
     return {
