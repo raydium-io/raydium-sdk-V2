@@ -20,6 +20,8 @@ import {
   CREATE_CPMM_POOL_PROGRAM,
   DEVNET_PROGRAM_ID,
   fetchMultipleMintInfos,
+  fetchTransferHookAccounts,
+  fetchTransferHookProgram,
   getMultipleAccountsInfo,
   getMultipleAccountsInfoWithCustomFlags,
   getTransferAmountFeeV2,
@@ -48,6 +50,7 @@ import {
   getPdaObservationId,
   getPdaPermissionId,
   getPdaPoolAuthority,
+  getPdaSupportHookProgram,
 } from "./pda";
 import {
   AddCpmmLiquidityParams,
@@ -425,6 +428,29 @@ export default class CpmmModule extends ModuleBase {
       });
     }
 
+    // hooked Token-2022 mints: pool creation needs the enshrined-hook PDA for each hook program in remaining accounts,
+    // and the initial deposit needs the hooks' extra accounts like any other transfer
+    for (const m of [mintAPubkey, mintBPubkey]) {
+      const hookProgram = await fetchTransferHookProgram(this.scope.connection, m);
+      if (hookProgram) extendMintAccount.push(getPdaSupportHookProgram(programId, hookProgram).publicKey);
+    }
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: mintAPubkey,
+        source: userVaultA,
+        destination: poolKeys.vaultA,
+        owner: this.scope.ownerPubKey,
+        amount: mintAAmount,
+      },
+      {
+        mint: mintBPubkey,
+        source: userVaultB,
+        destination: poolKeys.vaultB,
+        owner: this.scope.ownerPubKey,
+        amount: mintBAmount,
+      },
+    ]);
+
     txBuilder.addInstruction({
       instructions: [
         makeCreateCpmmPoolInInstruction(
@@ -449,6 +475,7 @@ export default class CpmmModule extends ModuleBase {
           mintBAmount,
           startTime,
           extendMintAccount,
+          hookAccounts,
         ),
       ],
       instructionTypes: [InstructionType.CpmmCreatePool],
@@ -579,6 +606,22 @@ export default class CpmmModule extends ModuleBase {
     });
     txBuilder.addInstruction(lpInstruction);
     const poolKeys = propPoolKeys ?? (await this.getCpmmPoolKeys(poolInfo.id));
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: mintA,
+        source: tokenAccountA!,
+        destination: new PublicKey(poolKeys.vault.A),
+        owner: this.scope.ownerPubKey,
+        amount: baseIn ? inputAmountFee.amount : anotherAmount,
+      },
+      {
+        mint: mintB,
+        source: tokenAccountB!,
+        destination: new PublicKey(poolKeys.vault.B),
+        owner: this.scope.ownerPubKey,
+        amount: baseIn ? anotherAmount : inputAmountFee.amount,
+      },
+    ]);
     const _slippage = new Percent(new BN(1)).sub(slippage);
 
     txBuilder.addInstruction({
@@ -600,6 +643,7 @@ export default class CpmmModule extends ModuleBase {
           computeResult ? computeResult?.liquidity : _slippage.mul(liquidity).quotient,
           baseIn ? inputAmountFee.amount : anotherAmount,
           baseIn ? anotherAmount : inputAmountFee.amount,
+          hookAccounts,
         ),
       ],
       instructionTypes: [InstructionType.CpmmAddLiquidity],
@@ -696,6 +740,22 @@ export default class CpmmModule extends ModuleBase {
     if (!lpTokenAccount)
       this.logAndCreateError("cannot found lp token account", "tokenAccounts", account.tokenAccounts);
     const poolKeys = propPoolKeys ?? (await this.getCpmmPoolKeys(poolInfo.id));
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: mintA,
+        source: new PublicKey(poolKeys.vault.A),
+        destination: tokenAccountA!,
+        owner: new PublicKey(poolKeys.authority),
+        amount: amountMintA,
+      },
+      {
+        mint: mintB,
+        source: new PublicKey(poolKeys.vault.B),
+        destination: tokenAccountB!,
+        owner: new PublicKey(poolKeys.authority),
+        amount: amountMintB,
+      },
+    ]);
     txBuilder.addInstruction({
       instructions: [
         makeWithdrawCpmmInInstruction(
@@ -715,6 +775,7 @@ export default class CpmmModule extends ModuleBase {
           lpAmount,
           amountMintA.sub(mintAAmountFee.fee ?? new BN(0)),
           amountMintB.sub(mintBAmountFee.fee ?? new BN(0)),
+          hookAccounts,
         ),
       ],
       instructionTypes: [InstructionType.CpmmWithdrawLiquidity],
@@ -813,6 +874,23 @@ export default class CpmmModule extends ModuleBase {
       });
 
     const poolKeys = propPoolKeys ?? (await this.getCpmmPoolKeys(poolInfo.id));
+    // hooked Token-2022 mints: the pool forwards these to Token-2022 for the user->vault and vault->user transfers
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: baseIn ? mintA : mintB,
+        source: baseIn ? mintATokenAcc! : mintBTokenAcc!,
+        destination: new PublicKey(poolKeys.vault[baseIn ? "A" : "B"]),
+        owner: this.scope.ownerPubKey,
+        amount: swapResult.inputAmount,
+      },
+      {
+        mint: baseIn ? mintB : mintA,
+        source: new PublicKey(poolKeys.vault[baseIn ? "B" : "A"]),
+        destination: baseIn ? mintBTokenAcc! : mintATokenAcc!,
+        owner: new PublicKey(poolKeys.authority),
+        amount: swapResult.outputAmount,
+      },
+    ]);
 
     txBuilder.addInstruction({
       instructions: [
@@ -835,6 +913,7 @@ export default class CpmmModule extends ModuleBase {
 
               inputAmount,
               swapResult.outputAmount,
+              hookAccounts,
             )
           : makeSwapCpmmBaseOutInstruction(
               new PublicKey(poolInfo.programId),
@@ -857,6 +936,7 @@ export default class CpmmModule extends ModuleBase {
 
               swapResult.inputAmount,
               swapResult.outputAmount,
+              hookAccounts,
             ),
       ],
       instructionTypes: [fixedOut ? InstructionType.CpmmSwapBaseOut : InstructionType.ClmmSwapBaseIn],
