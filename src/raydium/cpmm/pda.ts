@@ -8,7 +8,7 @@ const POOL_LP_MINT_SEED = Buffer.from("pool_lp_mint", "utf8");
 const POOL_VAULT_SEED = Buffer.from("pool_vault", "utf8");
 const OBSERVATION_SEED = Buffer.from("observation", "utf8");
 const PERMISSION_SEED = Buffer.from("permission", "utf8");
-const SUPPORT_MINT_SEED = Buffer.from('support_mint', 'utf8');
+const SUPPORT_MINT_SEED = Buffer.from("support_mint", "utf8");
 const CREATOR_FEE_SHARE_SEED = Buffer.from("creator_fee_share", "utf8");
 
 export function getPdaPoolAuthority(programId: PublicKey): {
@@ -142,12 +142,12 @@ export function getPdaPermissionId(
 
 export function getPdaMintExAccountCp(
   programId: PublicKey,
-  mintAddress: PublicKey
+  mintAddress: PublicKey,
 ): {
   publicKey: PublicKey;
   nonce: number;
 } {
-  return findProgramAddress([SUPPORT_MINT_SEED, mintAddress.toBuffer()], programId)
+  return findProgramAddress([SUPPORT_MINT_SEED, mintAddress.toBuffer()], programId);
 }
 
 export function getCreatorFeeSharePda(
@@ -158,8 +158,18 @@ export function getCreatorFeeSharePda(
   publicKey: PublicKey;
   nonce: number;
 } {
-  return findProgramAddress(
-    [CREATOR_FEE_SHARE_SEED, creator.toBuffer(), ammConfigId.toBuffer()],
-    programId,
-  );
+  return findProgramAddress([CREATOR_FEE_SHARE_SEED, creator.toBuffer(), ammConfigId.toBuffer()], programId);
+}
+
+export const SUPPORT_HOOK_SEED = Buffer.from("support_hook", "utf8");
+
+/** PDA recording that `hookProgram` is an enshrined (reviewed, immutable) transfer-hook program on this CPMM program. */
+export function getPdaSupportHookProgram(
+  programId: PublicKey,
+  hookProgram: PublicKey,
+): {
+  publicKey: PublicKey;
+  nonce: number;
+} {
+  return findProgramAddress([SUPPORT_HOOK_SEED, hookProgram.toBuffer()], programId);
 }

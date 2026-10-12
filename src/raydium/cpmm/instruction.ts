@@ -62,6 +62,8 @@ export function makeCreateCpmmPoolInInstruction(
   openTime: BN,
 
   supperMintEx?: PublicKey[],
+  /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+  hookAccounts: AccountMeta[] = [],
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountMaxA"), u64("amountMaxB"), u64("openTime")]);
 
@@ -90,6 +92,7 @@ export function makeCreateCpmmPoolInInstruction(
     { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: RENT_PROGRAM_ID, isSigner: false, isWritable: false },
     ...(supperMintEx ?? []).map((i) => ({ pubkey: i, isSigner: false, isWritable: false })),
+    ...hookAccounts,
   ];
 
   const data = Buffer.alloc(dataLayout.span);
@@ -126,6 +129,8 @@ export function makeDepositCpmmInInstruction(
   lpAmount: BN,
   amountMaxA: BN,
   amountMaxB: BN,
+  /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+  hookAccounts: AccountMeta[] = [],
 ): TransactionInstruction {
   const dataLayout = struct([u64("lpAmount"), u64("amountMaxA"), u64("amountMaxB")]);
 
@@ -143,6 +148,7 @@ export function makeDepositCpmmInInstruction(
     { pubkey: mintA, isSigner: false, isWritable: false },
     { pubkey: mintB, isSigner: false, isWritable: false },
     { pubkey: lpMint, isSigner: false, isWritable: true },
+    ...hookAccounts,
   ];
 
   const data = Buffer.alloc(dataLayout.span);
@@ -184,6 +190,8 @@ export function makeWithdrawCpmmInInstruction(
   lpAmount: BN,
   amountMinA: BN,
   amountMinB: BN,
+  /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+  hookAccounts: AccountMeta[] = [],
 ): TransactionInstruction {
   const dataLayout = struct([u64("lpAmount"), u64("amountMinA"), u64("amountMinB")]);
 
@@ -202,6 +210,7 @@ export function makeWithdrawCpmmInInstruction(
     { pubkey: mintB, isSigner: false, isWritable: false },
     { pubkey: lpMint, isSigner: false, isWritable: true },
     { pubkey: MEMO_PROGRAM_ID, isSigner: false, isWritable: false },
+    ...hookAccounts,
   ];
 
   const data = Buffer.alloc(dataLayout.span);
@@ -239,6 +248,8 @@ export function makeSwapCpmmBaseInInstruction(
 
   amountIn: BN,
   amounOutMin: BN,
+  /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+  hookAccounts: AccountMeta[] = [],
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountIn"), u64("amounOutMin")]);
 
@@ -256,6 +267,7 @@ export function makeSwapCpmmBaseInInstruction(
     { pubkey: inputMint, isSigner: false, isWritable: false },
     { pubkey: outputMint, isSigner: false, isWritable: false },
     { pubkey: observationId, isSigner: false, isWritable: true },
+    ...hookAccounts,
   ];
 
   const data = Buffer.alloc(dataLayout.span);
@@ -291,6 +303,8 @@ export function makeSwapCpmmBaseOutInstruction(
 
   amountInMax: BN,
   amountOut: BN,
+  /** transfer-hook accounts for hooked mints, appended as remaining accounts */
+  hookAccounts: AccountMeta[] = [],
 ): TransactionInstruction {
   const dataLayout = struct([u64("amountInMax"), u64("amountOut")]);
 
@@ -308,6 +322,7 @@ export function makeSwapCpmmBaseOutInstruction(
     { pubkey: inputMint, isSigner: false, isWritable: false },
     { pubkey: outputMint, isSigner: false, isWritable: false },
     { pubkey: observationId, isSigner: false, isWritable: true },
+    ...hookAccounts,
   ];
 
   const data = Buffer.alloc(dataLayout.span);

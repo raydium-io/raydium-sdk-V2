@@ -10,6 +10,7 @@ export * from "./pda";
 export * from "./programId";
 export * from "./pubKey";
 export * from "./transfer";
+export * from "./transferHook";
 export * from "./txTool/lookupTable";
 export * from "./txTool/txTool";
 export * from "./txTool/txType";
