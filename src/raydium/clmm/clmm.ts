@@ -8,6 +8,8 @@ import {
   getMultipleAccountsInfoWithCustomFlags,
   InstructionType,
   WSOLMint,
+  fetchTransferHookAccounts,
+  fetchTransferHookProgram,
 } from "@/common";
 import { MakeMultiTxData, MakeTxData } from "@/common/txTool/txTool";
 import { TxVersion } from "@/common/txTool/txType";
@@ -50,6 +52,7 @@ import {
   getPdaLimitOrderNonceAddress,
   getPdaLockClPositionIdV2,
   getPdaMintExAccount,
+  getPdaSupportHookProgram,
   getPdaOperationAccount,
   getPdaPersonalPositionAddress,
   getPdaPoolVaultId,
@@ -138,6 +141,11 @@ export class Clmm extends ModuleBase {
       if (r) extendMintAccount.push(fetchAccounts[idx]);
     });
 
+    // hooked Token-2022 mints: pool creation needs the enshrined-hook PDA for each hook program in remaining accounts
+    for (const m of [new PublicKey(mintA.address), new PublicKey(mintB.address)]) {
+      const hookProgram = await fetchTransferHookProgram(this.scope.connection, m);
+      if (hookProgram) extendMintAccount.push(getPdaSupportHookProgram(programId, hookProgram).publicKey);
+    }
     const insInfo = await ClmmInstrument.createPoolInstructions({
       connection: this.scope.connection,
       programId,
@@ -297,6 +305,11 @@ export class Clmm extends ModuleBase {
       this.logAndCreateError("param collectFeeOnMint find error");
     }
 
+    // hooked Token-2022 mints: pool creation needs the enshrined-hook PDA for each hook program in remaining accounts
+    for (const m of [address.mintA, address.mintB]) {
+      const hookProgram = await fetchTransferHookProgram(this.scope.connection, m);
+      if (hookProgram) extendMintAccount.push(getPdaSupportHookProgram(programId, hookProgram).publicKey);
+    }
     const ins = ClmmInstrument.createCustomizablePoolInstruction(
       programId,
       address.poolId,
@@ -475,6 +488,11 @@ export class Clmm extends ModuleBase {
       this.logAndCreateError("param collectFeeOnMint find error");
     }
 
+    // hooked Token-2022 mints: pool creation needs the enshrined-hook PDA for each hook program in remaining accounts
+    for (const m of [address.mintA, address.mintB]) {
+      const hookProgram = await fetchTransferHookProgram(this.scope.connection, m);
+      if (hookProgram) extendMintAccount.push(getPdaSupportHookProgram(programId, hookProgram).publicKey);
+    }
     const ins = ClmmInstrument.createPermissionedPoolInstruction(
       programId,
       payer,
@@ -648,6 +666,23 @@ export class Clmm extends ModuleBase {
         ownerTokenAccountB: ownerTokenAccountB?.toBase58(),
       });
     const poolKeys = propsPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id.toString()))!;
+    const [hookAmountA, hookAmountB] = base === "MintA" ? [baseAmount, otherAmountMax] : [otherAmountMax, baseAmount];
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: new PublicKey(poolInfo.mintA.address),
+        source: ownerTokenAccountA!,
+        destination: new PublicKey(poolKeys.vault.A),
+        owner: this.scope.ownerPubKey,
+        amount: hookAmountA,
+      },
+      {
+        mint: new PublicKey(poolInfo.mintB.address),
+        source: ownerTokenAccountB!,
+        destination: new PublicKey(poolKeys.vault.B),
+        owner: this.scope.ownerPubKey,
+        amount: hookAmountB,
+      },
+    ]);
 
     const insInfo = await ClmmInstrument.openPositionFromBaseInstructions({
       poolInfo,
@@ -668,6 +703,7 @@ export class Clmm extends ModuleBase {
       withMetadata,
       getEphemeralSigners,
       nft2022,
+      hookAccounts,
     });
 
     txBuilder.addInstruction(insInfo);
@@ -755,6 +791,22 @@ export class Clmm extends ModuleBase {
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
     const poolKeys = propPoolKeys || (await this.getClmmPoolKeys(poolInfo.id.toString()));
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: new PublicKey(poolInfo.mintA.address),
+        source: ownerTokenAccountA!,
+        destination: new PublicKey(poolKeys.vault.A),
+        owner: this.scope.ownerPubKey,
+        amount: amountMaxA,
+      },
+      {
+        mint: new PublicKey(poolInfo.mintB.address),
+        source: ownerTokenAccountB!,
+        destination: new PublicKey(poolKeys.vault.B),
+        owner: this.scope.ownerPubKey,
+        amount: amountMaxB,
+      },
+    ]);
 
     const makeOpenPositionInstructions = await ClmmInstrument.openPositionFromLiquidityInstructions({
       poolInfo,
@@ -773,6 +825,7 @@ export class Clmm extends ModuleBase {
       withMetadata,
       getEphemeralSigners,
       nft2022,
+      hookAccounts,
     });
     txBuilder.addInstruction(makeOpenPositionInstructions);
     txBuilder.addCustomComputeBudget(computeBudgetConfig);
@@ -852,6 +905,22 @@ export class Clmm extends ModuleBase {
     if (!ownerTokenAccountA && !ownerTokenAccountB)
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
     const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: new PublicKey(poolInfo.mintA.address),
+        source: ownerTokenAccountA!,
+        destination: new PublicKey(poolKeys.vault.A),
+        owner: this.scope.ownerPubKey,
+        amount: amountMaxA,
+      },
+      {
+        mint: new PublicKey(poolInfo.mintB.address),
+        source: ownerTokenAccountB!,
+        destination: new PublicKey(poolKeys.vault.B),
+        owner: this.scope.ownerPubKey,
+        amount: amountMaxB,
+      },
+    ]);
     const ins = ClmmInstrument.increasePositionFromLiquidityInstructions({
       poolInfo,
       poolKeys,
@@ -864,6 +933,7 @@ export class Clmm extends ModuleBase {
       liquidity,
       amountMaxA,
       amountMaxB,
+      hookAccounts,
       nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
     txBuilder.addInstruction(ins);
@@ -944,6 +1014,23 @@ export class Clmm extends ModuleBase {
       this.logAndCreateError("cannot found target token accounts", "tokenAccounts", this.scope.account.tokenAccounts);
 
     const poolKeys = await this.getClmmPoolKeys(poolInfo.id);
+    const [hookAmountA, hookAmountB] = base === "MintA" ? [baseAmount, otherAmountMax] : [otherAmountMax, baseAmount];
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: new PublicKey(poolInfo.mintA.address),
+        source: ownerTokenAccountA!,
+        destination: new PublicKey(poolKeys.vault.A),
+        owner: this.scope.ownerPubKey,
+        amount: hookAmountA,
+      },
+      {
+        mint: new PublicKey(poolInfo.mintB.address),
+        source: ownerTokenAccountB!,
+        destination: new PublicKey(poolKeys.vault.B),
+        owner: this.scope.ownerPubKey,
+        amount: hookAmountB,
+      },
+    ]);
     const ins = ClmmInstrument.increasePositionFromBaseInstructions({
       poolInfo,
       poolKeys,
@@ -956,6 +1043,7 @@ export class Clmm extends ModuleBase {
       base,
       baseAmount,
       otherAmountMax,
+      hookAccounts,
       nft2022: (await this.scope.connection.getAccountInfo(ownerPosition.nftMint))?.owner.equals(TOKEN_2022_PROGRAM_ID),
     });
     txBuilder.addInstruction(ins);
@@ -1029,6 +1117,22 @@ export class Clmm extends ModuleBase {
     accountBInstructions && txBuilder.addInstruction(accountBInstructions);
 
     const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id));
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: new PublicKey(poolInfo.mintA.address),
+        source: new PublicKey(poolKeys.vault.A),
+        destination: ownerTokenAccountA!,
+        owner: new PublicKey(poolInfo.id),
+        amount: amountMinA,
+      },
+      {
+        mint: new PublicKey(poolInfo.mintB.address),
+        source: new PublicKey(poolKeys.vault.B),
+        destination: ownerTokenAccountB!,
+        owner: new PublicKey(poolInfo.id),
+        amount: amountMinB,
+      },
+    ]);
     const rewardAccounts: PublicKey[] = [];
     for (const itemReward of poolKeys.rewardInfos) {
       const rewardUseSOLBalance = ownerInfo.useSOLBalance && itemReward.mint.address === WSOLMint.toString();
@@ -1083,6 +1187,7 @@ export class Clmm extends ModuleBase {
       liquidity,
       amountMinA,
       amountMinB,
+      hookAccounts,
       nft2022,
     });
 
@@ -2635,6 +2740,24 @@ export class Clmm extends ModuleBase {
       });
 
     const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id.toString()));
+    // hooked Token-2022 mints: the program forwards these to Token-2022 for the user->vault and vault->user transfers
+    const inIsA = inputMint.toString() === poolInfo.mintA.address;
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: new PublicKey(inputMint),
+        source: inIsA ? ownerTokenAccountA! : ownerTokenAccountB!,
+        destination: new PublicKey(inIsA ? poolKeys.vault.A : poolKeys.vault.B),
+        owner: this.scope.ownerPubKey,
+        amount: amountIn,
+      },
+      {
+        mint: new PublicKey(inIsA ? poolInfo.mintB.address : poolInfo.mintA.address),
+        source: new PublicKey(inIsA ? poolKeys.vault.B : poolKeys.vault.A),
+        destination: inIsA ? ownerTokenAccountB! : ownerTokenAccountA!,
+        owner: new PublicKey(poolInfo.id),
+        amount: amountOutMin,
+      },
+    ]);
     txBuilder.addInstruction(
       ClmmInstrument.makeSwapBaseInInstructions({
         poolInfo: {
@@ -2654,6 +2777,7 @@ export class Clmm extends ModuleBase {
         amountOutMin,
         sqrtPriceLimitX64: BN_ZERO,
         remainingAccounts,
+        hookAccounts,
       }),
     );
 
@@ -2765,6 +2889,24 @@ export class Clmm extends ModuleBase {
       });
 
     const poolKeys = propPoolKeys ?? (await this.getClmmPoolKeys(poolInfo.id.toString()));
+    // hooked Token-2022 mints: the program forwards these to Token-2022 for the user->vault and vault->user transfers
+    const outIsA = outputMint.toString() === poolInfo.mintA.address;
+    const hookAccounts = await fetchTransferHookAccounts(this.scope.connection, [
+      {
+        mint: new PublicKey(outIsA ? poolInfo.mintB.address : poolInfo.mintA.address),
+        source: outIsA ? ownerTokenAccountB! : ownerTokenAccountA!,
+        destination: new PublicKey(outIsA ? poolKeys.vault.B : poolKeys.vault.A),
+        owner: this.scope.ownerPubKey,
+        amount: amountInMax,
+      },
+      {
+        mint: new PublicKey(outputMint),
+        source: new PublicKey(outIsA ? poolKeys.vault.A : poolKeys.vault.B),
+        destination: outIsA ? ownerTokenAccountA! : ownerTokenAccountB!,
+        owner: new PublicKey(poolInfo.id),
+        amount: amountOut,
+      },
+    ]);
     txBuilder.addInstruction(
       ClmmInstrument.makeSwapBaseOutInstructions({
         poolInfo: {
@@ -2784,6 +2926,7 @@ export class Clmm extends ModuleBase {
         amountInMax,
         sqrtPriceLimitX64: BN_ZERO,
         remainingAccounts,
+        hookAccounts,
       }),
     );
 
