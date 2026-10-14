@@ -18,11 +18,19 @@ export class CpmmFee {
   }
 
   static splitCreatorFee(totalFee: BN, tradeFeeRate: BN, creatorFeeRate: BN): BN {
-    return floorDiv(totalFee, creatorFeeRate, tradeFeeRate.add(creatorFeeRate));
+    const totalRate = tradeFeeRate.add(creatorFeeRate);
+    // With both rates at zero there is no fee to split; dividing by the zero
+    // total rate would throw an opaque BN assertion instead of returning 0.
+    if (totalRate.isZero()) return new BN(0);
+    return floorDiv(totalFee, creatorFeeRate, totalRate);
   }
 
   static calculatePreFeeAmount(postFeeAmount: BN, tradeFeeRate: BN): BN {
     if (tradeFeeRate.isZero()) return postFeeAmount;
+    // The gross-up divides by (denominator - rate): at a 100% rate the pre-fee
+    // amount is undefined, and past it the formula returns negative amounts.
+    if (tradeFeeRate.gte(FEE_RATE_DENOMINATOR_VALUE))
+      throw Error("tradeFeeRate must be less than the fee rate denominator");
 
     const numerator = postFeeAmount.mul(FEE_RATE_DENOMINATOR_VALUE);
     const denominator = FEE_RATE_DENOMINATOR_VALUE.sub(tradeFeeRate);
