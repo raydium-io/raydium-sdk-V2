@@ -396,6 +396,10 @@ export class TickUtil {
     feeRate: number;
     isFeeOnInput: boolean;
   }): LimitOrderMatchResult {
+    // The fee gross-ups below divide by (denominator - feeRate): at a 100% rate
+    // that denominator is zero, and past it the formulas return negative amounts.
+    if (new BN(feeRate).gte(FEE_RATE_DENOMINATOR_VALUE)) throw Error("feeRate must be less than the fee rate denominator");
+
     const result: LimitOrderMatchResult = {
       amountIn: BN_ZERO,
       amountOut: BN_ZERO,
