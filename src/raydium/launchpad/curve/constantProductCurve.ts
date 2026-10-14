@@ -204,6 +204,13 @@ export class LaunchConstantProductCurve extends CurveBase {
     inputReserve: BN;
     outputReserve: BN;
   }): BN {
+    // A constant-product pool can never pay out its entire output reserve
+    // (that would take an infinite input); without a guard, amountOut >
+    // reserve makes the denominator negative and BN division silently
+    // returns a negative input amount, and amountOut == reserve surfaces
+    // as an opaque BN "Assertion failed" from the division by zero.
+    if (amountOut.gte(outputReserve)) throw Error("amountOut is greater than or equal to output reserve");
+
     const numerator = inputReserve.mul(amountOut);
     const denominator = outputReserve.sub(amountOut);
     const amountIn = ceilDivBN(numerator, denominator);
