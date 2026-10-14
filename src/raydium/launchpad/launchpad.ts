@@ -686,7 +686,7 @@ export default class LaunchpadModule extends ModuleBase {
     const minMintAAmount =
       propMinMintAAmount ??
       (slippage
-        ? new BN(decimalAmountA.mul(multiplier).toFixed(0))
+        ? new BN(decimalAmountA.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR))
         : calculatedAmount.amountA.amount.sub(calculatedAmount.amountA.fee ?? new BN(0)));
 
     if (calculatedAmount.amountB.lt(buyAmount)) {
@@ -853,7 +853,8 @@ export default class LaunchpadModule extends ModuleBase {
       : new Decimal(1);
 
     const maxAmountB =
-      maxBuyAmount ?? (slippage ? new BN(decimalAmountB.mul(multiplier).toFixed(0)) : calculatedAmount.amountB);
+      maxBuyAmount ??
+      (slippage ? new BN(decimalAmountB.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR)) : calculatedAmount.amountB);
 
     const userTokenAccountA = this.scope.account.getAssociatedTokenAccount(mintA, mintAProgram);
     let userTokenAccountB: PublicKey | null = null;
@@ -1092,7 +1093,8 @@ export default class LaunchpadModule extends ModuleBase {
       : new Decimal(1);
 
     const minAmountB =
-      propMinAmountB ?? (slippage ? new BN(decimalAmountB.mul(multiplier).toFixed(0)) : calculatedAmount.amountB);
+      propMinAmountB ??
+      (slippage ? new BN(decimalAmountB.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR)) : calculatedAmount.amountB);
 
     if (minAmountB.lte(new BN(0))) this.logAndCreateError(`out ${mintB.toBase58()} amount should be gt 0`);
 
@@ -1297,7 +1299,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     const maxSellAmountA =
       maxSellAmount ??
-      (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0)) : calculatedAmount.amountA.amount);
+      (slippage ? new BN(decimalAmountA.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR)) : calculatedAmount.amountA.amount);
 
     const shareATA = shareFeeReceiver ? getATAAddress(shareFeeReceiver, mintB, mintBProgram).publicKey : undefined;
     if (shareATA) {
