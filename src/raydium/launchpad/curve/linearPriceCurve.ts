@@ -152,6 +152,7 @@ export class LinearPriceCurve extends CurveBase {
     poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     amount: BN;
   }): BN {
+    if (amount.gt(poolInfo.realA)) throw Error("amount is greater than pool realA");
     const newBase = poolInfo.realA.sub(amount);
     const newBaseSquared = newBase.mul(newBase);
     const newQuote = ceilDivBN(poolInfo.virtualA.mul(newBaseSquared), new BN(2).mul(Q64));
@@ -165,6 +166,7 @@ export class LinearPriceCurve extends CurveBase {
     poolInfo: ReturnType<typeof LaunchpadPool.decode> | PoolBaseAmount;
     amount: BN;
   }): BN {
+    if (amount.gt(poolInfo.realB)) throw Error("amount is greater than pool realB");
     const newB = poolInfo.realB.sub(amount);
     const termInsideSqrt = new BN(2).mul(newB).mul(Q64).div(poolInfo.virtualA);
 
