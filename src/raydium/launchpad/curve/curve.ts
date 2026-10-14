@@ -510,7 +510,12 @@ export class Curve {
     creatorFeeRate: BN;
   }): BN {
     const totalFeeRate = protocolFeeRate.add(platformFeeRate).add(shareFeeRate).add(creatorFeeRate);
-    if (totalFeeRate.gt(new BN(1_000_000))) throw Error("total fee rate gt 1_000_000");
+    // A total rate of exactly 100% is not a usable fee either: the exact-out
+    // paths gross up by dividing by (denominator - totalFeeRate), and on the
+    // exact-in paths the fee consumes the whole input/output, so a swap would
+    // silently quote zero out. Reject it here, at the funnel every swap path
+    // and splitFee call, instead of only past 100%.
+    if (totalFeeRate.gte(new BN(1_000_000))) throw Error("total fee rate must be less than the fee rate denominator");
     return protocolFeeRate.add(platformFeeRate).add(shareFeeRate).add(creatorFeeRate);
   }
 
