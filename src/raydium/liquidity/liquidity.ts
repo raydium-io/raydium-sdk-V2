@@ -1204,8 +1204,13 @@ export default class LiquidityModule extends ModuleBase {
     let amountOutRaw = amountOut;
     let fee = new BN(0);
     if (!amountOutRaw.isZero()) {
-      // if out > reserve, out = reserve - 1
-      if (amountOutRaw.gt(reserveOut)) {
+      // if out >= reserve, out = reserve - 1: a constant-product pool can
+      // never pay its whole reserve, so == left the denominator at zero and
+      // surfaced as an opaque BN "Assertion failed" from the division below
+      if (amountOutRaw.gte(reserveOut)) {
+        // an empty reserve can pay nothing; clamping would set out = -1 and
+        // silently return a negative amountIn/fee
+        if (reserveOut.isZero()) throw Error("insufficient liquidity: output reserve is zero");
         amountOutRaw = reserveOut.sub(new BN(1));
       }
 
