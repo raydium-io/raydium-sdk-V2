@@ -62,6 +62,13 @@ export class CurveCalculator {
     } else {
       inputAmountLessFees = inputAmount.sub(tradeFee);
     }
+    // Each fee is ceil-divided off the same input, so on a dust input the
+    // rounded-up fees can together exceed the input itself (1 unit at
+    // 25bps + 25bps owes 1 + 1). The negative remainder would flow into the
+    // curve and produce a negative output amount and vault balances that
+    // move the wrong way; the on-chain program's checked subtraction fails
+    // such a swap instead.
+    if (inputAmountLessFees.isNeg()) throw Error("swap fees exceed input amount");
 
     const protocolFee = Fee.protocolFee(tradeFee, protocolFeeRate);
     const fundFee = Fee.protocolFee(tradeFee, fundFeeRate);
