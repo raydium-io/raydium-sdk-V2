@@ -491,6 +491,9 @@ export class Curve {
   }
   static calculatePreFee({ postFeeAmount, feeRate }: { postFeeAmount: BN; feeRate: BN }): BN {
     if (feeRate.isZero()) return postFeeAmount;
+    // The gross-up divides by (denominator - rate): at a 100% rate the pre-fee
+    // amount is undefined, and past it the formula returns negative amounts.
+    if (feeRate.gte(FEE_RATE_DENOMINATOR_VALUE)) throw Error("feeRate must be less than the fee rate denominator");
 
     const numerator = postFeeAmount.mul(FEE_RATE_DENOMINATOR_VALUE);
     const denominator = FEE_RATE_DENOMINATOR_VALUE.sub(feeRate);
