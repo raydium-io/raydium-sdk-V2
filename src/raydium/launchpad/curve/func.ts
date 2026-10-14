@@ -27,7 +27,10 @@ export function checkPoolToAmm({supply, totalFundRaisingB, totalLockedAmount, to
   supply: BN, totalSellA: BN, totalLockedAmount: BN, totalFundRaisingB: BN, migrateType: 'amm' | 'cpmm', decimalsA: number,
 }) {
   const migrateAmountA = supply.sub(totalSellA).sub(totalLockedAmount)
-  const liquidity = new BN(new Decimal(migrateAmountA.mul(totalFundRaisingB).toString()).sqrt().toFixed(0))
+  // Floor the sqrt: the migrated LP amount is an integer sqrt, and rounding
+  // the root up (the Decimal default) lets a pool whose floored liquidity is
+  // at or below the minimum pass this check.
+  const liquidity = new BN(new Decimal(migrateAmountA.mul(totalFundRaisingB).toString()).sqrt().toFixed(0, Decimal.ROUND_FLOOR))
 
   if (migrateType === 'amm') {
     if (liquidity.gt(new BN(10).pow(new BN(decimalsA)))) return true
