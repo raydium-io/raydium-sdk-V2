@@ -226,7 +226,12 @@ export class Curve {
     if (amountMigrate.lt(minAmountMigrate)) throw Error("migrate lt min migrate amoount");
 
     const migrateAmountA = supply.sub(totalSell).sub(totalLockedAmount);
-    const liquidity = new BN(new Decimal(migrateAmountA.mul(totalFundRaising).toString()).sqrt().toFixed(0));
+    // Floor the sqrt: the migrated LP amount is an integer sqrt, and rounding
+    // the root up (the Decimal default) lets a pool whose floored liquidity is
+    // at or below the minimum pass this check.
+    const liquidity = new BN(
+      new Decimal(migrateAmountA.mul(totalFundRaising).toString()).sqrt().toFixed(0, Decimal.ROUND_FLOOR),
+    );
 
     if (migrateType === "amm") {
       const minLockLp = new BN(10).pow(new BN(decimals));
