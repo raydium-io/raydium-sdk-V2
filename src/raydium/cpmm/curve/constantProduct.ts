@@ -33,6 +33,8 @@ export class ConstantProductCurve {
   }
 
   static swapBaseOutputWithoutFees(outputAmount: BN, inputVaultAmount: BN, onputVaultAmount: BN): BN {
+    if (outputAmount.gte(onputVaultAmount)) throw Error("amountOut is greater than or equal to output reserve");
+
     const numerator = inputVaultAmount.mul(outputAmount);
     const denominator = onputVaultAmount.sub(outputAmount);
     const [inputAmount] = checkedCeilDiv(numerator, denominator);
