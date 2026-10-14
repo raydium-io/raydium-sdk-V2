@@ -839,7 +839,7 @@ export default class TradeV2 extends ModuleBase {
       launchMintTransferFeeConfigB,
       launchSwapInfo,
       outAmount: launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0)),
-      minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0)),
+      minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR)),
     };
   }
 
@@ -1208,7 +1208,7 @@ export default class TradeV2 extends ModuleBase {
       ? new Decimal(SLIPPAGE_UNIT.sub(new BN(slippage * 10000)).toNumber() / SLIPPAGE_UNIT.toNumber()).clampedTo(0, 1)
       : new Decimal(1);
 
-    const minLaunchOutAmount = new BN(decimalAmountB.mul(multiplier).toFixed(0));
+    const minLaunchOutAmount = new BN(decimalAmountB.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR));
 
     const clmmComputeAmount = await PoolUtils.computeAmountOutFormat({
       poolInfo: clmmPoolData.computePoolInfo,
@@ -1626,7 +1626,7 @@ export default class TradeV2 extends ModuleBase {
       launchMintTransferFeeConfigB,
       launchSwapInfo,
       outAmount: launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0)),
-      minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0)),
+      minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR)),
     };
   }
 
@@ -1793,7 +1793,7 @@ export default class TradeV2 extends ModuleBase {
       launchMintTransferFeeConfigB,
       launchSwapInfo,
       outAmount: launchSwapInfo.amountA.amount.sub(launchSwapInfo.amountA.fee ?? new BN(0)),
-      minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0)),
+      minOutAmount: new BN(decimalAmountA.mul(multiplier).toFixed(0, Decimal.ROUND_FLOOR)),
     };
   }
 
