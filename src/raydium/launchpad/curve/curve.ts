@@ -346,7 +346,11 @@ export class Curve {
 
     const preAmountA = getTransferAmountFeeFromPost(amountA, transferFeeConfigA, slot);
     let realAmountA = preAmountA.fee ? preAmountA.amount.add(preAmountA.fee) : preAmountA.amount;
-    if (amountA.gt(remainingAmountA)) {
+    // Clamp the gross amount the pool is asked to send, not the net amountA:
+    // when amountA <= remainingAmountA < realAmountA (a transfer fee on mint A
+    // grosses the request past the remaining supply), pricing the unclamped
+    // gross would quote a cost for more A than the pool has left to sell.
+    if (realAmountA.gt(remainingAmountA)) {
       realAmountA = remainingAmountA;
     }
 
