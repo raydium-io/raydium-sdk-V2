@@ -756,9 +756,9 @@ export default class CpmmModule extends ModuleBase {
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
 
     if (!fixedOut) {
-      swapResult.outputAmount = swapResult.outputAmount.mul(new BN((1 - slippage) * 10000)).div(new BN(10000));
+      swapResult.outputAmount = swapResult.outputAmount.mul(new BN(Math.floor((1 - slippage) * 10000000000))).div(new BN(10000000000));
     } else {
-      swapResult.inputAmount = swapResult.inputAmount.mul(new BN((1 + slippage) * 10000)).div(new BN(10000));
+      swapResult.inputAmount = swapResult.inputAmount.mul(new BN(Math.floor((1 + slippage) * 10000000000))).div(new BN(10000000000));
     }
 
     const mintAUseSOLBalance = poolInfo.mintA.address === WSOLMint.toBase58();
@@ -1600,7 +1600,7 @@ export default class CpmmModule extends ModuleBase {
 
     const executionPrice = new Decimal(swapResult.outputAmount.toString()).div(swapResult.inputAmount.toString());
 
-    const minAmountOut = swapResult.outputAmount.mul(new BN((1 - slippage) * 10000)).div(new BN(10000));
+    const minAmountOut = swapResult.outputAmount.mul(new BN(Math.floor((1 - slippage) * 10000000000))).div(new BN(10000000000));
     return {
       allTrade: swapBaseIn ? swapResult.inputAmount.eq(amountIn) : swapResult.outputAmount.eq(amountIn),
       amountIn: swapBaseIn ? amountIn : swapResult.inputAmount,
