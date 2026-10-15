@@ -2917,7 +2917,7 @@ export default class TradeV2 extends ModuleBase {
         maxAmountIn: {
           amount: toTokenAmount({
             ...inputToken,
-            amount: amountIn.mul(new BN((1 + slippage) * 10000)).div(new BN(10000)),
+            amount: amountIn.mul(new BN(Math.floor((1 + slippage) * 10000000000))).div(new BN(10000000000)),
           }),
           fee: undefined,
           expirationTime: undefined,
