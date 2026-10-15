@@ -71,8 +71,14 @@ export function divCeil(a: BN, b: BN): BN {
 }
 
 export function shakeFractionDecimal(n: Fraction): string {
-  const [, sign = "", int = ""] = n.toFixed(2).match(/(-?)(\d*)\.?(\d*)/) ?? [];
-  return `${sign}${int}`;
+  // Drop the fractional part by truncating toward zero (BN division
+  // semantics, the same as Fraction.quotient). Going through
+  // n.toFixed(2) here would round half-up at 2 decimal places first, so
+  // any value whose fractional part is >= 0.995 (1.999, 0.999, -1.999)
+  // would cross the integer boundary and come back one unit too large
+  // in magnitude — toBN / toUsdCurrency would mint a raw unit that the
+  // input amount does not contain.
+  return n.quotient.toString();
 }
 
 export function toBN(n: Numberish, decimal: BigNumberish = 0): BN {
