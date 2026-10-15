@@ -31,8 +31,10 @@ export function splitNumber(num: string, decimals: number): [string, string] {
     integral = num;
   }
 
-  // fix decimals is 0
-  return [integral, fractional.slice(0, decimals) || fractional];
+  // fix decimals is 0: a 0-decimal amount has no fractional unit, so the
+  // fractional part contributes nothing (same truncation applied to excess
+  // digits when decimals > 0) instead of being added at face value
+  return [integral, decimals === 0 ? "0" : fractional.slice(0, decimals) || fractional];
 }
 
 export class TokenAmount extends Fraction {
