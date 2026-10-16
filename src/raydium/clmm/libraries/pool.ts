@@ -1140,9 +1140,17 @@ export function clmmComputeInfoToApiInfo(
         mint: toApiV3Token({
           address: r.mint.toBase58(),
           programId: TOKEN_PROGRAM_ID.toBase58(),
-          decimals: mintData[r.mint.toBase58()].decimals ?? 6,
+          decimals: mintData[r.mint.toBase58()]?.decimals ?? 6,
         }),
-        perSecond: Number(r.emissionsPerSecondX64.divn(10 ** (mintData[r.mint.toBase58()].decimals ?? 6)).toString()),
+        // Divide by a BN power of ten, not divn(10 ** decimals): divn
+        // asserts its divisor fits in 26 bits, so it throws for any
+        // reward mint with decimals >= 8 (10^8 > 2^26). The mint info
+        // may also be absent (fetchMultipleMintInfos skips invalid mint
+        // accounts, and mintInfos is optional here), so read decimals
+        // with ?. and fall back to 6 instead of dereferencing undefined.
+        perSecond: Number(
+          r.emissionsPerSecondX64.div(new BN(10).pow(new BN(mintData[r.mint.toBase58()]?.decimals ?? 6))).toString(),
+        ),
         startTime: r.openTime.toNumber(),
         endTime: r.endTime.toNumber(),
       })),
