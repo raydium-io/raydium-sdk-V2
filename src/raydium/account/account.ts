@@ -403,7 +403,10 @@ export default class Account extends ModuleBase {
         if (ataInfo === null) {
           instructions.push(_createATAIns);
         } else if (
-          ataInfo.owner.equals(TOKEN_PROGRAM_ID) &&
+          // the ATA may belong to either token program; check against the
+          // program the caller passed (e.g. Token-2022), not a fixed one —
+          // getOrCreateTokenAccount above already checks its tokenProgram
+          ataInfo.owner.equals(programId) &&
           AccountLayout.decode(ataInfo.data).mint.equals(mint) &&
           AccountLayout.decode(ataInfo.data).owner.equals(this.scope.ownerPubKey)
         ) {
