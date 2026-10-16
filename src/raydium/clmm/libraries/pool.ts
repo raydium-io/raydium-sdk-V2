@@ -976,16 +976,21 @@ export class PoolUtils {
       getTransferAmountFeeV2(amounts.amountB, poolInfo.mintB.extensions?.feeConfig, epochInfo, true),
     ];
 
-    const slippageBps = slippage * 10000;
+    // Scale by 1e10 (the same form computeAmountOut/computeAmountIn above
+    // use) instead of muln(10000 - slippage * 10000): muln takes an integer
+    // multiplier, so a slippage with sub-basis-point precision (e.g. 0.005%
+    // = 0.5 bps) was mangled into a value that is neither the exact
+    // floor(amount * (1 - slippage)) nor the whole-bps truncation.
+    const slippageFactor = new BN(Math.floor((1 - slippage) * 10000000000));
     const [amountSlippageA, amountSlippageB] = [
       getTransferAmountFeeV2(
-        amounts.amountA.muln(10000 - slippageBps).divn(10000),
+        amounts.amountA.mul(slippageFactor).div(new BN(10000000000)),
         poolInfo.mintA.extensions?.feeConfig,
         epochInfo,
         true,
       ),
       getTransferAmountFeeV2(
-        amounts.amountB.muln(10000 - slippageBps).divn(10000),
+        amounts.amountB.mul(slippageFactor).div(new BN(10000000000)),
         poolInfo.mintB.extensions?.feeConfig,
         epochInfo,
         true,
