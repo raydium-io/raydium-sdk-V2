@@ -155,16 +155,21 @@ export class Api {
   async getBlockSlotCountForSecond(endpointUrl?: string): Promise<number> {
     if (!endpointUrl) return 2;
     const res: {
-      id: string;
-      jsonrpc: string;
-      result: { numSlots: number; numTransactions: number; samplePeriodSecs: number; slot: number }[];
+      data: {
+        id: string;
+        jsonrpc: string;
+        result: { numSlots: number; numTransactions: number; samplePeriodSecs: number; slot: number }[];
+      };
     } = await axios.post(endpointUrl, {
       id: "getRecentPerformanceSamples",
       jsonrpc: "2.0",
       method: "getRecentPerformanceSamples",
       params: [4],
     });
-    const slotList = res.result.map((data) => data.numSlots);
+    // bare axios resolves with the full response, not the body — this method
+    // does not go through this.api's data-unwrapping interceptor, so the
+    // JSON-RPC result lives under .data (same as getComputeBudgetConfig).
+    const slotList = res.data.result.map((data) => data.numSlots);
     return slotList.reduce((a, b) => a + b, 0) / slotList.length / 60;
   }
 
