@@ -50,6 +50,11 @@ export const updateReqHistory = async ({
       data[0].data = resStr + (resStr.length > 100 ? "..." : "");
       while (!success) {
         data.pop();
+        // Storage can keep rejecting writes after every saved entry has been
+        // dropped (full or blocked storage). Nothing is left to trim at that
+        // point, so stop instead of dereferencing data[0] on an empty array,
+        // which threw a TypeError out of this logging helper.
+        if (!data.length) break;
         const resStr = JSON.stringify(resData.data).substring(0, 100);
         data[0].data = resStr + (resStr.length > 100 ? "..." : "");
         try {
