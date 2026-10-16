@@ -3191,7 +3191,12 @@ export class Clmm extends ModuleBase {
           mintA: toApiV3Token({
             address: mintA,
             decimals: clmmPoolsRpcInfo[poolId].mintDecimalsA,
-            programId: mintInfos[mintA].programId.toBase58() || TOKEN_PROGRAM_ID.toBase58(),
+            // fetchMultipleMintInfos skips invalid mint accounts, so a
+            // mint may have no entry here: fall back to the classic Token
+            // program instead of dereferencing undefined (the old
+            // `.programId.toBase58() || TOKEN_PROGRAM_ID` form could never
+            // reach its own fallback).
+            programId: mintInfos[mintA]?.programId.toBase58() ?? TOKEN_PROGRAM_ID.toBase58(),
             extensions: {
               feeConfig: mintInfos[mintA]?.feeConfig ? toFeeConfig(mintInfos[mintA]?.feeConfig) : undefined,
             },
@@ -3199,7 +3204,7 @@ export class Clmm extends ModuleBase {
           mintB: toApiV3Token({
             address: mintB,
             decimals: clmmPoolsRpcInfo[poolId].mintDecimalsB,
-            programId: mintInfos[mintB].programId.toBase58() || TOKEN_PROGRAM_ID.toBase58(),
+            programId: mintInfos[mintB]?.programId.toBase58() ?? TOKEN_PROGRAM_ID.toBase58(),
             extensions: {
               feeConfig: mintInfos[mintB]?.feeConfig ? toFeeConfig(mintInfos[mintB]?.feeConfig) : undefined,
             },
