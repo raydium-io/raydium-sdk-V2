@@ -3280,7 +3280,14 @@ export class Clmm extends ModuleBase {
         .map((r) => ({
           mint: toApiV3Token({
             address: r.mint.toBase58(),
-            programId: TOKEN_PROGRAM_ID.toBase58(),
+            // Use the reward mint's real token program from the fetched
+            // mint infos (which include every non-default reward mint and
+            // record the mint account's owner as programId): consumers
+            // pass this programId to getOrCreateTokenAccount as the token
+            // program, so a Token-2022 reward mint reported under the
+            // classic Token program derives the wrong ATA. Fall back to
+            // the classic program only when no mint info is available.
+            programId: (mintInfos[r.mint.toBase58()]?.programId ?? TOKEN_PROGRAM_ID).toBase58(),
             decimals: mintInfos[r.mint.toBase58()].decimals ?? 6,
           }),
           vault: r.vault.toBase58(),
