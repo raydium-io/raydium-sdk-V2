@@ -1139,7 +1139,13 @@ export function clmmComputeInfoToApiInfo(
       .map((r) => ({
         mint: toApiV3Token({
           address: r.mint.toBase58(),
-          programId: TOKEN_PROGRAM_ID.toBase58(),
+          // Use the reward mint's real token program from the fetched mint
+          // infos (fetchMultipleMintInfos records the mint account's owner):
+          // a Token-2022 reward mint reported under the classic Token
+          // program makes consumers derive the wrong ATA / token program
+          // for it. Fall back to the classic program only when no mint
+          // info is available for the mint.
+          programId: (mintData[r.mint.toBase58()]?.programId ?? TOKEN_PROGRAM_ID).toBase58(),
           decimals: mintData[r.mint.toBase58()].decimals ?? 6,
         }),
         perSecond: Number(r.emissionsPerSecondX64.divn(10 ** (mintData[r.mint.toBase58()].decimals ?? 6)).toString()),
