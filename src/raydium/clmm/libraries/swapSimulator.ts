@@ -243,8 +243,8 @@ export function swapInternal({
   }
 
   return {
-    allTrade: true,
-    amountSpecifiedRemaining: BN_ZERO,
+    allTrade: state.amountSpecifiedRemaining.isZero(),
+    amountSpecifiedRemaining: state.amountSpecifiedRemaining,
     amountCalculated: state.amountCalculated,
     feeAmount: state.lpFee.add(state.fundFee).add(state.protocolFee),
     sqrtPriceX64: state.sqrtPriceX64,
