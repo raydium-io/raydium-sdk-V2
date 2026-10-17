@@ -69,6 +69,11 @@ export const validateFarmRewards = (params: {
         return `rewardInfos or rewardTokenAccounts lengths not equal 1: ${infoMsg}`;
       }
     },
+    4: (): string | undefined => {
+      if (rewardInfos.length !== 2 || rewardTokenAccountsPublicKeys.length !== 2) {
+        return `rewardInfos or rewardTokenAccounts lengths not equal 2: ${infoMsg}`;
+      }
+    },
     5: (): string | undefined => {
       if (rewardInfos.length !== rewardTokenAccountsPublicKeys.length) {
         return `rewardInfos and rewardTokenAccounts lengths not equal: ${infoMsg}`;
