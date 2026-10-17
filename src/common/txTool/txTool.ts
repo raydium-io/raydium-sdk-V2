@@ -329,6 +329,7 @@ export class TxBuilder {
   ): Promise<T[]> {
     const ownerSigner = this.owner?.signer;
     transactions.forEach((tx, idx) => {
+      if (idx < skipTxCount) return;
       const txSigners = [...signers[idx]];
       if (ownerSigner && !txSigners.some((signer) => signer.publicKey.equals(ownerSigner.publicKey)))
         txSigners.push(ownerSigner);

@@ -82,7 +82,7 @@ function fixture(kind, allowSend = false) {
             }
           : undefined,
     });
-  return { builder, calls };
+  return { builder, calls, connection };
 }
 
 const transfer = (from) => SystemProgram.transfer({ fromPubkey: from, toPubkey: keypair(5).publicKey, lamports: 1 });
@@ -162,6 +162,58 @@ for (const name of ["buildMultiTx", "buildV0MultiTx", "sizeCheckBuild", "sizeChe
     assert.deepEqual(calls.walletBatchSizes, [1]);
     assert.equal(calls.sends, 0);
   });
+}
+
+for (const kind of ["keypair", "wallet"]) {
+  for (const name of ["buildMultiTx", "buildV0MultiTx", "sizeCheckBuild", "sizeCheckBuildV0"]) {
+    const legacy = name === "buildMultiTx" || name === "sizeCheckBuild";
+    for (const explicitBlockhash of legacy ? [true, false] : [true]) {
+      test(`${name} ${kind}: resume preserves skipped transaction, explicit hash=${explicitBlockhash}`, async () => {
+        const { builder, calls, connection } = fixture(kind);
+        const built = await build(name, builder);
+        const skipped = built.transactions[0];
+        if (skipped instanceof Transaction) {
+          skipped.recentBlockhash = blockhash;
+          skipped.partialSign(owner);
+        } else {
+          skipped.sign([owner]);
+        }
+        assert(validSignatures(skipped));
+        const originalBytes = Buffer.from(skipped.serialize());
+        connection.getLatestBlockhash = async () => ({
+          blockhash: refreshedBlockhash,
+          lastValidBlockHeight: 101,
+        });
+
+        const result = await built.execute({
+          notSendToRpc: true,
+          sequentially: true,
+          skipTxCount: 1,
+          ...(explicitBlockhash ? { recentBlockHash: refreshedBlockhash } : {}),
+          onTxUpdate: () => calls.updates++,
+        });
+
+        assert.deepEqual(result.txIds, []);
+        assert.equal(result.signedTxs.length, 2);
+        assert(validSignatures(result.signedTxs[0]), "skipped transaction must retain its valid signature");
+        assert.deepEqual(
+          Buffer.from(result.signedTxs[0].serialize()),
+          originalBytes,
+          "skipped transaction's message and signatures must remain unchanged",
+        );
+        const pending = result.signedTxs[1];
+        assert(validSignatures(pending));
+        assert.equal(
+          pending instanceof Transaction ? pending.recentBlockhash : pending.message.recentBlockhash,
+          refreshedBlockhash,
+        );
+        assert.deepEqual(calls.walletBatchSizes, kind === "wallet" ? [1] : []);
+        assert.equal(calls.sends, 0);
+        assert.equal(calls.confirmations, 0);
+        assert.equal(calls.updates, 0);
+      });
+    }
+  }
 }
 
 for (const name of ["buildMultiTx", "sizeCheckBuild"]) {
