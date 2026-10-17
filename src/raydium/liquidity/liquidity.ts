@@ -21,6 +21,7 @@ import {
   getAssociatedLedgerAccount,
   getFarmLedgerLayout,
   makeWithdrawInstructionV3,
+  makeWithdrawInstructionV4,
   makeWithdrawInstructionV5,
   makeWithdrawInstructionV6,
 } from "../../raydium/farm";
@@ -498,27 +499,32 @@ export default class LiquidityModule extends ModuleBase {
 
     if (farmInfo !== undefined && !userFarmLpAmount?.isZero()) {
       const farmVersion = FARM_PROGRAM_TO_VERSION[farmInfo.programId];
-      const ledger = getAssociatedLedgerAccount({
-        programId: new PublicKey(farmInfo.programId),
-        poolId: new PublicKey(farmInfo.id),
-        owner: this.scope.ownerPubKey,
-        version: farmVersion as 3 | 5 | 6,
-      });
-      let ledgerInfo: FarmLedger | undefined = undefined;
-      const ledgerData = await this.scope.connection.getAccountInfo(ledger);
-      if (ledgerData) {
-        const ledgerLayout = getFarmLedgerLayout(farmVersion)!;
-        ledgerInfo = ledgerLayout.decode(ledgerData.data);
-      }
-      if (farmVersion !== 6 && !ledgerInfo) {
-        const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
-          id: new PublicKey(farmInfo.id),
+      // v4 farms have no ledger layout and no create-ledger instruction (the
+      // v4 withdraw builder takes the caller's auxiliary ledgers instead), so
+      // the whole associated-ledger flow is skipped for them, as in Farm.withdraw
+      if (farmVersion !== 4) {
+        const ledger = getAssociatedLedgerAccount({
           programId: new PublicKey(farmInfo.programId),
-          version: farmVersion,
-          ledger,
+          poolId: new PublicKey(farmInfo.id),
           owner: this.scope.ownerPubKey,
+          version: farmVersion as 3 | 5 | 6,
         });
-        txBuilder.addInstruction({ instructions: [instruction], instructionTypes: [instructionType] });
+        let ledgerInfo: FarmLedger | undefined = undefined;
+        const ledgerData = await this.scope.connection.getAccountInfo(ledger);
+        if (ledgerData) {
+          const ledgerLayout = getFarmLedgerLayout(farmVersion)!;
+          ledgerInfo = ledgerLayout.decode(ledgerData.data);
+        }
+        if (farmVersion !== 6 && !ledgerInfo) {
+          const { instruction, instructionType } = createAssociatedLedgerAccountInstruction({
+            id: new PublicKey(farmInfo.id),
+            programId: new PublicKey(farmInfo.programId),
+            version: farmVersion,
+            ledger,
+            owner: this.scope.ownerPubKey,
+          });
+          txBuilder.addInstruction({ instructions: [instruction], instructionTypes: [instructionType] });
+        }
       }
 
       const rewardTokenAccounts: PublicKey[] = [];
@@ -559,9 +565,12 @@ export default class LiquidityModule extends ModuleBase {
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
           ? makeWithdrawInstructionV5(insParams)
+          : version === 4
+          ? makeWithdrawInstructionV4(insParams)
           : makeWithdrawInstructionV3(insParams);
       const insType = {
         3: InstructionType.FarmV3Withdraw,
+        4: InstructionType.FarmV4Withdraw,
         5: InstructionType.FarmV5Withdraw,
         6: InstructionType.FarmV6Withdraw,
       };
