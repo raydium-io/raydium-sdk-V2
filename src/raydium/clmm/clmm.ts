@@ -431,7 +431,11 @@ export class Clmm extends ModuleBase {
     }
 
     const payer = feePayer ?? this.scope.ownerPubKey;
-    const seedIndex = Math.floor(Math.random() * Math.pow(2, 16)) + 1;
+    // seedIndex is encoded as a u16 everywhere it is used (the pool PDA seed via
+    // writeUInt16LE and the create instruction's u16 field), so it must stay within
+    // 1..65535: drawing from 2^16 values and adding 1 could produce 65536, which
+    // throws a RangeError in the PDA derivation and aborts pool creation.
+    const seedIndex = Math.floor(Math.random() * 65535) + 1;
 
     const { address } = await ClmmInstrument.createPermissionedPoolInstructions({
       connection: this.scope.connection,
