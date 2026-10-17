@@ -282,6 +282,7 @@ export class TxBuilder {
 
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
+          if (notSendToRpc) return { txId: "", signedTx: transaction };
           const txId = sendAndConfirm
             ? await sendAndConfirmTransaction(
                 this.connection,
@@ -320,6 +321,34 @@ export class TxBuilder {
     };
   }
 
+  private async signMultiTransactions<T extends Transaction | VersionedTransaction>(
+    transactions: T[],
+    signers: Signer[][],
+    recentBlockhash?: string,
+    skipTxCount = 0,
+  ): Promise<T[]> {
+    const ownerSigner = this.owner?.signer;
+    transactions.forEach((tx, idx) => {
+      const txSigners = [...signers[idx]];
+      if (ownerSigner && !txSigners.some((signer) => signer.publicKey.equals(ownerSigner.publicKey)))
+        txSigners.push(ownerSigner);
+      if (tx instanceof Transaction) {
+        if (recentBlockhash) tx.recentBlockhash = recentBlockhash;
+        if (txSigners.length) tx.partialSign(...txSigners);
+      } else {
+        if (recentBlockhash) tx.message.recentBlockhash = recentBlockhash;
+        if (txSigners.length) tx.sign(txSigners);
+      }
+    });
+
+    if (this.owner?.isKeyPair) return transactions;
+    if (this.signAllTransactions) {
+      const signedTxs = await this.signAllTransactions(transactions.slice(skipTxCount));
+      return [...transactions.slice(0, skipTxCount), ...signedTxs];
+    }
+    throw new Error("please provide owner in keypair format or signAllTransactions function");
+  }
+
   public buildMultiTx<T = Record<string, any>>(params: {
     extraPreBuildData?: MakeTxData<TxVersion.LEGACY>[];
     extInfo?: T;
@@ -354,8 +383,14 @@ export class TxBuilder {
           skipTxCount = 0,
           recentBlockHash: propBlockHash,
           skipPreflight = true,
+          notSendToRpc,
         } = executeParams || {};
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
+        if (notSendToRpc)
+          return {
+            txIds: [],
+            signedTxs: await this.signMultiTransactions(allTransactions, allSigners, recentBlockHash, skipTxCount),
+          };
         if (this.owner?.isKeyPair) {
           if (sequentially) {
             const txIds: string[] = [];
@@ -558,6 +593,7 @@ export class TxBuilder {
         const { skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
+          if (notSendToRpc) return { txId: "", signedTx: transaction };
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
           if (sendAndConfirm) {
             await confirmTransaction(this.connection, txId);
@@ -631,7 +667,19 @@ export class TxBuilder {
       instructionTypes: allInstructionTypes,
       buildProps,
       execute: async (executeParams?: MultiTxExecuteParam) => {
-        const { sequentially, onTxUpdate, recentBlockHash: propBlockHash, skipPreflight = true } = executeParams || {};
+        const {
+          sequentially,
+          onTxUpdate,
+          recentBlockHash: propBlockHash,
+          skipPreflight = true,
+          notSendToRpc,
+          skipTxCount = 0,
+        } = executeParams || {};
+        if (notSendToRpc)
+          return {
+            txIds: [],
+            signedTxs: await this.signMultiTransactions(allTransactions, allSigners, propBlockHash, skipTxCount),
+          };
         if (propBlockHash) allTransactions.forEach((tx) => (tx.message.recentBlockhash = propBlockHash));
         printSimulate(allTransactions);
         if (this.owner?.isKeyPair) {
@@ -853,8 +901,14 @@ export class TxBuilder {
           skipTxCount = 0,
           recentBlockHash: propBlockHash,
           skipPreflight = true,
+          notSendToRpc,
         } = executeParams || {};
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
+        if (notSendToRpc)
+          return {
+            txIds: [],
+            signedTxs: await this.signMultiTransactions(allTransactions, allSigners, recentBlockHash, skipTxCount),
+          };
         allTransactions.forEach(async (tx, idx) => {
           tx.recentBlockhash = recentBlockHash;
           if (allSigners[idx].length) tx.sign(...allSigners[idx]);
@@ -1154,7 +1208,13 @@ export class TxBuilder {
           skipTxCount = 0,
           recentBlockHash: propBlockHash,
           skipPreflight = true,
+          notSendToRpc,
         } = executeParams || {};
+        if (notSendToRpc)
+          return {
+            txIds: [],
+            signedTxs: await this.signMultiTransactions(allTransactions, allSigners, propBlockHash, skipTxCount),
+          };
         allTransactions.map(async (tx, idx) => {
           if (allSigners[idx].length) tx.sign(allSigners[idx]);
           if (propBlockHash) tx.message.recentBlockhash = propBlockHash;
