@@ -971,10 +971,13 @@ export default class Farm extends ModuleBase {
           ? makeWithdrawInstructionV6(insParams)
           : version === 5
           ? makeWithdrawInstructionV5(insParams)
+          : version === 4
+          ? makeWithdrawInstructionV4(insParams)
           : makeWithdrawInstructionV3(insParams);
 
       const insType = {
         3: InstructionType.FarmV3Withdraw,
+        4: InstructionType.FarmV4Withdraw,
         5: InstructionType.FarmV5Withdraw,
         6: InstructionType.FarmV6Withdraw,
       };
