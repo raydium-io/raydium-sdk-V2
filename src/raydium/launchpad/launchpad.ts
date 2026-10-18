@@ -1900,7 +1900,7 @@ export default class LaunchpadModule extends ModuleBase {
 
     const tokenAccountRecord: Record<string, PublicKey> = {};
 
-    platformList.forEach(async (platform) => {
+    for (const platform of platformList) {
       const platformFeeAuth = getPdaPlatformFeeVaultAuth(programId).publicKey;
       const platformFeeVault = getPdaPlatformVault(programId, platform.id, platform.mintB).publicKey;
       const useSolBalance = platform.mintB.equals(NATIVE_MINT) && unwrapSol;
@@ -1924,6 +1924,7 @@ export default class LaunchpadModule extends ModuleBase {
             checkCreateATAOwner,
           });
         if (_userTokenAccount) userTokenAccount = _userTokenAccount;
+        if (userTokenAccount) tokenAccountRecord[platform.mintB.toBase58()] = userTokenAccount;
         txBuilder.addInstruction(_tokenAccountInstruction || {});
         if (userTokenAccount === undefined)
           this.logAndCreateError(
@@ -1947,7 +1948,7 @@ export default class LaunchpadModule extends ModuleBase {
           ),
         ],
       });
-    });
+    }
 
     if (txVersion === TxVersion.V0)
       return txBuilder.sizeCheckBuildV0({ computeBudgetConfig }) as Promise<MakeMultiTxData<T>>;
