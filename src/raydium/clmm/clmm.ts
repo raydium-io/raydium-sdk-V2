@@ -45,6 +45,7 @@ import {
   mockV3CreatePoolInfo,
 } from "./libraries/constants";
 import {
+  getPdaCustomizablePoolV2Id,
   getPdaExBitmapAccount,
   getPdaLimitOrderAddress,
   getPdaLimitOrderNonceAddress,
@@ -431,9 +432,17 @@ export class Clmm extends ModuleBase {
     }
 
     const payer = feePayer ?? this.scope.ownerPubKey;
-    const seedIndex = Math.floor(Math.random() * Math.pow(2, 16)) + 1;
 
-    const { address } = await ClmmInstrument.createCustomizablePoolV2Instructions({
+    const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
+
+    // check which seed index is available
+    const poolIdList = new Array(100)
+      .fill(0)
+      .map((_, i) => getPdaCustomizablePoolV2Id(programId, ammConfig.id, mintAAddress, mintBAddress, i).publicKey);
+    const data = await getMultipleAccountsInfo(this.scope.connection, poolIdList, { commitment: "confirmed" });
+    const seedIndex = data.findIndex((d) => d === null);
+
+    const { address } = ClmmInstrument.createCustomizablePoolV2Instructions({
       connection: this.scope.connection,
       programId,
       owner,
