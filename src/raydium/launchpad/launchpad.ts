@@ -27,6 +27,7 @@ import {
   CreatePlatformVestingAccount,
   CreateVesting,
   LaunchpadConfigInfo,
+  LaunchpadCurveRuleInfo,
   LaunchpadPoolInfo,
   SellToken,
   SellTokenExactOut,
@@ -82,8 +83,15 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
+import bs58 from "bs58";
 import { getPdaMetadataKey } from "../clmm";
-import { LaunchpadConfig, LaunchpadPool, PlatformConfig, PlatformCurveRule } from "./layout";
+import {
+  LaunchpadConfig,
+  LaunchpadPool,
+  PLATFORM_CURVE_RULE_DISCRIMINATOR,
+  PlatformConfig,
+  PlatformCurveRule,
+} from "./layout";
 import { Curve, SwapInfoReturn } from "./curve/curve";
 import { toLaunchpadMintProgramFlag } from "./util";
 import Decimal from "decimal.js";
@@ -2259,6 +2267,48 @@ export default class LaunchpadModule extends ModuleBase {
     return txBuilder.versionBuild({
       txVersion,
     }) as Promise<MakeTxData<T>>;
+  }
+
+  /**
+   * every curve rule of a platform, one account per config the platform has created a rule for,
+   * use it when the full set is needed, the api only lists the configs it serves
+   */
+  public async getRpcPlatformCurveRules({
+    platformId,
+    programId = LAUNCHPAD_PROGRAM,
+  }: {
+    platformId: PublicKey;
+    programId?: PublicKey;
+  }): Promise<(LaunchpadCurveRuleInfo & { platformCurveRuleId: PublicKey })[]> {
+    const accounts = await this.scope.connection.getProgramAccounts(programId, {
+      filters: [
+        // the platform pubkey alone is not enough, other account types of this program hold one at the same offset
+        { memcmp: { offset: 0, bytes: bs58.encode(PLATFORM_CURVE_RULE_DISCRIMINATOR) } },
+        { memcmp: { offset: PlatformCurveRule.offsetOf("platformId")!, bytes: platformId.toBase58() } },
+      ],
+    });
+
+    return accounts.map(({ pubkey, account }) => ({
+      platformCurveRuleId: pubkey,
+      ...PlatformCurveRule.decode(account.data),
+    }));
+  }
+
+  /** the curve rule a platform set for one config, undefined when it has not created one */
+  public async getRpcPlatformCurveRule({
+    platformId,
+    configId,
+    programId = LAUNCHPAD_PROGRAM,
+  }: {
+    platformId: PublicKey;
+    configId: PublicKey;
+    programId?: PublicKey;
+  }): Promise<(LaunchpadCurveRuleInfo & { platformCurveRuleId: PublicKey }) | undefined> {
+    const { publicKey: platformCurveRuleId } = getPdaPlatformCurveRule(programId, platformId, configId);
+    const res = await this.scope.connection.getAccountInfo(platformCurveRuleId);
+    if (!res) return undefined;
+
+    return { platformCurveRuleId, ...PlatformCurveRule.decode(res.data) };
   }
 
   public async getRpcPoolInfo({

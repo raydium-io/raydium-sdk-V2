@@ -15,7 +15,6 @@ export const POOL_TICK_ARRAY_BITMAP_SEED = Buffer.from('pool_tick_array_bitmap_e
 export const POOL_OBSERVATION_SEED = Buffer.from('observation', 'utf8')
 export const SUPPORT_MINT_SEED = Buffer.from('support_mint', 'utf8')
 export const DYNAMIC_FEE_CONFIG_SEED = Buffer.from('dynamic_fee_config', 'utf8')
-export const PERMISSION_SEED = Buffer.from('permission', 'utf8')
 
 
 export function getPdaAmmConfigId(programId: PublicKey, index: number): ProgramAddress {
@@ -34,11 +33,7 @@ export function getPdaPoolId(
   )
 }
 
-export function getPdaPermission(programId: PublicKey, payer: PublicKey): ProgramAddress {
-  return findProgramAddress([PERMISSION_SEED, payer.toBuffer()], programId)
-}
-
-export function getPdaPermissionedPoolId(
+export function getPdaCustomizablePoolV2Id(
   programId: PublicKey,
   ammConfigId: PublicKey,
   mintA: PublicKey,

@@ -387,7 +387,7 @@ export class Clmm extends ModuleBase {
     }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
 
-  public async createPermissionedPool<T extends TxVersion>(
+  public async createCustomizablePoolV2<T extends TxVersion>(
     props: CreateCustomizablePool<T>,
   ): Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {
     const {
@@ -433,7 +433,7 @@ export class Clmm extends ModuleBase {
     const payer = feePayer ?? this.scope.ownerPubKey;
     const seedIndex = Math.floor(Math.random() * Math.pow(2, 16)) + 1;
 
-    const { address } = await ClmmInstrument.createPermissionedPoolInstructions({
+    const { address } = await ClmmInstrument.createCustomizablePoolV2Instructions({
       connection: this.scope.connection,
       programId,
       owner,
@@ -442,7 +442,6 @@ export class Clmm extends ModuleBase {
       ammConfigId: ammConfig.id,
       initialPriceX64,
       extendMintAccount,
-      payer,
       seedIndex,
     });
 
@@ -475,11 +474,10 @@ export class Clmm extends ModuleBase {
       this.logAndCreateError("param collectFeeOnMint find error");
     }
 
-    const ins = ClmmInstrument.createPermissionedPoolInstruction(
+    const ins = ClmmInstrument.createCustomizablePoolV2Instruction(
       programId,
       payer,
-      payer,
-      address.permission,
+      owner,
       ammConfig.id,
       address.poolId,
       address.mintA,
