@@ -126,7 +126,10 @@ export class LinearPriceCurve extends CurveBase {
   }): BN {
     const newQuote = poolInfo.realB.add(amount);
     const termInsideSqrt = new BN(2).mul(newQuote).mul(Q64).div(poolInfo.virtualA);
-    const sqrtTerm = new BN(new Decimal(termInsideSqrt.toString()).sqrt().toFixed(0));
+    // Floor the sqrt: this is an amount-out, and rounding the root up (the
+    // Decimal default) hands out base the paid quote does not buy on the
+    // curve — buyExactOut for the rounded output can exceed the amount paid.
+    const sqrtTerm = new BN(new Decimal(termInsideSqrt.toString()).sqrt().toFixed(0, Decimal.ROUND_FLOOR));
     const amountOut = sqrtTerm.sub(poolInfo.realA);
 
     return amountOut;
@@ -167,8 +170,11 @@ export class LinearPriceCurve extends CurveBase {
   }): BN {
     const newB = poolInfo.realB.sub(amount);
     const termInsideSqrt = new BN(2).mul(newB).mul(Q64).div(poolInfo.virtualA);
+    // Floor the sqrt: the amount in is realA minus this root, so flooring
+    // the root ceils the input — rounding it up undercharges the seller,
+    // who then receives less than the requested exact-out amount.
 
-    const sqrtTerm = new BN(new Decimal(termInsideSqrt.toString()).sqrt().toFixed(0));
+    const sqrtTerm = new BN(new Decimal(termInsideSqrt.toString()).sqrt().toFixed(0, Decimal.ROUND_FLOOR));
 
     const amountIn = poolInfo.realA.sub(sqrtTerm);
 

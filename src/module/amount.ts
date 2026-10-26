@@ -19,8 +19,15 @@ export function splitNumber(num: string, decimals: number): [string, string] {
   let integral = "0";
   let fractional = "0";
 
-  if (num.includes(".")) {
-    const splited = num.split(".");
+  // Callers parse the two parts separately and add them, so the sign has to
+  // be carried by both parts: splitting "-1.5" into ["-1", "500000"] used to
+  // reconstruct -1000000 + 500000 = -500000 instead of -1500000, and "-0.5"
+  // even came back positive.
+  const negative = num.startsWith("-");
+  const unsigned = negative ? num.slice(1) : num;
+
+  if (unsigned.includes(".")) {
+    const splited = unsigned.split(".");
     if (splited.length === 2) {
       [integral, fractional] = splited;
       fractional = fractional.padEnd(decimals, "0");
@@ -28,11 +35,16 @@ export function splitNumber(num: string, decimals: number): [string, string] {
       logger.logWithError(`invalid number string, num: ${num}`);
     }
   } else {
-    integral = num;
+    integral = unsigned;
   }
 
-  // fix decimals is 0
-  return [integral, fractional.slice(0, decimals) || fractional];
+  // With decimals === 0 the fractional part must be dropped entirely (the
+  // same truncation larger decimals get from the slice below): returning it
+  // used to make "1.5" for a 0-decimals token reconstruct as 1 + 5 = 6.
+  const truncated = decimals === 0 ? "0" : fractional.slice(0, decimals) || "0";
+  const signedFractional = negative && truncated !== "0" && !/^0+$/.test(truncated) ? `-${truncated}` : truncated;
+
+  return [negative ? `-${integral}` : integral, signedFractional];
 }
 
 export class TokenAmount extends Fraction {

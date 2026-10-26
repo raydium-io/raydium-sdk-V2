@@ -755,11 +755,12 @@ export default class CpmmModule extends ModuleBase {
 
     const [mintA, mintB] = [new PublicKey(poolInfo.mintA.address), new PublicKey(poolInfo.mintB.address)];
 
-    if (!fixedOut) {
-      swapResult.outputAmount = swapResult.outputAmount.mul(new BN((1 - slippage) * 10000)).div(new BN(10000));
-    } else {
-      swapResult.inputAmount = swapResult.inputAmount.mul(new BN((1 + slippage) * 10000)).div(new BN(10000));
-    }
+    const inputAmountMax = fixedOut
+      ? swapResult.inputAmount.mul(new BN((1 + slippage) * 10000)).div(new BN(10000))
+      : swapResult.inputAmount;
+    const outputAmountMin = fixedOut
+      ? swapResult.outputAmount
+      : swapResult.outputAmount.mul(new BN((1 - slippage) * 10000)).div(new BN(10000));
 
     const mintAUseSOLBalance = poolInfo.mintA.address === WSOLMint.toBase58();
     const mintBUseSOLBalance = poolInfo.mintB.address === WSOLMint.toBase58();
@@ -772,7 +773,7 @@ export default class CpmmModule extends ModuleBase {
           mintAUseSOLBalance || !baseIn
             ? {
                 payer: feePayer || this.scope.ownerPubKey,
-                amount: baseIn ? swapResult.inputAmount : 0,
+                amount: baseIn ? inputAmountMax : 0,
               }
             : undefined,
         notUseTokenAccount: mintAUseSOLBalance,
@@ -791,7 +792,7 @@ export default class CpmmModule extends ModuleBase {
           mintBUseSOLBalance || baseIn
             ? {
                 payer: feePayer || this.scope.ownerPubKey,
-                amount: baseIn ? 0 : swapResult.inputAmount,
+                amount: baseIn ? 0 : inputAmountMax,
               }
             : undefined,
         notUseTokenAccount: mintBUseSOLBalance,
@@ -834,7 +835,7 @@ export default class CpmmModule extends ModuleBase {
               getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
 
               inputAmount,
-              swapResult.outputAmount,
+              outputAmountMin,
             )
           : makeSwapCpmmBaseOutInstruction(
               new PublicKey(poolInfo.programId),
@@ -855,8 +856,8 @@ export default class CpmmModule extends ModuleBase {
 
               getPdaObservationId(new PublicKey(poolInfo.programId), new PublicKey(poolInfo.id)).publicKey,
 
-              swapResult.inputAmount,
-              swapResult.outputAmount,
+              inputAmountMax,
+              outputAmountMin,
             ),
       ],
       instructionTypes: [fixedOut ? InstructionType.CpmmSwapBaseOut : InstructionType.ClmmSwapBaseIn],

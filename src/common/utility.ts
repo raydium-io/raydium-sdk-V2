@@ -6,10 +6,6 @@ import { ReplaceType } from "../raydium/type";
 
 import { tryParsePublicKey } from "./pubKey";
 
-export async function sleep(ms: number): Promise<void> {
-  new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export function getTimestamp(): number {
   return new Date().getTime();
 }
@@ -18,7 +14,11 @@ export function notInnerObject(v: unknown): v is Record<string, any> {
   return (
     typeof v === "object" &&
     v !== null &&
-    ![Token, TokenAmount, PublicKey, Fraction, BN, Price, Percent].some((o) => typeof o === "object" && v instanceof o)
+    // the entries are classes, and `typeof Klass` is "function", never
+    // "object" — guarding the instanceof check on it made the check always
+    // false, so instances were treated as plain objects and dismantled by
+    // jsonInfo2PoolKeys into `{ _bn: { words, … } }` shells
+    ![Token, TokenAmount, PublicKey, Fraction, BN, Price, Percent].some((o) => v instanceof o)
   );
 }
 

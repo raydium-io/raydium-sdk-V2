@@ -226,7 +226,12 @@ export class Curve {
     if (amountMigrate.lt(minAmountMigrate)) throw Error("migrate lt min migrate amoount");
 
     const migrateAmountA = supply.sub(totalSell).sub(totalLockedAmount);
-    const liquidity = new BN(new Decimal(migrateAmountA.mul(totalFundRaising).toString()).sqrt().toFixed(0));
+    // Floor the sqrt: the migrated LP amount is an integer sqrt, and rounding
+    // the root up (the Decimal default) lets a pool whose floored liquidity is
+    // at or below the minimum pass this check.
+    const liquidity = new BN(
+      new Decimal(migrateAmountA.mul(totalFundRaising).toString()).sqrt().toFixed(0, Decimal.ROUND_FLOOR),
+    );
 
     if (migrateType === "amm") {
       const minLockLp = new BN(10).pow(new BN(decimals));
@@ -345,7 +350,11 @@ export class Curve {
     const remainingAmountA = poolInfo.totalSellA.sub(poolInfo.realA);
 
     const preAmountA = getTransferAmountFeeFromPost(amountA, transferFeeConfigA, slot);
-    let realAmountA = preAmountA.fee ? preAmountA.amount.add(preAmountA.fee) : preAmountA.amount;
+    // FromPost's amount is already the gross amount: it is the amount the pool
+    // must send so the buyer nets amountA after the transfer fee is withheld
+    // (its fee field is the withheld part of that same amount). Adding the fee
+    // again would charge the buyer for amount + 2 * fee of token A.
+    let realAmountA = preAmountA.amount;
     if (amountA.gt(remainingAmountA)) {
       realAmountA = remainingAmountA;
     }
@@ -491,6 +500,9 @@ export class Curve {
   }
   static calculatePreFee({ postFeeAmount, feeRate }: { postFeeAmount: BN; feeRate: BN }): BN {
     if (feeRate.isZero()) return postFeeAmount;
+    // The gross-up divides by (denominator - rate): at a 100% rate the pre-fee
+    // amount is undefined, and past it the formula returns negative amounts.
+    if (feeRate.gte(FEE_RATE_DENOMINATOR_VALUE)) throw Error("feeRate must be less than the fee rate denominator");
 
     const numerator = postFeeAmount.mul(FEE_RATE_DENOMINATOR_VALUE);
     const denominator = FEE_RATE_DENOMINATOR_VALUE.sub(feeRate);

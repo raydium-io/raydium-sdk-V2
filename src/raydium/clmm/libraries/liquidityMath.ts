@@ -190,7 +190,7 @@ export class LiquidityMathUtil {
         sqrtPriceCurrentX64,
         sqrtPriceLowerX64,
         sqrtPriceUpperX64,
-        amountInfo.amount,
+        liquidity,
         true,
       ),
     };

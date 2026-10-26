@@ -2,7 +2,6 @@ export * from "./accountInfo";
 export * from "./bignumber";
 export * from "./constant";
 export * from "./date";
-export * from "./fractionUtil";
 export * from "./lodash";
 export * from "./logger";
 export * from "./owner";

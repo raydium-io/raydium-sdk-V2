@@ -45,6 +45,7 @@ import {
   mockV3CreatePoolInfo,
 } from "./libraries/constants";
 import {
+  getPdaCustomizablePoolV2Id,
   getPdaExBitmapAccount,
   getPdaLimitOrderAddress,
   getPdaLimitOrderNonceAddress,
@@ -387,8 +388,8 @@ export class Clmm extends ModuleBase {
     }) as Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>>;
   }
 
-  public async createPermissionedPool<T extends TxVersion>(
-    props: CreateCustomizablePool<T>,
+  public async createCustomizablePoolV2<T extends TxVersion>(
+    props: Omit<CreateCustomizablePool<T>, "collectFeeOn">,
   ): Promise<MakeTxData<T, { mockPoolInfo: ApiV3PoolInfoConcentratedItem; address: ClmmKeys }>> {
     const {
       programId,
@@ -405,8 +406,6 @@ export class Clmm extends ModuleBase {
       feePayer,
       addSupportMintExt,
     } = props;
-    if (props.collectFeeOn !== undefined)
-      throw Error("SDK no longer supports this parameter, please use collectFeeOnMint");
     const txBuilder = this.createTxBuilder(feePayer);
     const [mintA, mintB, initPrice] = new BN(new PublicKey(mint1.address).toBuffer()).gt(
       new BN(new PublicKey(mint2.address).toBuffer()),
@@ -431,9 +430,17 @@ export class Clmm extends ModuleBase {
     }
 
     const payer = feePayer ?? this.scope.ownerPubKey;
-    const seedIndex = Math.floor(Math.random() * Math.pow(2, 16)) + 1;
 
-    const { address } = await ClmmInstrument.createPermissionedPoolInstructions({
+    const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
+
+    // check which seed index is available
+    const poolIdList = new Array(100)
+      .fill(0)
+      .map((_, i) => getPdaCustomizablePoolV2Id(programId, ammConfig.id, mintAAddress, mintBAddress, i + 1).publicKey);
+    const data = await getMultipleAccountsInfo(this.scope.connection, poolIdList, { commitment: "confirmed" });
+    const seedIndex = data.findIndex((d) => d === null) + 1;
+
+    const { address } = ClmmInstrument.createCustomizablePoolV2Instructions({
       connection: this.scope.connection,
       programId,
       owner,
@@ -442,7 +449,6 @@ export class Clmm extends ModuleBase {
       ammConfigId: ammConfig.id,
       initialPriceX64,
       extendMintAccount,
-      payer,
       seedIndex,
     });
 
@@ -475,11 +481,10 @@ export class Clmm extends ModuleBase {
       this.logAndCreateError("param collectFeeOnMint find error");
     }
 
-    const ins = ClmmInstrument.createPermissionedPoolInstruction(
+    const ins = ClmmInstrument.createCustomizablePoolV2Instruction(
       programId,
       payer,
-      payer,
-      address.permission,
+      owner,
       ammConfig.id,
       address.poolId,
       address.mintA,
@@ -3191,7 +3196,12 @@ export class Clmm extends ModuleBase {
           mintA: toApiV3Token({
             address: mintA,
             decimals: clmmPoolsRpcInfo[poolId].mintDecimalsA,
-            programId: mintInfos[mintA].programId.toBase58() || TOKEN_PROGRAM_ID.toBase58(),
+            // fetchMultipleMintInfos skips invalid mint accounts, so a
+            // mint may have no entry here: fall back to the classic Token
+            // program instead of dereferencing undefined (the old
+            // `.programId.toBase58() || TOKEN_PROGRAM_ID` form could never
+            // reach its own fallback).
+            programId: mintInfos[mintA]?.programId.toBase58() ?? TOKEN_PROGRAM_ID.toBase58(),
             extensions: {
               feeConfig: mintInfos[mintA]?.feeConfig ? toFeeConfig(mintInfos[mintA]?.feeConfig) : undefined,
             },
@@ -3199,7 +3209,7 @@ export class Clmm extends ModuleBase {
           mintB: toApiV3Token({
             address: mintB,
             decimals: clmmPoolsRpcInfo[poolId].mintDecimalsB,
-            programId: mintInfos[mintB].programId.toBase58() || TOKEN_PROGRAM_ID.toBase58(),
+            programId: mintInfos[mintB]?.programId.toBase58() ?? TOKEN_PROGRAM_ID.toBase58(),
             extensions: {
               feeConfig: mintInfos[mintB]?.feeConfig ? toFeeConfig(mintInfos[mintB]?.feeConfig) : undefined,
             },

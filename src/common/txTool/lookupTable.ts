@@ -14,15 +14,16 @@ export async function getMultipleLookupTableInfo({
   address: PublicKey[];
   cluster?: "mainnet" | "devnet";
 }): Promise<CacheLTA> {
-  const dataInfos = await getMultipleAccountsInfo(
-    connection,
-    [...new Set<string>(address.map((i) => i.toString()))].map((i) => new PublicKey(i)),
-  );
+  const uniqueAddress = [...new Set<string>(address.map((i) => i.toString()))].map((i) => new PublicKey(i));
+  const dataInfos = await getMultipleAccountsInfo(connection, uniqueAddress);
 
   const outDict: CacheLTA = {};
-  for (let i = 0; i < address.length; i++) {
+  // dataInfos is aligned with uniqueAddress, not with address: indexing it by
+  // the original list would bind a key to another table's data (and drop the
+  // last table) whenever the input repeats an address.
+  for (let i = 0; i < uniqueAddress.length; i++) {
     const info = dataInfos[i];
-    const key = address[i];
+    const key = uniqueAddress[i];
     if (!info) continue;
     const lookupAccount = new AddressLookupTableAccount({
       key,
