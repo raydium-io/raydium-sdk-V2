@@ -2,7 +2,7 @@ export const SESSION_KEY = "ray_tab_hash";
 export const STORAGE_KEY = "ray_req_hash";
 
 export const getSessionKey = (): string => {
-  if (typeof window === undefined) return "";
+  if (typeof window === "undefined") return "";
   let key = sessionStorage.getItem(SESSION_KEY);
 
   // new a session key
@@ -29,7 +29,7 @@ export const updateReqHistory = async ({
   removeLastLog,
   ...resData
 }: Omit<ResHistory, "time" | "session">): Promise<void> => {
-  if (typeof window === undefined) return new Promise((resolve) => resolve());
+  if (typeof window === "undefined") return new Promise((resolve) => resolve());
   const data: ResHistory[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").slice(0, logCount - 1);
 
   // means retry last save error
