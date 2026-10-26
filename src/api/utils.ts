@@ -50,6 +50,7 @@ export const updateReqHistory = async ({
       data[0].data = resStr + (resStr.length > 100 ? "..." : "");
       while (!success) {
         data.pop();
+        if (data.length === 0) break;
         const resStr = JSON.stringify(resData.data).substring(0, 100);
         data[0].data = resStr + (resStr.length > 100 ? "..." : "");
         try {
