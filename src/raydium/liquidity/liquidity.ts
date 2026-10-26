@@ -1117,7 +1117,9 @@ export default class LiquidityModule extends ModuleBase {
       }
     }
 
-    const minAmountOutRaw = new BN(new Decimal(amountOutRaw.toString()).mul(1 - slippage).toFixed(0));
+    // Floor the slippage bound: Decimal's default toFixed rounding is half-up, which can
+    // round the minimum up past the caller's slippage tolerance (105 at 10% -> 94.5 -> 95).
+    const minAmountOutRaw = new BN(new Decimal(amountOutRaw.toString()).mul(1 - slippage).toFixed(0, Decimal.ROUND_FLOOR));
 
     const amountOut = amountOutRaw;
     const minAmountOut = minAmountOutRaw;
@@ -1219,7 +1221,9 @@ export default class LiquidityModule extends ModuleBase {
       fee = amountInRaw.sub(amountInWithoutFee);
     }
 
-    const maxAmountInRaw = new BN(new Decimal(amountInRaw.toString()).mul(1 + slippage).toFixed(0));
+    // Floor the slippage bound: Decimal's default toFixed rounding is half-up, which can
+    // round the maximum up past the caller's slippage tolerance (116 at 10% -> 127.6 -> 128).
+    const maxAmountInRaw = new BN(new Decimal(amountInRaw.toString()).mul(1 + slippage).toFixed(0, Decimal.ROUND_FLOOR));
 
     const amountIn = amountInRaw;
     const maxAmountIn = maxAmountInRaw;
