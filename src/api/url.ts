@@ -75,7 +75,7 @@ export const API_URLS = {
   CPMM_LOCK: "https://dynamic-ipfs.raydium.io/lock/cpmm/position",
 
   LAUNCH_AUTH_HOST: "https://launch-auth-v1.raydium.io",
-  LAUNCH_COMMENT_HOST: "hhttps://launch-forum-v1.raydium.io",
+  LAUNCH_COMMENT_HOST: "https://launch-forum-v1.raydium.io",
   LAUNCH_HISTORY_HOST: "https://launch-history-v1.raydium.io",
   LAUNCH_MINT_HOST: "https://launch-mint-v1.raydium.io",
 };
