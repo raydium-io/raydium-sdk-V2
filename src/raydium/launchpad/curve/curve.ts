@@ -345,7 +345,11 @@ export class Curve {
     const remainingAmountA = poolInfo.totalSellA.sub(poolInfo.realA);
 
     const preAmountA = getTransferAmountFeeFromPost(amountA, transferFeeConfigA, slot);
-    let realAmountA = preAmountA.fee ? preAmountA.amount.add(preAmountA.fee) : preAmountA.amount;
+    // FromPost's amount is already the gross amount: it is the amount the pool
+    // must send so the buyer nets amountA after the transfer fee is withheld
+    // (its fee field is the withheld part of that same amount). Adding the fee
+    // again would charge the buyer for amount + 2 * fee of token A.
+    let realAmountA = preAmountA.amount;
     if (amountA.gt(remainingAmountA)) {
       realAmountA = remainingAmountA;
     }
