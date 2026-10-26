@@ -3286,7 +3286,10 @@ export class Clmm extends ModuleBase {
           mint: toApiV3Token({
             address: r.mint.toBase58(),
             programId: TOKEN_PROGRAM_ID.toBase58(),
-            decimals: mintInfos[r.mint.toBase58()].decimals ?? 6,
+            // fetchMultipleMintInfos skips invalid mint accounts, so a
+            // reward mint may have no entry here: use the 6-decimal
+            // fallback instead of dereferencing undefined.
+            decimals: mintInfos[r.mint.toBase58()]?.decimals ?? 6,
           }),
           vault: r.vault.toBase58(),
         })),
