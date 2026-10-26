@@ -1,3 +1,5 @@
+import { sha256 } from "js-sha256";
+
 import { publicKey, seq, struct, u128, u16, u64, u8, vec } from "../../marshmallow";
 
 export const LaunchpadConfig = struct([
@@ -146,3 +148,7 @@ export const PlatformCurveRule = struct([
 
   vec(CurveRuleGroup, "groups"),
 ]);
+
+// the anchor discriminator the program writes in the first 8 bytes of every PlatformCurveRule
+// account, PlatformCurveRule.span is -1 so a getProgramAccounts scan filters on it instead of dataSize
+export const PLATFORM_CURVE_RULE_DISCRIMINATOR = Buffer.from(sha256.digest("account:PlatformCurveRule")).slice(0, 8);
