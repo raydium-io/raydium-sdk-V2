@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from "axios";
 
-import { createLogger, sleep } from "../common";
+import { createLogger } from "../common";
 import { Cluster } from "../solana";
 
 import {
@@ -29,22 +29,6 @@ import { solToWSol } from "../common";
 const logger = createLogger("Raydium_Api");
 const poolKeysCache: Map<string, PoolKeys> = new Map();
 const cacheLaunchConfigs: Map<Cluster, ApiLaunchConfig[]> = new Map();
-
-export async function endlessRetry<T>(name: string, call: () => Promise<T>, interval = 1000): Promise<T> {
-  let result: T | undefined;
-
-  while (result == undefined) {
-    try {
-      logger.debug(`Request ${name} through endlessRetry`);
-      result = await call();
-    } catch (err) {
-      logger.error(`Request ${name} failed, retry after ${interval} ms`, err);
-      await sleep(interval);
-    }
-  }
-
-  return result;
-}
 
 export interface ApiProps {
   cluster: Cluster;
