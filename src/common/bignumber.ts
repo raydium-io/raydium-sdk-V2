@@ -8,7 +8,6 @@ import { Price } from "../module/price";
 import { Token } from "../module/token";
 import { SplToken, TokenJson } from "../raydium/token/type";
 import { parseBigNumberish } from "./constant";
-import { mul } from "./fractionUtil";
 import { BN_ZERO } from "@/raydium";
 
 export const BN_TWO = new BN(2);
@@ -23,35 +22,6 @@ export type Numberish = number | string | bigint | Fraction | BN;
 
 export function tenExponential(shift: BigNumberish): BN {
   return BN_TEN.pow(parseBigNumberish(shift));
-}
-
-/**
- *
- * @example
- * getIntInfo(0.34) => { numerator: '34', denominator: '100'}
- * getIntInfo('0.34') //=> { numerator: '34', denominator: '100'}
- */
-export function parseNumberInfo(n: Numberish | undefined): {
-  denominator: string;
-  numerator: string;
-  sign?: string;
-  int?: string;
-  dec?: string;
-} {
-  if (n === undefined) return { denominator: "1", numerator: "0" };
-  if (n instanceof BN) {
-    return { numerator: n.toString(), denominator: "1" };
-  }
-
-  if (n instanceof Fraction) {
-    return { denominator: n.denominator.toString(), numerator: n.numerator.toString() };
-  }
-
-  const s = String(n);
-  const [, sign = "", int = "", dec = ""] = s.replace(",", "").match(/(-?)(\d*)\.?(\d*)/) ?? [];
-  const denominator = "1" + "0".repeat(dec.length);
-  const numerator = sign + (int === "0" ? "" : int) + dec || "0";
-  return { denominator, numerator, sign, int, dec };
 }
 
 // round up
@@ -70,39 +40,6 @@ export function divCeil(a: BN, b: BN): BN {
   }
 }
 
-export function shakeFractionDecimal(n: Fraction): string {
-  const [, sign = "", int = ""] = n.toFixed(2).match(/(-?)(\d*)\.?(\d*)/) ?? [];
-  return `${sign}${int}`;
-}
-
-export function toBN(n: Numberish, decimal: BigNumberish = 0): BN {
-  if (n instanceof BN) return n;
-  return new BN(shakeFractionDecimal(toFraction(n).mul(BN_TEN.pow(new BN(String(decimal))))));
-}
-
-export function toFraction(value: Numberish): Fraction {
-  //  to complete math format(may have decimal), not int
-  if (value instanceof Percent) return new Fraction(value.numerator, value.denominator);
-
-  if (value instanceof Price) return value.adjusted;
-
-  // to complete math format(may have decimal), not BN
-  if (value instanceof TokenAmount)
-    try {
-      return toFraction(value.toExact());
-    } catch {
-      return new Fraction(BN_ZERO);
-    }
-
-  // do not ideal with other fraction value
-  if (value instanceof Fraction) return value;
-
-  // wrap to Fraction
-  const n = String(value);
-  const details = parseNumberInfo(n);
-  return new Fraction(details.numerator, details.denominator);
-}
-
 export function ceilDiv(tokenAmount: BN, feeNumerator: BN, feeDenominator: BN): BN {
   return tokenAmount.mul(feeNumerator).add(feeDenominator).sub(new BN(1)).div(feeDenominator);
 }
@@ -111,66 +48,6 @@ export function floorDiv(tokenAmount: BN, feeNumerator: BN, feeDenominator: BN):
   return tokenAmount.mul(feeNumerator).div(feeDenominator);
 }
 
-/**
- * @example
- * toPercent(3.14) // => Percent { 314.00% }
- * toPercent(3.14, { alreadyDecimaled: true }) // => Percent {3.14%}
- */
-export function toPercent(
-  n: Numberish,
-  options?: { /* usually used for backend data */ alreadyDecimaled?: boolean },
-): Percent {
-  const { numerator, denominator } = parseNumberInfo(n);
-  return new Percent(new BN(numerator), new BN(denominator).mul(options?.alreadyDecimaled ? new BN(100) : new BN(1)));
-}
-
-export function toTokenPrice(params: {
-  token: TokenJson | Token | SplToken;
-  numberPrice: Numberish;
-  decimalDone?: boolean;
-}): Price {
-  const { token, numberPrice, decimalDone } = params;
-  const usdCurrency = new Token({ mint: "", decimals: 6, symbol: "usd", name: "usd", skipMint: true });
-  const { numerator, denominator } = parseNumberInfo(numberPrice);
-  const parsedNumerator = decimalDone ? new BN(numerator).mul(BN_TEN.pow(new BN(token.decimals))) : numerator;
-  const parsedDenominator = new BN(denominator).mul(BN_TEN.pow(new BN(usdCurrency.decimals)));
-
-  return new Price({
-    baseToken: usdCurrency,
-    denominator: parsedDenominator.toString(),
-    quoteToken: new Token({ ...token, skipMint: true, mint: "" }),
-    numerator: parsedNumerator.toString(),
-  });
-}
-
-export function toUsdCurrency(amount: Numberish): CurrencyAmount {
-  const usdCurrency = new Currency({ decimals: 6, symbol: "usd", name: "usd" });
-  const amountBigNumber = toBN(mul(amount, 10 ** usdCurrency.decimals)!);
-  return new CurrencyAmount(usdCurrency, amountBigNumber);
-}
-
-export function toTotalPrice(amount: Numberish | undefined, price: Price | undefined): CurrencyAmount {
-  if (!price || !amount) return toUsdCurrency(0);
-  return toUsdCurrency(mul(amount, price)!);
-}
-
-export function decimalToFraction(n: Decimal | undefined): Fraction | undefined {
-  if (n == null) return undefined;
-  const { numerator, denominator } = parseNumberInfo(n.toString());
-  return new Fraction(numerator, denominator);
-}
-
 export function isDecimal(val: unknown): boolean {
   return val instanceof Decimal;
 }
-
-// export function recursivelyDecimalToFraction<T>(info: T): ReplaceType<T, Decimal, Fraction> {
-//   // @ts-expect-error no need type for inner code
-//   return isDecimal(info)
-//     ? decimalToFraction(info as any)
-//     : Array.isArray(info)
-//     ? info.map((k) => recursivelyDecimalToFraction(k))
-//     : notInnerObject(info)
-//     ? Object.fromEntries(Object.entries(info as any).map(([k, v]) => [k, recursivelyDecimalToFraction(v)]))
-//     : info;
-// }

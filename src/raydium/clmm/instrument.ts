@@ -14,8 +14,7 @@ import {
   getPdaMetadataKey,
   getPdaObservationAccount,
   getPdaOperationAccount,
-  getPdaPermission,
-  getPdaPermissionedPoolId,
+  getPdaCustomizablePoolV2Id,
   getPdaPersonalPositionAddress,
   getPdaPoolId,
   getPdaPoolRewardVaultId,
@@ -51,7 +50,7 @@ const logger = createLogger("Raydium_Clmm");
 const insId = {
   createPool: getAnchorByte("create_pool"),
   createCustomizablePool: getAnchorByte("create_customizable_pool"), // todo
-  createPermissionedPool: getAnchorByte("create_permissioned_pool"),
+  createCustomizablePoolV2: getAnchorByte("create_customizable_pool_v2"),
 
   openPositionV2: getAnchorByte("open_position_v2"),
   openPositionWithToken22Nft: getAnchorByte("open_position_with_token22_nft"),
@@ -184,11 +183,10 @@ export class ClmmInstrument {
     });
   }
 
-  static createPermissionedPoolInstruction(
+  static createCustomizablePoolV2Instruction(
     programId: PublicKey,
     payer: PublicKey,
     poolCreator: PublicKey,
-    permission: PublicKey,
     ammConfig: PublicKey,
     poolId: PublicKey,
     mintA: PublicKey,
@@ -210,7 +208,6 @@ export class ClmmInstrument {
     const keys = [
       { pubkey: payer, isSigner: true, isWritable: true },
       { pubkey: poolCreator, isSigner: false, isWritable: false },
-      { pubkey: permission, isSigner: false, isWritable: false },
       { pubkey: ammConfig, isSigner: false, isWritable: false },
       { pubkey: poolId, isSigner: false, isWritable: true },
       { pubkey: mintA, isSigner: false, isWritable: false },
@@ -232,7 +229,7 @@ export class ClmmInstrument {
       { sqrtPriceX64, collectFeeOn, enableDynamicFee: dynamicFeeConfig !== undefined, seedIndex },
       data,
     );
-    const aData = Buffer.from([...insId.createPermissionedPool, ...data]);
+    const aData = Buffer.from([...insId.createCustomizablePoolV2, ...data]);
 
     return new TransactionInstruction({
       keys,
@@ -1032,8 +1029,8 @@ export class ClmmInstrument {
     };
   }
 
-  static createPermissionedPoolInstructions(
-    props: CreatePoolInstruction & { payer: PublicKey; seedIndex: number },
+  static createCustomizablePoolV2Instructions(
+    props: CreatePoolInstruction & { seedIndex: number },
   ): ReturnTypeMakeInstructions<{
     poolId: PublicKey;
     observationId: PublicKey;
@@ -1044,23 +1041,21 @@ export class ClmmInstrument {
     mintBProgram: PublicKey;
     mintAVault: PublicKey;
     mintBVault: PublicKey;
-    permission: PublicKey;
   }> {
-    const { programId, owner, mintA, mintB, ammConfigId, initialPriceX64, extendMintAccount, payer, seedIndex } = props;
+    const { programId, owner, mintA, mintB, ammConfigId, initialPriceX64, extendMintAccount, seedIndex } = props;
     const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
     const [mintAProgram, mintBProgram] = [
       new PublicKey(mintA.programId || TOKEN_PROGRAM_ID),
       new PublicKey(mintB.programId || TOKEN_PROGRAM_ID),
     ];
 
-    const { publicKey: poolId } = getPdaPermissionedPoolId(
+    const { publicKey: poolId } = getPdaCustomizablePoolV2Id(
       programId,
       ammConfigId,
       mintAAddress,
       mintBAddress,
       seedIndex,
     );
-    const { publicKey: permission } = getPdaPermission(programId, payer);
     const { publicKey: observationId } = getPdaObservationAccount(programId, poolId);
     const { publicKey: mintAVault } = getPdaPoolVaultId(programId, poolId, mintAAddress);
     const { publicKey: mintBVault } = getPdaPoolVaultId(programId, poolId, mintBAddress);
@@ -1099,7 +1094,6 @@ export class ClmmInstrument {
         mintBProgram,
         mintAVault,
         mintBVault,
-        permission,
       },
       lookupTableAddress: [],
     };

@@ -106,7 +106,7 @@ export class Fraction {
     if (decimalPlaces < 0) logger.logWithError(`${decimalPlaces} is negative.`);
 
     Big.DP = decimalPlaces;
-    Big.RM = toFixedRounding[rounding] || 1;
+    Big.RM = toFixedRounding[rounding] ?? 1;
     return new Big(this.numerator.toString()).div(this.denominator.toString()).toFormat(decimalPlaces, format);
   }
 

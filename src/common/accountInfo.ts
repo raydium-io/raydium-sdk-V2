@@ -64,7 +64,10 @@ export async function getMultipleAccountsInfo(
         if (accountInfo) {
           const { data, executable, lamports, owner, rentEpoch } = accountInfo;
 
-          if (data.length !== 2 && data[1] !== "base64") logger.logWithError(`info must be base64 encoded, RPC_ERROR`);
+          // Reject unless the payload is exactly [encoded, "base64"]: with &&
+          // a 2-element reply carrying any other encoding (e.g. "base58")
+          // slipped through and was silently decoded as base64 below.
+          if (data.length !== 2 || data[1] !== "base64") logger.logWithError(`info must be base64 encoded, RPC_ERROR`);
 
           return {
             data: Buffer.from(data[0], "base64"),

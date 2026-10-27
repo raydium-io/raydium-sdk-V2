@@ -290,6 +290,10 @@ export class SwapMathUtil {
     zeroForOne: boolean,
     isFeeOnInput: boolean
   ): SwapStepResult {
+    // The fee gross-ups below divide by (denominator - feeRate): at a 100% rate
+    // that denominator is zero, and past it the formulas return negative amounts.
+    if (new BN(feeRate).gte(FEE_RATE_DENOMINATOR_VALUE)) throw Error("feeRate must be less than the fee rate denominator");
+
     const result = this.newSwapComputationResult({})
 
     if (isBaseInput) {
