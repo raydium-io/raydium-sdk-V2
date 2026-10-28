@@ -19,6 +19,13 @@ import { InstructionType } from "./txType";
 import { ComputeBudgetConfig } from "../../raydium/type";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
+import {
+  getBase64EncodedWireTransaction,
+  isTransactionWithinSizeLimit,
+  type Transaction as V1Transaction,
+} from "@solana/transactions";
+import { buildV1Transaction } from "./buildV1Tx";
+
 const logger = createLogger("Raydium_txUtil");
 
 export const MAX_BASE64_SIZE = 1644;
@@ -37,6 +44,21 @@ export function addComputeBudget(config: ComputeBudgetConfig): {
     ins.push(ComputeBudgetProgram.setComputeUnitLimit({ units: config.units }));
     insTypes.push(InstructionType.SetComputeUnitLimit);
   }
+  if (config.loadedAccountsDataSize) {
+    // ComputeBudgetProgram.setLoadedAccountsDataSizeLimit 在部分 web3.js 版本尚未提供，手動組指令
+    // discriminator = 4，後接 u32 LE bytes
+    const data = Buffer.alloc(5);
+    data.writeUInt8(4, 0);
+    data.writeUInt32LE(config.loadedAccountsDataSize, 1);
+    ins.push(
+      new TransactionInstruction({
+        programId: ComputeBudgetProgram.programId,
+        keys: [],
+        data,
+      }),
+    );
+    insTypes.push(InstructionType.SetLoadedAccountsDataSizeLimit);
+  }
 
   return {
     instructions: ins,
@@ -52,7 +74,10 @@ export async function getRecentBlockHash(connection: Connection, propsCommitment
 export async function confirmTransaction(connection: Connection, txId: string): Promise<string> {
   connection.getSignatureStatuses([txId]);
   return new Promise((resolve, reject) => {
-    const id = setTimeout(reject, 60 * 1000);
+    const id = setTimeout(
+      () => reject(Object.assign(new Error(`Transaction confirmation timeout: ${txId}`), { txId })),
+      60 * 1000,
+    );
     connection.onSignature(
       txId,
       (signatureResult) => {
@@ -285,6 +310,52 @@ export function checkV0TxSize({
   }
 }
 
+/**
+ * Whether the given instructions still fit into a single v1 transaction.
+ *
+ * Unlike legacy / v0 (both capped at 1232 bytes), a v1 transaction may be up to 4096 bytes, and its compute budget
+ * lives in the message config mask instead of ComputeBudget instructions - the mask takes a fixed amount of space,
+ * so it has to be passed in here for the measurement to match what buildV1Transaction will produce.
+ *
+ * The transaction is measured unsigned: compileTransaction already reserves one slot per required signer, so the
+ * size reported here is the final wire size.
+ */
+export function checkV1TxSize({
+  instructions,
+  payer,
+  computeUnitLimit = 600000,
+  priorityFeeLamports,
+  loadedAccountsDataSize,
+  recentBlockhash = Keypair.generate().publicKey.toString(),
+  lastValidBlockHeight = 0,
+}: {
+  instructions: TransactionInstruction[];
+  payer: PublicKey;
+  /** Must match the value handed to buildV1Transaction; it is part of the config mask */
+  computeUnitLimit?: number;
+  priorityFeeLamports?: number | bigint;
+  loadedAccountsDataSize?: number;
+  recentBlockhash?: string;
+  lastValidBlockHeight?: number | bigint;
+}): boolean {
+  try {
+    return isTransactionWithinSizeLimit(
+      buildV1Transaction({
+        payer,
+        recentBlockhash,
+        lastValidBlockHeight,
+        computeUnitLimit,
+        priorityFeeLamports,
+        loadedAccountsDataSize,
+        instructions,
+      }),
+    );
+  } catch (error) {
+    // compiling throws when e.g. the account list overflows, which means it does not fit either
+    return false;
+  }
+}
+
 let epochInfoCache: { time: number; data?: EpochInfo } = {
   time: 0,
   data: undefined,
@@ -313,7 +384,19 @@ export const toBuffer = (arr: Buffer | Uint8Array | Array<number>): Buffer => {
   }
 };
 
-export const txToBase64 = (transaction: Transaction | VersionedTransaction): string => {
+/**
+ * A 2.x (kit) Transaction is a plain `{ messageBytes, signatures }` object rather than a class instance,
+ * so it cannot be detected with `instanceof`. Neither the 1.x Transaction nor VersionedTransaction carries
+ * `messageBytes`, which makes it a reliable discriminator.
+ */
+export const isV1Transaction = (
+  transaction: Transaction | VersionedTransaction | V1Transaction,
+): transaction is V1Transaction => "messageBytes" in transaction;
+
+export const txToBase64 = (transaction: Transaction | VersionedTransaction | V1Transaction): string => {
+  if (isV1Transaction(transaction)) {
+    return getBase64EncodedWireTransaction(transaction);
+  }
   let serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
   if (transaction instanceof VersionedTransaction) serialized = toBuffer(serialized);
   try {
@@ -323,7 +406,7 @@ export const txToBase64 = (transaction: Transaction | VersionedTransaction): str
   }
 };
 
-export function printSimulate(transactions: Transaction[] | VersionedTransaction[]): string[] {
+export function printSimulate(transactions: Transaction[] | VersionedTransaction[] | V1Transaction[]): string[] {
   const allBase64: string[] = [];
   transactions.forEach((transaction) => {
     if (transaction instanceof Transaction) {

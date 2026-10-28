@@ -41,6 +41,11 @@ export interface CreateLaunchPad<T = TxVersion.LEGACY> {
   createOnly?: boolean;
 
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;
@@ -290,6 +295,11 @@ export interface ClaimAllPlatformFee<T = TxVersion.LEGACY> {
   platformClaimFeeWallet: PublicKey;
 
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;
@@ -316,6 +326,11 @@ export interface CreateMultipleVesting<T = TxVersion.LEGACY> {
   }[];
 
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txVersion?: T;
   feePayer?: PublicKey;
 }
@@ -346,6 +361,11 @@ export interface ClaimMultiVesting<T = TxVersion.LEGACY> {
   >;
 
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txVersion?: T;
   feePayer?: PublicKey;
 }
@@ -377,6 +397,11 @@ export interface ClaimMultipleVaultPlatformFee<T = TxVersion.LEGACY> {
 
   unwrapSol?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txVersion?: T;
   feePayer?: PublicKey;
   associatedOnly?: boolean;
@@ -400,6 +425,11 @@ export interface ClaimMultiCreatorFee<T = TxVersion.LEGACY> {
     programId?: PublicKey;
   }[];
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txTipConfig?: TxTipConfig;
   txVersion?: T;
   feePayer?: PublicKey;

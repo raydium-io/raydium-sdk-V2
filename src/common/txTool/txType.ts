@@ -1,6 +1,7 @@
 export enum TxVersion {
   "V0",
   "LEGACY",
+  "V1",
 }
 
 export const InstructionType = {
@@ -17,6 +18,7 @@ export const InstructionType = {
 
   SetComputeUnitPrice: "SetComputeUnitPrice",
   SetComputeUnitLimit: "SetComputeUnitLimit",
+  SetLoadedAccountsDataSizeLimit: "SetLoadedAccountsDataSizeLimit",
 
   // CLMM
   ClmmCreatePool: "ClmmCreatePool",

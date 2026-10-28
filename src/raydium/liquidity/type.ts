@@ -172,6 +172,11 @@ export interface CreateMarketAndPoolParam<T> {
   tokenProgram?: PublicKey;
 
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txVersion?: T;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;

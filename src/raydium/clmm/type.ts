@@ -610,6 +610,11 @@ export interface HarvestAllRewardsParams<T = TxVersion.LEGACY> {
   programId?: PublicKey;
   txVersion?: T;
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txTipConfig?: TxTipConfig;
   feePayer?: PublicKey;
 
@@ -734,6 +739,11 @@ export interface CloseAllLimitOrder<T = TxVersion.LEGACY> {
 
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txVersion?: T;
   feePayer?: PublicKey;
 }
@@ -764,6 +774,11 @@ export interface SettleAllLimitOrders<T = TxVersion.LEGACY> {
   associatedOnly?: boolean;
   checkCreateATAOwner?: boolean;
   computeBudgetConfig?: ComputeBudgetConfig;
+  /**
+   * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+   * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+   */
+  insCountLimit?: number;
   txVersion?: T;
   feePayer?: PublicKey;
 }

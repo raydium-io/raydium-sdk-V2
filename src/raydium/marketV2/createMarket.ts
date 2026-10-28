@@ -37,6 +37,7 @@ export default class MarketV2 extends ModuleBase {
     assignSeed,
     txVersion,
     computeBudgetConfig,
+    insCountLimit,
     txTipConfig,
     feePayer,
   }: {
@@ -62,6 +63,11 @@ export default class MarketV2 extends ModuleBase {
 
     txVersion?: T;
     computeBudgetConfig?: ComputeBudgetConfig;
+    /**
+     * Max instruction count per split tx. Legacy / v0 default to 12; v1 derives it from the compute budget
+     * (computeBudgetConfig.units / 50000, i.e. 12 at the default 600000 units), so raising the budget raises it too.
+     */
+    insCountLimit?: number;
     txTipConfig?: TxTipConfig;
     feePayer?: PublicKey;
   }): Promise<MakeMultiTxData<T, MarketExtInfo>> {
@@ -171,24 +177,10 @@ export default class MarketV2 extends ModuleBase {
       });
     }
 
-    if (txVersion === TxVersion.V0)
-      return txBuilder.sizeCheckBuildV0({
-        computeBudgetConfig,
-        address: {
-          marketId: market.publicKey,
-          requestQueue: requestQueue.publicKey,
-          eventQueue: eventQueue.publicKey,
-          bids: bids.publicKey,
-          asks: asks.publicKey,
-          baseVault: baseVault.publicKey,
-          quoteVault: quoteVault.publicKey,
-          baseMint: new PublicKey(baseInfo.mint),
-          quoteMint: new PublicKey(quoteInfo.mint),
-        },
-      }) as Promise<MakeMultiTxData<T, MarketExtInfo>>;
-
-    return txBuilder.sizeCheckBuild({
+    return txBuilder.versionSizeCheckBuild({
+      txVersion,
       computeBudgetConfig,
+      insCountLimit,
       address: {
         marketId: market.publicKey,
         requestQueue: requestQueue.publicKey,
