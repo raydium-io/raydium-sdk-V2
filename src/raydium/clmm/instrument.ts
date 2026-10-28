@@ -1341,7 +1341,7 @@ export class ClmmInstrument {
 
           withMetadata === "create",
 
-          base ? base === "MintA" : base,
+          liquidity.isZero() ? null : base ? base === "MintA" : base,
 
           PoolUtil.isOverflowDefaultTickarrayBitmap({
             tickSpacing: poolInfo.config.tickSpacing,
@@ -1374,13 +1374,13 @@ export class ClmmInstrument {
           tickArrayLowerStartIndex,
           tickArrayUpperStartIndex,
 
-          BN_ZERO,
+          liquidity,
           base === "MintA" ? baseAmount : otherAmountMax,
           base === "MintA" ? otherAmountMax : baseAmount,
 
           withMetadata === "create",
 
-          base === "MintA",
+          liquidity.isZero() ? null : base ? base === "MintA" : base,
 
           PoolUtil.isOverflowDefaultTickarrayBitmap({
             tickSpacing: poolInfo.config.tickSpacing,
