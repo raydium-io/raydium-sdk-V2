@@ -31,6 +31,7 @@ import ModuleBase, { ModuleBaseProps } from "../moduleBase";
 import { toApiV3Token, toFeeConfig } from "../token";
 import {
   makeCreateCpmmPoolInInstruction,
+  makeCreateCpmmPoolV2InInstruction,
   makeDepositCpmmInInstruction,
   makeSwapCpmmBaseInInstruction,
   makeSwapCpmmBaseOutInstruction,
@@ -69,6 +70,15 @@ import {
 } from "./type";
 import { getCpLockPda } from "./pda";
 import { BN_ZERO } from "../clmm";
+
+/**
+ * `feeOn` names the caller's mintA/mintB, but the pool stores it against token0/token1.
+ * Flips the side when sorting the mints swapped them.
+ */
+function sortFeeOn<T extends FeeOn | undefined>(feeOn: T, isFront: boolean): T {
+  if (feeOn === undefined || isFront || feeOn === FeeOn.BothToken) return feeOn;
+  return (feeOn === FeeOn.OnlyTokenA ? FeeOn.OnlyTokenB : FeeOn.OnlyTokenA) as T;
+}
 
 export default class CpmmModule extends ModuleBase {
   constructor(params: ModuleBaseProps) {
@@ -346,6 +356,7 @@ export default class CpmmModule extends ModuleBase {
     txTipConfig,
     feePayer,
     addSupportMintExt,
+    creatorFeeOn,
     ...params
   }: CreateCpmmPoolParam<T>): Promise<MakeTxData<T, { address: CreateCpmmPoolAddress }>> {
     const payer = ownerInfo.feePayer || this.scope.owner?.publicKey;
@@ -425,31 +436,36 @@ export default class CpmmModule extends ModuleBase {
       });
     }
 
+    const sortedCreatorFeeOn = sortFeeOn(creatorFeeOn, isFront);
+
+    const createPoolArgs = [
+      programId,
+      this.scope.ownerPubKey,
+      new PublicKey(feeConfig.id),
+      poolKeys.authority,
+      poolKeys.poolId,
+      mintAPubkey,
+      mintBPubkey,
+      poolKeys.lpMint,
+      userVaultA,
+      userVaultB,
+      getATAAddress(this.scope.ownerPubKey, poolKeys.lpMint).publicKey,
+      poolKeys.vaultA,
+      poolKeys.vaultB,
+      poolFeeAccount,
+      new PublicKey(mintA.programId ?? TOKEN_PROGRAM_ID),
+      new PublicKey(mintB.programId ?? TOKEN_PROGRAM_ID),
+      poolKeys.observationId,
+      mintAAmount,
+      mintBAmount,
+      startTime,
+    ] as const;
+
     txBuilder.addInstruction({
       instructions: [
-        makeCreateCpmmPoolInInstruction(
-          programId,
-          this.scope.ownerPubKey,
-          new PublicKey(feeConfig.id),
-          poolKeys.authority,
-          poolKeys.poolId,
-          mintAPubkey,
-          mintBPubkey,
-          poolKeys.lpMint,
-          userVaultA,
-          userVaultB,
-          getATAAddress(this.scope.ownerPubKey, poolKeys.lpMint).publicKey,
-          poolKeys.vaultA,
-          poolKeys.vaultB,
-          poolFeeAccount,
-          new PublicKey(mintA.programId ?? TOKEN_PROGRAM_ID),
-          new PublicKey(mintB.programId ?? TOKEN_PROGRAM_ID),
-          poolKeys.observationId,
-          mintAAmount,
-          mintBAmount,
-          startTime,
-          extendMintAccount,
-        ),
+        sortedCreatorFeeOn === undefined
+          ? makeCreateCpmmPoolInInstruction(...createPoolArgs, extendMintAccount)
+          : makeCreateCpmmPoolV2InInstruction(...createPoolArgs, sortedCreatorFeeOn, extendMintAccount),
       ],
       instructionTypes: [InstructionType.CpmmCreatePool],
     });
@@ -1286,7 +1302,7 @@ export default class CpmmModule extends ModuleBase {
           mintBAmount,
           startTime,
 
-          feeOn,
+          sortFeeOn(feeOn, isFront),
         ),
       ],
       instructionTypes: [InstructionType.CpmmCreatePool],
