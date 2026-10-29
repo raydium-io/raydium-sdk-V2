@@ -251,11 +251,13 @@ export class Clmm extends ModuleBase {
         fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintA.address)).publicKey);
       if (mintB.programId === TOKEN_2022_PROGRAM_ID.toBase58())
         fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintB.address)).publicKey);
-      const extMintRes = await this.scope.connection.getMultipleAccountsInfo(fetchAccounts);
+      if (fetchAccounts.length) {
+        const extMintRes = await this.scope.connection.getMultipleAccountsInfo(fetchAccounts);
 
-      extMintRes.forEach((r, idx) => {
-        if (r) extendMintAccount.push(fetchAccounts[idx]);
-      });
+        extMintRes.forEach((r, idx) => {
+          if (r) extendMintAccount.push(fetchAccounts[idx]);
+        });
+      }
     }
 
     const { address } = await ClmmInstrument.createPoolInstructions({
@@ -405,6 +407,7 @@ export class Clmm extends ModuleBase {
       txTipConfig,
       feePayer,
       addSupportMintExt,
+      forerunCreate,
     } = props;
     const txBuilder = this.createTxBuilder(feePayer);
     const [mintA, mintB, initPrice] = new BN(new PublicKey(mint1.address).toBuffer()).gt(
@@ -422,11 +425,13 @@ export class Clmm extends ModuleBase {
         fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintA.address)).publicKey);
       if (mintB.programId === TOKEN_2022_PROGRAM_ID.toBase58())
         fetchAccounts.push(getPdaMintExAccount(programId, new PublicKey(mintB.address)).publicKey);
-      const extMintRes = await this.scope.connection.getMultipleAccountsInfo(fetchAccounts);
+      if (fetchAccounts.length) {
+        const extMintRes = await this.scope.connection.getMultipleAccountsInfo(fetchAccounts);
 
-      extMintRes.forEach((r, idx) => {
-        if (r) extendMintAccount.push(fetchAccounts[idx]);
-      });
+        extMintRes.forEach((r, idx) => {
+          if (r) extendMintAccount.push(fetchAccounts[idx]);
+        });
+      }
     }
 
     const payer = feePayer ?? this.scope.ownerPubKey;
@@ -434,11 +439,17 @@ export class Clmm extends ModuleBase {
     const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
 
     // check which seed index is available
-    const poolIdList = new Array(100)
-      .fill(0)
-      .map((_, i) => getPdaCustomizablePoolV2Id(programId, ammConfig.id, mintAAddress, mintBAddress, i + 1).publicKey);
-    const data = await getMultipleAccountsInfo(this.scope.connection, poolIdList, { commitment: "confirmed" });
-    const seedIndex = data.findIndex((d) => d === null) + 1;
+    const poolIdList = forerunCreate
+      ? []
+      : new Array(100)
+          .fill(0)
+          .map(
+            (_, i) => getPdaCustomizablePoolV2Id(programId, ammConfig.id, mintAAddress, mintBAddress, i + 1).publicKey,
+          );
+    const data = forerunCreate
+      ? []
+      : await getMultipleAccountsInfo(this.scope.connection, poolIdList, { commitment: "confirmed" });
+    const seedIndex = forerunCreate ? 0 : data.findIndex((d) => d === null) + 1;
 
     const { address } = ClmmInstrument.createCustomizablePoolV2Instructions({
       connection: this.scope.connection,
@@ -455,7 +466,7 @@ export class Clmm extends ModuleBase {
     // const desc = getCollectFeeOnDescription(collectFeeOn);
     const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
 
-    if (dynamicFeeConfig) {
+    if (!forerunCreate && dynamicFeeConfig) {
       // Check if dynamic fee config exists
       const dynamicFeeData = await this.scope.connection.getAccountInfo(dynamicFeeConfig);
       if (!dynamicFeeData)
@@ -512,6 +523,17 @@ export class Clmm extends ModuleBase {
     }>({
       txVersion,
       extInfo: {
+        ...(forerunCreate
+          ? {
+              recentBlockhash: PublicKey.default.toString(),
+              lastValidBlockHeight: 1,
+              loadedAccountsDataSize: 8 * 1024 * 1024,
+              computeBudgetConfig: {
+                units: 600000,
+                microLamports: 16667,
+              },
+            }
+          : {}),
         address: {
           ...address,
           observationId: address.observationId.toBase58(),

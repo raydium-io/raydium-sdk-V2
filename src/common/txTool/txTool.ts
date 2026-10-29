@@ -1,6 +1,5 @@
 import {
   Commitment,
-  ComputeBudgetProgram,
   Connection,
   PublicKey,
   sendAndConfirmTransaction,
@@ -14,7 +13,7 @@ import {
 } from "@solana/web3.js";
 import axios from "axios";
 
-import { Api } from "../../api";
+import { Api, API_URLS, DEV_API_URLS } from "../../api";
 import { ComputeBudgetConfig, SignAllTransactions, TxTipConfig } from "../../raydium/type";
 import { Cluster } from "../../solana";
 import { Owner } from "../owner";
@@ -270,15 +269,32 @@ export class TxBuilder {
   }
 
   public async getComputeBudgetConfig(): Promise<ComputeBudgetConfig | undefined> {
-    const json = (
-      await axios.get<SolanaFeeInfoJson>(`https://solanacompass.com/api/fees?cacheFreshTime=${5 * 60 * 1000}`)
-    ).data;
-    const { avg } = json?.[15] ?? {};
-    if (!avg) return undefined;
-    return {
-      units: 600000,
-      microLamports: Math.min(Math.ceil((avg * 1000000) / 600000), 25000),
-    };
+    try {
+      const urlConfigs = this.cluster === "devnet" ? DEV_API_URLS : API_URLS;
+      const data = await axios.get<{
+        data: {
+          default: {
+            h: number;
+            m: number;
+            vh: number;
+          };
+        };
+      }>(`${urlConfigs.BASE_HOST}${urlConfigs.PRIORITY_FEE}`);
+      return {
+        units: 600000,
+        microLamports: Math.ceil((data.data.data.default.h * 1000000) / 600000),
+      };
+    } catch {
+      const json = (
+        await axios.get<SolanaFeeInfoJson>(`https://solanacompass.com/api/fees?cacheFreshTime=${5 * 60 * 1000}`)
+      ).data;
+      const { avg } = json?.[15] ?? {};
+      if (!avg) return undefined;
+      return {
+        units: 600000,
+        microLamports: Math.min(Math.ceil((avg * 1000000) / 600000), 25000),
+      };
+    }
   }
 
   public setCustomComputeBudget(config?: ComputeBudgetConfig): boolean {
@@ -354,8 +370,6 @@ export class TxBuilder {
 
   public build<O = Record<string, any>>(extInfo?: O): MakeTxData<TxVersion.LEGACY, O> {
     const transaction = new Transaction();
-    const computeBudgetIns = this.getComputeBudgetIns();
-    if (this.allInstructions.length) transaction.add(...computeBudgetIns.instructions, ...this.allInstructions);
     transaction.feePayer = this.feePayer;
     if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
       this.signers.push(this.owner.signer);
@@ -364,7 +378,7 @@ export class TxBuilder {
       builder: this,
       transaction,
       signers: this.signers,
-      instructionTypes: [...computeBudgetIns.instructionTypes, ...this.instructionTypes, ...this.endInstructionTypes],
+      instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { recentBlockHash: propBlockHash, skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
