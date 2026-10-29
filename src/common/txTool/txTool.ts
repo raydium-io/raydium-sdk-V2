@@ -1,5 +1,6 @@
 import {
   Commitment,
+  ComputeBudgetProgram,
   Connection,
   PublicKey,
   sendAndConfirmTransaction,
@@ -237,8 +238,35 @@ export class TxBuilder {
     };
   }
 
+  get AllV1TxData(): {
+    instructions: TransactionInstruction[];
+    endInstructions: TransactionInstruction[];
+    signers: Signer[];
+    instructionTypes: string[];
+    endInstructionTypes: string[];
+    lookupTableAddress: string[];
+  } {
+    return {
+      instructions: this.instructions,
+      endInstructions: this.endInstructions,
+      signers: this.signers,
+      instructionTypes: this.instructionTypes,
+      endInstructionTypes: this.endInstructionTypes,
+      lookupTableAddress: this.lookupTableAddress,
+    };
+  }
+
   get allInstructions(): TransactionInstruction[] {
     return [...this.getComputeBudgetIns().instructions, ...this.instructions, ...this.endInstructions];
+  }
+
+  /**
+   * The instructions a v1 transaction should carry: in v1 the compute budget lives in the message config mask, so
+   * every ComputeBudget instruction has to be stripped - the ones allInstructions prepends from
+   * setCustomComputeBudget as well as any the caller pushed in directly - or they would be applied twice.
+   */
+  get v1Instructions(): TransactionInstruction[] {
+    return [...this.instructions, ...this.endInstructions];
   }
 
   public async getComputeBudgetConfig(): Promise<ComputeBudgetConfig | undefined> {
@@ -729,7 +757,7 @@ export class TxBuilder {
     // loadedAccountsDataSize precedence: explicitly specified > measured (autoLoadedAccountsDataSize) > the fixed 8MB default
     let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
     if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize) {
-      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.allInstructions);
+      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.v1Instructions);
     }
     loadedAccountsDataSize = loadedAccountsDataSize ?? DEFAULT_LOADED_ACCOUNTS_DATA_SIZE;
 
@@ -740,7 +768,7 @@ export class TxBuilder {
       computeUnitLimit,
       priorityFeeLamports,
       loadedAccountsDataSize,
-      instructions: [...this.allInstructions],
+      instructions: this.v1Instructions,
     });
 
     return {
@@ -1765,7 +1793,7 @@ export class TxBuilder {
       propInsCountLimit ?? Math.max(1, Math.floor(computeUnitLimit / V1_DEFAULT_CU_PER_INSTRUCTION));
     console.log("sizeCheckBuildV1: computeUnitLimit", computeUnitLimit, "insCountLimit", insCountLimit);
 
-    const sourceInstructions = [...this.instructions, ...this.endInstructions];
+    const sourceInstructions = this.v1Instructions;
 
     let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
     if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize)

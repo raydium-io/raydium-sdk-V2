@@ -490,7 +490,7 @@ export default class LaunchpadModule extends ModuleBase {
           : undefined,
         fromCreate: true,
       });
-      txBuilder.addInstruction({ ...builder.AllTxData });
+      txBuilder.addInstruction({ ...builder[txVersion === TxVersion.V1 ? "AllV1TxData" : "AllTxData"] });
       swapInfo = { ...extInfo };
       splitIns =
         (this.scope.cluster === "devnet" || txVersion === TxVersion.LEGACY) && extraConfigs.shareFeeReceiver
