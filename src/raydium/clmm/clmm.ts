@@ -525,6 +525,7 @@ export class Clmm extends ModuleBase {
       extInfo: {
         ...(forerunCreate
           ? {
+              forerunCreate,
               recentBlockhash: PublicKey.default.toString(),
               lastValidBlockHeight: 1,
               loadedAccountsDataSize: 8 * 1024 * 1024,

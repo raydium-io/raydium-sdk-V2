@@ -631,12 +631,14 @@ export class TxBuilder {
       ...extInfo
     } = props || {};
 
-    const lookupTableAddressAccount = {
-      ...(this.cluster === "devnet"
-        ? await getDevLookupTableCache(this.connection)
-        : await getMainLookupTableCache(this.connection)),
-      ...lookupTableCache,
-    };
+    const lookupTableAddressAccount = forerunCreate
+      ? lookupTableCache
+      : {
+          ...(this.cluster === "devnet"
+            ? await getDevLookupTableCache(this.connection)
+            : await getMainLookupTableCache(this.connection)),
+          ...lookupTableCache,
+        };
     const allLTA = Array.from(new Set<string>([...lookupTableAddress, ...this.lookupTableAddress]));
     const needCacheLTA: PublicKey[] = [];
     for (const item of allLTA) {
