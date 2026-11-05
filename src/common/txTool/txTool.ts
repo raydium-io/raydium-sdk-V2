@@ -370,6 +370,7 @@ export class TxBuilder {
 
   public build<O = Record<string, any>>(extInfo?: O): MakeTxData<TxVersion.LEGACY, O> {
     const transaction = new Transaction();
+    if (this.allInstructions.length) transaction.add(...this.allInstructions);
     transaction.feePayer = this.feePayer;
     if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
       this.signers.push(this.owner.signer);

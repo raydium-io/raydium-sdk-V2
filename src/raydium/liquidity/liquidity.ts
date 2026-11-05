@@ -284,8 +284,7 @@ export default class LiquidityModule extends ModuleBase {
     });
     txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
-    if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
-    return txBuilder.build() as MakeTxData<T>;
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
   public async removeLiquidity<T extends TxVersion>(params: RemoveParams<T>): Promise<Promise<MakeTxData<T>>> {
@@ -380,8 +379,7 @@ export default class LiquidityModule extends ModuleBase {
     });
     txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
-    if (txVersion === TxVersion.V0) return (await txBuilder.buildV0()) as MakeTxData<T>;
-    return txBuilder.build() as MakeTxData<T>;
+    return txBuilder.versionBuild({ txVersion }) as Promise<MakeTxData<T>>;
   }
 
   public async removeAllLpAndCreateClmmPosition<T extends TxVersion>({
