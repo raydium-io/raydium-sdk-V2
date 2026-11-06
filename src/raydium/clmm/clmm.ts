@@ -449,7 +449,7 @@ export class Clmm extends ModuleBase {
     const data = forerunCreate
       ? []
       : await getMultipleAccountsInfo(this.scope.connection, poolIdList, { commitment: "confirmed" });
-    const seedIndex = forerunCreate ? 0 : data.findIndex((d) => d === null) + 1;
+    const seedIndex = Math.max(forerunCreate ? 1 : data.findIndex((d) => d === null) + 1, 1);
 
     const { address } = ClmmInstrument.createCustomizablePoolV2Instructions({
       connection: this.scope.connection,

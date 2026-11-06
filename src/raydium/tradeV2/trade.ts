@@ -380,14 +380,7 @@ export default class TradeV2 extends ModuleBase {
       const { transactions } = await checkTxBuilder.versionSizeCheckBuild({ txVersion, insCountLimit });
       if (transactions.length < 2) {
         txBuilder.addInstruction({
-          instructions: [
-            createTransferInstruction(
-              sourceAcc,
-              swapInfo.feeConfig.feeAccount,
-              this.scope.ownerPubKey,
-              swapInfo.feeConfig.feeAmount.toNumber(),
-            ),
-          ],
+          instructions: [transferInstruction],
           instructionTypes: [InstructionType.TransferAmount],
         });
       }
