@@ -237,7 +237,7 @@ export class TxBuilder {
     };
   }
 
-  get AllV1TxData(): {
+  get AllPureTxData(): {
     instructions: TransactionInstruction[];
     endInstructions: TransactionInstruction[];
     signers: Signer[];
@@ -264,7 +264,7 @@ export class TxBuilder {
    * every ComputeBudget instruction has to be stripped - the ones allInstructions prepends from
    * setCustomComputeBudget as well as any the caller pushed in directly - or they would be applied twice.
    */
-  get v1Instructions(): TransactionInstruction[] {
+  get pureAllInstructions(): TransactionInstruction[] {
     return [...this.instructions, ...this.endInstructions];
   }
 
@@ -382,6 +382,7 @@ export class TxBuilder {
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { recentBlockHash: propBlockHash, skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
+        if (!this.pureAllInstructions.length) throw new Error("empty transaction, no need to sign");
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
         transaction.recentBlockhash = recentBlockHash;
         if (this.signers.length) transaction.sign(...this.signers);
@@ -669,6 +670,7 @@ export class TxBuilder {
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
+        if (!this.pureAllInstructions.length) throw new Error("empty transaction, no need to sign");
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
@@ -774,7 +776,7 @@ export class TxBuilder {
     // loadedAccountsDataSize precedence: explicitly specified > measured (autoLoadedAccountsDataSize) > the fixed 8MB default
     let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
     if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize) {
-      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.v1Instructions);
+      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.pureAllInstructions);
     }
     loadedAccountsDataSize = loadedAccountsDataSize ?? DEFAULT_LOADED_ACCOUNTS_DATA_SIZE;
 
@@ -785,7 +787,7 @@ export class TxBuilder {
       computeUnitLimit,
       priorityFeeLamports,
       loadedAccountsDataSize,
-      instructions: this.v1Instructions,
+      instructions: this.pureAllInstructions,
     });
 
     return {
@@ -795,7 +797,7 @@ export class TxBuilder {
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
-
+        if (!this.pureAllInstructions.length) throw new Error("empty transaction, no need to sign");
         printSimulate([transaction]);
         // Keypair path: we hold the keys, so convert every signer into a CryptoKeyPair and sign
         if (this.owner?.isKeyPair) {
@@ -1810,7 +1812,7 @@ export class TxBuilder {
       propInsCountLimit ?? Math.max(1, Math.floor(computeUnitLimit / V1_DEFAULT_CU_PER_INSTRUCTION));
     console.log("sizeCheckBuildV1: computeUnitLimit", computeUnitLimit, "insCountLimit", insCountLimit);
 
-    const sourceInstructions = this.v1Instructions;
+    const sourceInstructions = this.pureAllInstructions;
 
     let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
     if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize)

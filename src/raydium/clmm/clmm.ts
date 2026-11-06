@@ -2239,7 +2239,7 @@ export class Clmm extends ModuleBase {
     } else if (!limitOrderSettle.isZero()) {
       const settleBuildData = await this.settleLimitOrder({ limitOrder });
       txBuilder.addInstruction({
-        ...settleBuildData.builder[txVersion === TxVersion.V1 ? "AllV1TxData" : "AllTxData"],
+        ...settleBuildData.builder[txVersion === TxVersion.V1 ? "AllPureTxData" : "AllTxData"],
       });
     }
 
@@ -2341,7 +2341,7 @@ export class Clmm extends ModuleBase {
       } else if (!limitOrderSettle.isZero()) {
         const settleBuildData = await this.settleLimitOrder({ limitOrder, forerunCreate: true });
         txBuilder.addInstruction({
-          ...settleBuildData.builder[txVersion === TxVersion.V1 ? "AllV1TxData" : "AllTxData"],
+          ...settleBuildData.builder[txVersion === TxVersion.V1 ? "AllPureTxData" : "AllTxData"],
         });
       }
 
