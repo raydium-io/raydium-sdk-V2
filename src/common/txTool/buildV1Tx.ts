@@ -232,7 +232,7 @@ export async function calcLoadedAccountsDataSize(
   const keyList = [...keys].map((k) => new PublicKey(k));
 
   // getMultipleAccountsInfo takes at most 100 keys per call, so fetch in batches
-  const infos = await getMultipleAccountsInfoInBatch(connection, keyList);
+  const infos = keyList.length > 0 ? await getMultipleAccountsInfoInBatch(connection, keyList) : [];
 
   let total = 0;
   const programDataKeys: PublicKey[] = [];
@@ -260,6 +260,7 @@ async function getMultipleAccountsInfoInBatch(
   connection: Connection,
   keys: PublicKey[],
 ): Promise<(AccountInfo<Buffer> | null)[]> {
+  if (!keys.length) return [];
   const BATCH = 100;
   const result: (AccountInfo<Buffer> | null)[] = [];
   for (let i = 0; i < keys.length; i += BATCH) {

@@ -13,7 +13,7 @@ import {
 } from "@solana/web3.js";
 import axios from "axios";
 
-import { Api } from "../../api";
+import { Api, API_URLS, DEV_API_URLS } from "../../api";
 import { ComputeBudgetConfig, SignAllTransactions, TxTipConfig } from "../../raydium/type";
 import { Cluster } from "../../solana";
 import { Owner } from "../owner";
@@ -237,20 +237,64 @@ export class TxBuilder {
     };
   }
 
+  get AllPureTxData(): {
+    instructions: TransactionInstruction[];
+    endInstructions: TransactionInstruction[];
+    signers: Signer[];
+    instructionTypes: string[];
+    endInstructionTypes: string[];
+    lookupTableAddress: string[];
+  } {
+    return {
+      instructions: this.instructions,
+      endInstructions: this.endInstructions,
+      signers: this.signers,
+      instructionTypes: this.instructionTypes,
+      endInstructionTypes: this.endInstructionTypes,
+      lookupTableAddress: this.lookupTableAddress,
+    };
+  }
+
   get allInstructions(): TransactionInstruction[] {
     return [...this.getComputeBudgetIns().instructions, ...this.instructions, ...this.endInstructions];
   }
 
+  /**
+   * The instructions a v1 transaction should carry: in v1 the compute budget lives in the message config mask, so
+   * every ComputeBudget instruction has to be stripped - the ones allInstructions prepends from
+   * setCustomComputeBudget as well as any the caller pushed in directly - or they would be applied twice.
+   */
+  get pureAllInstructions(): TransactionInstruction[] {
+    return [...this.instructions, ...this.endInstructions];
+  }
+
   public async getComputeBudgetConfig(): Promise<ComputeBudgetConfig | undefined> {
-    const json = (
-      await axios.get<SolanaFeeInfoJson>(`https://solanacompass.com/api/fees?cacheFreshTime=${5 * 60 * 1000}`)
-    ).data;
-    const { avg } = json?.[15] ?? {};
-    if (!avg) return undefined;
-    return {
-      units: 600000,
-      microLamports: Math.min(Math.ceil((avg * 1000000) / 600000), 25000),
-    };
+    try {
+      const urlConfigs = this.cluster === "devnet" ? DEV_API_URLS : API_URLS;
+      const data = await axios.get<{
+        data: {
+          default: {
+            h: number;
+            m: number;
+            vh: number;
+          };
+        };
+      }>(`${urlConfigs.BASE_HOST}${urlConfigs.PRIORITY_FEE}`);
+      return {
+        units: 600000,
+        microLamports: Math.ceil((data.data.data.default.h * 1000000) / 600000),
+      };
+    } catch {
+      const json = (
+        await axios.get<SolanaFeeInfoJson>(`https://solanacompass.com/api/fees?cacheFreshTime=${5 * 60 * 1000}`)
+      ).data;
+      const { avg } = json?.[15] ?? {};
+      if (!avg) return undefined;
+      return {
+        units: 600000,
+        microLamports: Math.min(Math.ceil((avg * 1000000) / 600000), 25000),
+      };
+    }
   }
 
   public setCustomComputeBudget(config?: ComputeBudgetConfig): boolean {
@@ -326,8 +370,7 @@ export class TxBuilder {
 
   public build<O = Record<string, any>>(extInfo?: O): MakeTxData<TxVersion.LEGACY, O> {
     const transaction = new Transaction();
-    const computeBudgetIns = this.getComputeBudgetIns();
-    if (this.allInstructions.length) transaction.add(...computeBudgetIns.instructions, ...this.allInstructions);
+    if (this.allInstructions.length) transaction.add(...this.allInstructions);
     transaction.feePayer = this.feePayer;
     if (this.owner?.signer && !this.signers.some((s) => s.publicKey.equals(this.owner!.publicKey)))
       this.signers.push(this.owner.signer);
@@ -336,9 +379,10 @@ export class TxBuilder {
       builder: this,
       transaction,
       signers: this.signers,
-      instructionTypes: [...computeBudgetIns.instructionTypes, ...this.instructionTypes, ...this.endInstructionTypes],
+      instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { recentBlockHash: propBlockHash, skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
+        if (!this.pureAllInstructions.length) throw new Error("empty transaction, no need to sign");
         const recentBlockHash = propBlockHash ?? (await getRecentBlockHash(this.connection, this.blockhashCommitment));
         transaction.recentBlockhash = recentBlockHash;
         if (this.signers.length) transaction.sign(...this.signers);
@@ -589,12 +633,14 @@ export class TxBuilder {
       ...extInfo
     } = props || {};
 
-    const lookupTableAddressAccount = {
-      ...(this.cluster === "devnet"
-        ? await getDevLookupTableCache(this.connection)
-        : await getMainLookupTableCache(this.connection)),
-      ...lookupTableCache,
-    };
+    const lookupTableAddressAccount = forerunCreate
+      ? lookupTableCache
+      : {
+          ...(this.cluster === "devnet"
+            ? await getDevLookupTableCache(this.connection)
+            : await getMainLookupTableCache(this.connection)),
+          ...lookupTableCache,
+        };
     const allLTA = Array.from(new Set<string>([...lookupTableAddress, ...this.lookupTableAddress]));
     const needCacheLTA: PublicKey[] = [];
     for (const item of allLTA) {
@@ -624,6 +670,7 @@ export class TxBuilder {
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
+        if (!this.pureAllInstructions.length) throw new Error("empty transaction, no need to sign");
         printSimulate([transaction]);
         if (this.owner?.isKeyPair) {
           const txId = await this.connection.sendTransaction(transaction, { skipPreflight });
@@ -729,7 +776,7 @@ export class TxBuilder {
     // loadedAccountsDataSize precedence: explicitly specified > measured (autoLoadedAccountsDataSize) > the fixed 8MB default
     let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
     if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize) {
-      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.allInstructions);
+      loadedAccountsDataSize = await calcLoadedAccountsDataSize(this.connection, this.pureAllInstructions);
     }
     loadedAccountsDataSize = loadedAccountsDataSize ?? DEFAULT_LOADED_ACCOUNTS_DATA_SIZE;
 
@@ -740,7 +787,7 @@ export class TxBuilder {
       computeUnitLimit,
       priorityFeeLamports,
       loadedAccountsDataSize,
-      instructions: [...this.allInstructions],
+      instructions: this.pureAllInstructions,
     });
 
     return {
@@ -750,7 +797,7 @@ export class TxBuilder {
       instructionTypes: [...this.instructionTypes, ...this.endInstructionTypes],
       execute: async (params) => {
         const { skipPreflight = true, sendAndConfirm, notSendToRpc } = params || {};
-
+        if (!this.pureAllInstructions.length) throw new Error("empty transaction, no need to sign");
         printSimulate([transaction]);
         // Keypair path: we hold the keys, so convert every signer into a CryptoKeyPair and sign
         if (this.owner?.isKeyPair) {
@@ -1765,7 +1812,7 @@ export class TxBuilder {
       propInsCountLimit ?? Math.max(1, Math.floor(computeUnitLimit / V1_DEFAULT_CU_PER_INSTRUCTION));
     console.log("sizeCheckBuildV1: computeUnitLimit", computeUnitLimit, "insCountLimit", insCountLimit);
 
-    const sourceInstructions = [...this.instructions, ...this.endInstructions];
+    const sourceInstructions = this.pureAllInstructions;
 
     let loadedAccountsDataSize = budgetConfig?.loadedAccountsDataSize;
     if (loadedAccountsDataSize === undefined && autoLoadedAccountsDataSize)

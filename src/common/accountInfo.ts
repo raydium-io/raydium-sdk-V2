@@ -38,6 +38,7 @@ export async function getMultipleAccountsInfo(
     batchRequest: false,
     ...config,
   };
+  if (!publicKeys.length) return [];
 
   const chunkedKeys = chunkArray(publicKeys, chunkCount);
   let results: (AccountInfo<Buffer> | null)[][] = new Array(chunkedKeys.length).fill([]);
@@ -100,6 +101,7 @@ export async function getMultipleAccountsInfoWithCustomFlags<T extends { pubkey:
   publicKeysWithCustomFlag: T[],
   config?: GetMultipleAccountsInfoConfig,
 ): Promise<({ accountInfo: AccountInfo<Buffer> | null } & T)[]> {
+  if (!publicKeysWithCustomFlag.length) return [];
   const multipleAccountsInfo = await getMultipleAccountsInfo(
     connection,
     publicKeysWithCustomFlag.map((o) => o.pubkey),

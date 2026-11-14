@@ -345,4 +345,15 @@ export class Api {
     const res = await this.api.get(`${this.urlConfigs.CPMM_LOCK || API_URLS.CPMM_LOCK}?id=${key.toString()}`);
     return res as unknown as CpmmLockInfo;
   }
+
+  async fetchPriorityFee(): Promise<{
+    default: {
+      h: number;
+      m: number;
+      vh: number;
+    };
+  }> {
+    const res = await this.api.get(this.urlConfigs.PRIORITY_FEE || API_URLS.PRIORITY_FEE);
+    return res.data;
+  }
 }
