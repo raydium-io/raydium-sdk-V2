@@ -52,19 +52,23 @@ export class CurveCalculator {
     isCreatorFeeOnInput: boolean,
   ): SwapResult {
     let creatorFee = new BN(0);
-
-    const tradeFee = Fee.tradingFee(inputAmount, tradeFeeRate);
+    let tradeFee;
 
     let inputAmountLessFees;
     if (isCreatorFeeOnInput) {
-      creatorFee = Fee.creatorFee(inputAmount, creatorFeeRate);
-      inputAmountLessFees = inputAmount.sub(tradeFee).sub(creatorFee);
+      // One ceil over the combined rate, then split, so this stays the inverse of swapBaseOutput.
+      // Ceiling each rate on its own overcharges the input by up to one unit.
+      const totalFee = Fee.tradingFee(inputAmount, tradeFeeRate.add(creatorFeeRate));
+      creatorFee = Fee.splitCreatorFee(totalFee, tradeFeeRate, creatorFeeRate);
+      tradeFee = totalFee.sub(creatorFee);
+      inputAmountLessFees = inputAmount.sub(totalFee);
     } else {
+      tradeFee = Fee.tradingFee(inputAmount, tradeFeeRate);
       inputAmountLessFees = inputAmount.sub(tradeFee);
     }
 
     const protocolFee = Fee.protocolFee(tradeFee, protocolFeeRate);
-    const fundFee = Fee.protocolFee(tradeFee, fundFeeRate);
+    const fundFee = Fee.fundFee(tradeFee, fundFeeRate);
 
     const outputAmountSwapped = ConstantProductCurve.swapBaseInputWithoutFees(
       inputAmountLessFees,

@@ -270,6 +270,9 @@ export interface CollectCreatorFees<T = TxVersion.LEGACY> {
   poolInfo: ApiV3PoolInfoStandardItemCpmm;
   poolKeys?: CpmmKeys;
 
+  /** Only read by the permissionless variant, which pays a pool creator that is not the signer. */
+  poolCreator?: PublicKey;
+
   programId?: PublicKey;
   feePayer?: PublicKey;
   associatedOnly?: boolean;

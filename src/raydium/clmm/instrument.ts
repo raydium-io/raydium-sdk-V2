@@ -1030,7 +1030,12 @@ export class ClmmInstrument {
   }
 
   static createCustomizablePoolV2Instructions(
-    props: CreatePoolInstruction & { seedIndex: number },
+    props: CreatePoolInstruction & {
+      seedIndex: number;
+      payer?: PublicKey;
+      collectFeeOn?: CollectFeeOn;
+      dynamicFeeConfig?: PublicKey;
+    },
   ): ReturnTypeMakeInstructions<{
     poolId: PublicKey;
     observationId: PublicKey;
@@ -1042,7 +1047,19 @@ export class ClmmInstrument {
     mintAVault: PublicKey;
     mintBVault: PublicKey;
   }> {
-    const { programId, owner, mintA, mintB, ammConfigId, initialPriceX64, extendMintAccount, seedIndex } = props;
+    const {
+      programId,
+      owner,
+      mintA,
+      mintB,
+      ammConfigId,
+      initialPriceX64,
+      extendMintAccount,
+      seedIndex,
+      payer = owner,
+      collectFeeOn = CollectFeeOn.FromInput,
+      dynamicFeeConfig,
+    } = props;
     const [mintAAddress, mintBAddress] = [new PublicKey(mintA.address), new PublicKey(mintB.address)];
     const [mintAProgram, mintBProgram] = [
       new PublicKey(mintA.programId || TOKEN_PROGRAM_ID),
@@ -1062,28 +1079,32 @@ export class ClmmInstrument {
     const exBitmapAccount = getPdaExBitmapAccount(programId, poolId).publicKey;
 
     const ins = [
-      this.createPoolInstruction(
+      this.createCustomizablePoolV2Instruction(
         programId,
-        poolId,
+        payer,
         owner,
         ammConfigId,
-        observationId,
+        poolId,
         mintAAddress,
-        mintAVault,
-        mintAProgram,
         mintBAddress,
+        mintAVault,
         mintBVault,
-        mintBProgram,
+        observationId,
         exBitmapAccount,
+        mintAProgram,
+        mintBProgram,
         initialPriceX64,
-        extendMintAccount,
+        collectFeeOn,
+        seedIndex,
+        extendMintAccount ?? [],
+        dynamicFeeConfig,
       ),
     ];
 
     return {
       signers: [],
       instructions: ins,
-      instructionTypes: [InstructionType.CreateAccount, InstructionType.ClmmCreatePool],
+      instructionTypes: [InstructionType.ClmmCreatePool],
       address: {
         poolId,
         observationId,

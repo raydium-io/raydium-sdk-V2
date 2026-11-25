@@ -37,13 +37,7 @@ import {
   TickArrayLayout,
 } from "./layout";
 import { clmmComputeInfoToApiInfo, decimalToX64, LimitOrderMath, PoolUtils } from "./libraries";
-import {
-  BN_ZERO,
-  CollectFeeOn,
-  MAX_SQRT_PRICE_X64,
-  MIN_SQRT_PRICE_X64,
-  mockV3CreatePoolInfo,
-} from "./libraries/constants";
+import { CollectFeeOn, MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64, mockV3CreatePoolInfo } from "./libraries/constants";
 import {
   getPdaCustomizablePoolV2Id,
   getPdaExBitmapAccount,
@@ -272,21 +266,11 @@ export class Clmm extends ModuleBase {
     });
 
     // const desc = getCollectFeeOnDescription(collectFeeOn);
-    const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
-
     if (dynamicFeeConfig) {
       // Check if dynamic fee config exists
       const dynamicFeeData = await this.scope.connection.getAccountInfo(dynamicFeeConfig);
       if (!dynamicFeeData)
         throw new Error("Dynamic Fee Config not found. Run 03_admin_create_dynamic_fee_config.ts first.");
-      console.log("Dynamic Fee Config", dynamicFeeConfig.toBase58());
-
-      // Add dynamic fee config as remaining account
-      remainingAccounts.push({
-        pubkey: dynamicFeeConfig,
-        isSigner: false,
-        isWritable: false,
-      });
     }
 
     let collectFeeOn: CollectFeeOn;
@@ -315,7 +299,7 @@ export class Clmm extends ModuleBase {
       address.mintBProgram,
       initialPriceX64,
       collectFeeOn,
-      [...extendMintAccount, ...remainingAccounts.map((d) => d.pubkey)],
+      extendMintAccount,
       dynamicFeeConfig,
     );
 
@@ -417,7 +401,6 @@ export class Clmm extends ModuleBase {
       : [mint1, mint2, initialPrice];
 
     const initialPriceX64 = TickUtil.priceToSqrtPriceX64(initPrice, mintA.decimals, mintB.decimals);
-
     const extendMintAccount: PublicKey[] = [];
     const fetchAccounts: PublicKey[] = [];
     if (addSupportMintExt) {
@@ -451,9 +434,29 @@ export class Clmm extends ModuleBase {
       : await getMultipleAccountsInfo(this.scope.connection, poolIdList, { commitment: "confirmed" });
     const seedIndex = Math.max(forerunCreate ? 1 : data.findIndex((d) => d === null) + 1, 1);
 
-    const { address } = ClmmInstrument.createCustomizablePoolV2Instructions({
+    // const desc = getCollectFeeOnDescription(collectFeeOn);
+    if (!forerunCreate && dynamicFeeConfig) {
+      // Check if dynamic fee config exists
+      const dynamicFeeData = await this.scope.connection.getAccountInfo(dynamicFeeConfig);
+      if (!dynamicFeeData)
+        throw new Error("Dynamic Fee Config not found. Run 03_admin_create_dynamic_fee_config.ts first.");
+    }
+
+    let collectFeeOn: CollectFeeOn;
+    if (collectFeeOnMint === undefined) {
+      collectFeeOn = CollectFeeOn.FromInput;
+    } else if (collectFeeOnMint.equals(mintAAddress)) {
+      collectFeeOn = CollectFeeOn.TokenOnlyA;
+    } else if (collectFeeOnMint.equals(mintBAddress)) {
+      collectFeeOn = CollectFeeOn.TokenOnlyB;
+    } else {
+      this.logAndCreateError("param collectFeeOnMint find error");
+    }
+
+    const { address, instructions } = ClmmInstrument.createCustomizablePoolV2Instructions({
       connection: this.scope.connection,
       programId,
+      payer,
       owner,
       mintA,
       mintB,
@@ -461,59 +464,11 @@ export class Clmm extends ModuleBase {
       initialPriceX64,
       extendMintAccount,
       seedIndex,
+      collectFeeOn,
+      dynamicFeeConfig,
     });
 
-    // const desc = getCollectFeeOnDescription(collectFeeOn);
-    const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
-
-    if (!forerunCreate && dynamicFeeConfig) {
-      // Check if dynamic fee config exists
-      const dynamicFeeData = await this.scope.connection.getAccountInfo(dynamicFeeConfig);
-      if (!dynamicFeeData)
-        throw new Error("Dynamic Fee Config not found. Run 03_admin_create_dynamic_fee_config.ts first.");
-      console.log("Dynamic Fee Config", dynamicFeeConfig.toBase58());
-
-      // Add dynamic fee config as remaining account
-      remainingAccounts.push({
-        pubkey: dynamicFeeConfig,
-        isSigner: false,
-        isWritable: false,
-      });
-    }
-
-    let collectFeeOn: CollectFeeOn;
-    if (collectFeeOnMint === undefined) {
-      collectFeeOn = CollectFeeOn.FromInput;
-    } else if (collectFeeOnMint.equals(address.mintA)) {
-      collectFeeOn = CollectFeeOn.TokenOnlyA;
-    } else if (collectFeeOnMint.equals(address.mintB)) {
-      collectFeeOn = CollectFeeOn.TokenOnlyB;
-    } else {
-      this.logAndCreateError("param collectFeeOnMint find error");
-    }
-
-    const ins = ClmmInstrument.createCustomizablePoolV2Instruction(
-      programId,
-      payer,
-      owner,
-      ammConfig.id,
-      address.poolId,
-      address.mintA,
-      address.mintB,
-      address.mintAVault,
-      address.mintBVault,
-      address.observationId,
-      address.exBitmapAccount,
-      address.mintAProgram,
-      address.mintBProgram,
-      initialPriceX64,
-      collectFeeOn,
-      seedIndex,
-      [...extendMintAccount, ...remainingAccounts.map((d) => d.pubkey)],
-      dynamicFeeConfig,
-    );
-
-    txBuilder.addInstruction({ instructions: [ins] });
+    txBuilder.addInstruction({ instructions });
     txBuilder.setCustomComputeBudget(computeBudgetConfig);
     txBuilder.addTipInstruction(txTipConfig);
 
@@ -2687,7 +2642,7 @@ export class Clmm extends ModuleBase {
         inputMint: new PublicKey(inputMint),
         amountIn,
         amountOutMin,
-        sqrtPriceLimitX64: BN_ZERO,
+        sqrtPriceLimitX64,
         remainingAccounts,
       }),
     );
@@ -2817,7 +2772,7 @@ export class Clmm extends ModuleBase {
         outputMint: new PublicKey(outputMint),
         amountOut,
         amountInMax,
-        sqrtPriceLimitX64: BN_ZERO,
+        sqrtPriceLimitX64,
         remainingAccounts,
       }),
     );

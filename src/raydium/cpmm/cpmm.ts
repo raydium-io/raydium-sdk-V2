@@ -993,7 +993,7 @@ export default class CpmmModule extends ModuleBase {
 
     const poolKeys = params.poolKeys ?? (await this.getCpmmPoolKeys(poolInfo.id));
 
-    const { publicKey: nftAccount } = getATAAddress(feePayer, nftMint, TOKEN_PROGRAM_ID);
+    const { publicKey: nftAccount } = getATAAddress(this.scope.ownerPubKey, nftMint, TOKEN_PROGRAM_ID);
     const { publicKey: lockPda } = getCpLockPda(programId, nftMint);
     const { publicKey: lockLpVault } = getATAAddress(
       authProgram,
@@ -1151,7 +1151,7 @@ export default class CpmmModule extends ModuleBase {
       const poolKeys = lockData.poolKeys ?? (await this.getCpmmPoolKeys(poolInfo.id));
       if (poolKeys.lookupTableAccount) lookupTableAccounts.push(poolKeys.lookupTableAccount);
 
-      const { publicKey: nftAccount } = getATAAddress(feePayer, nftMint, TOKEN_PROGRAM_ID);
+      const { publicKey: nftAccount } = getATAAddress(this.scope.ownerPubKey, nftMint, TOKEN_PROGRAM_ID);
       const { publicKey: lockPda } = getCpLockPda(programId, nftMint);
       const { publicKey: lockLpVault } = getATAAddress(
         authProgram,
@@ -1506,6 +1506,7 @@ export default class CpmmModule extends ModuleBase {
   public async collectCreatorFeesPermissionless<T extends TxVersion>({
     poolInfo,
     poolKeys: propPoolKeys,
+    poolCreator: propPoolCreator,
     programId = CREATE_CPMM_POOL_PROGRAM,
     txVersion,
     computeBudgetConfig,
@@ -1524,24 +1525,19 @@ export default class CpmmModule extends ModuleBase {
       new PublicKey(poolInfo.mintB.programId),
     ];
 
-    const tokenAccountA = this.scope.account.getAssociatedTokenAccount(mintA, mintAProgram);
-    const tokenAccountB = this.scope.account.getAssociatedTokenAccount(mintB, mintBProgram);
+    let creator = propPoolCreator;
+    if (!creator) {
+      const poolAccount = await this.scope.connection.getAccountInfo(new PublicKey(poolInfo.id));
+      if (!poolAccount) this.logAndCreateError("pool not found", "poolId", poolInfo.id);
+      creator = CpmmPoolInfoLayout.decode(poolAccount!.data).poolCreator;
+    }
+
+    const creatorVaultA = getATAAddress(creator, mintA, mintAProgram).publicKey;
+    const creatorVaultB = getATAAddress(creator, mintB, mintBProgram).publicKey;
     txBuilder.addInstruction({
       instructions: [
-        createAssociatedTokenAccountIdempotentInstruction(
-          this.scope.ownerPubKey,
-          tokenAccountA,
-          this.scope.ownerPubKey,
-          mintA,
-          new PublicKey(poolInfo.mintA.programId),
-        ),
-        createAssociatedTokenAccountIdempotentInstruction(
-          this.scope.ownerPubKey,
-          tokenAccountB,
-          this.scope.ownerPubKey,
-          mintB,
-          new PublicKey(poolInfo.mintB.programId),
-        ),
+        createAssociatedTokenAccountIdempotentInstruction(payer, creatorVaultA, creator, mintA, mintAProgram),
+        createAssociatedTokenAccountIdempotentInstruction(payer, creatorVaultB, creator, mintB, mintBProgram),
       ],
     });
 
@@ -1550,7 +1546,7 @@ export default class CpmmModule extends ModuleBase {
         collectCreatorFeePermissionlessInInstruction(
           programId,
           payer,
-          this.scope.ownerPubKey,
+          creator,
           new PublicKey(poolKeys.authority),
           new PublicKey(poolKeys.id),
           new PublicKey(poolKeys.config.id),
@@ -1558,8 +1554,8 @@ export default class CpmmModule extends ModuleBase {
           new PublicKey(poolKeys.vault.B),
           mintA,
           mintB,
-          tokenAccountA,
-          tokenAccountB,
+          creatorVaultA,
+          creatorVaultB,
           mintAProgram,
           mintBProgram,
         ),
@@ -1597,14 +1593,19 @@ export default class CpmmModule extends ModuleBase {
     swapResult: SwapResult;
   } {
     const isBaseIn = outputMint.toString() === pool.mintB.address;
-    const isCreatorFeeOnInput = pool.feeOn === FeeOn.BothToken || pool.feeOn === FeeOn.OnlyTokenB;
+    const isCreatorFeeOnInput =
+      pool.feeOn === FeeOn.BothToken ||
+      (pool.feeOn === FeeOn.OnlyTokenA && isBaseIn) ||
+      (pool.feeOn === FeeOn.OnlyTokenB && !isBaseIn);
+
+    const creatorFeeRate = pool.enableCreatorFee ? pool.configInfo.creatorFeeRate : BN_ZERO;
     const swapResult = swapBaseIn
       ? CurveCalculator.swapBaseInput(
           amountIn,
           isBaseIn ? pool.baseReserve : pool.quoteReserve,
           isBaseIn ? pool.quoteReserve : pool.baseReserve,
           pool.configInfo.tradeFeeRate,
-          pool.configInfo.creatorFeeRate,
+          creatorFeeRate,
           pool.configInfo.protocolFeeRate,
           pool.configInfo.fundFeeRate,
           isCreatorFeeOnInput,
@@ -1614,7 +1615,7 @@ export default class CpmmModule extends ModuleBase {
           isBaseIn ? pool.baseReserve : pool.quoteReserve,
           isBaseIn ? pool.quoteReserve : pool.baseReserve,
           pool.configInfo.tradeFeeRate,
-          pool.configInfo.creatorFeeRate,
+          creatorFeeRate,
           pool.configInfo.protocolFeeRate,
           pool.configInfo.fundFeeRate,
           isCreatorFeeOnInput,

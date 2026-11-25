@@ -1397,7 +1397,7 @@ export default class TradeV2 extends ModuleBase {
           getPdaObservationId(cpmmPoolData.programId, cpmmPoolData.id).publicKey,
 
           inputAmount,
-          cpmmComputInfo.swapResult.outputAmount,
+          cpmmComputInfo.minAmountOut,
         ),
       ],
     });
