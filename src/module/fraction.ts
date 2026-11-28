@@ -91,9 +91,15 @@ export class Fraction {
     if (significantDigits <= 0) logger.logWithError(`${significantDigits} is not positive.`);
 
     Decimal.set({ precision: significantDigits + 1, rounding: toSignificantRounding[rounding] });
-    const quotient = new Decimal(this.numerator.toString())
-      .div(this.denominator.toString())
-      .toSignificantDigits(significantDigits);
+    const numerator = this.numerator.toString();
+    const denominator = this.denominator.toString();
+    let divided = new Decimal(numerator).div(denominator);
+    // decimal.js-light truncates the division, so a remainder below the guard
+    // digit was lost and ROUND_UP returned the truncated value
+    if (rounding === Rounding.ROUND_UP && !divided.mul(denominator).eq(numerator)) {
+      divided = divided.plus(`${divided.isNegative() ? "-" : ""}1e${divided.exponent() - significantDigits}`);
+    }
+    const quotient = divided.toSignificantDigits(significantDigits);
     return quotient.toFormat(quotient.decimalPlaces(), format);
   }
 
